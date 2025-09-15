@@ -6,14 +6,14 @@
     <title>Painel de Gestão ANCB-MT</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <style>
         /* --- Variáveis de Cor --- */
         :root {
             --cor-vermelho-escuro: #A62626;
             --cor-vermelho-claro: #D92E2E;
-            --cor-azul-escuro: #0D47A1;  /* Nova Cor */
-            --cor-azul-claro: #1976D2;   /* Nova Cor */
+            --cor-azul-escuro: #0D47A1;
+            --cor-azul-claro: #1976D2;
             --cor-laranja: #F27405;
             --cor-preto: #1A1A1A;
             --cor-cinza-fundo: #f0f2f5;
@@ -21,7 +21,9 @@
             --cor-branco: #ffffff;
             --sombra-card: 0 4px 12px rgba(0,0,0,0.1);
             --sombra-card-hover: 0 8px 20px rgba(0,0,0,0.15);
-            --fonte-titulo: 'Teko', sans-serif;
+            --fonte-titulo: 'Roboto', sans-serif;
+            --cor-sucesso: #28a745;
+            --cor-aviso: #ffc107;
         }
         /* --- Estilos Globais --- */
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -29,16 +31,86 @@
         body.modal-open { overflow: hidden; }
         .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
 
+        /* --- Estilos de Login e Registro --- */
+        .auth-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        .auth-box {
+            width: 100%;
+            max-width: 400px;
+            padding: 40px;
+            background: var(--cor-branco);
+            box-shadow: var(--sombra-card);
+            border-radius: 12px;
+            text-align: center;
+        }
+        .login-logo {
+            height: 90px;
+            width: auto;
+            display: block;
+            margin: 0 auto 20px;
+        }
+        .auth-box h2 {
+            font-family: var(--fonte-titulo);
+            font-size: 2.5rem;
+            margin-bottom: 25px;
+            color: var(--cor-preto);
+        }
+        .auth-error {
+            color: var(--cor-vermelho-escuro);
+            margin-top: 15px;
+            display: none;
+        }
+        .auth-toggle-link {
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: var(--cor-azul-claro);
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        #register-container { display: none; }
+
+        /* --- Abas de Navegação --- */
+        .nav-tabs {
+            display: flex;
+            border-bottom: 2px solid var(--cor-cinza-fundo);
+            margin-bottom: 20px;
+        }
+        .nav-tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s ease-in-out;
+        }
+        .nav-tab:hover {
+            color: var(--cor-azul-escuro);
+        }
+        .nav-tab.active {
+            color: var(--cor-azul-escuro);
+            border-bottom-color: var(--cor-azul-escuro);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* --- Esconder conteúdo principal por padrão --- */
+        #main-content { display: none; }
+
         /* --- Cabeçalho e Rodapé --- */
         .site-header {
-            /* Cor do gradiente alterada para azul */
             background: linear-gradient(135deg, var(--cor-azul-escuro), var(--cor-preto));
             color: var(--cor-branco);
             padding: 10px 0;
             position: sticky; top: 0; z-index: 100;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         }
-        .header-container { display: flex; align-items: center; gap: 20px; }
+        .header-container { display: flex; justify-content: space-between; align-items: center; }
+        .header-left { display: flex; align-items: center; gap: 20px; }
         .logo { height: 60px; width: auto; border-radius: 8px; }
         .site-header h1 { font-family: var(--fonte-titulo); font-size: 2.8rem; letter-spacing: 1px; margin: 0; }
         .site-footer { text-align: center; padding: 20px; margin-top: 40px; background-color: var(--cor-preto); color: var(--cor-branco); }
@@ -54,6 +126,19 @@
         .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
         .btn[disabled] { background-color: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
         .btn-primary { background-color: var(--cor-laranja); color: var(--cor-branco); }
+        .btn-logout { background-color: var(--cor-vermelho-claro); color: var(--cor-branco); }
+        
+        /* --- Classes para controle de acesso --- */
+        .admin-only { display: none; }
+
+        /* --- Tabela de Usuários (Admin) --- */
+        #admin-users-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        #admin-users-table th, #admin-users-table td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        #admin-users-table th { background-color: var(--cor-cinza-fundo); }
+        .role-toggle { padding: 5px 10px; border-radius: 5px; cursor: pointer; border: none; color: white; }
+        .role-toggle.admin { background-color: var(--cor-sucesso); }
+        .role-toggle.jogador { background-color: var(--cor-aviso); color: var(--cor-preto); }
+        .role-toggle[disabled] { background-color: #aaa; cursor: not-allowed; }
 
         /* --- Cards (Jogador e Campeonato) --- */
         .player-card, .championship-card { background-color: var(--cor-branco); border-radius: 12px; box-shadow: var(--sombra-card); text-align: center; padding: 20px; cursor: pointer; transition: all 0.2s ease-in-out; position: relative; overflow: hidden; border: 1px solid #e2e8f0; }
@@ -96,111 +181,131 @@
 </head>
 <body>
 
-    <header class="site-header">
-        <div class="container header-container">
-            <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="logo">
-            <h1>Painel de Gestão ANCB-MT</h1>
+    <div id="login-container" class="auth-container">
+        <div class="auth-box">
+            <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="login-logo">
+            <h2>ANCB-MT Login</h2>
+            <form id="login-form">
+                <div class="form-group">
+                    <input type="email" id="login-email" placeholder="Email" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="login-password" placeholder="Senha" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Entrar</button>
+                <p id="login-error" class="auth-error">Email ou senha inválidos.</p>
+            </form>
+            <p id="toggle-to-register" class="auth-toggle-link">Não tem uma conta? Registre-se</p>
         </div>
-    </header>
+    </div>
 
-    <main class="container">
-        <section id="secao-campeonatos" class="content-section">
-            <div class="section-header">
-                <h2>Campeonatos</h2>
-                <button id="btn-abrir-modal-campeonato" class="btn btn-primary">🏆 Adicionar Campeonato</button>
+    <div id="register-container" class="auth-container">
+        <div class="auth-box">
+            <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="login-logo">
+            <h2>Criar Conta</h2>
+            <form id="register-form">
+                <div class="form-group">
+                    <input type="email" id="register-email" placeholder="Email" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="register-password" placeholder="Senha (mínimo 6 caracteres)" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Registrar</button>
+                <p id="register-error" class="auth-error">Ocorreu um erro ao registrar.</p>
+            </form>
+            <p id="toggle-to-login" class="auth-toggle-link">Já tem uma conta? Faça o login</p>
+        </div>
+    </div>
+
+    <div id="main-content">
+        <header class="site-header">
+            <div class="container header-container">
+                <div class="header-left">
+                    <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="logo">
+                    <h1>Painel de Gestão ANCB-MT</h1>
+                </div>
+                <button id="btn-logout" class="btn btn-logout">Sair</button>
             </div>
-            <div id="grid-campeonatos" class="card-grid"></div>
-        </section>
+        </header>
 
-        <section id="secao-jogadores" class="content-section">
-            <div class="section-header">
-                <h2>Jogadores</h2>
-                <button id="btn-abrir-modal-jogador" class="btn btn-primary">➕ Cadastrar Jogador</button>
+        <main class="container">
+            <nav class="nav-tabs">
+                <div class="nav-tab active" data-tab="campeonatos">Campeonatos</div>
+                <div class="nav-tab" data-tab="jogadores">Jogadores</div>
+                <div class="nav-tab admin-only" data-tab="admin">Administradores</div>
+            </nav>
+
+            <div id="tab-campeonatos" class="tab-content active">
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2>Campeonatos</h2>
+                        <button id="btn-abrir-modal-campeonato" class="btn btn-primary admin-only">🏆 Adicionar Campeonato</button>
+                    </div>
+                    <div id="grid-campeonatos" class="card-grid"></div>
+                </section>
             </div>
-            <div id="grid-jogadores" class="card-grid"></div>
-        </section>
-    </main>
 
-    <footer class="site-footer">
-        <p>&copy; 2025 ANCB-MT. Todos os direitos reservados.</p>
-    </footer>
+            <div id="tab-jogadores" class="tab-content">
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2>Jogadores</h2>
+                        <button id="btn-abrir-modal-jogador" class="btn btn-primary admin-only">➕ Cadastrar Jogador</button>
+                    </div>
+                    <div id="grid-jogadores" class="card-grid"></div>
+                </section>
+            </div>
+
+            <div id="tab-admin" class="tab-content">
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2>Gerenciar Permissões</h2>
+                    </div>
+                    <p>Clique na permissão para alternar entre "Admin" e "Jogador".</p>
+                    <table id="admin-users-table">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Permissão</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body"></tbody>
+                    </table>
+                </section>
+            </div>
+        </main>
+
+        <footer class="site-footer">
+            <p>&copy; 2025 ANCB-MT. Todos os direitos reservados.</p>
+        </footer>
+    </div>
 
     <div id="modal-backdrop" class="modal-backdrop"></div>
-
     <div id="modal-jogador" class="modal">
         <div class="modal-content">
             <button class="close-button" aria-label="Fechar">&times;</button>
             <h2 id="modal-jogador-titulo"></h2>
             <form id="form-jogador">
                 <input type="hidden" id="documento-id">
-                <div class="form-group">
-                    <label for="foto">Foto de Perfil</label>
-                    <input type="file" id="foto" accept="image/*">
-                    <img id="preview-foto" src="" alt="Pré-visualização da foto">
-                </div>
+                <div class="form-group"><label for="foto">Foto de Perfil</label><input type="file" id="foto" accept="image/*"><img id="preview-foto" src="" alt="Pré-visualização da foto"></div>
                 <div class="form-group"><label for="nome">Nome Completo</label><input type="text" id="nome" required></div>
                 <div class="form-group"><label for="cpf">CPF</label><input type="text" id="cpf" required></div>
                 <div class="form-group"><label for="nascimento">Data de Nascimento</label><input type="date" id="nascimento" required></div>
-                <div class="form-group">
-                    <label for="posicao">Posição</label>
-                    <select id="posicao" required>
-                        <option value="">Selecione...</option>
-                        <option value="Armador (PG)">Armador (PG)</option>
-                        <option value="Ala-Armador (SG)">Ala-Armador (SG)</option>
-                        <option value="Ala (SF)">Ala (SF)</option>
-                        <option value="Ala-Pivô (PF)">Ala-Pivô (PF)</option>
-                        <option value="Pivô (C)">Pivô (C)</option>
-                    </select>
-                </div>
+                <div class="form-group"><label for="posicao">Posição</label><select id="posicao" required><option value="">Selecione...</option><option value="Armador (PG)">Armador (PG)</option><option value="Ala-Armador (SG)">Ala-Armador (SG)</option><option value="Ala (SF)">Ala (SF)</option><option value="Ala-Pivô (PF)">Ala-Pivô (PF)</option><option value="Pivô (C)">Pivô (C)</option></select></div>
                 <div class="form-group"><label for="numero_uniforme">Nº Uniforme</label><input type="number" id="numero_uniforme" min="0" required></div>
                 <button type="submit" class="btn btn-primary">Salvar</button>
             </form>
         </div>
     </div>
-
-    <div id="modal-ver-jogador" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2>Ficha do Jogador</h2>
-            <div id="ficha-jogador"></div>
-        </div>
-    </div>
-
-    <div id="modal-campeonato" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2 id="modal-campeonato-titulo"></h2>
-            <form id="form-campeonato">
-                <input type="hidden" id="campeonato-id">
-                <div class="form-group"><label for="campeonato-nome">Nome do Campeonato</label><input type="text" id="campeonato-nome" required></div>
-                <div class="form-group"><label for="campeonato-data">Data</label><input type="date" id="campeonato-data" required></div>
-                <div class="form-group">
-                    <label>Escalar Jogadores</label>
-                    <div id="lista-jogadores-escalar"></div>
-                </div>
-                <button type="submit" class="btn btn-primary">Salvar Campeonato</button>
-            </form>
-        </div>
-    </div>
-
-    <div id="modal-ver-campeonato" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2 id="ver-campeonato-titulo"></h2>
-            <p id="ver-campeonato-data"></p>
-            <hr>
-            <h3>Jogadores Escalados</h3>
-            <div id="escalacao-container"></div>
-        </div>
-    </div>
+    <div id="modal-ver-jogador" class="modal"><div class="modal-content"><button class="close-button" aria-label="Fechar">&times;</button><h2>Ficha do Jogador</h2><div id="ficha-jogador"></div></div></div>
+    <div id="modal-campeonato" class="modal"><div class="modal-content"><button class="close-button" aria-label="Fechar">&times;</button><h2 id="modal-campeonato-titulo"></h2><form id="form-campeonato"><input type="hidden" id="campeonato-id"><div class="form-group"><label for="campeonato-nome">Nome do Campeonato</label><input type="text" id="campeonato-nome" required></div><div class="form-group"><label for="campeonato-data">Data</label><input type="date" id="campeonato-data" required></div><div class="form-group"><label>Escalar Jogadores</label><div id="lista-jogadores-escalar"></div></div><button type="submit" class="btn btn-primary">Salvar Campeonato</button></form></div></div>
+    <div id="modal-ver-campeonato" class="modal"><div class="modal-content"><button class="close-button" aria-label="Fechar">&times;</button><h2 id="ver-campeonato-titulo"></h2><p id="ver-campeonato-data"></p><hr><h3>Jogadores Escalados</h3><div id="escalacao-container"></div></div></div>
 
     <script type="module">
         // --- INICIALIZAÇÃO DO FIREBASE ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, orderBy, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
-        // IMPORTANTE: Em um ambiente de produção, estas chaves devem ser protegidas
-        // e o acesso ao Firestore deve ser controlado via Regras de Segurança.
         const firebaseConfig = {
             apiKey: "AIzaSyCZ2yeJJ34VwYAmQnFCEv72Q1uDFFGKKjQ",
             authDomain: "ancb-painel-db.firebaseapp.com",
@@ -213,16 +318,31 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
 
         // --- ESTADO GLOBAL DA APLICAÇÃO ---
         let state = {
             jogadores: [],
-            campeonatos: []
+            campeonatos: [],
+            allUsers: [],
+            currentUser: null,
+            userRole: null,
+            listeners: {} // Objeto para guardar referências dos listeners
         };
 
         // --- SELETORES DO DOM ---
         const elements = {
             body: document.body,
+            loginContainer: document.getElementById('login-container'),
+            registerContainer: document.getElementById('register-container'),
+            mainContent: document.getElementById('main-content'),
+            loginForm: document.getElementById('login-form'),
+            registerForm: document.getElementById('register-form'),
+            loginError: document.getElementById('login-error'),
+            registerError: document.getElementById('register-error'),
+            toggleToRegister: document.getElementById('toggle-to-register'),
+            toggleToLogin: document.getElementById('toggle-to-login'),
+            btnLogout: document.getElementById('btn-logout'),
             gridJogadores: document.getElementById('grid-jogadores'),
             gridCampeonatos: document.getElementById('grid-campeonatos'),
             modalJogador: document.getElementById('modal-jogador'),
@@ -235,7 +355,10 @@
             btnAbrirModalJogador: document.getElementById('btn-abrir-modal-jogador'),
             btnAbrirModalCampeonato: document.getElementById('btn-abrir-modal-campeonato'),
             fotoInput: document.getElementById('foto'),
-            fotoPreview: document.getElementById('preview-foto')
+            fotoPreview: document.getElementById('preview-foto'),
+            navTabs: document.querySelector('.nav-tabs'),
+            tabContents: document.querySelectorAll('.tab-content'),
+            usersTableBody: document.getElementById('users-table-body')
         };
 
         // --- FUNÇÕES DE UTILIDADE ---
@@ -257,40 +380,59 @@
         const UI = {
             renderJogadores() {
                 elements.gridJogadores.innerHTML = '';
+                const cardActionsHTML = state.userRole === 'admin' ? `
+                    <div class="card-actions">
+                        <button class="btn-edit-jogador" title="Editar">✏️</button>
+                        <button class="btn-delete-jogador" title="Excluir">🗑️</button>
+                    </div>` : '';
                 state.jogadores.forEach(j => {
                     const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : `<div class="photo-placeholder">🏀</div>`;
                     const card = document.createElement('div');
                     card.className = 'player-card';
                     card.dataset.id = j.id;
-                    card.innerHTML = `
-                        <div class="card-actions">
-                            <button class="btn-edit-jogador" title="Editar">✏️</button>
-                            <button class="btn-delete-jogador" title="Excluir">🗑️</button>
-                        </div>
-                        <div class="photo-container">${fotoHTML}</div>
-                        <p class="player-name">${j.nome}</p>`;
+                    card.innerHTML = `${cardActionsHTML}<div class="photo-container">${fotoHTML}</div><p class="player-name">${j.nome}</p>`;
                     elements.gridJogadores.appendChild(card);
                 });
             },
             renderCampeonatos() {
                 elements.gridCampeonatos.innerHTML = '';
+                const cardActionsHTML = state.userRole === 'admin' ? `
+                    <div class="card-actions">
+                        <button class="btn-edit-camp" title="Editar">✏️</button>
+                        <button class="btn-delete-camp" title="Excluir">🗑️</button>
+                    </div>` : '';
                 state.campeonatos.forEach(c => {
                     const card = document.createElement('div');
                     card.className = 'championship-card';
                     card.dataset.id = c.id;
-                    card.innerHTML = `
-                        <div class="card-actions">
-                            <button class="btn-edit-camp" title="Editar">✏️</button>
-                            <button class="btn-delete-camp" title="Excluir">🗑️</button>
-                        </div>
-                        <div>
-                            <h3 class="championship-name">${c.nome}</h3>
-                            <div class="championship-info">
-                                <p>📅 <strong>Data:</strong> ${utils.formatDate(c.data)}</p>
-                                <p>👥 <strong>Jogadores:</strong> ${c.jogadoresEscalados?.length || 0} escalado(s)</p>
-                            </div>
-                        </div>`;
+                    card.innerHTML = `${cardActionsHTML}<div><h3 class="championship-name">${c.nome}</h3><div class="championship-info"><p>📅 <strong>Data:</strong> ${utils.formatDate(c.data)}</p><p>👥 <strong>Jogadores:</strong> ${c.jogadoresEscalados?.length || 0} escalado(s)</p></div></div>`;
                     elements.gridCampeonatos.appendChild(card);
+                });
+            },
+            updateUIAccess() {
+                const isAdmin = state.userRole === 'admin';
+                document.querySelectorAll('.admin-only').forEach(el => {
+                    el.style.display = isAdmin ? (el.matches('.nav-tab, .btn') ? 'inline-flex' : 'block') : 'none';
+                });
+                this.renderAllUsers();
+                this.renderJogadores();
+                this.renderCampeonatos();
+            },
+            renderAllUsers() {
+                if(state.userRole !== 'admin') {
+                    elements.usersTableBody.innerHTML = '';
+                    return;
+                }
+                elements.usersTableBody.innerHTML = '';
+                state.allUsers.forEach(user => {
+                    const tr = document.createElement('tr');
+                    const isCurrentUser = user.uid === state.currentUser.uid;
+                    const toggleButtonHTML = isCurrentUser
+                        ? `<button class="role-toggle ${user.role}" disabled title="Você não pode alterar sua própria permissão.">${user.role}</button>`
+                        : `<button class="role-toggle ${user.role}" data-uid="${user.uid}">${user.role}</button>`;
+
+                    tr.innerHTML = `<td>${user.email}</td><td>${toggleButtonHTML}</td>`;
+                    elements.usersTableBody.appendChild(tr);
                 });
             },
             openModal(modal) {
@@ -304,6 +446,7 @@
                 elements.body.classList.remove('modal-open');
             },
             showJogadorModal(id = null) {
+                if (state.userRole !== 'admin') return;
                 elements.formJogador.reset();
                 elements.fotoPreview.src = "";
                 elements.fotoPreview.classList.remove('visible');
@@ -330,12 +473,15 @@
             showFichaJogador(id) {
                 const j = state.jogadores.find(p => p.id === id);
                 if (!j) return;
+
                 const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : '<div class="placeholder">🏀</div>';
+                const cpfHTML = state.userRole === 'admin' ? `<p><strong>CPF:</strong> ${j.cpf}</p>` : '';
+
                 document.getElementById('ficha-jogador').innerHTML = `
                     ${fotoHTML}
                     <div>
                         <p><strong>Nome:</strong> ${j.nome}</p>
-                        <p><strong>CPF:</strong> ${j.cpf}</p>
+                        ${cpfHTML}
                         <p><strong>Nascimento:</strong> ${utils.formatDate(j.nascimento)}</p>
                         <p><strong>Posição:</strong> ${j.posicao}</p>
                         <p><strong>Nº Uniforme:</strong> ${j.numero_uniforme}</p>
@@ -343,6 +489,7 @@
                 this.openModal(elements.modalVerJogador);
             },
             showCampeonatoModal(id = null) {
+                if (state.userRole !== 'admin') return;
                 elements.formCampeonato.reset();
                 let escalados = [];
                 document.getElementById('campeonato-id').value = id || '';
@@ -383,14 +530,7 @@
                         const j = state.jogadores.find(p => p.id === jogadorId);
                         if (j) {
                             const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : `<div class="placeholder">🏀</div>`;
-                            container.innerHTML += `
-                                <div class="jogador-escalado">
-                                    ${fotoHTML}
-                                    <div class="info">
-                                        <strong>${j.nome}</strong><br>
-                                        <span>#${j.numero_uniforme} - ${j.posicao}</span>
-                                    </div>
-                                </div>`;
+                            container.innerHTML += `<div class="jogador-escalado">${fotoHTML}<div class="info"><strong>${j.nome}</strong><br><span>#${j.numero_uniforme} - ${j.posicao}</span></div></div>`;
                         }
                     });
                 }
@@ -401,42 +541,35 @@
         // --- LÓGICA DE DADOS (FIREBASE) ---
         const dataService = {
             async saveJogador(id, dados, fotoFile) {
+                if (state.userRole !== 'admin') { alert("Acesso negado."); return; }
                 try {
-                    if (fotoFile) {
-                        dados.foto = await utils.toBase64(fotoFile);
-                    } else if (id) {
-                        const jogadorExistente = state.jogadores.find(p => p.id === id);
-                        dados.foto = jogadorExistente ? jogadorExistente.foto : null;
-                    } else {
-                        dados.foto = null;
-                    }
-
-                    if (id) {
-                        await updateDoc(doc(db, "jogadores", id), dados);
-                    } else {
-                        await addDoc(collection(db, "jogadores"), dados);
-                    }
-                } catch (error) {
-                    console.error("Erro ao salvar jogador: ", error);
-                    alert("Ocorreu um erro ao salvar o jogador. Verifique o console para mais detalhes.");
-                }
+                    if (fotoFile) { dados.foto = await utils.toBase64(fotoFile); }
+                    else if (id) { const j = state.jogadores.find(p => p.id === id); dados.foto = j ? j.foto : null; }
+                    else { dados.foto = null; }
+                    if (id) { await updateDoc(doc(db, "jogadores", id), dados); }
+                    else { await addDoc(collection(db, "jogadores"), dados); }
+                } catch (error) { console.error("Erro ao salvar jogador: ", error); }
             },
             async deleteJogador(id) {
-                if (confirm('Tem certeza que deseja excluir este jogador?')) {
-                    await deleteDoc(doc(db, "jogadores", id));
-                }
+                if (state.userRole !== 'admin') return;
+                if (confirm('Tem certeza?')) { await deleteDoc(doc(db, "jogadores", id)); }
             },
             async saveCampeonato(id, dados) {
-                if (id) {
-                    await updateDoc(doc(db, "campeonatos", id), dados);
-                } else {
-                    await addDoc(collection(db, "campeonatos"), dados);
-                }
+                if (state.userRole !== 'admin') { alert("Acesso negado."); return; }
+                if (id) { await updateDoc(doc(db, "campeonatos", id), dados); }
+                else { await addDoc(collection(db, "campeonatos"), dados); }
             },
             async deleteCampeonato(id) {
-                if (confirm('Tem certeza que deseja excluir este campeonato?')) {
-                    await deleteDoc(doc(db, "campeonatos", id));
-                }
+                if (state.userRole !== 'admin') return;
+                if (confirm('Tem certeza?')) { await deleteDoc(doc(db, "campeonatos", id)); }
+            },
+            async getUserRole(uid) {
+                const userDoc = await getDoc(doc(db, "usuarios", uid));
+                return userDoc.exists() ? userDoc.data().role : null;
+            },
+            async setUserRole(uid, newRole) {
+                if (state.userRole !== 'admin') { alert("Ação não permitida."); return; }
+                await updateDoc(doc(db, "usuarios", uid), { role: newRole });
             }
         };
 
@@ -444,120 +577,191 @@
         const handleJogadorFormSubmit = async (e) => {
             e.preventDefault();
             const form = e.target;
-            const submitButton = form.querySelector('button[type="submit"]');
-            submitButton.disabled = true;
-            submitButton.innerText = "Salvando...";
-            
+            const btn = form.querySelector('button[type="submit"]');
+            btn.disabled = true; btn.innerText = "Salvando...";
             const id = form.querySelector('#documento-id').value;
             const dados = {
-                nome: form.querySelector('#nome').value,
-                cpf: form.querySelector('#cpf').value,
-                nascimento: form.querySelector('#nascimento').value,
-                posicao: form.querySelector('#posicao').value,
+                nome: form.querySelector('#nome').value, cpf: form.querySelector('#cpf').value,
+                nascimento: form.querySelector('#nascimento').value, posicao: form.querySelector('#posicao').value,
                 numero_uniforme: form.querySelector('#numero_uniforme').value
             };
-            
             await dataService.saveJogador(id, dados, form.querySelector('#foto').files[0]);
-            
             UI.closeAllModals();
-            submitButton.disabled = false;
-            submitButton.innerText = "Salvar";
+            btn.disabled = false; btn.innerText = "Salvar";
         };
 
         const handleCampeonatoFormSubmit = async (e) => {
             e.preventDefault();
             const form = e.target;
-            const submitButton = form.querySelector('button[type="submit"]');
-            submitButton.disabled = true;
-            submitButton.innerText = "Salvando...";
-
+            const btn = form.querySelector('button[type="submit"]');
+            btn.disabled = true; btn.innerText = "Salvando...";
             const id = form.querySelector('#campeonato-id').value;
             const escalados = Array.from(form.querySelectorAll('#lista-jogadores-escalar input:checked')).map(chk => chk.value);
             const dados = {
-                nome: form.querySelector('#campeonato-nome').value,
-                data: form.querySelector('#campeonato-data').value,
+                nome: form.querySelector('#campeonato-nome').value, data: form.querySelector('#campeonato-data').value,
                 jogadoresEscalados: escalados
             };
-
             await dataService.saveCampeonato(id, dados);
-
             UI.closeAllModals();
-            submitButton.disabled = false;
-            submitButton.innerText = "Salvar Campeonato";
+            btn.disabled = false; btn.innerText = "Salvar Campeonato";
         };
 
         const handleGridJogadoresClick = (e) => {
             const card = e.target.closest('.player-card');
             if (!card) return;
             const id = card.dataset.id;
-            
-            // CORREÇÃO: Usar as classes corretas dos botões
-            if (e.target.closest('.btn-edit-jogador')) {
-                UI.showJogadorModal(id);
-            } else if (e.target.closest('.btn-delete-jogador')) {
-                dataService.deleteJogador(id);
-            } else {
-                UI.showFichaJogador(id);
-            }
+            if (state.userRole === 'admin' && e.target.closest('.btn-edit-jogador')) { UI.showJogadorModal(id); }
+            else if (state.userRole === 'admin' && e.target.closest('.btn-delete-jogador')) { dataService.deleteJogador(id); }
+            else { UI.showFichaJogador(id); }
         };
 
         const handleGridCampeonatosClick = (e) => {
             const card = e.target.closest('.championship-card');
             if (!card) return;
             const id = card.dataset.id;
-            
-            // CORREÇÃO: Usar as classes corretas dos botões
-            if (e.target.closest('.btn-edit-camp')) {
-                UI.showCampeonatoModal(id);
-            } else if (e.target.closest('.btn-delete-camp')) {
-                dataService.deleteCampeonato(id);
-            } else {
-                UI.showFichaCampeonato(id);
+            if (state.userRole === 'admin' && e.target.closest('.btn-edit-camp')) { UI.showCampeonatoModal(id); }
+            else if (state.userRole === 'admin' && e.target.closest('.btn-delete-camp')) { dataService.deleteCampeonato(id); }
+            else { UI.showFichaCampeonato(id); }
+        };
+
+        const handleToggleToRegister = () => {
+            elements.loginContainer.style.display = 'none';
+            elements.registerContainer.style.display = 'flex';
+        };
+
+        const handleToggleToLogin = () => {
+            elements.registerContainer.style.display = 'none';
+            elements.loginContainer.style.display = 'flex';
+        };
+
+        const handleLoginSubmit = async (e) => {
+            e.preventDefault();
+            const email = elements.loginForm['login-email'].value;
+            const password = elements.loginForm['login-password'].value;
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                elements.loginError.style.display = 'none';
+            } catch (error) {
+                elements.loginError.style.display = 'block';
             }
         };
-        
-        // --- INICIALIZAÇÃO E BINDING DE EVENTOS ---
-        function init() {
-            // Botões principais
+
+        const handleRegisterSubmit = async (e) => {
+            e.preventDefault();
+            const email = elements.registerForm['register-email'].value;
+            const password = elements.registerForm['register-password'].value;
+            elements.registerError.style.display = 'none';
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                await setDoc(doc(db, "usuarios", userCredential.user.uid), {
+                    email: userCredential.user.email, role: "jogador"
+                });
+            } catch (error) {
+                elements.registerError.textContent = "Erro ao registrar. Verifique o email e a senha (mín. 6 caracteres)."
+                elements.registerError.style.display = 'block';
+            }
+        };
+
+        const handleTabClick = (e) => {
+            if (!e.target.classList.contains('nav-tab')) return;
+            const targetTab = e.target.dataset.tab;
+            elements.navTabs.querySelector('.active').classList.remove('active');
+            e.target.classList.add('active');
+            elements.tabContents.forEach(content => {
+                content.classList.remove('active');
+                if (content.id === `tab-${targetTab}`) { content.classList.add('active'); }
+            });
+        };
+
+        const handleRoleToggle = async (e) => {
+            if (!e.target.classList.contains('role-toggle')) return;
+            const button = e.target;
+            const uid = button.dataset.uid;
+            const currentRole = button.textContent;
+            const newRole = currentRole === 'admin' ? 'jogador' : 'admin';
+            button.disabled = true;
+            await dataService.setUserRole(uid, newRole);
+        };
+
+        const handlePhotoPreview = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                elements.fotoPreview.src = URL.createObjectURL(file);
+                elements.fotoPreview.classList.add('visible');
+            }
+        };
+
+        // --- GERENCIAMENTO DE LISTENERS ---
+        function addAppListeners() {
+            if(state.listeners.tabs) elements.navTabs.removeEventListener('click', state.listeners.tabs);
+            elements.navTabs.addEventListener('click', handleTabClick);
+            state.listeners.tabs = handleTabClick;
+
+            // Adicione outros listeners da aplicação principal aqui, seguindo o mesmo padrão
             elements.btnAbrirModalJogador.addEventListener('click', () => UI.showJogadorModal());
             elements.btnAbrirModalCampeonato.addEventListener('click', () => UI.showCampeonatoModal());
-
-            // Delegação de eventos para os grids
             elements.gridJogadores.addEventListener('click', handleGridJogadoresClick);
             elements.gridCampeonatos.addEventListener('click', handleGridCampeonatosClick);
-
-            // Submissão de formulários
             elements.formJogador.addEventListener('submit', handleJogadorFormSubmit);
             elements.formCampeonato.addEventListener('submit', handleCampeonatoFormSubmit);
+            elements.usersTableBody.addEventListener('click', handleRoleToggle);
+            elements.fotoInput.addEventListener('change', handlePhotoPreview);
             
-            // Fechar modais
             document.querySelectorAll('.close-button').forEach(b => b.addEventListener('click', UI.closeAllModals));
             elements.modalBackdrop.addEventListener('click', UI.closeAllModals);
+        }
 
-            // Preview de foto
-            elements.fotoInput.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    elements.fotoPreview.src = URL.createObjectURL(file);
-                    elements.fotoPreview.classList.add('visible');
+        // --- INICIALIZAÇÃO E LÓGICA DE AUTENTICAÇÃO ---
+        function init() {
+            elements.toggleToRegister.addEventListener('click', handleToggleToRegister);
+            elements.toggleToLogin.addEventListener('click', handleToggleToLogin);
+            elements.loginForm.addEventListener('submit', handleLoginSubmit);
+            elements.registerForm.addEventListener('submit', handleRegisterSubmit);
+            elements.btnLogout.addEventListener('click', () => signOut(auth));
+
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    state.currentUser = user;
+                    state.userRole = await dataService.getUserRole(user.uid);
+                    
+                    elements.loginContainer.style.display = 'none';
+                    elements.registerContainer.style.display = 'none';
+                    elements.mainContent.style.display = 'block';
+                    
+                    addAppListeners();
+                    UI.updateUIAccess();
+
+                    // Listeners do Firebase (reativados quando logado)
+                    state.listeners.jogadoresUnsub = onSnapshot(query(collection(db, "jogadores"), orderBy("nome")), (snapshot) => {
+                        state.jogadores = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        UI.renderJogadores();
+                    });
+                    state.listeners.campeonatosUnsub = onSnapshot(query(collection(db, "campeonatos"), orderBy("data", "desc")), (snapshot) => {
+                        state.campeonatos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        UI.renderCampeonatos();
+                    });
+                    if (state.userRole === 'admin') {
+                        state.listeners.usersUnsub = onSnapshot(query(collection(db, "usuarios"), orderBy("email")), (snapshot) => {
+                            state.allUsers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+                            UI.renderAllUsers();
+                        });
+                    }
+
+                } else {
+                    // Limpa o estado e desativa listeners ao deslogar
+                    if(state.listeners.jogadoresUnsub) state.listeners.jogadoresUnsub();
+                    if(state.listeners.campeonatosUnsub) state.listeners.campeonatosUnsub();
+                    if(state.listeners.usersUnsub) state.listeners.usersUnsub();
+
+                    state.currentUser = null;
+                    state.userRole = null;
+                    elements.mainContent.style.display = 'none';
+                    elements.registerContainer.style.display = 'none';
+                    elements.loginContainer.style.display = 'flex';
                 }
-            });
-
-            // Listeners do Firebase para atualização em tempo real
-            const qJogadores = query(collection(db, "jogadores"), orderBy("nome"));
-            onSnapshot(qJogadores, (snapshot) => {
-                state.jogadores = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                UI.renderJogadores();
-            });
-
-            const qCampeonatos = query(collection(db, "campeonatos"), orderBy("data", "desc"));
-            onSnapshot(qCampeonatos, (snapshot) => {
-                state.campeonatos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                UI.renderCampeonatos();
             });
         }
 
-        // Iniciar a aplicação
         init();
     </script>
 </body>
