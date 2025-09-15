@@ -44,117 +44,37 @@
         .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
 
         /* --- Estilos de Login e Registro --- */
-        .auth-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            padding: 20px;
-        }
-        .auth-box {
-            width: 100%;
-            max-width: 400px;
-            padding: 40px;
-            background: var(--cor-branco);
-            box-shadow: var(--sombra-card);
-            border-radius: 12px;
-            text-align: center;
-        }
-        .login-logo {
-            height: 90px;
-            width: auto;
-            display: block;
-            margin: 0 auto 20px;
-        }
-        .auth-box h2 {
-            font-family: var(--fonte-titulo);
-            font-size: 2.5rem;
-            margin-bottom: 25px;
-            color: var(--cor-preto);
-        }
-        .auth-error {
-            color: var(--cor-vermelho-escuro);
-            margin-top: 15px;
-            display: none;
-        }
-        .auth-toggle-link {
-            margin-top: 20px;
-            font-size: 0.9rem;
-            color: var(--cor-azul-claro);
-            cursor: pointer;
-            text-decoration: underline;
-            font-weight: bold;
-        }
+        .auth-container { display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; }
+        .auth-box { width: 100%; max-width: 400px; padding: 40px; background: var(--cor-branco); box-shadow: var(--sombra-card); border-radius: 12px; text-align: center; }
+        .login-logo { height: 90px; width: auto; display: block; margin: 0 auto 20px; }
+        .auth-box h2 { font-family: var(--fonte-titulo); font-size: 2.5rem; margin-bottom: 25px; color: var(--cor-preto); }
+        .auth-error { color: var(--cor-vermelho-escuro); margin-top: 15px; display: none; }
+        .auth-toggle-link { margin-top: 20px; font-size: 0.9rem; color: var(--cor-azul-claro); cursor: pointer; text-decoration: underline; font-weight: bold; }
         #register-container { display: none; }
-        .form-group label.inline-label {
-            text-align: left;
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
+        .form-group label.inline-label { text-align: left; display: block; margin-bottom: 5px; font-weight: 600; }
 
         /* --- Abas de Navegação --- */
-        .nav-tabs {
-            display: flex;
-            margin-bottom: 0;
-            background-color: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(5px);
-            border-radius: 8px 8px 0 0;
-            padding: 5px 5px 0 5px;
-        }
-        .nav-tab {
-            padding: 10px 20px;
-            cursor: pointer;
-            font-size: 1.1rem;
-            font-weight: 600;
-            border-bottom: 3px solid transparent;
-            transition: all 0.2s ease-in-out;
-        }
-        .nav-tab:hover {
-            color: var(--cor-azul-escuro);
-        }
-        .nav-tab.active {
-            color: var(--cor-azul-escuro);
-            border-bottom-color: var(--cor-azul-escuro);
-        }
+        .nav-tabs { display: flex; margin-bottom: 0; background-color: rgba(255, 255, 255, 0.9); backdrop-filter: blur(5px); border-radius: 8px 8px 0 0; padding: 5px 5px 0 5px; }
+        .nav-tab { padding: 10px 20px; cursor: pointer; font-size: 1.1rem; font-weight: 600; border-bottom: 3px solid transparent; transition: all 0.2s ease-in-out; }
+        .nav-tab:hover { color: var(--cor-azul-escuro); }
+        .nav-tab.active { color: var(--cor-azul-escuro); border-bottom-color: var(--cor-azul-escuro); }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         
         #main-content { display: none; }
 
         /* --- Cabeçalho e Rodapé --- */
-        .site-header {
-            background: linear-gradient(135deg, var(--cor-azul-escuro), var(--cor-preto));
-            color: var(--cor-branco);
-            padding: 10px 0;
-            position: sticky; top: 0; z-index: 100;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-        }
+        .site-header { background: linear-gradient(135deg, var(--cor-azul-escuro), var(--cor-preto)); color: var(--cor-branco); padding: 10px 0; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .header-container { display: flex; justify-content: space-between; align-items: center; }
         .header-left { display: flex; align-items: center; gap: 20px; }
         .logo { height: 60px; width: auto; border-radius: 8px; }
         .site-header h1 { font-family: var(--fonte-titulo); font-size: 2.8rem; letter-spacing: 1px; margin: 0; }
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-        }
-        #welcome-message {
-            font-weight: 600;
-            font-size: 1rem;
-        }
+        .header-right { display: flex; align-items: center; gap: 20px; }
+        #welcome-message { font-weight: 600; font-size: 1rem; }
         .site-footer { text-align: center; padding: 20px; margin-top: 40px; background-color: var(--cor-preto); color: var(--cor-branco); }
 
         /* --- Seções e Layout --- */
-        .content-section { 
-            background-color: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(8px);
-            padding: 25px; 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.05); 
-            border: 1px solid rgba(255,255,255,0.2);
-            margin-top: 0;
-            border-radius: 0 0 12px 12px;
-        }
+        .content-section { background-color: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); padding: 25px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid rgba(255,255,255,0.2); margin-top: 0; border-radius: 0 0 12px 12px; }
         .section-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; border-bottom: 2px solid var(--cor-cinza-fundo); padding-bottom: 15px; margin-bottom: 25px; }
         .section-header h2 { font-family: var(--fonte-titulo); font-size: 2.5rem; color: var(--cor-preto); }
         .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 25px; }
@@ -169,13 +89,21 @@
         .admin-only { display: none; }
 
         /* --- Tabela de Usuários (Admin) --- */
-        #admin-users-table { width: 100%; border-collapse: collapse; margin-top: 20px; display: block; overflow-x: auto; }
-        #admin-users-table th, #admin-users-table td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        #admin-users-table-wrapper { display: block; overflow-x: auto; }
+        #admin-users-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        #admin-users-table th, #admin-users-table td { padding: 12px; border: 1px solid #ddd; text-align: left; white-space: nowrap; }
         #admin-users-table th { background-color: var(--cor-cinza-fundo); }
-        .role-toggle { padding: 5px 10px; border-radius: 5px; cursor: pointer; border: none; color: white; }
+        .user-actions { display: flex; gap: 8px; align-items: center;}
+        .action-btn { background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 5px; }
+        .action-btn:hover { opacity: 0.7; }
+        .btn-delete { color: var(--cor-vermelho-escuro); }
+        .btn-ban { color: var(--cor-laranja); }
+        .btn-unban { color: var(--cor-sucesso); }
+        .role-toggle { padding: 5px 10px; border-radius: 5px; cursor: pointer; border: none; color: white; font-size: 0.8rem;}
         .role-toggle.admin { background-color: var(--cor-sucesso); }
         .role-toggle.jogador { background-color: var(--cor-aviso); color: var(--cor-preto); }
         .role-toggle[disabled] { background-color: #aaa; cursor: not-allowed; }
+        .user-status.banned { color: var(--cor-vermelho-escuro); font-weight: bold; }
 
         /* --- Cards (Jogador e Campeonato) --- */
         .player-card, .championship-card { background-color: var(--cor-branco); border-radius: 12px; box-shadow: var(--sombra-card); text-align: center; padding: 20px; cursor: pointer; transition: all 0.2s ease-in-out; position: relative; overflow: hidden; border: 1px solid #e2e8f0; }
@@ -215,123 +143,42 @@
         .jogador-escalado { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
         .jogador-escalado img, .jogador-escalado .placeholder { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; margin-right: 15px; }
 
-        /**********************************************
-         * INÍCIO DAS OTIMIZAÇÕES PARA DISPOSITIVOS MÓVEIS *
-         **********************************************/
         @media screen and (max-width: 768px) {
-            .container {
-                padding: 10px;
-            }
-
-            /* --- Cabeçalho Ajustado --- */
-            .header-left {
-                gap: 10px;
-            }
-            .logo {
-                height: 50px;
-            }
-            .site-header h1 {
-                font-size: 1.8rem;
-            }
-            .header-right {
-                gap: 10px;
-                flex-direction: column-reverse;
-                align-items: flex-end;
-            }
-            #welcome-message {
-                font-size: 0.8rem;
-                text-align: right;
-            }
-            .btn-logout {
-                padding: 8px 12px;
-            }
-
-            /* --- Abas e Seções --- */
-            .nav-tabs {
-                justify-content: space-around;
-            }
-            .nav-tab {
-                padding: 8px 10px;
-                font-size: 0.9rem;
-            }
-            .section-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 10px;
-            }
-            .section-header h2 {
-                font-size: 2rem;
-            }
-            .content-section {
-                padding: 15px;
-            }
-
-            /* --- Grid de Cards em Coluna Única --- */
-            .card-grid {
-                grid-template-columns: 1fr;
-                gap: 20px;
-            }
-
-            /* --- Modais e Formulários --- */
-            .modal-content {
-                padding: 20px;
-            }
-            #ficha-jogador {
-                flex-direction: column;
-            }
-            .auth-box {
-                padding: 20px;
-            }
-            .auth-box h2 {
-                font-size: 2rem;
-            }
+            .container { padding: 10px; }
+            .header-left { gap: 10px; }
+            .logo { height: 50px; }
+            .site-header h1 { font-size: 1.8rem; }
+            .header-right { gap: 10px; flex-direction: column-reverse; align-items: flex-end; }
+            #welcome-message { font-size: 0.8rem; text-align: right; }
+            .btn-logout { padding: 8px 12px; }
+            .nav-tabs { justify-content: space-around; }
+            .nav-tab { padding: 8px 10px; font-size: 0.9rem; }
+            .section-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .section-header h2 { font-size: 2rem; }
+            .content-section { padding: 15px; }
+            .card-grid { grid-template-columns: 1fr; gap: 20px; }
+            .modal-content { padding: 20px; }
+            #ficha-jogador { flex-direction: column; }
+            .auth-box { padding: 20px; }
+            .auth-box h2 { font-size: 2rem; }
         }
-        /**********************************************
-         * FIM DAS OTIMIZAÇÕES PARA DISPOSITIVOS MÓVEIS  *
-         **********************************************/
     </style>
 </head>
 <body>
 
-    <div id="login-container" class="auth-container">
-        <div class="auth-box">
-            <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="login-logo">
-            <h2>ANCB-MT Login</h2>
-            <form id="login-form">
-                <div class="form-group">
-                    <input type="email" id="login-email" placeholder="Email" required>
-                </div>
-                <div class="form-group">
-                    <input type="password" id="login-password" placeholder="Senha" required>
-                </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%;">Entrar</button>
-                <p id="login-error" class="auth-error">Email ou senha inválidos.</p>
-            </form>
-            <p id="toggle-to-register" class="auth-toggle-link">Não tem uma conta? Registre-se</p>
-        </div>
-    </div>
+    <div id="login-container" class="auth-container"> <div class="auth-box"> <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="login-logo"> <h2>ANCB-MT Login</h2> <form id="login-form"> <div class="form-group"> <input type="email" id="login-email" placeholder="Email" required> </div> <div class="form-group"> <input type="password" id="login-password" placeholder="Senha" required> </div> <button type="submit" class="btn btn-primary" style="width: 100%;">Entrar</button> <p id="login-error" class="auth-error">Email ou senha inválidos. Usuários banidos não podem fazer login.</p> </form> <p id="toggle-to-register" class="auth-toggle-link">Não tem uma conta? Registre-se</p> </div> </div>
 
     <div id="register-container" class="auth-container">
         <div class="auth-box">
             <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="login-logo">
             <h2>Criar Conta</h2>
             <form id="register-form">
-                <div class="form-group">
-                    <input type="text" id="register-nome" placeholder="Nome Completo" required>
-                </div>
-                <div class="form-group">
-                    <input type="text" id="register-apelido" placeholder="Apelido" required>
-                </div>
-                <div class="form-group">
-                    <label for="register-nascimento" class="inline-label">Data de Nascimento</label>
-                    <input type="date" id="register-nascimento" required>
-                </div>
-                <div class="form-group">
-                    <input type="email" id="register-email" placeholder="Email" required>
-                </div>
-                <div class="form-group">
-                    <input type="password" id="register-password" placeholder="Senha (mínimo 6 caracteres)" required>
-                </div>
+                <div class="form-group"> <input type="text" id="register-nome" placeholder="Nome Completo" required> </div>
+                <div class="form-group"> <input type="text" id="register-apelido" placeholder="Apelido" required> </div>
+                <div class="form-group"> <label for="register-nascimento" class="inline-label">Data de Nascimento</label> <input type="date" id="register-nascimento" required> </div>
+                <div class="form-group"> <input type="email" id="register-email" placeholder="Email" required> </div>
+                <div class="form-group"> <input type="password" id="register-password" placeholder="Senha (mínimo 6 caracteres)" required> </div>
+                <div class="form-group"> <input type="password" id="register-password-confirm" placeholder="Confirmar Senha" required> </div>
                 <button type="submit" class="btn btn-primary" style="width: 100%;">Registrar</button>
                 <p id="register-error" class="auth-error">Ocorreu um erro ao registrar.</p>
             </form>
@@ -360,48 +207,33 @@
                 <div class="nav-tab admin-only" data-tab="admin">Administradores</div>
             </nav>
 
-            <div id="tab-campeonatos" class="tab-content active">
-                <section class="content-section">
-                    <div class="section-header">
-                        <h2>Campeonatos</h2>
-                        <button id="btn-abrir-modal-campeonato" class="btn btn-primary admin-only">🏆 Adicionar Campeonato</button>
-                    </div>
-                    <div id="grid-campeonatos" class="card-grid"></div>
-                </section>
-            </div>
-
-            <div id="tab-jogadores" class="tab-content">
-                <section class="content-section">
-                    <div class="section-header">
-                        <h2>Jogadores</h2>
-                        <button id="btn-abrir-modal-jogador" class="btn btn-primary admin-only">➕ Cadastrar Jogador</button>
-                    </div>
-                    <div id="grid-jogadores" class="card-grid"></div>
-                </section>
-            </div>
-
+            <div id="tab-campeonatos" class="tab-content active"> <section class="content-section"> <div class="section-header"> <h2>Campeonatos</h2> <button id="btn-abrir-modal-campeonato" class="btn btn-primary admin-only">🏆 Adicionar Campeonato</button> </div> <div id="grid-campeonatos" class="card-grid"></div> </section> </div>
+            <div id="tab-jogadores" class="tab-content"> <section class="content-section"> <div class="section-header"> <h2>Jogadores</h2> <button id="btn-abrir-modal-jogador" class="btn btn-primary admin-only">➕ Cadastrar Jogador</button> </div> <div id="grid-jogadores" class="card-grid"></div> </section> </div>
+            
             <div id="tab-admin" class="tab-content">
                 <section class="content-section">
                     <div class="section-header">
-                        <h2>Gerenciar Permissões</h2>
+                        <h2>Gerenciar Usuários</h2>
                     </div>
-                    <p>Clique na permissão para alternar entre "Admin" e "Jogador".</p>
-                    <table id="admin-users-table">
-                        <thead>
-                            <tr>
-                                <th>Email</th>
-                                <th>Permissão</th>
-                            </tr>
-                        </thead>
-                        <tbody id="users-table-body"></tbody>
-                    </table>
+                    <div id="admin-users-table-wrapper">
+                        <table id="admin-users-table">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Nome</th>
+                                    <th>Status</th>
+                                    <th>Permissão</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body"></tbody>
+                        </table>
+                    </div>
                 </section>
             </div>
         </main>
 
-        <footer class="site-footer">
-            <p>&copy; 2025 ANCB-MT. Todos os direitos reservados.</p>
-        </footer>
+        <footer class="site-footer"> <p>&copy; 2025 ANCB-MT. Todos os direitos reservados.</p> </footer>
     </div>
 
     <div id="modal-backdrop" class="modal-backdrop"></div>
@@ -409,149 +241,97 @@
     <div id="modal-ver-jogador" class="modal"><div class="modal-content"><button class="close-button" aria-label="Fechar">&times;</button><h2>Ficha do Jogador</h2><div id="ficha-jogador"></div></div></div>
     <div id="modal-campeonato" class="modal"><div class="modal-content"><button class="close-button" aria-label="Fechar">&times;</button><h2 id="modal-campeonato-titulo"></h2><form id="form-campeonato"><input type="hidden" id="campeonato-id"><div class="form-group"><label for="campeonato-nome">Nome do Campeonato</label><input type="text" id="campeonato-nome" required></div><div class="form-group"><label for="campeonato-data">Data</label><input type="date" id="campeonato-data" required></div><div class="form-group"><label>Escalar Jogadores</label><div id="lista-jogadores-escalar"></div></div><button type="submit" class="btn btn-primary">Salvar Campeonato</button></form></div></div>
     <div id="modal-ver-campeonato" class="modal"><div class="modal-content"><button class="close-button" aria-label="Fechar">&times;</button><h2 id="ver-campeonato-titulo"></h2><p id="ver-campeonato-data"></p><hr><h3>Jogadores Escalados</h3><div id="escalacao-container"></div></div></div>
-
+    <div id="modal-edit-user" class="modal"><div class="modal-content"><button class="close-button" aria-label="Fechar">&times;</button><h2 id="modal-edit-user-titulo">Editar Usuário</h2><form id="form-edit-user"><input type="hidden" id="edit-user-id"><div class="form-group"><label for="edit-user-nome">Nome Completo</label><input type="text" id="edit-user-nome" required></div><div class="form-group"><label for="edit-user-apelido">Apelido</label><input type="text" id="edit-user-apelido" required></div><div class="form-group"><label for="edit-user-nascimento">Data de Nascimento</label><input type="date" id="edit-user-nascimento" required></div><button type="submit" class="btn btn-primary">Salvar Alterações</button></form></div></div>
+    
     <script type="module">
         // --- INICIALIZAÇÃO DO FIREBASE ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, orderBy, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyCZ2yeJJ34VwYAmQnFCEv72Q1uDFFGKKjQ",
-            authDomain: "ancb-painel-db.firebaseapp.com",
-            projectId: "ancb-painel-db",
-            storageBucket: "ancb-painel-db.appspot.com",
-            messagingSenderId: "792900234002",
-            appId: "1:792900234002:web:2a37004deb046cb8f261cb",
-            measurementId: "G-VCMEKP1XP4"
-        };
-
+        const firebaseConfig = { apiKey: "AIzaSyCZ2yeJJ34VwYAmQnFCEv72Q1uDFFGKKjQ", authDomain: "ancb-painel-db.firebaseapp.com", projectId: "ancb-painel-db", storageBucket: "ancb-painel-db.appspot.com", messagingSenderId: "792900234002", appId: "1:792900234002:web:2a37004deb046cb8f261cb", measurementId: "G-VCMEKP1XP4" };
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // --- ESTADO GLOBAL DA APLICAÇÃO ---
-        let state = {
-            jogadores: [],
-            campeonatos: [],
-            allUsers: [],
-            currentUser: null,
-            currentUserProfile: null,
-            userRole: null,
-            listeners: {} 
-        };
+        let state = { jogadores: [], campeonatos: [], allUsers: [], currentUser: null, currentUserProfile: null, userRole: null, listeners: {} };
 
-        // --- SELETORES DO DOM ---
         const elements = {
-            body: document.body,
-            loginContainer: document.getElementById('login-container'),
-            registerContainer: document.getElementById('register-container'),
-            mainContent: document.getElementById('main-content'),
-            loginForm: document.getElementById('login-form'),
-            registerForm: document.getElementById('register-form'),
-            loginError: document.getElementById('login-error'),
-            registerError: document.getElementById('register-error'),
-            toggleToRegister: document.getElementById('toggle-to-register'),
-            toggleToLogin: document.getElementById('toggle-to-login'),
-            btnLogout: document.getElementById('btn-logout'),
-            welcomeMessage: document.getElementById('welcome-message'),
-            gridJogadores: document.getElementById('grid-jogadores'),
-            gridCampeonatos: document.getElementById('grid-campeonatos'),
-            modalJogador: document.getElementById('modal-jogador'),
-            modalVerJogador: document.getElementById('modal-ver-jogador'),
-            modalCampeonato: document.getElementById('modal-campeonato'),
-            modalVerCampeonato: document.getElementById('modal-ver-campeonato'),
-            modalBackdrop: document.getElementById('modal-backdrop'),
-            formJogador: document.getElementById('form-jogador'),
-            formCampeonato: document.getElementById('form-campeonato'),
-            btnAbrirModalJogador: document.getElementById('btn-abrir-modal-jogador'),
-            btnAbrirModalCampeonato: document.getElementById('btn-abrir-modal-campeonato'),
-            fotoInput: document.getElementById('foto'),
-            fotoPreview: document.getElementById('preview-foto'),
-            navTabs: document.querySelector('.nav-tabs'),
-            tabContents: document.querySelectorAll('.tab-content'),
-            usersTableBody: document.getElementById('users-table-body')
+            body: document.body, loginContainer: document.getElementById('login-container'), registerContainer: document.getElementById('register-container'),
+            mainContent: document.getElementById('main-content'), loginForm: document.getElementById('login-form'), registerForm: document.getElementById('register-form'),
+            loginError: document.getElementById('login-error'), registerError: document.getElementById('register-error'), toggleToRegister: document.getElementById('toggle-to-register'),
+            toggleToLogin: document.getElementById('toggle-to-login'), btnLogout: document.getElementById('btn-logout'), welcomeMessage: document.getElementById('welcome-message'),
+            gridJogadores: document.getElementById('grid-jogadores'), gridCampeonatos: document.getElementById('grid-campeonatos'), modalJogador: document.getElementById('modal-jogador'),
+            modalVerJogador: document.getElementById('modal-ver-jogador'), modalCampeonato: document.getElementById('modal-campeonato'),
+            modalVerCampeonato: document.getElementById('modal-ver-campeonato'), modalBackdrop: document.getElementById('modal-backdrop'), formJogador: document.getElementById('form-jogador'),
+            formCampeonato: document.getElementById('form-campeonato'), btnAbrirModalJogador: document.getElementById('btn-abrir-modal-jogador'),
+            btnAbrirModalCampeonato: document.getElementById('btn-abrir-modal-campeonato'), fotoInput: document.getElementById('foto'), fotoPreview: document.getElementById('preview-foto'),
+            navTabs: document.querySelector('.nav-tabs'), tabContents: document.querySelectorAll('.tab-content'), usersTableBody: document.getElementById('users-table-body'),
+            modalEditUser: document.getElementById('modal-edit-user'), formEditUser: document.getElementById('form-edit-user')
         };
-
-        // --- FUNÇÕES DE UTILIDADE ---
         const utils = {
             formatDate: (dateStr) => { if (!dateStr) return 'N/A'; const [year, month, day] = dateStr.split('-'); return `${day}/${month}/${year}`; },
             toBase64: (file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result); reader.onerror = error => reject(error); })
         };
-
-        // --- LÓGICA DE UI (INTERFACE) ---
-        const UI = {
-            renderJogadores() { elements.gridJogadores.innerHTML = ''; const cardActionsHTML = state.userRole === 'admin' ? `<div class="card-actions"><button class="btn-edit-jogador" title="Editar">✏️</button><button class="btn-delete-jogador" title="Excluir">🗑️</button></div>` : ''; state.jogadores.forEach(j => { const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : `<div class="photo-placeholder">🏀</div>`; const card = document.createElement('div'); card.className = 'player-card'; card.dataset.id = j.id; card.innerHTML = `${cardActionsHTML}<div class="photo-container">${fotoHTML}</div><p class="player-name">${j.nome}</p>`; elements.gridJogadores.appendChild(card); }); },
-            renderCampeonatos() { elements.gridCampeonatos.innerHTML = ''; const cardActionsHTML = state.userRole === 'admin' ? `<div class="card-actions"><button class="btn-edit-camp" title="Editar">✏️</button><button class="btn-delete-camp" title="Excluir">🗑️</button></div>` : ''; state.campeonatos.forEach(c => { const card = document.createElement('div'); card.className = 'championship-card'; card.dataset.id = c.id; card.innerHTML = `${cardActionsHTML}<div><h3 class="championship-name">${c.nome}</h3><div class="championship-info"><p>📅 <strong>Data:</strong> ${utils.formatDate(c.data)}</p><p>👥 <strong>Jogadores:</strong> ${c.jogadoresEscalados?.length || 0} escalado(s)</p></div></div>`; elements.gridCampeonatos.appendChild(card); }); },
-            updateUIAccess() { const isAdmin = state.userRole === 'admin'; document.querySelectorAll('.admin-only').forEach(el => { el.style.display = isAdmin ? (el.matches('.nav-tab, .btn') ? 'inline-flex' : 'block') : 'none'; }); this.renderAllUsers(); this.renderJogadores(); this.renderCampeonatos(); },
-            renderAllUsers() { if(state.userRole !== 'admin') { elements.usersTableBody.innerHTML = ''; return; } elements.usersTableBody.innerHTML = ''; state.allUsers.forEach(user => { const tr = document.createElement('tr'); const isCurrentUser = user.uid === state.currentUser.uid; const toggleButtonHTML = isCurrentUser ? `<button class="role-toggle ${user.role}" disabled title="Você não pode alterar sua própria permissão.">${user.role}</button>` : `<button class="role-toggle ${user.role}" data-uid="${user.uid}">${user.role}</button>`; tr.innerHTML = `<td>${user.email}</td><td>${toggleButtonHTML}</td>`; elements.usersTableBody.appendChild(tr); }); },
-            openModal(modal) { elements.body.classList.add('modal-open'); elements.modalBackdrop.classList.add('active'); modal.classList.add('active'); },
-            closeAllModals() { document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active')); elements.modalBackdrop.classList.remove('active'); elements.body.classList.remove('modal-open'); },
-            showJogadorModal(id = null) { if (state.userRole !== 'admin') return; elements.formJogador.reset(); elements.fotoPreview.src = ""; elements.fotoPreview.classList.remove('visible'); document.getElementById('documento-id').value = id || ''; if (id) { const j = state.jogadores.find(p => p.id === id); if (!j) return; document.getElementById('modal-jogador-titulo').innerText = 'Editar Jogador'; document.getElementById('nome').value = j.nome; document.getElementById('cpf').value = j.cpf; document.getElementById('nascimento').value = j.nascimento; document.getElementById('posicao').value = j.posicao; document.getElementById('numero_uniforme').value = j.numero_uniforme; if (j.foto) { elements.fotoPreview.src = j.foto; elements.fotoPreview.classList.add('visible'); } } else { document.getElementById('modal-jogador-titulo').innerText = 'Cadastrar Novo Jogador'; } this.openModal(elements.modalJogador); },
-            showFichaJogador(id) { const j = state.jogadores.find(p => p.id === id); if (!j) return; const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : '<div class="placeholder">🏀</div>'; const cpfHTML = state.userRole === 'admin' ? `<p><strong>CPF:</strong> ${j.cpf}</p>` : ''; document.getElementById('ficha-jogador').innerHTML = `${fotoHTML}<div><p><strong>Nome:</strong> ${j.nome}</p>${cpfHTML}<p><strong>Nascimento:</strong> ${utils.formatDate(j.nascimento)}</p><p><strong>Posição:</strong> ${j.posicao}</p><p><strong>Nº Uniforme:</strong> ${j.numero_uniforme}</p></div>`; this.openModal(elements.modalVerJogador); },
-            showCampeonatoModal(id = null) { if (state.userRole !== 'admin') return; elements.formCampeonato.reset(); let escalados = []; document.getElementById('campeonato-id').value = id || ''; if (id) { const c = state.campeonatos.find(i => i.id === id); if (!c) return; document.getElementById('modal-campeonato-titulo').innerText = 'Editar Campeonato'; document.getElementById('campeonato-nome').value = c.nome; document.getElementById('campeonato-data').value = c.data; escalados = c.jogadoresEscalados || []; } else { document.getElementById('modal-campeonato-titulo').innerText = 'Adicionar Novo Campeonato'; } const listaContainer = document.getElementById('lista-jogadores-escalar'); listaContainer.innerHTML = ''; const sortedJogadores = [...state.jogadores].sort((a, b) => a.nome.localeCompare(b.nome)); sortedJogadores.forEach(j => { const checked = escalados.includes(j.id) ? 'checked' : ''; listaContainer.innerHTML += `<div><input type="checkbox" id="j_${j.id}" value="${j.id}" ${checked}><label for="j_${j.id}"> ${j.nome} (#${j.numero_uniforme})</label></div>`; }); this.openModal(elements.modalCampeonato); },
-            showFichaCampeonato(id) { const camp = state.campeonatos.find(c => c.id === id); if (!camp) return; document.getElementById('ver-campeonato-titulo').innerText = camp.nome; document.getElementById('ver-campeonato-data').innerText = `Data: ${utils.formatDate(camp.data)}`; const container = document.getElementById('escalacao-container'); container.innerHTML = ''; if (!camp.jogadoresEscalados || camp.jogadoresEscalados.length === 0) { container.innerHTML = '<p>Nenhum jogador escalado.</p>'; } else { camp.jogadoresEscalados.forEach(jogadorId => { const j = state.jogadores.find(p => p.id === jogadorId); if (j) { const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : `<div class="placeholder">🏀</div>`; container.innerHTML += `<div class="jogador-escalado">${fotoHTML}<div class="info"><strong>${j.nome}</strong><br><span>#${j.numero_uniforme} - ${j.posicao}</span></div></div>`; } }); } this.openModal(elements.modalVerCampeonato); }
-        };
-
-        // --- LÓGICA DE DADOS (FIREBASE) ---
-        const dataService = {
-            getUserProfile: async (uid) => { const docSnap = await getDoc(doc(db, "usuarios", uid)); return docSnap.exists() ? docSnap.data() : null; },
-            saveJogador(id, dados, fotoFile) { if (state.userRole !== 'admin') { alert("Acesso negado."); return; } try { if (fotoFile) { dados.foto = utils.toBase64(fotoFile); } else if (id) { const j = state.jogadores.find(p => p.id === id); dados.foto = j ? j.foto : null; } else { dados.foto = null; } if (id) { updateDoc(doc(db, "jogadores", id), dados); } else { addDoc(collection(db, "jogadores"), dados); } } catch (error) { console.error("Erro ao salvar jogador: ", error); } },
-            deleteJogador(id) { if (state.userRole !== 'admin') return; if (confirm('Tem certeza?')) { deleteDoc(doc(db, "jogadores", id)); } },
-            saveCampeonato(id, dados) { if (state.userRole !== 'admin') { alert("Acesso negado."); return; } if (id) { updateDoc(doc(db, "campeonatos", id), dados); } else { addDoc(collection(db, "campeonatos"), dados); } },
-            deleteCampeonato(id) { if (state.userRole !== 'admin') return; if (confirm('Tem certeza?')) { deleteDoc(doc(db, "campeonatos", id)); } },
-            setUserRole(uid, newRole) { if (state.userRole !== 'admin') { alert("Ação não permitida."); return; } updateDoc(doc(db, "usuarios", uid), { role: newRole }); }
-        };
-
-        // --- HANDLERS DE EVENTOS ---
-        const handleJogadorFormSubmit = async (e) => { e.preventDefault(); const form = e.target; const btn = form.querySelector('button[type="submit"]'); btn.disabled = true; btn.innerText = "Salvando..."; const id = form.querySelector('#documento-id').value; const dados = { nome: form.querySelector('#nome').value, cpf: form.querySelector('#cpf').value, nascimento: form.querySelector('#nascimento').value, posicao: form.querySelector('#posicao').value, numero_uniforme: form.querySelector('#numero_uniforme').value }; await dataService.saveJogador(id, dados, form.querySelector('#foto').files[0]); UI.closeAllModals(); btn.disabled = false; btn.innerText = "Salvar"; };
-        const handleCampeonatoFormSubmit = async (e) => { e.preventDefault(); const form = e.target; const btn = form.querySelector('button[type="submit"]'); btn.disabled = true; btn.innerText = "Salvando..."; const id = form.querySelector('#campeonato-id').value; const escalados = Array.from(form.querySelectorAll('#lista-jogadores-escalar input:checked')).map(chk => chk.value); const dados = { nome: form.querySelector('#campeonato-nome').value, data: form.querySelector('#campeonato-data').value, jogadoresEscalados: escalados }; await dataService.saveCampeonato(id, dados); UI.closeAllModals(); btn.disabled = false; btn.innerText = "Salvar Campeonato"; };
-        const handleGridJogadoresClick = (e) => { const card = e.target.closest('.player-card'); if (!card) return; const id = card.dataset.id; if (state.userRole === 'admin' && e.target.closest('.btn-edit-jogador')) { UI.showJogadorModal(id); } else if (state.userRole === 'admin' && e.target.closest('.btn-delete-jogador')) { dataService.deleteJogador(id); } else { UI.showFichaJogador(id); } };
-        const handleGridCampeonatosClick = (e) => { const card = e.target.closest('.championship-card'); if (!card) return; const id = card.dataset.id; if (state.userRole === 'admin' && e.target.closest('.btn-edit-camp')) { UI.showCampeonatoModal(id); } else if (state.userRole === 'admin' && e.target.closest('.btn-delete-camp')) { dataService.deleteCampeonato(id); } else { UI.showFichaCampeonato(id); } };
-        const handleToggleToRegister = () => { elements.loginContainer.style.display = 'none'; elements.registerContainer.style.display = 'flex'; };
+        const UI = { renderAllUsers() { if (state.userRole !== 'admin') { elements.usersTableBody.innerHTML = ''; return; } elements.usersTableBody.innerHTML = ''; state.allUsers.forEach(user => { const tr = document.createElement('tr'); const isCurrentUser = user.uid === state.currentUser.uid; const roleButton = isCurrentUser ? `<button class="role-toggle ${user.role}" disabled title="Não é possível alterar sua própria permissão">${user.role}</button>` : `<button class="role-toggle ${user.role}" data-uid="${user.uid}">${user.role}</button>`; const statusText = user.status === 'banned' ? '<span class="user-status banned">Banido</span>' : '<span class="user-status">Ativo</span>'; const banButton = user.status === 'banned' ? `<button class="action-btn btn-unban" title="Reativar" data-uid="${user.uid}">♻️</button>` : `<button class="action-btn btn-ban" title="Banir" data-uid="${user.uid}">🚫</button>`; const actions = isCurrentUser ? '' : `<div class="user-actions"><button class="action-btn btn-edit-user" title="Editar Dados" data-uid="${user.uid}">✏️</button>${banButton}<button class="action-btn btn-delete" title="Excluir Conta" data-uid="${user.uid}">🗑️</button></div>`; tr.innerHTML = `<td>${user.email}</td><td>${user.nome || 'N/A'}</td><td>${statusText}</td><td>${roleButton}</td><td>${actions}</td>`; elements.usersTableBody.appendChild(tr); }); }, showEditUserModal(uid) { const user = state.allUsers.find(u => u.uid === uid); if (!user) return; elements.formEditUser['edit-user-id'].value = uid; elements.formEditUser['edit-user-nome'].value = user.nome; elements.formEditUser['edit-user-apelido'].value = user.apelido; elements.formEditUser['edit-user-nascimento'].value = user.dataNascimento; this.openModal(elements.modalEditUser); }, openModal(modal) { elements.body.classList.add('modal-open'); elements.modalBackdrop.classList.add('active'); modal.classList.add('active'); }, closeAllModals() { document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active')); elements.modalBackdrop.classList.remove('active'); elements.body.classList.remove('modal-open'); }, renderJogadores() { elements.gridJogadores.innerHTML = ''; const cardActionsHTML = state.userRole === 'admin' ? `<div class="card-actions"><button class="btn-edit-jogador" title="Editar">✏️</button><button class="btn-delete-jogador" title="Excluir">🗑️</button></div>` : ''; state.jogadores.forEach(j => { const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : `<div class="photo-placeholder">🏀</div>`; const card = document.createElement('div'); card.className = 'player-card'; card.dataset.id = j.id; card.innerHTML = `${cardActionsHTML}<div class="photo-container">${fotoHTML}</div><p class="player-name">${j.nome}</p>`; elements.gridJogadores.appendChild(card); }); }, renderCampeonatos() { elements.gridCampeonatos.innerHTML = ''; const cardActionsHTML = state.userRole === 'admin' ? `<div class="card-actions"><button class="btn-edit-camp" title="Editar">✏️</button><button class="btn-delete-camp" title="Excluir">🗑️</button></div>` : ''; state.campeonatos.forEach(c => { const card = document.createElement('div'); card.className = 'championship-card'; card.dataset.id = c.id; card.innerHTML = `${cardActionsHTML}<div><h3 class="championship-name">${c.nome}</h3><div class="championship-info"><p>📅 <strong>Data:</strong> ${utils.formatDate(c.data)}</p><p>👥 <strong>Jogadores:</strong> ${c.jogadoresEscalados?.length || 0} escalado(s)</p></div></div>`; elements.gridCampeonatos.appendChild(card); }); }, updateUIAccess() { const isAdmin = state.userRole === 'admin'; document.querySelectorAll('.admin-only').forEach(el => { el.style.display = isAdmin ? (el.matches('.nav-tab, .btn') ? 'inline-flex' : 'block') : 'none'; }); this.renderAllUsers(); this.renderJogadores(); this.renderCampeonatos(); }, showJogadorModal(id = null) { if (state.userRole !== 'admin') return; elements.formJogador.reset(); elements.fotoPreview.src = ""; elements.fotoPreview.classList.remove('visible'); document.getElementById('documento-id').value = id || ''; if (id) { const j = state.jogadores.find(p => p.id === id); if (!j) return; document.getElementById('modal-jogador-titulo').innerText = 'Editar Jogador'; document.getElementById('nome').value = j.nome; document.getElementById('cpf').value = j.cpf; document.getElementById('nascimento').value = j.nascimento; document.getElementById('posicao').value = j.posicao; document.getElementById('numero_uniforme').value = j.numero_uniforme; if (j.foto) { elements.fotoPreview.src = j.foto; elements.fotoPreview.classList.add('visible'); } } else { document.getElementById('modal-jogador-titulo').innerText = 'Cadastrar Novo Jogador'; } this.openModal(elements.modalJogador); }, showFichaJogador(id) { const j = state.jogadores.find(p => p.id === id); if (!j) return; const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : '<div class="placeholder">🏀</div>'; const cpfHTML = state.userRole === 'admin' ? `<p><strong>CPF:</strong> ${j.cpf}</p>` : ''; document.getElementById('ficha-jogador').innerHTML = `${fotoHTML}<div><p><strong>Nome:</strong> ${j.nome}</p>${cpfHTML}<p><strong>Nascimento:</strong> ${utils.formatDate(j.nascimento)}</p><p><strong>Posição:</strong> ${j.posicao}</p><p><strong>Nº Uniforme:</strong> ${j.numero_uniforme}</p></div>`; this.openModal(elements.modalVerJogador); }, showCampeonatoModal(id = null) { if (state.userRole !== 'admin') return; elements.formCampeonato.reset(); let escalados = []; document.getElementById('campeonato-id').value = id || ''; if (id) { const c = state.campeonatos.find(i => i.id === id); if (!c) return; document.getElementById('modal-campeonato-titulo').innerText = 'Editar Campeonato'; document.getElementById('campeonato-nome').value = c.nome; document.getElementById('campeonato-data').value = c.data; escalados = c.jogadoresEscalados || []; } else { document.getElementById('modal-campeonato-titulo').innerText = 'Adicionar Novo Campeonato'; } const listaContainer = document.getElementById('lista-jogadores-escalar'); listaContainer.innerHTML = ''; const sortedJogadores = [...state.jogadores].sort((a, b) => a.nome.localeCompare(b.nome)); sortedJogadores.forEach(j => { const checked = escalados.includes(j.id) ? 'checked' : ''; listaContainer.innerHTML += `<div><input type="checkbox" id="j_${j.id}" value="${j.id}" ${checked}><label for="j_${j.id}"> ${j.nome} (#${j.numero_uniforme})</label></div>`; }); this.openModal(elements.modalCampeonato); }, showFichaCampeonato(id) { const camp = state.campeonatos.find(c => c.id === id); if (!camp) return; document.getElementById('ver-campeonato-titulo').innerText = camp.nome; document.getElementById('ver-campeonato-data').innerText = `Data: ${utils.formatDate(camp.data)}`; const container = document.getElementById('escalacao-container'); container.innerHTML = ''; if (!camp.jogadoresEscalados || camp.jogadoresEscalados.length === 0) { container.innerHTML = '<p>Nenhum jogador escalado.</p>'; } else { camp.jogadoresEscalados.forEach(jogadorId => { const j = state.jogadores.find(p => p.id === jogadorId); if (j) { const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : `<div class="placeholder">🏀</div>`; container.innerHTML += `<div class="jogador-escalado">${fotoHTML}<div class="info"><strong>${j.nome}</strong><br><span>#${j.numero_uniforme} - ${j.posicao}</span></div></div>`; } }); } this.openModal(elements.modalVerCampeonato); } };
+        const dataService = { getUserProfile: async (uid) => { const docSnap = await getDoc(doc(db, "usuarios", uid)); return docSnap.exists() ? docSnap.data() : null; }, setUserRole: async (uid, newRole) => { if (state.userRole !== 'admin') return; await updateDoc(doc(db, "usuarios", uid), { role: newRole }); }, setUserStatus: async (uid, newStatus) => { if (state.userRole !== 'admin') return; await updateDoc(doc(db, "usuarios", uid), { status: newStatus }); }, updateUserData: async (uid, data) => { if (state.userRole !== 'admin') return; await updateDoc(doc(db, "usuarios", uid), data); }, deleteUserCompletely: async (uid) => { if (state.userRole !== 'admin') return; try { await deleteDoc(doc(db, "usuarios", uid)); alert("Usuário excluído do banco de dados. A exclusão da autenticação requer configuração de backend (Cloud Function) para ser feita por um admin."); } catch (error) { console.error("Erro ao excluir usuário: ", error); alert("Erro ao excluir. Verifique o console."); } }, saveJogador(id, dados, fotoFile) { if (state.userRole !== 'admin') { alert("Acesso negado."); return; } try { if (fotoFile) { dados.foto = utils.toBase64(fotoFile); } else if (id) { const j = state.jogadores.find(p => p.id === id); dados.foto = j ? j.foto : null; } else { dados.foto = null; } if (id) { updateDoc(doc(db, "jogadores", id), dados); } else { addDoc(collection(db, "jogadores"), dados); } } catch (error) { console.error("Erro ao salvar jogador: ", error); } }, deleteJogador(id) { if (state.userRole !== 'admin') return; if (confirm('Tem certeza que deseja excluir este jogador?')) { deleteDoc(doc(db, "jogadores", id)); } }, saveCampeonato(id, dados) { if (state.userRole !== 'admin') { alert("Acesso negado."); return; } if (id) { updateDoc(doc(db, "campeonatos", id), dados); } else { addDoc(collection(db, "campeonatos"), dados); } }, deleteCampeonato(id) { if (state.userRole !== 'admin') return; if (confirm('Tem certeza que deseja excluir este campeonato?')) { deleteDoc(doc(db, "campeonatos", id)); } }, };
+        
+        const handleUsersTableClick = async (e) => { const button = e.target.closest('button'); if (!button) return; const uid = button.dataset.uid; if (!uid) return; if (button.classList.contains('role-toggle')) { const currentRole = button.textContent; const newRole = currentRole === 'admin' ? 'jogador' : 'admin'; await dataService.setUserRole(uid, newRole); } else if (button.classList.contains('btn-edit-user')) { UI.showEditUserModal(uid); } else if (button.classList.contains('btn-ban')) { if (confirm(`Tem certeza que deseja BANIR este usuário? Ele não poderá mais fazer login.`)) { await dataService.setUserStatus(uid, 'banned'); } } else if (button.classList.contains('btn-unban')) { await dataService.setUserStatus(uid, 'active'); } else if (button.classList.contains('btn-delete')) { if (confirm(`ATENÇÃO: EXCLUIR este usuário é uma ação permanente e irreversível. Deseja continuar?`)) { await dataService.deleteUserCompletely(uid); } } };
+        const handleEditUserFormSubmit = async (e) => { e.preventDefault(); const uid = elements.formEditUser['edit-user-id'].value; const data = { nome: elements.formEditUser['edit-user-nome'].value, apelido: elements.formEditUser['edit-user-apelido'].value, dataNascimento: elements.formEditUser['edit-user-nascimento'].value, }; await dataService.updateUserData(uid, data); UI.closeAllModals(); };
+        const handleLoginSubmit = async (e) => { e.preventDefault(); const email = elements.loginForm['login-email'].value; const password = elements.loginForm['login-password'].value; try { await signInWithEmailAndPassword(auth, email, password); elements.loginError.style.display = 'none'; } catch (error) { elements.loginError.textContent = "Email ou senha inválidos."; elements.loginError.style.display = 'block'; } };
+        const addAppListeners = () => { elements.navTabs.addEventListener('click', (e) => { if (!e.target.classList.contains('nav-tab')) return; const targetTab = e.target.dataset.tab; elements.navTabs.querySelector('.active').classList.remove('active'); e.target.classList.add('active'); elements.tabContents.forEach(content => { content.classList.remove('active'); if (content.id === `tab-${targetTab}`) { content.classList.add('active'); } }); }); elements.btnAbrirModalJogador.addEventListener('click', () => UI.showJogadorModal()); elements.btnAbrirModalCampeonato.addEventListener('click', () => UI.showCampeonatoModal()); elements.gridJogadores.addEventListener('click', (e) => { const card = e.target.closest('.player-card'); if (!card) return; const id = card.dataset.id; if (state.userRole === 'admin' && e.target.closest('.btn-edit-jogador')) { UI.showJogadorModal(id); } else if (state.userRole === 'admin' && e.target.closest('.btn-delete-jogador')) { dataService.deleteJogador(id); } else { UI.showFichaJogador(id); } }); elements.gridCampeonatos.addEventListener('click', (e) => { const card = e.target.closest('.championship-card'); if (!card) return; const id = card.dataset.id; if (state.userRole === 'admin' && e.target.closest('.btn-edit-camp')) { UI.showCampeonatoModal(id); } else if (state.userRole === 'admin' && e.target.closest('.btn-delete-camp')) { dataService.deleteCampeonato(id); } else { UI.showFichaCampeonato(id); } }); elements.formJogador.addEventListener('submit', async (e) => { e.preventDefault(); const form = e.target; const btn = form.querySelector('button[type="submit"]'); btn.disabled = true; btn.innerText = "Salvando..."; const id = form.querySelector('#documento-id').value; const dados = { nome: form.querySelector('#nome').value, cpf: form.querySelector('#cpf').value, nascimento: form.querySelector('#nascimento').value, posicao: form.querySelector('#posicao').value, numero_uniforme: form.querySelector('#numero_uniforme').value }; await dataService.saveJogador(id, dados, form.querySelector('#foto').files[0]); UI.closeAllModals(); btn.disabled = false; btn.innerText = "Salvar"; }); elements.formCampeonato.addEventListener('submit', async (e) => { e.preventDefault(); const form = e.target; const btn = form.querySelector('button[type="submit"]'); btn.disabled = true; btn.innerText = "Salvando..."; const id = form.querySelector('#campeonato-id').value; const escalados = Array.from(form.querySelectorAll('#lista-jogadores-escalar input:checked')).map(chk => chk.value); const dados = { nome: form.querySelector('#campeonato-nome').value, data: form.querySelector('#campeonato-data').value, jogadoresEscalados: escalados }; await dataService.saveCampeonato(id, dados); UI.closeAllModals(); btn.disabled = false; btn.innerText = "Salvar Campeonato"; }); elements.usersTableBody.addEventListener('click', handleUsersTableClick); elements.formEditUser.addEventListener('submit', handleEditUserFormSubmit); elements.fotoInput.addEventListener('change', (e) => { const file = e.target.files[0]; if (file) { elements.fotoPreview.src = URL.createObjectURL(file); elements.fotoPreview.classList.add('visible'); } }); document.querySelectorAll('.close-button').forEach(b => b.addEventListener('click', UI.closeAllModals)); elements.modalBackdrop.addEventListener('click', UI.closeAllModals); };
+        
         const handleToggleToLogin = () => { elements.registerContainer.style.display = 'none'; elements.loginContainer.style.display = 'flex'; };
-        const handleLoginSubmit = async (e) => { e.preventDefault(); const email = elements.loginForm['login-email'].value; const password = elements.loginForm['login-password'].value; try { await signInWithEmailAndPassword(auth, email, password); elements.loginError.style.display = 'none'; } catch (error) { elements.loginError.style.display = 'block'; } };
+
+        // --- ALTERAÇÃO PRINCIPAL AQUI ---
         const handleRegisterSubmit = async (e) => {
             e.preventDefault();
-            const nome = elements.registerForm['register-nome'].value;
-            const apelido = elements.registerForm['register-apelido'].value;
-            const nascimento = elements.registerForm['register-nascimento'].value;
-            const email = elements.registerForm['register-email'].value;
-            const password = elements.registerForm['register-password'].value;
+            const { value: nome } = elements.registerForm['register-nome'];
+            const { value: apelido } = elements.registerForm['register-apelido'];
+            const { value: nascimento } = elements.registerForm['register-nascimento'];
+            const { value: email } = elements.registerForm['register-email'];
+            const { value: password } = elements.registerForm['register-password'];
+            const { value: passwordConfirm } = elements.registerForm['register-password-confirm'];
             elements.registerError.style.display = 'none';
+
+            // 1. Verificação da confirmação de senha
+            if (password !== passwordConfirm) {
+                elements.registerError.textContent = "As senhas não conferem. Tente novamente.";
+                elements.registerError.style.display = 'block';
+                return; // Para a execução
+            }
+
             try {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 await setDoc(doc(db, "usuarios", userCredential.user.uid), {
-                    nome: nome, apelido: apelido, dataNascimento: nascimento,
-                    email: email, role: "jogador"
+                    nome, apelido, dataNascimento: nascimento, email, role: "jogador", status: "active"
                 });
+                
+                // 2. Desconecta o usuário recém-criado
+                await signOut(auth);
+
+                // 3. Alerta de sucesso e redirecionamento da tela
+                alert('Cadastro realizado com sucesso! Por favor, faça o login para continuar.');
+                elements.registerForm.reset();
+                handleToggleToLogin(); // Mostra a tela de login
+
             } catch (error) {
-                elements.registerError.textContent = "Erro ao registrar. Verifique os dados e a senha (mín. 6 caracteres)."
+                console.error("Erro de Registro Detalhado:", error.code, error.message);
+                let friendlyMessage = "Ocorreu um erro. Tente novamente.";
+                switch (error.code) {
+                    case 'auth/email-already-in-use': friendlyMessage = "Este endereço de e-mail já está em uso."; break;
+                    case 'auth/weak-password': friendlyMessage = "A senha é muito fraca. Use pelo menos 6 caracteres."; break;
+                    case 'auth/invalid-email': friendlyMessage = "O formato do e-mail é inválido."; break;
+                    case 'permission-denied': friendlyMessage = "Permissão negada para salvar o perfil. Verifique as Regras do Firestore."; break;
+                    default: friendlyMessage = "Erro ao registrar. Verifique os dados e tente novamente.";
+                }
+                elements.registerError.textContent = friendlyMessage;
                 elements.registerError.style.display = 'block';
             }
         };
-        const handleTabClick = (e) => { if (!e.target.classList.contains('nav-tab')) return; const targetTab = e.target.dataset.tab; elements.navTabs.querySelector('.active').classList.remove('active'); e.target.classList.add('active'); elements.tabContents.forEach(content => { content.classList.remove('active'); if (content.id === `tab-${targetTab}`) { content.classList.add('active'); } }); };
-        const handleRoleToggle = async (e) => { if (!e.target.classList.contains('role-toggle')) return; const button = e.target; const uid = button.dataset.uid; const currentRole = button.textContent; const newRole = currentRole === 'admin' ? 'jogador' : 'admin'; button.disabled = true; await dataService.setUserRole(uid, newRole); };
-        const handlePhotoPreview = (e) => { const file = e.target.files[0]; if (file) { elements.fotoPreview.src = URL.createObjectURL(file); elements.fotoPreview.classList.add('visible'); } };
 
-        // --- GERENCIAMENTO DE LISTENERS ---
-        function addAppListeners() {
-            elements.navTabs.addEventListener('click', handleTabClick);
-            elements.btnAbrirModalJogador.addEventListener('click', () => UI.showJogadorModal());
-            elements.btnAbrirModalCampeonato.addEventListener('click', () => UI.showCampeonatoModal());
-            elements.gridJogadores.addEventListener('click', handleGridJogadoresClick);
-            elements.gridCampeonatos.addEventListener('click', handleGridCampeonatosClick);
-            elements.formJogador.addEventListener('submit', handleJogadorFormSubmit);
-            elements.formCampeonato.addEventListener('submit', handleCampeonatoFormSubmit);
-            elements.usersTableBody.addEventListener('click', handleRoleToggle);
-            elements.fotoInput.addEventListener('change', handlePhotoPreview);
-            document.querySelectorAll('.close-button').forEach(b => b.addEventListener('click', UI.closeAllModals));
-            elements.modalBackdrop.addEventListener('click', UI.closeAllModals);
-        }
-
-        // --- INICIALIZAÇÃO E LÓGICA DE AUTENTICAÇÃO ---
         function init() {
-            elements.toggleToRegister.addEventListener('click', handleToggleToRegister);
+            elements.toggleToRegister.addEventListener('click', () => { elements.loginContainer.style.display = 'none'; elements.registerContainer.style.display = 'flex'; });
             elements.toggleToLogin.addEventListener('click', handleToggleToLogin);
             elements.loginForm.addEventListener('submit', handleLoginSubmit);
             elements.registerForm.addEventListener('submit', handleRegisterSubmit);
@@ -559,56 +339,36 @@
 
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    state.currentUser = user;
                     const userProfile = await dataService.getUserProfile(user.uid);
+                    if (userProfile && userProfile.status === 'banned') { elements.loginError.textContent = "Esta conta foi banida e não pode fazer login."; elements.loginError.style.display = 'block'; signOut(auth); return; }
+                    state.currentUser = user;
                     state.currentUserProfile = userProfile;
                     state.userRole = userProfile ? userProfile.role : null;
-                    
                     elements.loginContainer.style.display = 'none';
                     elements.registerContainer.style.display = 'none';
                     elements.mainContent.style.display = 'block';
-                    
-                    if(userProfile) {
-                        elements.welcomeMessage.textContent = `Bem vindo(a) ${userProfile.nome} (${userProfile.apelido})`;
-                    }
-
+                    if(userProfile) { elements.welcomeMessage.textContent = `Bem vindo(a) ${userProfile.nome} (${userProfile.apelido})`; }
                     addAppListeners();
                     UI.updateUIAccess();
-
-                    // Listeners do Firebase
                     if (state.listeners.jogadoresUnsub) state.listeners.jogadoresUnsub();
-                    state.listeners.jogadoresUnsub = onSnapshot(query(collection(db, "jogadores"), orderBy("nome")), (snapshot) => {
-                        state.jogadores = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        UI.renderJogadores();
-                    });
+                    state.listeners.jogadoresUnsub = onSnapshot(query(collection(db, "jogadores"), orderBy("nome")), (snapshot) => { state.jogadores = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); UI.renderJogadores(); });
                     if (state.listeners.campeonatosUnsub) state.listeners.campeonatosUnsub();
-                    state.listeners.campeonatosUnsub = onSnapshot(query(collection(db, "campeonatos"), orderBy("data", "desc")), (snapshot) => {
-                        state.campeonatos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        UI.renderCampeonatos();
-                    });
+                    state.listeners.campeonatosUnsub = onSnapshot(query(collection(db, "campeonatos"), orderBy("data", "desc")), (snapshot) => { state.campeonatos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); UI.renderCampeonatos(); });
                     if (state.userRole === 'admin') {
                         if (state.listeners.usersUnsub) state.listeners.usersUnsub();
-                        state.listeners.usersUnsub = onSnapshot(query(collection(db, "usuarios"), orderBy("email")), (snapshot) => {
-                            state.allUsers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
-                            UI.renderAllUsers();
-                        });
+                        state.listeners.usersUnsub = onSnapshot(query(collection(db, "usuarios"), orderBy("email")), (snapshot) => { state.allUsers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })); UI.renderAllUsers(); });
                     }
-
                 } else {
                     if(state.listeners.jogadoresUnsub) state.listeners.jogadoresUnsub();
                     if(state.listeners.campeonatosUnsub) state.listeners.campeonatosUnsub();
                     if(state.listeners.usersUnsub) state.listeners.usersUnsub();
-
-                    state.currentUser = null;
-                    state.currentUserProfile = null;
-                    state.userRole = null;
+                    state.currentUser = null; state.currentUserProfile = null; state.userRole = null;
                     elements.mainContent.style.display = 'none';
                     elements.registerContainer.style.display = 'none';
                     elements.loginContainer.style.display = 'flex';
                 }
             });
         }
-
         init();
     </script>
 </body>
