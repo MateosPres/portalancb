@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Gestão ANCB-MT</title>
+    <title>Portal ANCB-MT</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
@@ -30,7 +30,7 @@
         
         body { 
             font-family: 'Segoe UI', system-ui, sans-serif; 
-            background-color: var(--cor-cinza-fundo); /* Cor de fallback */
+            background-color: var(--cor-cinza-fundo);
             color: var(--cor-cinza-texto); 
             line-height: 1.6;
             
@@ -49,6 +49,7 @@
             align-items: center;
             justify-content: center;
             height: 100vh;
+            padding: 20px;
         }
         .auth-box {
             width: 100%;
@@ -85,15 +86,21 @@
             font-weight: bold;
         }
         #register-container { display: none; }
+        .form-group label.inline-label {
+            text-align: left;
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
 
-        /* --- Abas de Navegação (ALTERAÇÃO AQUI) --- */
+        /* --- Abas de Navegação --- */
         .nav-tabs {
             display: flex;
-            margin-bottom: 0; /* Remove a margem inferior */
+            margin-bottom: 0;
             background-color: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(5px);
-            border-radius: 8px 8px 0 0; /* Mantém cantos superiores arredondados */
-            padding: 5px 5px 0 5px; /* Ajusta o padding */
+            border-radius: 8px 8px 0 0;
+            padding: 5px 5px 0 5px;
         }
         .nav-tab {
             padding: 10px 20px;
@@ -127,17 +134,26 @@
         .header-left { display: flex; align-items: center; gap: 20px; }
         .logo { height: 60px; width: auto; border-radius: 8px; }
         .site-header h1 { font-family: var(--fonte-titulo); font-size: 2.8rem; letter-spacing: 1px; margin: 0; }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        #welcome-message {
+            font-weight: 600;
+            font-size: 1rem;
+        }
         .site-footer { text-align: center; padding: 20px; margin-top: 40px; background-color: var(--cor-preto); color: var(--cor-branco); }
 
-        /* --- Seções e Layout (ALTERAÇÃO AQUI) --- */
+        /* --- Seções e Layout --- */
         .content-section { 
             background-color: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(8px);
             padding: 25px; 
             box-shadow: 0 10px 25px rgba(0,0,0,0.05); 
             border: 1px solid rgba(255,255,255,0.2);
-            margin-top: 0; /* Remove a margem superior */
-            border-radius: 0 0 12px 12px; /* Cantos superiores retos, inferiores arredondados */
+            margin-top: 0;
+            border-radius: 0 0 12px 12px;
         }
         .section-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; border-bottom: 2px solid var(--cor-cinza-fundo); padding-bottom: 15px; margin-bottom: 25px; }
         .section-header h2 { font-family: var(--fonte-titulo); font-size: 2.5rem; color: var(--cor-preto); }
@@ -153,7 +169,7 @@
         .admin-only { display: none; }
 
         /* --- Tabela de Usuários (Admin) --- */
-        #admin-users-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        #admin-users-table { width: 100%; border-collapse: collapse; margin-top: 20px; display: block; overflow-x: auto; }
         #admin-users-table th, #admin-users-table td { padding: 12px; border: 1px solid #ddd; text-align: left; }
         #admin-users-table th { background-color: var(--cor-cinza-fundo); }
         .role-toggle { padding: 5px 10px; border-radius: 5px; cursor: pointer; border: none; color: white; }
@@ -198,6 +214,81 @@
         #escalacao-container { max-height: 40vh; overflow-y: auto; margin-top: 20px; }
         .jogador-escalado { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
         .jogador-escalado img, .jogador-escalado .placeholder { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; margin-right: 15px; }
+
+        /**********************************************
+         * INÍCIO DAS OTIMIZAÇÕES PARA DISPOSITIVOS MÓVEIS *
+         **********************************************/
+        @media screen and (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            /* --- Cabeçalho Ajustado --- */
+            .header-left {
+                gap: 10px;
+            }
+            .logo {
+                height: 50px;
+            }
+            .site-header h1 {
+                font-size: 1.8rem;
+            }
+            .header-right {
+                gap: 10px;
+                flex-direction: column-reverse;
+                align-items: flex-end;
+            }
+            #welcome-message {
+                font-size: 0.8rem;
+                text-align: right;
+            }
+            .btn-logout {
+                padding: 8px 12px;
+            }
+
+            /* --- Abas e Seções --- */
+            .nav-tabs {
+                justify-content: space-around;
+            }
+            .nav-tab {
+                padding: 8px 10px;
+                font-size: 0.9rem;
+            }
+            .section-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .section-header h2 {
+                font-size: 2rem;
+            }
+            .content-section {
+                padding: 15px;
+            }
+
+            /* --- Grid de Cards em Coluna Única --- */
+            .card-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            /* --- Modais e Formulários --- */
+            .modal-content {
+                padding: 20px;
+            }
+            #ficha-jogador {
+                flex-direction: column;
+            }
+            .auth-box {
+                padding: 20px;
+            }
+            .auth-box h2 {
+                font-size: 2rem;
+            }
+        }
+        /**********************************************
+         * FIM DAS OTIMIZAÇÕES PARA DISPOSITIVOS MÓVEIS  *
+         **********************************************/
     </style>
 </head>
 <body>
@@ -226,6 +317,16 @@
             <h2>Criar Conta</h2>
             <form id="register-form">
                 <div class="form-group">
+                    <input type="text" id="register-nome" placeholder="Nome Completo" required>
+                </div>
+                <div class="form-group">
+                    <input type="text" id="register-apelido" placeholder="Apelido" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-nascimento" class="inline-label">Data de Nascimento</label>
+                    <input type="date" id="register-nascimento" required>
+                </div>
+                <div class="form-group">
                     <input type="email" id="register-email" placeholder="Email" required>
                 </div>
                 <div class="form-group">
@@ -243,9 +344,12 @@
             <div class="container header-container">
                 <div class="header-left">
                     <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="logo">
-                    <h1>Painel de Gestão ANCB-MT</h1>
+                    <h1>Portal ANCB-MT</h1>
                 </div>
-                <button id="btn-logout" class="btn btn-logout">Sair</button>
+                <div class="header-right">
+                    <span id="welcome-message"></span>
+                    <button id="btn-logout" class="btn btn-logout">Sair</button>
+                </div>
             </div>
         </header>
 
@@ -301,22 +405,7 @@
     </div>
 
     <div id="modal-backdrop" class="modal-backdrop"></div>
-    <div id="modal-jogador" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2 id="modal-jogador-titulo"></h2>
-            <form id="form-jogador">
-                <input type="hidden" id="documento-id">
-                <div class="form-group"><label for="foto">Foto de Perfil</label><input type="file" id="foto" accept="image/*"><img id="preview-foto" src="" alt="Pré-visualização da foto"></div>
-                <div class="form-group"><label for="nome">Nome Completo</label><input type="text" id="nome" required></div>
-                <div class="form-group"><label for="cpf">CPF</label><input type="text" id="cpf" required></div>
-                <div class="form-group"><label for="nascimento">Data de Nascimento</label><input type="date" id="nascimento" required></div>
-                <div class="form-group"><label for="posicao">Posição</label><select id="posicao" required><option value="">Selecione...</option><option value="Armador (PG)">Armador (PG)</option><option value="Ala-Armador (SG)">Ala-Armador (SG)</option><option value="Ala (SF)">Ala (SF)</option><option value="Ala-Pivô (PF)">Ala-Pivô (PF)</option><option value="Pivô (C)">Pivô (C)</option></select></div>
-                <div class="form-group"><label for="numero_uniforme">Nº Uniforme</label><input type="number" id="numero_uniforme" min="0" required></div>
-                <button type="submit" class="btn btn-primary">Salvar</button>
-            </form>
-        </div>
-    </div>
+    <div id="modal-jogador" class="modal"><div class="modal-content"><button class="close-button" aria-label="Fechar">&times;</button><h2 id="modal-jogador-titulo"></h2><form id="form-jogador"><input type="hidden" id="documento-id"><div class="form-group"><label for="foto">Foto de Perfil</label><input type="file" id="foto" accept="image/*"><img id="preview-foto" src="" alt="Pré-visualização da foto"></div><div class="form-group"><label for="nome">Nome Completo</label><input type="text" id="nome" required></div><div class="form-group"><label for="cpf">CPF</label><input type="text" id="cpf" required></div><div class="form-group"><label for="nascimento">Data de Nascimento</label><input type="date" id="nascimento" required></div><div class="form-group"><label for="posicao">Posição</label><select id="posicao" required><option value="">Selecione...</option><option value="Armador (PG)">Armador (PG)</option><option value="Ala-Armador (SG)">Ala-Armador (SG)</option><option value="Ala (SF)">Ala (SF)</option><option value="Ala-Pivô (PF)">Ala-Pivô (PF)</option><option value="Pivô (C)">Pivô (C)</option></select></div><div class="form-group"><label for="numero_uniforme">Nº Uniforme</label><input type="number" id="numero_uniforme" min="0" required></div><button type="submit" class="btn btn-primary">Salvar</button></form></div></div>
     <div id="modal-ver-jogador" class="modal"><div class="modal-content"><button class="close-button" aria-label="Fechar">&times;</button><h2>Ficha do Jogador</h2><div id="ficha-jogador"></div></div></div>
     <div id="modal-campeonato" class="modal"><div class="modal-content"><button class="close-button" aria-label="Fechar">&times;</button><h2 id="modal-campeonato-titulo"></h2><form id="form-campeonato"><input type="hidden" id="campeonato-id"><div class="form-group"><label for="campeonato-nome">Nome do Campeonato</label><input type="text" id="campeonato-nome" required></div><div class="form-group"><label for="campeonato-data">Data</label><input type="date" id="campeonato-data" required></div><div class="form-group"><label>Escalar Jogadores</label><div id="lista-jogadores-escalar"></div></div><button type="submit" class="btn btn-primary">Salvar Campeonato</button></form></div></div>
     <div id="modal-ver-campeonato" class="modal"><div class="modal-content"><button class="close-button" aria-label="Fechar">&times;</button><h2 id="ver-campeonato-titulo"></h2><p id="ver-campeonato-data"></p><hr><h3>Jogadores Escalados</h3><div id="escalacao-container"></div></div></div>
@@ -347,6 +436,7 @@
             campeonatos: [],
             allUsers: [],
             currentUser: null,
+            currentUserProfile: null,
             userRole: null,
             listeners: {} 
         };
@@ -364,6 +454,7 @@
             toggleToRegister: document.getElementById('toggle-to-register'),
             toggleToLogin: document.getElementById('toggle-to-login'),
             btnLogout: document.getElementById('btn-logout'),
+            welcomeMessage: document.getElementById('welcome-message'),
             gridJogadores: document.getElementById('grid-jogadores'),
             gridCampeonatos: document.getElementById('grid-campeonatos'),
             modalJogador: document.getElementById('modal-jogador'),
@@ -384,333 +475,64 @@
 
         // --- FUNÇÕES DE UTILIDADE ---
         const utils = {
-            formatDate: (dateStr) => {
-                if (!dateStr) return 'N/A';
-                const [year, month, day] = dateStr.split('-');
-                return `${day}/${month}/${year}`;
-            },
-            toBase64: (file) => new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = error => reject(error);
-            })
+            formatDate: (dateStr) => { if (!dateStr) return 'N/A'; const [year, month, day] = dateStr.split('-'); return `${day}/${month}/${year}`; },
+            toBase64: (file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result); reader.onerror = error => reject(error); })
         };
 
         // --- LÓGICA DE UI (INTERFACE) ---
         const UI = {
-            renderJogadores() {
-                elements.gridJogadores.innerHTML = '';
-                const cardActionsHTML = state.userRole === 'admin' ? `
-                    <div class="card-actions">
-                        <button class="btn-edit-jogador" title="Editar">✏️</button>
-                        <button class="btn-delete-jogador" title="Excluir">🗑️</button>
-                    </div>` : '';
-                state.jogadores.forEach(j => {
-                    const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : `<div class="photo-placeholder">🏀</div>`;
-                    const card = document.createElement('div');
-                    card.className = 'player-card';
-                    card.dataset.id = j.id;
-                    card.innerHTML = `${cardActionsHTML}<div class="photo-container">${fotoHTML}</div><p class="player-name">${j.nome}</p>`;
-                    elements.gridJogadores.appendChild(card);
-                });
-            },
-            renderCampeonatos() {
-                elements.gridCampeonatos.innerHTML = '';
-                const cardActionsHTML = state.userRole === 'admin' ? `
-                    <div class="card-actions">
-                        <button class="btn-edit-camp" title="Editar">✏️</button>
-                        <button class="btn-delete-camp" title="Excluir">🗑️</button>
-                    </div>` : '';
-                state.campeonatos.forEach(c => {
-                    const card = document.createElement('div');
-                    card.className = 'championship-card';
-                    card.dataset.id = c.id;
-                    card.innerHTML = `${cardActionsHTML}<div><h3 class="championship-name">${c.nome}</h3><div class="championship-info"><p>📅 <strong>Data:</strong> ${utils.formatDate(c.data)}</p><p>👥 <strong>Jogadores:</strong> ${c.jogadoresEscalados?.length || 0} escalado(s)</p></div></div>`;
-                    elements.gridCampeonatos.appendChild(card);
-                });
-            },
-            updateUIAccess() {
-                const isAdmin = state.userRole === 'admin';
-                document.querySelectorAll('.admin-only').forEach(el => {
-                    el.style.display = isAdmin ? (el.matches('.nav-tab, .btn') ? 'inline-flex' : 'block') : 'none';
-                });
-                this.renderAllUsers();
-                this.renderJogadores();
-                this.renderCampeonatos();
-            },
-            renderAllUsers() {
-                if(state.userRole !== 'admin') {
-                    elements.usersTableBody.innerHTML = '';
-                    return;
-                }
-                elements.usersTableBody.innerHTML = '';
-                state.allUsers.forEach(user => {
-                    const tr = document.createElement('tr');
-                    const isCurrentUser = user.uid === state.currentUser.uid;
-                    const toggleButtonHTML = isCurrentUser
-                        ? `<button class="role-toggle ${user.role}" disabled title="Você não pode alterar sua própria permissão.">${user.role}</button>`
-                        : `<button class="role-toggle ${user.role}" data-uid="${user.uid}">${user.role}</button>`;
-
-                    tr.innerHTML = `<td>${user.email}</td><td>${toggleButtonHTML}</td>`;
-                    elements.usersTableBody.appendChild(tr);
-                });
-            },
-            openModal(modal) {
-                elements.body.classList.add('modal-open');
-                elements.modalBackdrop.classList.add('active');
-                modal.classList.add('active');
-            },
-            closeAllModals() {
-                document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
-                elements.modalBackdrop.classList.remove('active');
-                elements.body.classList.remove('modal-open');
-            },
-            showJogadorModal(id = null) {
-                if (state.userRole !== 'admin') return;
-                elements.formJogador.reset();
-                elements.fotoPreview.src = "";
-                elements.fotoPreview.classList.remove('visible');
-                document.getElementById('documento-id').value = id || '';
-
-                if (id) {
-                    const j = state.jogadores.find(p => p.id === id);
-                    if (!j) { console.error("Jogador não encontrado!"); return; }
-                    document.getElementById('modal-jogador-titulo').innerText = 'Editar Jogador';
-                    document.getElementById('nome').value = j.nome;
-                    document.getElementById('cpf').value = j.cpf;
-                    document.getElementById('nascimento').value = j.nascimento;
-                    document.getElementById('posicao').value = j.posicao;
-                    document.getElementById('numero_uniforme').value = j.numero_uniforme;
-                    if (j.foto) {
-                        elements.fotoPreview.src = j.foto;
-                        elements.fotoPreview.classList.add('visible');
-                    }
-                } else {
-                    document.getElementById('modal-jogador-titulo').innerText = 'Cadastrar Novo Jogador';
-                }
-                this.openModal(elements.modalJogador);
-            },
-            showFichaJogador(id) {
-                const j = state.jogadores.find(p => p.id === id);
-                if (!j) return;
-
-                const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : '<div class="placeholder">🏀</div>';
-                const cpfHTML = state.userRole === 'admin' ? `<p><strong>CPF:</strong> ${j.cpf}</p>` : '';
-
-                document.getElementById('ficha-jogador').innerHTML = `
-                    ${fotoHTML}
-                    <div>
-                        <p><strong>Nome:</strong> ${j.nome}</p>
-                        ${cpfHTML}
-                        <p><strong>Nascimento:</strong> ${utils.formatDate(j.nascimento)}</p>
-                        <p><strong>Posição:</strong> ${j.posicao}</p>
-                        <p><strong>Nº Uniforme:</strong> ${j.numero_uniforme}</p>
-                    </div>`;
-                this.openModal(elements.modalVerJogador);
-            },
-            showCampeonatoModal(id = null) {
-                if (state.userRole !== 'admin') return;
-                elements.formCampeonato.reset();
-                let escalados = [];
-                document.getElementById('campeonato-id').value = id || '';
-
-                if (id) {
-                    const c = state.campeonatos.find(i => i.id === id);
-                    if (!c) { console.error("Campeonato não encontrado!"); return; }
-                    document.getElementById('modal-campeonato-titulo').innerText = 'Editar Campeonato';
-                    document.getElementById('campeonato-nome').value = c.nome;
-                    document.getElementById('campeonato-data').value = c.data;
-                    escalados = c.jogadoresEscalados || [];
-                } else {
-                    document.getElementById('modal-campeonato-titulo').innerText = 'Adicionar Novo Campeonato';
-                }
-
-                const listaContainer = document.getElementById('lista-jogadores-escalar');
-                listaContainer.innerHTML = '';
-                const sortedJogadores = [...state.jogadores].sort((a, b) => a.nome.localeCompare(b.nome));
-                sortedJogadores.forEach(j => {
-                    const checked = escalados.includes(j.id) ? 'checked' : '';
-                    listaContainer.innerHTML += `<div><input type="checkbox" id="j_${j.id}" value="${j.id}" ${checked}><label for="j_${j.id}"> ${j.nome} (#${j.numero_uniforme})</label></div>`;
-                });
-                this.openModal(elements.modalCampeonato);
-            },
-            showFichaCampeonato(id) {
-                const camp = state.campeonatos.find(c => c.id === id);
-                if (!camp) return;
-
-                document.getElementById('ver-campeonato-titulo').innerText = camp.nome;
-                document.getElementById('ver-campeonato-data').innerText = `Data: ${utils.formatDate(camp.data)}`;
-                const container = document.getElementById('escalacao-container');
-                container.innerHTML = '';
-
-                if (!camp.jogadoresEscalados || camp.jogadoresEscalados.length === 0) {
-                    container.innerHTML = '<p>Nenhum jogador escalado para este campeonato.</p>';
-                } else {
-                    camp.jogadoresEscalados.forEach(jogadorId => {
-                        const j = state.jogadores.find(p => p.id === jogadorId);
-                        if (j) {
-                            const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : `<div class="placeholder">🏀</div>`;
-                            container.innerHTML += `<div class="jogador-escalado">${fotoHTML}<div class="info"><strong>${j.nome}</strong><br><span>#${j.numero_uniforme} - ${j.posicao}</span></div></div>`;
-                        }
-                    });
-                }
-                this.openModal(elements.modalVerCampeonato);
-            }
+            renderJogadores() { elements.gridJogadores.innerHTML = ''; const cardActionsHTML = state.userRole === 'admin' ? `<div class="card-actions"><button class="btn-edit-jogador" title="Editar">✏️</button><button class="btn-delete-jogador" title="Excluir">🗑️</button></div>` : ''; state.jogadores.forEach(j => { const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : `<div class="photo-placeholder">🏀</div>`; const card = document.createElement('div'); card.className = 'player-card'; card.dataset.id = j.id; card.innerHTML = `${cardActionsHTML}<div class="photo-container">${fotoHTML}</div><p class="player-name">${j.nome}</p>`; elements.gridJogadores.appendChild(card); }); },
+            renderCampeonatos() { elements.gridCampeonatos.innerHTML = ''; const cardActionsHTML = state.userRole === 'admin' ? `<div class="card-actions"><button class="btn-edit-camp" title="Editar">✏️</button><button class="btn-delete-camp" title="Excluir">🗑️</button></div>` : ''; state.campeonatos.forEach(c => { const card = document.createElement('div'); card.className = 'championship-card'; card.dataset.id = c.id; card.innerHTML = `${cardActionsHTML}<div><h3 class="championship-name">${c.nome}</h3><div class="championship-info"><p>📅 <strong>Data:</strong> ${utils.formatDate(c.data)}</p><p>👥 <strong>Jogadores:</strong> ${c.jogadoresEscalados?.length || 0} escalado(s)</p></div></div>`; elements.gridCampeonatos.appendChild(card); }); },
+            updateUIAccess() { const isAdmin = state.userRole === 'admin'; document.querySelectorAll('.admin-only').forEach(el => { el.style.display = isAdmin ? (el.matches('.nav-tab, .btn') ? 'inline-flex' : 'block') : 'none'; }); this.renderAllUsers(); this.renderJogadores(); this.renderCampeonatos(); },
+            renderAllUsers() { if(state.userRole !== 'admin') { elements.usersTableBody.innerHTML = ''; return; } elements.usersTableBody.innerHTML = ''; state.allUsers.forEach(user => { const tr = document.createElement('tr'); const isCurrentUser = user.uid === state.currentUser.uid; const toggleButtonHTML = isCurrentUser ? `<button class="role-toggle ${user.role}" disabled title="Você não pode alterar sua própria permissão.">${user.role}</button>` : `<button class="role-toggle ${user.role}" data-uid="${user.uid}">${user.role}</button>`; tr.innerHTML = `<td>${user.email}</td><td>${toggleButtonHTML}</td>`; elements.usersTableBody.appendChild(tr); }); },
+            openModal(modal) { elements.body.classList.add('modal-open'); elements.modalBackdrop.classList.add('active'); modal.classList.add('active'); },
+            closeAllModals() { document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active')); elements.modalBackdrop.classList.remove('active'); elements.body.classList.remove('modal-open'); },
+            showJogadorModal(id = null) { if (state.userRole !== 'admin') return; elements.formJogador.reset(); elements.fotoPreview.src = ""; elements.fotoPreview.classList.remove('visible'); document.getElementById('documento-id').value = id || ''; if (id) { const j = state.jogadores.find(p => p.id === id); if (!j) return; document.getElementById('modal-jogador-titulo').innerText = 'Editar Jogador'; document.getElementById('nome').value = j.nome; document.getElementById('cpf').value = j.cpf; document.getElementById('nascimento').value = j.nascimento; document.getElementById('posicao').value = j.posicao; document.getElementById('numero_uniforme').value = j.numero_uniforme; if (j.foto) { elements.fotoPreview.src = j.foto; elements.fotoPreview.classList.add('visible'); } } else { document.getElementById('modal-jogador-titulo').innerText = 'Cadastrar Novo Jogador'; } this.openModal(elements.modalJogador); },
+            showFichaJogador(id) { const j = state.jogadores.find(p => p.id === id); if (!j) return; const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : '<div class="placeholder">🏀</div>'; const cpfHTML = state.userRole === 'admin' ? `<p><strong>CPF:</strong> ${j.cpf}</p>` : ''; document.getElementById('ficha-jogador').innerHTML = `${fotoHTML}<div><p><strong>Nome:</strong> ${j.nome}</p>${cpfHTML}<p><strong>Nascimento:</strong> ${utils.formatDate(j.nascimento)}</p><p><strong>Posição:</strong> ${j.posicao}</p><p><strong>Nº Uniforme:</strong> ${j.numero_uniforme}</p></div>`; this.openModal(elements.modalVerJogador); },
+            showCampeonatoModal(id = null) { if (state.userRole !== 'admin') return; elements.formCampeonato.reset(); let escalados = []; document.getElementById('campeonato-id').value = id || ''; if (id) { const c = state.campeonatos.find(i => i.id === id); if (!c) return; document.getElementById('modal-campeonato-titulo').innerText = 'Editar Campeonato'; document.getElementById('campeonato-nome').value = c.nome; document.getElementById('campeonato-data').value = c.data; escalados = c.jogadoresEscalados || []; } else { document.getElementById('modal-campeonato-titulo').innerText = 'Adicionar Novo Campeonato'; } const listaContainer = document.getElementById('lista-jogadores-escalar'); listaContainer.innerHTML = ''; const sortedJogadores = [...state.jogadores].sort((a, b) => a.nome.localeCompare(b.nome)); sortedJogadores.forEach(j => { const checked = escalados.includes(j.id) ? 'checked' : ''; listaContainer.innerHTML += `<div><input type="checkbox" id="j_${j.id}" value="${j.id}" ${checked}><label for="j_${j.id}"> ${j.nome} (#${j.numero_uniforme})</label></div>`; }); this.openModal(elements.modalCampeonato); },
+            showFichaCampeonato(id) { const camp = state.campeonatos.find(c => c.id === id); if (!camp) return; document.getElementById('ver-campeonato-titulo').innerText = camp.nome; document.getElementById('ver-campeonato-data').innerText = `Data: ${utils.formatDate(camp.data)}`; const container = document.getElementById('escalacao-container'); container.innerHTML = ''; if (!camp.jogadoresEscalados || camp.jogadoresEscalados.length === 0) { container.innerHTML = '<p>Nenhum jogador escalado.</p>'; } else { camp.jogadoresEscalados.forEach(jogadorId => { const j = state.jogadores.find(p => p.id === jogadorId); if (j) { const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : `<div class="placeholder">🏀</div>`; container.innerHTML += `<div class="jogador-escalado">${fotoHTML}<div class="info"><strong>${j.nome}</strong><br><span>#${j.numero_uniforme} - ${j.posicao}</span></div></div>`; } }); } this.openModal(elements.modalVerCampeonato); }
         };
 
         // --- LÓGICA DE DADOS (FIREBASE) ---
         const dataService = {
-            async saveJogador(id, dados, fotoFile) {
-                if (state.userRole !== 'admin') { alert("Acesso negado."); return; }
-                try {
-                    if (fotoFile) { dados.foto = await utils.toBase64(fotoFile); }
-                    else if (id) { const j = state.jogadores.find(p => p.id === id); dados.foto = j ? j.foto : null; }
-                    else { dados.foto = null; }
-                    if (id) { await updateDoc(doc(db, "jogadores", id), dados); }
-                    else { await addDoc(collection(db, "jogadores"), dados); }
-                } catch (error) { console.error("Erro ao salvar jogador: ", error); }
-            },
-            async deleteJogador(id) {
-                if (state.userRole !== 'admin') return;
-                if (confirm('Tem certeza que deseja excluir este jogador?')) { await deleteDoc(doc(db, "jogadores", id)); }
-            },
-            async saveCampeonato(id, dados) {
-                if (state.userRole !== 'admin') { alert("Acesso negado."); return; }
-                if (id) { await updateDoc(doc(db, "campeonatos", id), dados); }
-                else { await addDoc(collection(db, "campeonatos"), dados); }
-            },
-            async deleteCampeonato(id) {
-                if (state.userRole !== 'admin') return;
-                if (confirm('Tem certeza que deseja excluir este campeonato?')) { await deleteDoc(doc(db, "campeonatos", id)); }
-            },
-            async getUserRole(uid) {
-                const userDoc = await getDoc(doc(db, "usuarios", uid));
-                return userDoc.exists() ? userDoc.data().role : null;
-            },
-            async setUserRole(uid, newRole) {
-                if (state.userRole !== 'admin') { alert("Ação não permitida."); return; }
-                await updateDoc(doc(db, "usuarios", uid), { role: newRole });
-            }
+            getUserProfile: async (uid) => { const docSnap = await getDoc(doc(db, "usuarios", uid)); return docSnap.exists() ? docSnap.data() : null; },
+            saveJogador(id, dados, fotoFile) { if (state.userRole !== 'admin') { alert("Acesso negado."); return; } try { if (fotoFile) { dados.foto = utils.toBase64(fotoFile); } else if (id) { const j = state.jogadores.find(p => p.id === id); dados.foto = j ? j.foto : null; } else { dados.foto = null; } if (id) { updateDoc(doc(db, "jogadores", id), dados); } else { addDoc(collection(db, "jogadores"), dados); } } catch (error) { console.error("Erro ao salvar jogador: ", error); } },
+            deleteJogador(id) { if (state.userRole !== 'admin') return; if (confirm('Tem certeza?')) { deleteDoc(doc(db, "jogadores", id)); } },
+            saveCampeonato(id, dados) { if (state.userRole !== 'admin') { alert("Acesso negado."); return; } if (id) { updateDoc(doc(db, "campeonatos", id), dados); } else { addDoc(collection(db, "campeonatos"), dados); } },
+            deleteCampeonato(id) { if (state.userRole !== 'admin') return; if (confirm('Tem certeza?')) { deleteDoc(doc(db, "campeonatos", id)); } },
+            setUserRole(uid, newRole) { if (state.userRole !== 'admin') { alert("Ação não permitida."); return; } updateDoc(doc(db, "usuarios", uid), { role: newRole }); }
         };
 
         // --- HANDLERS DE EVENTOS ---
-        const handleJogadorFormSubmit = async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const btn = form.querySelector('button[type="submit"]');
-            btn.disabled = true; btn.innerText = "Salvando...";
-            const id = form.querySelector('#documento-id').value;
-            const dados = {
-                nome: form.querySelector('#nome').value, cpf: form.querySelector('#cpf').value,
-                nascimento: form.querySelector('#nascimento').value, posicao: form.querySelector('#posicao').value,
-                numero_uniforme: form.querySelector('#numero_uniforme').value
-            };
-            await dataService.saveJogador(id, dados, form.querySelector('#foto').files[0]);
-            UI.closeAllModals();
-            btn.disabled = false; btn.innerText = "Salvar";
-        };
-
-        const handleCampeonatoFormSubmit = async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const btn = form.querySelector('button[type="submit"]');
-            btn.disabled = true; btn.innerText = "Salvando...";
-            const id = form.querySelector('#campeonato-id').value;
-            const escalados = Array.from(form.querySelectorAll('#lista-jogadores-escalar input:checked')).map(chk => chk.value);
-            const dados = {
-                nome: form.querySelector('#campeonato-nome').value, data: form.querySelector('#campeonato-data').value,
-                jogadoresEscalados: escalados
-            };
-            await dataService.saveCampeonato(id, dados);
-            UI.closeAllModals();
-            btn.disabled = false; btn.innerText = "Salvar Campeonato";
-        };
-
-        const handleGridJogadoresClick = (e) => {
-            const card = e.target.closest('.player-card');
-            if (!card) return;
-            const id = card.dataset.id;
-            if (state.userRole === 'admin' && e.target.closest('.btn-edit-jogador')) { UI.showJogadorModal(id); }
-            else if (state.userRole === 'admin' && e.target.closest('.btn-delete-jogador')) { dataService.deleteJogador(id); }
-            else { UI.showFichaJogador(id); }
-        };
-
-        const handleGridCampeonatosClick = (e) => {
-            const card = e.target.closest('.championship-card');
-            if (!card) return;
-            const id = card.dataset.id;
-            if (state.userRole === 'admin' && e.target.closest('.btn-edit-camp')) { UI.showCampeonatoModal(id); }
-            else if (state.userRole === 'admin' && e.target.closest('.btn-delete-camp')) { dataService.deleteCampeonato(id); }
-            else { UI.showFichaCampeonato(id); }
-        };
-
-        const handleToggleToRegister = () => {
-            elements.loginContainer.style.display = 'none';
-            elements.registerContainer.style.display = 'flex';
-        };
-
-        const handleToggleToLogin = () => {
-            elements.registerContainer.style.display = 'none';
-            elements.loginContainer.style.display = 'flex';
-        };
-
-        const handleLoginSubmit = async (e) => {
-            e.preventDefault();
-            const email = elements.loginForm['login-email'].value;
-            const password = elements.loginForm['login-password'].value;
-            try {
-                await signInWithEmailAndPassword(auth, email, password);
-                elements.loginError.style.display = 'none';
-            } catch (error) {
-                elements.loginError.style.display = 'block';
-            }
-        };
-
+        const handleJogadorFormSubmit = async (e) => { e.preventDefault(); const form = e.target; const btn = form.querySelector('button[type="submit"]'); btn.disabled = true; btn.innerText = "Salvando..."; const id = form.querySelector('#documento-id').value; const dados = { nome: form.querySelector('#nome').value, cpf: form.querySelector('#cpf').value, nascimento: form.querySelector('#nascimento').value, posicao: form.querySelector('#posicao').value, numero_uniforme: form.querySelector('#numero_uniforme').value }; await dataService.saveJogador(id, dados, form.querySelector('#foto').files[0]); UI.closeAllModals(); btn.disabled = false; btn.innerText = "Salvar"; };
+        const handleCampeonatoFormSubmit = async (e) => { e.preventDefault(); const form = e.target; const btn = form.querySelector('button[type="submit"]'); btn.disabled = true; btn.innerText = "Salvando..."; const id = form.querySelector('#campeonato-id').value; const escalados = Array.from(form.querySelectorAll('#lista-jogadores-escalar input:checked')).map(chk => chk.value); const dados = { nome: form.querySelector('#campeonato-nome').value, data: form.querySelector('#campeonato-data').value, jogadoresEscalados: escalados }; await dataService.saveCampeonato(id, dados); UI.closeAllModals(); btn.disabled = false; btn.innerText = "Salvar Campeonato"; };
+        const handleGridJogadoresClick = (e) => { const card = e.target.closest('.player-card'); if (!card) return; const id = card.dataset.id; if (state.userRole === 'admin' && e.target.closest('.btn-edit-jogador')) { UI.showJogadorModal(id); } else if (state.userRole === 'admin' && e.target.closest('.btn-delete-jogador')) { dataService.deleteJogador(id); } else { UI.showFichaJogador(id); } };
+        const handleGridCampeonatosClick = (e) => { const card = e.target.closest('.championship-card'); if (!card) return; const id = card.dataset.id; if (state.userRole === 'admin' && e.target.closest('.btn-edit-camp')) { UI.showCampeonatoModal(id); } else if (state.userRole === 'admin' && e.target.closest('.btn-delete-camp')) { dataService.deleteCampeonato(id); } else { UI.showFichaCampeonato(id); } };
+        const handleToggleToRegister = () => { elements.loginContainer.style.display = 'none'; elements.registerContainer.style.display = 'flex'; };
+        const handleToggleToLogin = () => { elements.registerContainer.style.display = 'none'; elements.loginContainer.style.display = 'flex'; };
+        const handleLoginSubmit = async (e) => { e.preventDefault(); const email = elements.loginForm['login-email'].value; const password = elements.loginForm['login-password'].value; try { await signInWithEmailAndPassword(auth, email, password); elements.loginError.style.display = 'none'; } catch (error) { elements.loginError.style.display = 'block'; } };
         const handleRegisterSubmit = async (e) => {
             e.preventDefault();
+            const nome = elements.registerForm['register-nome'].value;
+            const apelido = elements.registerForm['register-apelido'].value;
+            const nascimento = elements.registerForm['register-nascimento'].value;
             const email = elements.registerForm['register-email'].value;
             const password = elements.registerForm['register-password'].value;
             elements.registerError.style.display = 'none';
             try {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 await setDoc(doc(db, "usuarios", userCredential.user.uid), {
-                    email: userCredential.user.email, role: "jogador"
+                    nome: nome, apelido: apelido, dataNascimento: nascimento,
+                    email: email, role: "jogador"
                 });
             } catch (error) {
-                elements.registerError.textContent = "Erro ao registrar. Verifique o email e a senha (mín. 6 caracteres)."
+                elements.registerError.textContent = "Erro ao registrar. Verifique os dados e a senha (mín. 6 caracteres)."
                 elements.registerError.style.display = 'block';
             }
         };
-
-        const handleTabClick = (e) => {
-            if (!e.target.classList.contains('nav-tab')) return;
-            const targetTab = e.target.dataset.tab;
-            elements.navTabs.querySelector('.active').classList.remove('active');
-            e.target.classList.add('active');
-            elements.tabContents.forEach(content => {
-                content.classList.remove('active');
-                if (content.id === `tab-${targetTab}`) { content.classList.add('active'); }
-            });
-        };
-
-        const handleRoleToggle = async (e) => {
-            if (!e.target.classList.contains('role-toggle')) return;
-            const button = e.target;
-            const uid = button.dataset.uid;
-            const currentRole = button.textContent;
-            const newRole = currentRole === 'admin' ? 'jogador' : 'admin';
-            button.disabled = true;
-            await dataService.setUserRole(uid, newRole);
-        };
-
-        const handlePhotoPreview = (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                elements.fotoPreview.src = URL.createObjectURL(file);
-                elements.fotoPreview.classList.add('visible');
-            }
-        };
+        const handleTabClick = (e) => { if (!e.target.classList.contains('nav-tab')) return; const targetTab = e.target.dataset.tab; elements.navTabs.querySelector('.active').classList.remove('active'); e.target.classList.add('active'); elements.tabContents.forEach(content => { content.classList.remove('active'); if (content.id === `tab-${targetTab}`) { content.classList.add('active'); } }); };
+        const handleRoleToggle = async (e) => { if (!e.target.classList.contains('role-toggle')) return; const button = e.target; const uid = button.dataset.uid; const currentRole = button.textContent; const newRole = currentRole === 'admin' ? 'jogador' : 'admin'; button.disabled = true; await dataService.setUserRole(uid, newRole); };
+        const handlePhotoPreview = (e) => { const file = e.target.files[0]; if (file) { elements.fotoPreview.src = URL.createObjectURL(file); elements.fotoPreview.classList.add('visible'); } };
 
         // --- GERENCIAMENTO DE LISTENERS ---
         function addAppListeners() {
@@ -738,12 +560,18 @@
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     state.currentUser = user;
-                    state.userRole = await dataService.getUserRole(user.uid);
+                    const userProfile = await dataService.getUserProfile(user.uid);
+                    state.currentUserProfile = userProfile;
+                    state.userRole = userProfile ? userProfile.role : null;
                     
                     elements.loginContainer.style.display = 'none';
                     elements.registerContainer.style.display = 'none';
                     elements.mainContent.style.display = 'block';
                     
+                    if(userProfile) {
+                        elements.welcomeMessage.textContent = `Bem vindo(a) ${userProfile.nome} (${userProfile.apelido})`;
+                    }
+
                     addAppListeners();
                     UI.updateUIAccess();
 
@@ -753,13 +581,11 @@
                         state.jogadores = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         UI.renderJogadores();
                     });
-
                     if (state.listeners.campeonatosUnsub) state.listeners.campeonatosUnsub();
                     state.listeners.campeonatosUnsub = onSnapshot(query(collection(db, "campeonatos"), orderBy("data", "desc")), (snapshot) => {
                         state.campeonatos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         UI.renderCampeonatos();
                     });
-                    
                     if (state.userRole === 'admin') {
                         if (state.listeners.usersUnsub) state.listeners.usersUnsub();
                         state.listeners.usersUnsub = onSnapshot(query(collection(db, "usuarios"), orderBy("email")), (snapshot) => {
@@ -774,6 +600,7 @@
                     if(state.listeners.usersUnsub) state.listeners.usersUnsub();
 
                     state.currentUser = null;
+                    state.currentUserProfile = null;
                     state.userRole = null;
                     elements.mainContent.style.display = 'none';
                     elements.registerContainer.style.display = 'none';
