@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Gestão ANCB-MT</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- Variáveis de Cor --- */
+        :root {
+            --cor-vermelho-escuro: #A62626;
+            --cor-vermelho-claro: #D92E2E;
+            --cor-azul-escuro: #0D47A1;  /* Nova Cor */
+            --cor-azul-claro: #1976D2;   /* Nova Cor */
+            --cor-laranja: #F27405;
+            --cor-preto: #1A1A1A;
+            --cor-cinza-fundo: #f0f2f5;
+            --cor-cinza-texto: #333;
+            --cor-branco: #ffffff;
+            --sombra-card: 0 4px 12px rgba(0,0,0,0.1);
+            --sombra-card-hover: 0 8px 20px rgba(0,0,0,0.15);
+            --fonte-titulo: 'Teko', sans-serif;
+        }
+        /* --- Estilos Globais --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background-color: var(--cor-cinza-fundo); color: var(--cor-cinza-texto); line-height: 1.6; }
+        body.modal-open { overflow: hidden; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+        /* --- Cabeçalho e Rodapé --- */
+        .site-header {
+            /* Cor do gradiente alterada para azul */
+            background: linear-gradient(135deg, var(--cor-azul-escuro), var(--cor-preto));
+            color: var(--cor-branco);
+            padding: 10px 0;
+            position: sticky; top: 0; z-index: 100;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .header-container { display: flex; align-items: center; gap: 20px; }
+        .logo { height: 60px; width: auto; border-radius: 8px; }
+        .site-header h1 { font-family: var(--fonte-titulo); font-size: 2.8rem; letter-spacing: 1px; margin: 0; }
+        .site-footer { text-align: center; padding: 20px; margin-top: 40px; background-color: var(--cor-preto); color: var(--cor-branco); }
+
+        /* --- Seções e Layout --- */
+        .content-section { background-color: var(--cor-branco); padding: 25px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); margin-top: 30px; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; border-bottom: 2px solid var(--cor-cinza-fundo); padding-bottom: 15px; margin-bottom: 25px; }
+        .section-header h2 { font-family: var(--fonte-titulo); font-size: 2.5rem; color: var(--cor-preto); }
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 25px; }
+
+        /* --- Botões --- */
+        .btn { padding: 10px 20px; font-size: 0.95rem; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s ease-in-out; display: inline-flex; align-items: center; gap: 8px; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+        .btn[disabled] { background-color: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-primary { background-color: var(--cor-laranja); color: var(--cor-branco); }
+
+        /* --- Cards (Jogador e Campeonato) --- */
+        .player-card, .championship-card { background-color: var(--cor-branco); border-radius: 12px; box-shadow: var(--sombra-card); text-align: center; padding: 20px; cursor: pointer; transition: all 0.2s ease-in-out; position: relative; overflow: hidden; border: 1px solid #e2e8f0; }
+        .player-card:hover, .championship-card:hover { transform: translateY(-5px); box-shadow: var(--sombra-card-hover); }
+        .player-card .photo-container { width: 120px; height: 120px; margin: 0 auto 15px; border-radius: 50%; overflow: hidden; background-color: var(--cor-cinza-fundo); display: flex; align-items: center; justify-content: center; border: 4px solid var(--cor-branco); box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .player-card .photo-container img { width: 100%; height: 100%; object-fit: cover; }
+        .player-card .photo-placeholder { font-size: 3rem; color: var(--cor-laranja); }
+        .player-card .player-name { font-weight: 600; font-size: 1.2rem; color: var(--cor-preto); }
+        .championship-card { text-align: left; }
+        .championship-card::after { content: '🏆'; position: absolute; right: -20px; top: -10px; font-size: 6rem; color: var(--cor-laranja); opacity: 0.1; transform: rotate(-15deg); }
+        .championship-card .championship-name { font-size: 1.5rem; font-weight: bold; color: var(--cor-azul-escuro); margin-bottom: 10px; }
+        .championship-card .championship-info p { margin: 4px 0; color: #555; }
+        .card-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 5px; background: rgba(255,255,255,0.8); backdrop-filter: blur(5px); padding: 5px; border-radius: 8px; opacity: 0; transition: opacity 0.2s ease-in-out; z-index: 5; }
+        .player-card:hover .card-actions, .championship-card:hover .card-actions { opacity: 1; }
+        .card-actions button { font-size: 1rem; padding: 6px; border: none; border-radius: 50%; width: 32px; height: 32px; line-height: 1; color: white; cursor: pointer; background-color: rgba(0,0,0,0.5); transition: background-color 0.2s; }
+        .card-actions button:hover { background-color: var(--cor-preto); }
+
+        /* --- Modais --- */
+        .modal-backdrop { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(5px); }
+        .modal { display: none; position: fixed; z-index: 1001; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 600px; animation: slideDown 0.3s ease-out; }
+        .modal-content { background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); position: relative; max-height: 90vh; overflow-y: auto; }
+        @keyframes slideDown { from { transform: translate(-50%, -60%); opacity: 0; } to { transform: translate(-50%, -50%); opacity: 1; } }
+        .modal.active, .modal-backdrop.active { display: block; }
+        .close-button { position: absolute; top: 15px; right: 20px; font-size: 28px; font-weight: bold; cursor: pointer; border: none; background: none; z-index: 10; }
+        
+        /* --- Formulários e Conteúdo de Modais --- */
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
+        .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 1rem; }
+        #preview-foto { max-width: 100px; height: 100px; object-fit: cover; border-radius: 50%; display: none; margin-top: 10px; }
+        #preview-foto.visible { display: block; }
+        #lista-jogadores-escalar { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; border-radius: 4px; }
+        #ficha-jogador { display: flex; gap: 20px; align-items: center; }
+        #ficha-jogador img, #ficha-jogador .placeholder { width: 150px; height: 150px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .placeholder { background-color: var(--cor-cinza-fundo); display: flex; align-items: center; justify-content: center; font-size: 3rem; color: var(--cor-laranja); }
+        #escalacao-container { max-height: 40vh; overflow-y: auto; margin-top: 20px; }
+        .jogador-escalado { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+        .jogador-escalado img, .jogador-escalado .placeholder { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; margin-right: 15px; }
+    </style>
+</head>
+<body>
+
+    <header class="site-header">
+        <div class="container header-container">
+            <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="logo">
+            <h1>Painel de Gestão ANCB-MT</h1>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="secao-campeonatos" class="content-section">
+            <div class="section-header">
+                <h2>Campeonatos</h2>
+                <button id="btn-abrir-modal-campeonato" class="btn btn-primary">🏆 Adicionar Campeonato</button>
+            </div>
+            <div id="grid-campeonatos" class="card-grid"></div>
+        </section>
+
+        <section id="secao-jogadores" class="content-section">
+            <div class="section-header">
+                <h2>Jogadores</h2>
+                <button id="btn-abrir-modal-jogador" class="btn btn-primary">➕ Cadastrar Jogador</button>
+            </div>
+            <div id="grid-jogadores" class="card-grid"></div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; 2025 ANCB-MT. Todos os direitos reservados.</p>
+    </footer>
+
+    <div id="modal-backdrop" class="modal-backdrop"></div>
+
+    <div id="modal-jogador" class="modal">
+        <div class="modal-content">
+            <button class="close-button" aria-label="Fechar">&times;</button>
+            <h2 id="modal-jogador-titulo"></h2>
+            <form id="form-jogador">
+                <input type="hidden" id="documento-id">
+                <div class="form-group">
+                    <label for="foto">Foto de Perfil</label>
+                    <input type="file" id="foto" accept="image/*">
+                    <img id="preview-foto" src="" alt="Pré-visualização da foto">
+                </div>
+                <div class="form-group"><label for="nome">Nome Completo</label><input type="text" id="nome" required></div>
+                <div class="form-group"><label for="cpf">CPF</label><input type="text" id="cpf" required></div>
+                <div class="form-group"><label for="nascimento">Data de Nascimento</label><input type="date" id="nascimento" required></div>
+                <div class="form-group">
+                    <label for="posicao">Posição</label>
+                    <select id="posicao" required>
+                        <option value="">Selecione...</option>
+                        <option value="Armador (PG)">Armador (PG)</option>
+                        <option value="Ala-Armador (SG)">Ala-Armador (SG)</option>
+                        <option value="Ala (SF)">Ala (SF)</option>
+                        <option value="Ala-Pivô (PF)">Ala-Pivô (PF)</option>
+                        <option value="Pivô (C)">Pivô (C)</option>
+                    </select>
+                </div>
+                <div class="form-group"><label for="numero_uniforme">Nº Uniforme</label><input type="number" id="numero_uniforme" min="0" required></div>
+                <button type="submit" class="btn btn-primary">Salvar</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-ver-jogador" class="modal">
+        <div class="modal-content">
+            <button class="close-button" aria-label="Fechar">&times;</button>
+            <h2>Ficha do Jogador</h2>
+            <div id="ficha-jogador"></div>
+        </div>
+    </div>
+
+    <div id="modal-campeonato" class="modal">
+        <div class="modal-content">
+            <button class="close-button" aria-label="Fechar">&times;</button>
+            <h2 id="modal-campeonato-titulo"></h2>
+            <form id="form-campeonato">
+                <input type="hidden" id="campeonato-id">
+                <div class="form-group"><label for="campeonato-nome">Nome do Campeonato</label><input type="text" id="campeonato-nome" required></div>
+                <div class="form-group"><label for="campeonato-data">Data</label><input type="date" id="campeonato-data" required></div>
+                <div class="form-group">
+                    <label>Escalar Jogadores</label>
+                    <div id="lista-jogadores-escalar"></div>
+                </div>
+                <button type="submit" class="btn btn-primary">Salvar Campeonato</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-ver-campeonato" class="modal">
+        <div class="modal-content">
+            <button class="close-button" aria-label="Fechar">&times;</button>
+            <h2 id="ver-campeonato-titulo"></h2>
+            <p id="ver-campeonato-data"></p>
+            <hr>
+            <h3>Jogadores Escalados</h3>
+            <div id="escalacao-container"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- INICIALIZAÇÃO DO FIREBASE ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // IMPORTANTE: Em um ambiente de produção, estas chaves devem ser protegidas
+        // e o acesso ao Firestore deve ser controlado via Regras de Segurança.
+        const firebaseConfig = {
+            apiKey: "AIzaSyCZ2yeJJ34VwYAmQnFCEv72Q1uDFFGKKjQ",
+            authDomain: "ancb-painel-db.firebaseapp.com",
+            projectId: "ancb-painel-db",
+            storageBucket: "ancb-painel-db.appspot.com",
+            messagingSenderId: "792900234002",
+            appId: "1:792900234002:web:2a37004deb046cb8f261cb",
+            measurementId: "G-VCMEKP1XP4"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // --- ESTADO GLOBAL DA APLICAÇÃO ---
+        let state = {
+            jogadores: [],
+            campeonatos: []
+        };
+
+        // --- SELETORES DO DOM ---
+        const elements = {
+            body: document.body,
+            gridJogadores: document.getElementById('grid-jogadores'),
+            gridCampeonatos: document.getElementById('grid-campeonatos'),
+            modalJogador: document.getElementById('modal-jogador'),
+            modalVerJogador: document.getElementById('modal-ver-jogador'),
+            modalCampeonato: document.getElementById('modal-campeonato'),
+            modalVerCampeonato: document.getElementById('modal-ver-campeonato'),
+            modalBackdrop: document.getElementById('modal-backdrop'),
+            formJogador: document.getElementById('form-jogador'),
+            formCampeonato: document.getElementById('form-campeonato'),
+            btnAbrirModalJogador: document.getElementById('btn-abrir-modal-jogador'),
+            btnAbrirModalCampeonato: document.getElementById('btn-abrir-modal-campeonato'),
+            fotoInput: document.getElementById('foto'),
+            fotoPreview: document.getElementById('preview-foto')
+        };
+
+        // --- FUNÇÕES DE UTILIDADE ---
+        const utils = {
+            formatDate: (dateStr) => {
+                if (!dateStr) return 'N/A';
+                const [year, month, day] = dateStr.split('-');
+                return `${day}/${month}/${year}`;
+            },
+            toBase64: (file) => new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            })
+        };
+
+        // --- LÓGICA DE UI (INTERFACE) ---
+        const UI = {
+            renderJogadores() {
+                elements.gridJogadores.innerHTML = '';
+                state.jogadores.forEach(j => {
+                    const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : `<div class="photo-placeholder">🏀</div>`;
+                    const card = document.createElement('div');
+                    card.className = 'player-card';
+                    card.dataset.id = j.id;
+                    card.innerHTML = `
+                        <div class="card-actions">
+                            <button class="btn-edit-jogador" title="Editar">✏️</button>
+                            <button class="btn-delete-jogador" title="Excluir">🗑️</button>
+                        </div>
+                        <div class="photo-container">${fotoHTML}</div>
+                        <p class="player-name">${j.nome}</p>`;
+                    elements.gridJogadores.appendChild(card);
+                });
+            },
+            renderCampeonatos() {
+                elements.gridCampeonatos.innerHTML = '';
+                state.campeonatos.forEach(c => {
+                    const card = document.createElement('div');
+                    card.className = 'championship-card';
+                    card.dataset.id = c.id;
+                    card.innerHTML = `
+                        <div class="card-actions">
+                            <button class="btn-edit-camp" title="Editar">✏️</button>
+                            <button class="btn-delete-camp" title="Excluir">🗑️</button>
+                        </div>
+                        <div>
+                            <h3 class="championship-name">${c.nome}</h3>
+                            <div class="championship-info">
+                                <p>📅 <strong>Data:</strong> ${utils.formatDate(c.data)}</p>
+                                <p>👥 <strong>Jogadores:</strong> ${c.jogadoresEscalados?.length || 0} escalado(s)</p>
+                            </div>
+                        </div>`;
+                    elements.gridCampeonatos.appendChild(card);
+                });
+            },
+            openModal(modal) {
+                elements.body.classList.add('modal-open');
+                elements.modalBackdrop.classList.add('active');
+                modal.classList.add('active');
+            },
+            closeAllModals() {
+                document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
+                elements.modalBackdrop.classList.remove('active');
+                elements.body.classList.remove('modal-open');
+            },
+            showJogadorModal(id = null) {
+                elements.formJogador.reset();
+                elements.fotoPreview.src = "";
+                elements.fotoPreview.classList.remove('visible');
+                document.getElementById('documento-id').value = id || '';
+
+                if (id) {
+                    const j = state.jogadores.find(p => p.id === id);
+                    if (!j) { console.error("Jogador não encontrado!"); return; }
+                    document.getElementById('modal-jogador-titulo').innerText = 'Editar Jogador';
+                    document.getElementById('nome').value = j.nome;
+                    document.getElementById('cpf').value = j.cpf;
+                    document.getElementById('nascimento').value = j.nascimento;
+                    document.getElementById('posicao').value = j.posicao;
+                    document.getElementById('numero_uniforme').value = j.numero_uniforme;
+                    if (j.foto) {
+                        elements.fotoPreview.src = j.foto;
+                        elements.fotoPreview.classList.add('visible');
+                    }
+                } else {
+                    document.getElementById('modal-jogador-titulo').innerText = 'Cadastrar Novo Jogador';
+                }
+                this.openModal(elements.modalJogador);
+            },
+            showFichaJogador(id) {
+                const j = state.jogadores.find(p => p.id === id);
+                if (!j) return;
+                const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : '<div class="placeholder">🏀</div>';
+                document.getElementById('ficha-jogador').innerHTML = `
+                    ${fotoHTML}
+                    <div>
+                        <p><strong>Nome:</strong> ${j.nome}</p>
+                        <p><strong>CPF:</strong> ${j.cpf}</p>
+                        <p><strong>Nascimento:</strong> ${utils.formatDate(j.nascimento)}</p>
+                        <p><strong>Posição:</strong> ${j.posicao}</p>
+                        <p><strong>Nº Uniforme:</strong> ${j.numero_uniforme}</p>
+                    </div>`;
+                this.openModal(elements.modalVerJogador);
+            },
+            showCampeonatoModal(id = null) {
+                elements.formCampeonato.reset();
+                let escalados = [];
+                document.getElementById('campeonato-id').value = id || '';
+
+                if (id) {
+                    const c = state.campeonatos.find(i => i.id === id);
+                    if (!c) { console.error("Campeonato não encontrado!"); return; }
+                    document.getElementById('modal-campeonato-titulo').innerText = 'Editar Campeonato';
+                    document.getElementById('campeonato-nome').value = c.nome;
+                    document.getElementById('campeonato-data').value = c.data;
+                    escalados = c.jogadoresEscalados || [];
+                } else {
+                    document.getElementById('modal-campeonato-titulo').innerText = 'Adicionar Novo Campeonato';
+                }
+
+                const listaContainer = document.getElementById('lista-jogadores-escalar');
+                listaContainer.innerHTML = '';
+                const sortedJogadores = [...state.jogadores].sort((a, b) => a.nome.localeCompare(b.nome));
+                sortedJogadores.forEach(j => {
+                    const checked = escalados.includes(j.id) ? 'checked' : '';
+                    listaContainer.innerHTML += `<div><input type="checkbox" id="j_${j.id}" value="${j.id}" ${checked}><label for="j_${j.id}"> ${j.nome} (#${j.numero_uniforme})</label></div>`;
+                });
+                this.openModal(elements.modalCampeonato);
+            },
+            showFichaCampeonato(id) {
+                const camp = state.campeonatos.find(c => c.id === id);
+                if (!camp) return;
+
+                document.getElementById('ver-campeonato-titulo').innerText = camp.nome;
+                document.getElementById('ver-campeonato-data').innerText = `Data: ${utils.formatDate(camp.data)}`;
+                const container = document.getElementById('escalacao-container');
+                container.innerHTML = '';
+
+                if (!camp.jogadoresEscalados || camp.jogadoresEscalados.length === 0) {
+                    container.innerHTML = '<p>Nenhum jogador escalado para este campeonato.</p>';
+                } else {
+                    camp.jogadoresEscalados.forEach(jogadorId => {
+                        const j = state.jogadores.find(p => p.id === jogadorId);
+                        if (j) {
+                            const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : `<div class="placeholder">🏀</div>`;
+                            container.innerHTML += `
+                                <div class="jogador-escalado">
+                                    ${fotoHTML}
+                                    <div class="info">
+                                        <strong>${j.nome}</strong><br>
+                                        <span>#${j.numero_uniforme} - ${j.posicao}</span>
+                                    </div>
+                                </div>`;
+                        }
+                    });
+                }
+                this.openModal(elements.modalVerCampeonato);
+            }
+        };
+
+        // --- LÓGICA DE DADOS (FIREBASE) ---
+        const dataService = {
+            async saveJogador(id, dados, fotoFile) {
+                try {
+                    if (fotoFile) {
+                        dados.foto = await utils.toBase64(fotoFile);
+                    } else if (id) {
+                        const jogadorExistente = state.jogadores.find(p => p.id === id);
+                        dados.foto = jogadorExistente ? jogadorExistente.foto : null;
+                    } else {
+                        dados.foto = null;
+                    }
+
+                    if (id) {
+                        await updateDoc(doc(db, "jogadores", id), dados);
+                    } else {
+                        await addDoc(collection(db, "jogadores"), dados);
+                    }
+                } catch (error) {
+                    console.error("Erro ao salvar jogador: ", error);
+                    alert("Ocorreu um erro ao salvar o jogador. Verifique o console para mais detalhes.");
+                }
+            },
+            async deleteJogador(id) {
+                if (confirm('Tem certeza que deseja excluir este jogador?')) {
+                    await deleteDoc(doc(db, "jogadores", id));
+                }
+            },
+            async saveCampeonato(id, dados) {
+                if (id) {
+                    await updateDoc(doc(db, "campeonatos", id), dados);
+                } else {
+                    await addDoc(collection(db, "campeonatos"), dados);
+                }
+            },
+            async deleteCampeonato(id) {
+                if (confirm('Tem certeza que deseja excluir este campeonato?')) {
+                    await deleteDoc(doc(db, "campeonatos", id));
+                }
+            }
+        };
+
+        // --- HANDLERS DE EVENTOS ---
+        const handleJogadorFormSubmit = async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const submitButton = form.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.innerText = "Salvando...";
+            
+            const id = form.querySelector('#documento-id').value;
+            const dados = {
+                nome: form.querySelector('#nome').value,
+                cpf: form.querySelector('#cpf').value,
+                nascimento: form.querySelector('#nascimento').value,
+                posicao: form.querySelector('#posicao').value,
+                numero_uniforme: form.querySelector('#numero_uniforme').value
+            };
+            
+            await dataService.saveJogador(id, dados, form.querySelector('#foto').files[0]);
+            
+            UI.closeAllModals();
+            submitButton.disabled = false;
+            submitButton.innerText = "Salvar";
+        };
+
+        const handleCampeonatoFormSubmit = async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const submitButton = form.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.innerText = "Salvando...";
+
+            const id = form.querySelector('#campeonato-id').value;
+            const escalados = Array.from(form.querySelectorAll('#lista-jogadores-escalar input:checked')).map(chk => chk.value);
+            const dados = {
+                nome: form.querySelector('#campeonato-nome').value,
+                data: form.querySelector('#campeonato-data').value,
+                jogadoresEscalados: escalados
+            };
+
+            await dataService.saveCampeonato(id, dados);
+
+            UI.closeAllModals();
+            submitButton.disabled = false;
+            submitButton.innerText = "Salvar Campeonato";
+        };
+
+        const handleGridJogadoresClick = (e) => {
+            const card = e.target.closest('.player-card');
+            if (!card) return;
+            const id = card.dataset.id;
+            
+            // CORREÇÃO: Usar as classes corretas dos botões
+            if (e.target.closest('.btn-edit-jogador')) {
+                UI.showJogadorModal(id);
+            } else if (e.target.closest('.btn-delete-jogador')) {
+                dataService.deleteJogador(id);
+            } else {
+                UI.showFichaJogador(id);
+            }
+        };
+
+        const handleGridCampeonatosClick = (e) => {
+            const card = e.target.closest('.championship-card');
+            if (!card) return;
+            const id = card.dataset.id;
+            
+            // CORREÇÃO: Usar as classes corretas dos botões
+            if (e.target.closest('.btn-edit-camp')) {
+                UI.showCampeonatoModal(id);
+            } else if (e.target.closest('.btn-delete-camp')) {
+                dataService.deleteCampeonato(id);
+            } else {
+                UI.showFichaCampeonato(id);
+            }
+        };
+        
+        // --- INICIALIZAÇÃO E BINDING DE EVENTOS ---
+        function init() {
+            // Botões principais
+            elements.btnAbrirModalJogador.addEventListener('click', () => UI.showJogadorModal());
+            elements.btnAbrirModalCampeonato.addEventListener('click', () => UI.showCampeonatoModal());
+
+            // Delegação de eventos para os grids
+            elements.gridJogadores.addEventListener('click', handleGridJogadoresClick);
+            elements.gridCampeonatos.addEventListener('click', handleGridCampeonatosClick);
+
+            // Submissão de formulários
+            elements.formJogador.addEventListener('submit', handleJogadorFormSubmit);
+            elements.formCampeonato.addEventListener('submit', handleCampeonatoFormSubmit);
+            
+            // Fechar modais
+            document.querySelectorAll('.close-button').forEach(b => b.addEventListener('click', UI.closeAllModals));
+            elements.modalBackdrop.addEventListener('click', UI.closeAllModals);
+
+            // Preview de foto
+            elements.fotoInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    elements.fotoPreview.src = URL.createObjectURL(file);
+                    elements.fotoPreview.classList.add('visible');
+                }
+            });
+
+            // Listeners do Firebase para atualização em tempo real
+            const qJogadores = query(collection(db, "jogadores"), orderBy("nome"));
+            onSnapshot(qJogadores, (snapshot) => {
+                state.jogadores = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                UI.renderJogadores();
+            });
+
+            const qCampeonatos = query(collection(db, "campeonatos"), orderBy("data", "desc"));
+            onSnapshot(qCampeonatos, (snapshot) => {
+                state.campeonatos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                UI.renderCampeonatos();
+            });
+        }
+
+        // Iniciar a aplicação
+        init();
+    </script>
+</body>
+</html>
