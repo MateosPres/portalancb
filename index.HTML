@@ -219,9 +219,12 @@
             </div>
             
             <div id="tab-jogos-view" class="tab-like-content active">
-                <h3>Jogos Realizados</h3>
-                <div id="jogos-realizados-container"></div>
-            </div>
+    <div class="section-header-inline">
+        <h3>Jogos Realizados</h3>
+        <button id="btn-add-game-from-view" class="btn btn-primary admin-only">Adicionar Jogo</button>
+    </div>
+    <div id="jogos-realizados-container"></div>
+</div>
             <div id="tab-classificacao-view" class="tab-like-content">
                 <h3>Classificação de Pontos (Artilheiros)</h3>
                 <div id="classificacao-container"></div>
@@ -286,7 +289,83 @@
         </form>
     </div>
 </div>
-    
+
     <script type="module" src="js/main.js"></script>
+
+    <div id="modal-ver-jogo" class="modal">
+    <div class="modal-content">
+        <button class="close-button" aria-label="Fechar">&times;</button>
+        <div id="ver-jogo-header">
+            <h2 id="ver-jogo-titulo"></h2>
+            <p id="ver-jogo-placar-final" class="placar-final"></p>
+        </div>
+        <hr>
+        <h3>Estatísticas dos Jogadores</h3>
+        <div id="jogo-estatisticas-container">
+            </div>
+    </div>
+</div>
+
 </body>
 </html>
+
+<div id="modal-painel-jogo" class="modal modal-xl">
+    <div class="modal-content">
+        <button class="close-button" aria-label="Fechar">&times;</button>
+        <h2 id="painel-jogo-titulo">Painel do Jogo: ANCB vs <span id="painel-adversario-nome-header"></span></h2>
+        
+        <div class="tab-like-container">
+            <div class="tab-like-nav">
+                <button class="tab-like-btn active" data-target="tab-painel-aovivo">Ao Vivo</button>
+                <button class="tab-like-btn" data-target="tab-painel-distribuir">Distribuir Pontos</button>
+            </div>
+
+            <div id="tab-painel-aovivo" class="tab-like-content active">
+    
+                <div class="painel-scoreboard">
+                    <div class="team-score">
+                        <span class="team-name">ANCB</span>
+                        <div id="placar-ancb-display" class="score-display">0</div>
+                    </div>
+                    <div class="team-score">
+                        <span id="painel-adversario-nome" class="team-name">Adversário</span>
+                        <div id="placar-adversario-display" class="score-display">0</div>
+                    </div>
+                </div>
+
+                <div class="painel-controls-grid">
+                    <div class="team-controls" id="controles-ancb">
+                        <div class="botoes-placar-pontos">
+                            <button class="btn-placar add" data-points="1">+1</button>
+                            <button class="btn-placar add" data-points="2">+2</button>
+                            <button class="btn-placar add" data-points="3">+3</button>
+                        </div>
+                        <button id="btn-undo-point" class="btn-placar remove">Desfazer</button>
+                    </div>
+
+                    <div class="team-controls" id="controles-adversario">
+                        <div class="botoes-placar-pontos">
+                            <button class="btn-placar add" data-points="1">+1</button>
+                            <button class="btn-placar add" data-points="2">+2</button>
+                            <button class="btn-placar add" data-points="3">+3</button>
+                        </div>
+                        <button class="btn-placar remove">-1</button>
+                    </div>
+                </div>
+                
+                <div class="painel-log-section">
+                    <h3>Registro de Cestas (ANCB)</h3>
+                    <div id="registro-cestas-container" class="registro-cestas">
+                        </div>
+                </div>
+
+            </div>
+
+            <div id="tab-painel-distribuir" class="tab-like-content">
+                <div id="painel-distribuicao-container">
+                     </div>
+            </div>
+        </div>
+    </div>
+</div>
+

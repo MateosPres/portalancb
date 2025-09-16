@@ -1,9 +1,11 @@
-// js/main.js
+// js/main.js (VERSÃO CORRIGIDA E COMPLETA)
+
 import { initModals } from './components/modal.js';
 import { initAuth } from './modules/auth.js';
 import { initJogadores, setJogadoresUserRole } from './modules/jogadores.js';
 import { initCampeonatos, setCampeonatosUserRole } from './modules/campeonatos.js';
 import { initAdmin, setAdminVisibility } from './modules/admin.js';
+import { initPainelJogo } from './modules/painelJogo.js';
 
 const navTabs = document.querySelector('.nav-tabs');
 const tabContents = document.querySelectorAll('.tab-content');
@@ -52,8 +54,15 @@ function switchTab(targetTabName) {
     navTabs.querySelector('.active')?.classList.remove('active');
     tabContents.forEach(content => content.classList.remove('active'));
     
-    navTabs.querySelector(`[data-tab="${targetTabName}"]`)?.classList.add('active');
-    document.getElementById(`tab-${targetTabName}`)?.classList.add('active');
+    const navTabsItem = navTabs.querySelector(`[data-tab="${targetTabName}"]`);
+    if (navTabsItem) {
+        navTabsItem.classList.add('active');
+    }
+    
+    const tabContentItem = document.getElementById(`tab-${targetTabName}`);
+    if (tabContentItem) {
+        tabContentItem.classList.add('active');
+    }
 }
 
 function handleTabClick(e) {
@@ -63,14 +72,17 @@ function handleTabClick(e) {
     }
 }
 
+// ÚNICA DECLARAÇÃO DA FUNÇÃO 'main'
 function main() {
     initModals();
     initAuth(onUserLogin, onUserLogout);
     initJogadores();
     initCampeonatos();
     initAdmin();
+    initPainelJogo();
     navTabs.addEventListener('click', handleTabClick);
     console.log("Aplicação ANCB-MT inicializada com sucesso!");
 }
 
+// ÚNICA CHAMADA DA FUNÇÃO 'main'
 main();

@@ -337,3 +337,503 @@ body.modal-open { overflow: hidden; }
 .jogo-realizado-item strong {
     color: var(--cor-preto);
 }
+
+/* Estilos para o Painel de Jogo */
+.modal-xl {
+    max-width: 900px;
+}
+
+#painel-jogo-titulo {
+    margin-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+.painel-aovivo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-top: 15px;
+}
+
+.col-placar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.col-placar h3, .col-registro h3 {
+    margin-bottom: 10px;
+    font-size: 1.5rem;
+}
+
+.placar-display {
+    font-size: 5rem;
+    font-weight: bold;
+    color: var(--cor-preto);
+    background-color: var(--cor-cinza-fundo);
+    width: 100%;
+    text-align: center;
+    padding: 20px 0;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+}
+
+.botoes-placar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+}
+
+.btn-placar {
+    padding: 15px;
+    font-size: 1rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-placar.add {
+    background-color: var(--cor-sucesso);
+    color: white;
+}
+.btn-placar.add:hover {
+    background-color: #218838;
+}
+
+.btn-placar.remove {
+    background-color: var(--cor-vermelho-claro);
+    color: white;
+    grid-column: 1 / -1; /* Ocupa as duas colunas */
+}
+.btn-placar.remove:hover {
+    background-color: #c82333;
+}
+
+.registro-cestas {
+    height: 300px;
+    overflow-y: auto;
+    background: #fdfdfd;
+    border: 1px solid #eee;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.cesta-item {
+    padding: 8px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.cesta-item:last-child {
+    border-bottom: none;
+}
+
+.game-item-actions {
+    display: flex;
+    gap: 5px;
+}
+
+/* Estilos para o Painel de Distribuição */
+.saldo-cestas {
+    display: flex;
+    justify-content: space-around;
+    background: #f7f7f7;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+.saldo-item {
+    text-align: center;
+    font-size: 1.1rem;
+}
+.saldo-item strong {
+    display: block;
+    font-size: 1.8rem;
+    color: var(--cor-azul-escuro);
+}
+.distribuicao-jogador-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+}
+.botoes-distribuicao button {
+    margin-left: 5px;
+    width: 40px;
+    height: 30px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.botoes-distribuicao button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Adicione este código ao final de style.css */
+
+.section-header-inline {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 10px;
+}
+.section-header-inline h3 {
+    margin: 0;
+}
+
+/* Ajustes no Painel de Jogo */
+.painel-aovivo-grid {
+    display: grid;
+    /* ANCB | Adversário | Registro */
+    grid-template-columns: 1fr 180px 1fr;
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.col-placar.adversario {
+    border-left: 1px solid #eee;
+    border-right: 1px solid #eee;
+    padding: 0 20px;
+}
+
+.placar-display.adversario {
+    font-size: 4rem;
+    padding: 10px 0; /* Reduz o padding vertical */
+    margin-bottom: 15px;
+    background-color: #fff;
+}
+
+.col-placar.adversario .botoes-placar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+}
+
+/* Adicionar ao final de style.css */
+
+/* Deixa o item da lista de jogos clicável */
+.jogo-realizado-item.clickable {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.jogo-realizado-item.clickable:hover {
+    background-color: #f5f5f5;
+}
+.jogo-realizado-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.jogo-info {
+    flex-grow: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-right: 15px;
+}
+.btn-painel-jogo-view {
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+.btn-painel-jogo-view:hover {
+    background-color: var(--cor-azul-claro);
+    color: white;
+}
+
+
+/* Estilos para o Modal de Detalhes do Jogo */
+#ver-jogo-header {
+    text-align: center;
+    margin-bottom: 15px;
+}
+#ver-jogo-header h2 {
+    margin: 0;
+}
+.placar-final {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--cor-preto);
+}
+#jogo-estatisticas-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.stat-jogador-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: #f9f9f9;
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+.stat-jogador-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+}
+.stat-jogador-info img, .stat-jogador-info .placeholder {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.stat-jogador-pontos {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+.stat-jogador-pontos span {
+    display: inline-block;
+    text-align: center;
+    font-size: 0.9rem;
+    min-width: 20px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background-color: #e9ecef;
+}
+.stat-jogador-pontos strong {
+    font-size: 1.1rem;
+    min-width: 60px;
+    text-align: right;
+}
+
+/* Adicionar ao final de style.css para refinar a UI de estatísticas */
+
+.stat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    font-weight: bold;
+    color: #666;
+    border-bottom: 2px solid #eee;
+    margin-bottom: 5px;
+}
+
+.header-jogador {
+    flex: 1;
+    text-align: left;
+}
+
+.stat-jogador-item, .stat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.stat-jogador-info, .header-jogador {
+    flex-grow: 1; /* Ocupa o espaço restante */
+}
+
+/* Garante que a seção de pontos tenha um tamanho fixo para alinhamento */
+.stat-jogador-pontos, .header-pontos {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-shrink: 0; /* Impede que encolha */
+    width: 220px; /* Largura fixa para alinhar as colunas */
+    justify-content: flex-end;
+}
+
+/* Garante que cada coluna de pontos tenha a mesma largura */
+.stat-jogador-pontos span, .header-pontos span {
+    width: 35px;
+    text-align: center;
+    font-size: 0.9rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background-color: #e9ecef;
+}
+.header-pontos span {
+    background-color: transparent;
+    font-weight: bold;
+}
+
+.stat-jogador-pontos strong, .header-pontos strong {
+    width: 60px;
+    text-align: right;
+    font-size: 1.1rem;
+}
+
+/* Adicionar ao final de style.css */
+
+.game-item-actions-view {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.game-item-actions-view button {
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    font-size: 1.1rem; /* Ajustado para ícones menores */
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.game-item-actions-view button:hover {
+    background-color: var(--cor-azul-claro);
+    color: white;
+}
+
+/* Adicionar ao final de style.css - NOVOS ESTILOS PARA O PAINEL DE JOGO */
+/* Em style.css, SUBSTITUA todos os estilos do painel de jogo por este bloco */
+
+/* Reseta estilos antigos para evitar conflitos */
+.painel-aovivo-grid, .col-placar, .botoes-placar, .placar-display {
+    all: unset;
+    display: block;
+}
+
+/* -- Estrutura Principal do Painel (Mobile-First) -- */
+#tab-painel-aovivo {
+    padding: 10px;
+}
+
+.painel-scoreboard {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    border: 2px solid #eee;
+    background-color: var(--cor-preto);
+    color: var(--cor-branco);
+    border-radius: 12px;
+    padding: 10px;
+    margin-bottom: 20px;
+}
+.team-score {
+    text-align: center;
+    flex: 1;
+}
+.team-name {
+    font-size: 1rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.9;
+}
+.score-display {
+    font-size: 4rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.painel-controls-grid {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+.team-controls {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.botoes-placar-pontos {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-placar {
+    flex-grow: 1;
+    padding: 15px 10px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.2s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+.btn-placar:active {
+    transform: translateY(2px);
+    box-shadow: none;
+}
+.btn-placar.add {
+    background-color: var(--cor-sucesso);
+    color: white;
+}
+.btn-placar.remove {
+    background-color: var(--cor-vermelho-claro);
+    color: white;
+}
+
+.painel-log-section {
+    margin-top: 15px;
+}
+.painel-log-section h3 {
+    margin-bottom: 5px;
+    font-size: 1.2rem;
+}
+.registro-cestas {
+    height: 200px;
+    overflow-y: auto;
+    background: #fdfdfd;
+    border: 1px solid #eee;
+    padding: 10px;
+    border-radius: 8px;
+}
+.cesta-item {
+    padding: 8px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.9rem;
+}
+.cesta-item:last-child {
+    border-bottom: none;
+}
+
+
+/* -- Layout para Telas Maiores (Desktop) -- */
+@media screen and (min-width: 768px) {
+    #tab-painel-aovivo {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        grid-template-rows: auto 1fr;
+        gap: 20px 30px;
+        align-items: flex-start;
+    }
+    .painel-scoreboard {
+        grid-column: 1 / 2;
+        grid-row: 1 / 2;
+    }
+    .painel-controls-grid {
+        grid-column: 1 / 2;
+        grid-row: 2 / 3;
+    }
+    .painel-log-section {
+        grid-column: 2 / 3;
+        grid-row: 1 / 3;
+        margin-top: 0;
+    }
+    .registro-cestas {
+        height: 100%;
+        max-height: 450px;
+    }
+    .team-name {
+        font-size: 1.2rem;
+    }
+    .score-display {
+        font-size: 4.5rem;
+    }
+}
