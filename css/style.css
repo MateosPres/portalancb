@@ -959,3 +959,20 @@ body.modal-open { overflow: hidden; }
 }
 
 /* A animação @keyframes spin já deve existir no seu CSS, então não é preciso adicioná-la novamente */
+
+/* Adicionar ao final de style.css */
+#instagram-feed-container {
+    width: 100%;
+    margin-top: 20px;
+}
+
+.section-actions {
+    display: flex;
+    justify-content: flex-end; /* Alinha o botão à direita */
+    margin-bottom: 20px; /* Espaçamento abaixo do botão */
+}
+
+/* Ajuste opcional para o container do feed do Instagram */
+#instagram-feed-container {
+    margin-top: 0; /* Remove margem extra se houver */
+}

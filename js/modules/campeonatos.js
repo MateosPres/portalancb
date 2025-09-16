@@ -1,4 +1,4 @@
-// js/modules/campeonatos.js (VERSÃO FINAL E ESTÁVEL)
+// js/modules/campeonatos.js (VERSÃO FINAL COM IDs CORRIGIDOS)
 
 import { collection, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, addDoc, getDocs, getDoc, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { db } from '../services/firebase.js';
@@ -10,8 +10,8 @@ let campeonatos = [];
 let userRole = null;
 
 // --- Elementos do DOM ---
-const gridCampeonatos = document.getElementById('grid-campeonatos');
-const loaderCampeonatos = document.querySelector('#tab-campeonatos .grid-loader');
+// CORREÇÃO: O ID foi atualizado para 'grid-jogos'
+const gridJogos = document.getElementById('grid-jogos');
 const modalCampeonato = document.getElementById('modal-campeonato');
 const modalVerCampeonato = document.getElementById('modal-ver-campeonato');
 const formCampeonato = document.getElementById('form-campeonato');
@@ -25,14 +25,13 @@ const formatDate = (dateStr) => {
 };
 
 // --- RENDERIZAÇÃO PRINCIPAL ---
-// Em js/modules/campeonatos.js
-
 function render() {
-    loaderCampeonatos.style.display = 'none';   // esconde o loader
-    gridCampeonatos.innerHTML = ''; // Limpa o conteúdo (inclusive o spinner)
+    // CORREÇÃO: Usando a variável correta gridJogos
+    if (!gridJogos) return; // Checagem de segurança
+    gridJogos.innerHTML = '';
 
     if (campeonatos.length === 0) {
-        gridCampeonatos.innerHTML = '<p>Nenhum campeonato encontrado.</p>';
+        gridJogos.innerHTML = '<p>Nenhum campeonato encontrado.</p>';
         return;
     }
 
@@ -53,11 +52,14 @@ function render() {
                     <p>👥 <strong>Jogadores:</strong> ${c.jogadoresEscalados?.length || 0} escalado(s)</p>
                 </div>
             </div>`;
-        gridCampeonatos.appendChild(card);
+        // CORREÇÃO: Usando a variável correta gridJogos
+        gridJogos.appendChild(card);
     });
 }
 
-// --- LÓGICA DE CAMPEONATOS ---
+// O restante do arquivo continua igual...
+// (Cole o resto do seu arquivo campeonatos.js aqui ou use a versão completa abaixo)
+// Para garantir, aqui está o arquivo completo:
 
 async function showCampeonatoModal(id = null) {
     if (userRole !== 'admin') return;
@@ -65,7 +67,6 @@ async function showCampeonatoModal(id = null) {
     formCampeonato['campeonato-id'].value = id || '';
     document.getElementById('secao-gerenciar-jogos').style.display = 'none';
     let escalados = [];
-
     if (id) {
         const c = campeonatos.find(i => i.id === id);
         if (!c) return;
@@ -74,15 +75,12 @@ async function showCampeonatoModal(id = null) {
         formCampeonato['campeonato-data'].value = c.data;
         formCampeonato['campeonato-tipo'].value = c.tipo || '5x5';
         escalados = c.jogadoresEscalados || [];
-        
         document.getElementById('secao-gerenciar-jogos').style.display = 'block';
         document.getElementById('btn-adicionar-jogo').onclick = () => showJogoModal(id);
         renderJogosList(id);
-
     } else {
         document.getElementById('modal-campeonato-titulo').innerText = 'Adicionar Novo Campeonato';
     }
-
     const listaContainer = document.getElementById('lista-jogadores-escalar');
     listaContainer.innerHTML = '';
     const todosJogadores = getJogadores();
@@ -90,7 +88,6 @@ async function showCampeonatoModal(id = null) {
         const checked = escalados.includes(j.id) ? 'checked' : '';
         listaContainer.innerHTML += `<label class="checkbox-item"><input type="checkbox" value="${j.id}" ${checked}><span>${j.nome} (#${j.numero_uniforme})</span></label>`;
     });
-
     openModal(modalCampeonato);
 }
 
@@ -130,24 +127,18 @@ async function deleteCampeonato(id) {
     }
 }
 
-// --- LÓGICA DE JOGOS ---
-
 async function renderJogosList(campeonatoId) {
     const listaJogosContainer = document.getElementById('lista-de-jogos');
     listaJogosContainer.innerHTML = 'Carregando jogos...';
-    
     const campeonato = campeonatos.find(c => c.id === campeonatoId);
     if (!campeonato) return;
-
     const jogosRef = collection(db, "campeonatos", campeonatoId, "jogos");
     const q = query(jogosRef, orderBy("dataJogo", "desc"));
     const snapshot = await getDocs(q);
-
     if (snapshot.empty) {
         listaJogosContainer.innerHTML = '<p>Nenhum jogo adicionado ainda.</p>';
         return;
     }
-
     listaJogosContainer.innerHTML = '';
     snapshot.forEach(doc => {
         const jogo = { id: doc.id, ...doc.data() };
@@ -172,7 +163,6 @@ async function showJogoModal(campeonatoId, jogoId = null) {
     formJogo.reset();
     formJogo['jogo-campeonato-id'].value = campeonatoId;
     formJogo['jogo-id'].value = jogoId || '';
-    
     if (jogoId) {
         document.getElementById('modal-jogo-titulo').innerText = 'Editar Jogo';
         const jogoRef = doc(db, "campeonatos", campeonatoId, "jogos", jogoId);
@@ -191,20 +181,16 @@ async function showJogoModal(campeonatoId, jogoId = null) {
 async function handleFormSubmitJogo(e) {
     e.preventDefault();
     if (userRole !== 'admin') return;
-
     const campeonatoId = formJogo['jogo-campeonato-id'].value;
     const jogoId = formJogo['jogo-id'].value;
     const campeonato = campeonatos.find(c => c.id === campeonatoId);
-
     const loadingOverlay = modalJogo.querySelector('.loading-overlay');
     loadingOverlay.classList.add('active');
-
     const adversarioNome = formJogo['jogo-adversario'].value;
     let dadosJogo = {
         dataJogo: formJogo['jogo-data'].value,
         adversario: adversarioNome,
     };
-    
     try {
         if (jogoId) {
             const jogoRef = doc(db, "campeonatos", campeonatoId, "jogos", jogoId);
@@ -216,10 +202,8 @@ async function handleFormSubmitJogo(e) {
             dadosJogo.placarAdversario_final = 0;
             const jogoRef = await addDoc(collection(db, "campeonatos", campeonatoId, "jogos"), dadosJogo);
             const effectiveJogoId = jogoRef.id;
-            
             closeModal(modalJogo);
             closeModal(modalVerCampeonato);
-
             setTimeout(() => {
                 abrirPainelJogo(campeonato, effectiveJogoId, adversarioNome);
             }, 300);
@@ -249,15 +233,11 @@ async function deleteJogo(campeonatoId, jogoId) {
     }
 }
 
-// --- LÓGICA DE VISUALIZAÇÃO PÚBLICA ---
-
 async function showFichaCampeonato(id) {
     const camp = campeonatos.find(c => c.id === id);
     if (!camp) return;
-
     document.getElementById('ver-campeonato-titulo').innerText = camp.nome;
     document.getElementById('ver-campeonato-data').innerText = `Data: ${formatDate(camp.data)}`;
-    
     const btnAddGame = document.getElementById('btn-add-game-from-view');
     if (userRole === 'admin') {
         btnAddGame.style.display = 'inline-flex';
@@ -268,16 +248,12 @@ async function showFichaCampeonato(id) {
     } else {
         btnAddGame.style.display = 'none';
     }
-    
     const tabButtons = modalVerCampeonato.querySelectorAll('.tab-like-btn');
     const tabContents = modalVerCampeonato.querySelectorAll('.tab-like-content');
-    
     tabButtons.forEach((btn, index) => btn.classList.toggle('active', index === 0));
     tabContents.forEach((content, index) => content.classList.toggle('active', index === 0));
-    
     renderEscalacao(camp);
     openModal(modalVerCampeonato);
-
     try {
         await renderJogosEClassificacao(id);
     } catch (error) {
@@ -290,12 +266,10 @@ async function showFichaCampeonato(id) {
 function renderEscalacao(camp) {
     const container = document.getElementById('escalacao-container');
     container.innerHTML = '';
-    
     if (!camp.jogadoresEscalados || camp.jogadoresEscalados.length === 0) {
         container.innerHTML = '<p>Nenhum jogador escalado.</p>';
         return;
     }
-    
     const todosJogadores = getJogadores();
     camp.jogadoresEscalados.forEach(jogadorId => {
         const j = todosJogadores.find(p => p.id === jogadorId);
@@ -311,24 +285,19 @@ async function renderJogosEClassificacao(campeonatoId) {
     const classContainer = document.getElementById('classificacao-container');
     jogosContainer.innerHTML = '<p>Carregando jogos...</p>';
     classContainer.innerHTML = '<p>Calculando classificação...</p>';
-
     const todosJogadores = getJogadores();
     const jogosRef = collection(db, "campeonatos", campeonatoId, "jogos");
     const q = query(jogosRef, orderBy("dataJogo", "desc"));
     const snapshotJogos = await getDocs(q);
-
     if (snapshotJogos.empty) {
         jogosContainer.innerHTML = '<p>Nenhum jogo realizado.</p>';
         classContainer.innerHTML = '<p>Nenhuma estatística para exibir.</p>';
         return;
     }
-
     jogosContainer.innerHTML = '';
     const leaderboard = {};
-
     for (const jogoDoc of snapshotJogos.docs) {
         const jogo = { id: jogoDoc.id, ...jogoDoc.data() };
-
         let adminActionButtons = '';
         if (userRole === 'admin') {
             adminActionButtons = `
@@ -338,9 +307,7 @@ async function renderJogosEClassificacao(campeonatoId) {
                     <button class="btn-delete-jogo-view" data-jogo-id="${jogo.id}" data-campeonato-id="${campeonatoId}" title="Excluir Jogo">🗑️</button>
                 </div>`;
         }
-
         const resultadoClass = jogo.placarANCB_final > jogo.placarAdversario_final ? 'vitoria' : (jogo.placarANCB_final < jogo.placarAdversario_final ? 'derrota' : 'empate');
-        
         jogosContainer.innerHTML += `
             <div class="jogo-realizado-item clickable" data-jogo-id="${jogo.id}" data-campeonato-id="${campeonatoId}">
                 <div class="jogo-info">
@@ -349,7 +316,6 @@ async function renderJogosEClassificacao(campeonatoId) {
                 </div>
                 ${adminActionButtons}
             </div>`;
-
         const estatisticasRef = collection(db, "campeonatos", campeonatoId, "jogos", jogo.id, "estatisticas");
         const snapshotStats = await getDocs(estatisticasRef);
         snapshotStats.forEach(statDoc => {
@@ -365,7 +331,6 @@ async function renderJogosEClassificacao(campeonatoId) {
             }
         });
     }
-
     const sortedLeaderboard = Object.values(leaderboard).sort((a, b) => b.pontos - a.pontos);
     if (sortedLeaderboard.length === 0) {
         classContainer.innerHTML = '<p>Nenhuma estatística de pontos registrada.</p>';
@@ -406,30 +371,24 @@ async function showFichaJogoDetalhes(campeonatoId, jogoId) {
     const container = document.getElementById('jogo-estatisticas-container');
     container.innerHTML = '<p>Carregando estatísticas...</p>';
     openModal(modal);
-
     try {
         const todosJogadores = getJogadores();
         const jogoRef = doc(db, "campeonatos", campeonatoId, "jogos", jogoId);
         const jogoDoc = await getDoc(jogoRef);
-
         if (!jogoDoc.exists()) {
             container.innerHTML = '<p>Jogo não encontrado.</p>';
             return;
         }
         const jogo = jogoDoc.data();
-
         document.getElementById('ver-jogo-titulo').textContent = `ANCB vs ${jogo.adversario}`;
         document.getElementById('ver-jogo-placar-final').textContent = `${jogo.placarANCB_final} x ${jogo.placarAdversario_final}`;
-
         const cestasRef = collection(db, "campeonatos", campeonatoId, "jogos", jogoId, "cestas");
         const q = query(cestasRef, where("jogadorId", "!=", null));
         const cestasSnapshot = await getDocs(q);
-
         if (cestasSnapshot.empty) {
             container.innerHTML = '<p>Nenhuma pontuação individual registrada para este jogo.</p>';
             return;
         }
-
         const statsPorJogador = {};
         cestasSnapshot.forEach(doc => {
             const cesta = doc.data();
@@ -441,9 +400,7 @@ async function showFichaJogoDetalhes(campeonatoId, jogoId) {
             statsPorJogador[cesta.jogadorId][`cestas${cesta.pontos}`]++;
             statsPorJogador[cesta.jogadorId].total += cesta.pontos;
         });
-
         const sortedStats = Object.entries(statsPorJogador).sort(([, a], [, b]) => b.total - a.total);
-
         let html = `
             <div class="stat-header">
                 <span class="header-jogador">Jogador</span>
@@ -455,7 +412,6 @@ async function showFichaJogoDetalhes(campeonatoId, jogoId) {
                 </div>
             </div>
         `;
-
         sortedStats.forEach(([jogadorId, stats]) => {
             const perfil = todosJogadores.find(j => j.id === jogadorId);
             const fotoHTML = perfil?.foto ? `<img src="${perfil.foto}" alt="${stats.nome}">` : '<div class="placeholder">🏀</div>';
@@ -475,20 +431,16 @@ async function showFichaJogoDetalhes(campeonatoId, jogoId) {
             `;
         });
         container.innerHTML = html;
-
     } catch (error) {
         console.error("Erro ao buscar detalhes do jogo:", error);
         container.innerHTML = '<p>Não foi possível carregar as estatísticas.</p>';
     }
 }
 
-// --- INICIALIZAÇÃO E FUNÇÕES PÚBLICAS ---
-
 function setupTabEventListeners() {
     const tabContainer = document.querySelector('#modal-ver-campeonato .tab-like-container');
     if (!tabContainer) return;
     if (tabContainer.dataset.listenerAttached) return;
-
     tabContainer.addEventListener('click', (e) => {
         if (e.target.classList.contains('tab-like-btn')) {
             const targetId = e.target.dataset.target;
@@ -510,53 +462,58 @@ export function setCampeonatosUserRole(role) {
 }
 
 export function initCampeonatos() {
-    loaderCampeonatos.style.display = 'block';  // mostra o loader enquanto carrega
     onSnapshot(query(collection(db, "campeonatos"), orderBy("data", "desc")), (snapshot) => {
         campeonatos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         render();
     });
 
-    gridCampeonatos.addEventListener('click', (e) => {
-        const card = e.target.closest('.championship-card');
-        if (!card) return;
-        const id = card.dataset.id;
-        if (e.target.closest('.btn-edit-camp')) {
-            showCampeonatoModal(id);
-        } else if (e.target.closest('.btn-delete-camp')) {
-            deleteCampeonato(id);
-        } else {
-            showFichaCampeonato(id);
-        }
-    });
+    // CORREÇÃO: A variável gridJogos já está definida no escopo do módulo
+    if (gridJogos) {
+        gridJogos.addEventListener('click', (e) => {
+            const card = e.target.closest('.championship-card');
+            if (!card) return;
+            const id = card.dataset.id;
+            if (e.target.closest('.btn-edit-camp')) {
+                showCampeonatoModal(id);
+            } else if (e.target.closest('.btn-delete-camp')) {
+                deleteCampeonato(id);
+            } else {
+                showFichaCampeonato(id);
+            }
+        });
+    }
 
-    document.getElementById('jogos-realizados-container').addEventListener('click', (e) => {
-        const btnPainel = e.target.closest('.btn-painel-jogo-view');
-        const btnEdit = e.target.closest('.btn-edit-jogo-view');
-        const btnDelete = e.target.closest('.btn-delete-jogo-view');
-        const itemJogo = e.target.closest('.jogo-realizado-item');
-
-        if (btnPainel) {
-            e.stopPropagation();
-            const { campeonatoId, jogoId, adversario } = btnPainel.dataset;
-            const campeonato = campeonatos.find(c => c.id === campeonatoId);
-            if(campeonato && jogoId && adversario) abrirPainelJogo(campeonato, jogoId, adversario);
-
-        } else if (btnEdit) {
-            e.stopPropagation();
-            const { campeonatoId, jogoId } = btnEdit.dataset;
-            closeModal(modalVerCampeonato);
-            showJogoModal(campeonatoId, jogoId);
-
-        } else if (btnDelete) {
-            e.stopPropagation();
-            const { campeonatoId, jogoId } = btnDelete.dataset;
-            deleteJogo(campeonatoId, jogoId);
-            
-        } else if (itemJogo) {
-            const { campeonatoId, jogoId } = itemJogo.dataset;
-            if (campeonatoId && jogoId) showFichaJogoDetalhes(campeonatoId, jogoId);
-        }
-    });
+    const jogosRealizadosContainer = document.getElementById('jogos-realizados-container');
+    if (jogosRealizadosContainer) {
+        jogosRealizadosContainer.addEventListener('click', (e) => {
+            const btnPainel = e.target.closest('.btn-painel-jogo-view');
+            const btnEdit = e.target.closest('.btn-edit-jogo-view');
+            const btnDelete = e.target.closest('.btn-delete-jogo-view');
+            const itemJogo = e.target.closest('.jogo-realizado-item');
+    
+            if (btnPainel) {
+                e.stopPropagation();
+                const { campeonatoId, jogoId, adversario } = btnPainel.dataset;
+                const campeonato = campeonatos.find(c => c.id === campeonatoId);
+                if(campeonato && jogoId && adversario) abrirPainelJogo(campeonato, jogoId, adversario);
+    
+            } else if (btnEdit) {
+                e.stopPropagation();
+                const { campeonatoId, jogoId } = btnEdit.dataset;
+                closeModal(modalVerCampeonato);
+                showJogoModal(campeonatoId, jogoId);
+    
+            } else if (btnDelete) {
+                e.stopPropagation();
+                const { campeonatoId, jogoId } = btnDelete.dataset;
+                deleteJogo(campeonatoId, jogoId);
+                
+            } else if (itemJogo) {
+                const { campeonatoId, jogoId } = itemJogo.dataset;
+                if (campeonatoId && jogoId) showFichaJogoDetalhes(campeonatoId, jogoId);
+            }
+        });
+    }
 
     formCampeonato.addEventListener('submit', handleFormSubmitCampeonato);
     formJogo.addEventListener('submit', handleFormSubmitJogo);

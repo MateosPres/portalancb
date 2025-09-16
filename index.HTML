@@ -11,73 +11,86 @@
 </head>
 <body>
     <header class="site-header">
-        <div class="container header-container">
-            <div class="header-left">
-                <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="logo">
-                <h1>Portal ANCB-MT</h1>
+    <div class="container header-container">
+        <div class="header-left">
+            <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="logo">
+            <h1>Portal ANCB-MT</h1>
+        </div>
+        <div class="header-right">
+            <div class="logged-in-only">
+                <span id="welcome-message"></span>
+                <button id="btn-manage-users" class="btn btn-secondary btn-sm admin-only">Gerenciar Usuários</button>
+                <button id="btn-logout" class="btn btn-logout btn-sm">Sair</button>
             </div>
-            <div class="header-right">
-                <div class="logged-in-only">
-                    <span id="welcome-message"></span>
-                    <button id="btn-logout" class="btn btn-logout btn-sm">Sair</button>
-                </div>
-                <div class="logged-out-only">
-                    <button id="btn-show-login" class="btn btn-secondary btn-sm">Login</button>
-                    <button id="btn-show-register" class="btn btn-primary btn-sm">Registrar</button>
-                </div>
+            <div class="logged-out-only">
+                <button id="btn-show-login" class="btn btn-secondary btn-sm">Login</button>
+                <button id="btn-show-register" class="btn btn-primary btn-sm">Registrar</button>
             </div>
         </div>
-    </header>
+    </div>
+</header>
 
     <main class="container">
-        <nav class="nav-tabs">
-            <div class="nav-tab active" data-tab="campeonatos">Campeonatos</div>
-            <div class="nav-tab" data-tab="jogadores">Jogadores</div>
-            <div class="nav-tab admin-only" data-tab="admin">Administradores</div>
-        </nav>
+    
+    <nav class="nav-tabs">
+    <div class="nav-tab active" data-tab="ultimas-noticias">Últimas Notícias</div>
+    <div class="nav-tab" data-tab="jogos">Jogos</div>
+    <div class="nav-tab" data-tab="jogadores">Jogadores</div>
+</nav>
 
-        <div id="tab-campeonatos" class="tab-content active">
-            <section class="content-section">
-                <div class="section-header">
-                    <h2>Campeonatos</h2>
-                    <button id="btn-abrir-modal-campeonato" class="btn btn-primary admin-only">🏆 Adicionar Campeonato</button>
-                </div>
-                <div id="grid-campeonatos" class="card-grid"></div>
+    <div id="tab-ultimas-noticias" class="tab-content active">
+        <section class="content-section">
+            <div id="instagram-feed-container">
+<!-- Elfsight Instagram Feed | Untitled Instagram Feed -->
+<script src="https://elfsightcdn.com/platform.js" async></script>
+<div class="elfsight-app-ce6ff0b5-78cb-480e-aba7-1fef2c400a2f" data-elfsight-app-lazy></div>                </div>
+        </section>
+    </div>
+
+    <div id="tab-jogos" class="tab-content">
+        <section class="content-section">
+            <div class="section-actions">
+                <button id="btn-abrir-modal-campeonato" class="btn btn-primary admin-only">🏆 Adicionar Campeonato</button>
+            </div>
+            <div id="grid-jogos" class="card-grid">
                 <div class="grid-loader"></div>
-            </section>
-        </div>
-        <div id="tab-jogadores" class="tab-content">
-            <section class="content-section">
-                <div class="section-header">
-                    <h2>Jogadores</h2>
-                    <button id="btn-abrir-modal-jogador" class="btn btn-primary admin-only">➕ Cadastrar Jogador</button>
-                </div>
-                <div id="grid-jogadores" class="card-grid"></div>
+            </div>
+        </section>
+    </div>
+
+    <div id="tab-jogadores" class="tab-content">
+        <section class="content-section">
+            <div class="section-actions">
+                <button id="btn-abrir-modal-jogador" class="btn btn-primary admin-only">➕ Cadastrar Jogador</button>
+            </div>
+            <div id="grid-jogadores" class="card-grid">
                 <div class="grid-loader"></div>
-            </section>
-        </div>
-        <div id="tab-admin" class="tab-content">
-            <section class="content-section">
-                <div class="section-header">
-                    <h2>Gerenciar Usuários</h2>
-                </div>
-                <div id="admin-users-table-wrapper">
-                    <table id="admin-users-table">
-                        <thead>
-                            <tr>
-                                <th>Email</th>
-                                <th>Nome</th>
-                                <th>Status</th>
-                                <th>Permissão</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="users-table-body"></tbody>
-                    </table>
-                </div>
-            </section>
-        </div>
-    </main>
+            </div>
+        </section>
+    </div>
+
+    <div id="tab-admin" class="tab-content">
+        <section class="content-section">
+            <div class="section-header">
+                <h2>Gerenciar Usuários</h2>
+            </div>
+            <div id="admin-users-table-wrapper">
+                <table id="admin-users-table">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Nome</th>
+                            <th>Status</th>
+                            <th>Permissão</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</main>
 
     <footer class="site-footer">
         <p>&copy; 2025 ANCB-MT. Todos os direitos reservados.</p>

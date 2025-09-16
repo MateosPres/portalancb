@@ -47,7 +47,7 @@ function onUserLogout() {
     setJogadoresUserRole(null);
     setCampeonatosUserRole(null);
     setAdminVisibility(false, null);
-    switchTab('campeonatos'); // Volta para a aba principal
+    switchTab('ultimas-noticias'); // MUDANÇA AQUI
 }
 
 function switchTab(targetTabName) {
@@ -81,6 +81,16 @@ function main() {
     initAdmin();
     initPainelJogo();
     navTabs.addEventListener('click', handleTabClick);
+
+    const btnManageUsers = document.getElementById('btn-manage-users');
+    if (btnManageUsers) {
+        btnManageUsers.addEventListener('click', () => {
+            switchTab('admin');
+        });
+    }
+
+    switchTab('ultimas-noticias'); // MUDANÇA AQUI
+    
     console.log("Aplicação ANCB-MT inicializada com sucesso!");
 }
 
