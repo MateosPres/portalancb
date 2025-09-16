@@ -976,3 +976,35 @@ body.modal-open { overflow: hidden; }
 #instagram-feed-container {
     margin-top: 0; /* Remove margem extra se houver */
 }
+
+/* Adicionar ao final de style.css - MELHORIA DE LAYOUT MOBILE PARA JOGADORES */
+
+/* Media Query para ecrãs de telemóvel e tablets pequenos */
+@media screen and (max-width: 768px) {
+
+    /* Esta é a mudança principal:
+      Em vez de forçar 1 coluna (1fr), criamos um grid responsivo
+      que gera o máximo de colunas possíveis com no mínimo 150px de largura.
+      Num telemóvel típico, isto resulta em 2 colunas.
+    */
+    #grid-jogadores.card-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 15px;
+    }
+
+    /* Ajustes visuais para que os cards fiquem bem no novo tamanho menor.
+    */
+    .player-card {
+        padding: 15px; /* Reduz o espaçamento interno */
+        padding-bottom: 45px;
+    }
+
+    .player-card .photo-container {
+        width: 90px;  /* Diminui o tamanho da foto */
+        height: 90px;
+    }
+    
+    .player-card .player-name {
+        font-size: 1rem; /* Diminui o tamanho da fonte do nome */
+    }
+}
