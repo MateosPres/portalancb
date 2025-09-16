@@ -43,6 +43,7 @@
                     <button id="btn-abrir-modal-campeonato" class="btn btn-primary admin-only">🏆 Adicionar Campeonato</button>
                 </div>
                 <div id="grid-campeonatos" class="card-grid"></div>
+                <div class="grid-loader"></div>
             </section>
         </div>
         <div id="tab-jogadores" class="tab-content">
@@ -52,6 +53,7 @@
                     <button id="btn-abrir-modal-jogador" class="btn btn-primary admin-only">➕ Cadastrar Jogador</button>
                 </div>
                 <div id="grid-jogadores" class="card-grid"></div>
+                <div class="grid-loader"></div>
             </section>
         </div>
         <div id="tab-admin" class="tab-content">
@@ -314,14 +316,9 @@
         <button class="close-button" aria-label="Fechar">&times;</button>
         <h2 id="painel-jogo-titulo">Painel do Jogo: ANCB vs <span id="painel-adversario-nome-header"></span></h2>
         
-        <div class="tab-like-container">
-            <div class="tab-like-nav">
-                <button class="tab-like-btn active" data-target="tab-painel-aovivo">Ao Vivo</button>
-                <button class="tab-like-btn" data-target="tab-painel-distribuir">Distribuir Pontos</button>
-            </div>
-
-            <div id="tab-painel-aovivo" class="tab-like-content active">
-    
+        <div id="painel-jogo-container">
+            
+            <div class="painel-secao-aovivo">
                 <div class="painel-scoreboard">
                     <div class="team-score">
                         <span class="team-name">ANCB</span>
@@ -352,19 +349,19 @@
                         <button class="btn-placar remove">-1</button>
                     </div>
                 </div>
-                
-                <div class="painel-log-section">
-                    <h3>Registro de Cestas (ANCB)</h3>
-                    <div id="registro-cestas-container" class="registro-cestas">
-                        </div>
-                </div>
-
+            </div>
+            
+            <div class="painel-log-section">
+                <h3>Registro de Cestas (ANCB)</h3>
+                <div id="registro-cestas-container" class="registro-cestas">
+                    </div>
             </div>
 
-            <div id="tab-painel-distribuir" class="tab-like-content">
-                <div id="painel-distribuicao-container">
-                     </div>
-            </div>
+            <hr class="painel-divisor">
+
+            <div id="painel-distribuicao-container" class="painel-secao-distribuicao">
+                 </div>
+
         </div>
     </div>
 </div>

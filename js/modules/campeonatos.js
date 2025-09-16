@@ -1,4 +1,4 @@
-// js/modules/campeonatos.js (VERSÃO FINAL E CORRIGIDA)
+// js/modules/campeonatos.js (VERSÃO FINAL E ESTÁVEL)
 
 import { collection, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, addDoc, getDocs, getDoc, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { db } from '../services/firebase.js';
@@ -11,6 +11,7 @@ let userRole = null;
 
 // --- Elementos do DOM ---
 const gridCampeonatos = document.getElementById('grid-campeonatos');
+const loaderCampeonatos = document.querySelector('#tab-campeonatos .grid-loader');
 const modalCampeonato = document.getElementById('modal-campeonato');
 const modalVerCampeonato = document.getElementById('modal-ver-campeonato');
 const formCampeonato = document.getElementById('form-campeonato');
@@ -24,8 +25,17 @@ const formatDate = (dateStr) => {
 };
 
 // --- RENDERIZAÇÃO PRINCIPAL ---
+// Em js/modules/campeonatos.js
+
 function render() {
-    gridCampeonatos.innerHTML = '';
+    loaderCampeonatos.style.display = 'none';   // esconde o loader
+    gridCampeonatos.innerHTML = ''; // Limpa o conteúdo (inclusive o spinner)
+
+    if (campeonatos.length === 0) {
+        gridCampeonatos.innerHTML = '<p>Nenhum campeonato encontrado.</p>';
+        return;
+    }
+
     campeonatos.forEach(c => {
         const card = document.createElement('div');
         const isAdmin = userRole === 'admin';
@@ -146,7 +156,7 @@ async function renderJogosList(campeonatoId) {
         item.innerHTML = `
             <span>vs <strong>${jogo.adversario}</strong> (${formatDate(jogo.dataJogo)})</span>
             <div class="game-item-actions">
-                <button class="btn-painel-jogo btn-sm" title="Abrir Painel do JJogo">📊</button>
+                <button class="btn-painel-jogo btn-sm" title="Abrir Painel do Jogo">📊</button>
                 <button class="btn-edit-jogo btn-sm" title="Editar Jogo">✏️</button>
                 <button class="btn-delete-jogo btn-sm" title="Excluir Jogo">🗑️</button>
             </div>
@@ -391,7 +401,6 @@ async function renderJogosEClassificacao(campeonatoId) {
     }
 }
 
-// CORREÇÃO: Restaurando o cabeçalho na renderização das estatísticas
 async function showFichaJogoDetalhes(campeonatoId, jogoId) {
     const modal = document.getElementById('modal-ver-jogo');
     const container = document.getElementById('jogo-estatisticas-container');
@@ -435,7 +444,6 @@ async function showFichaJogoDetalhes(campeonatoId, jogoId) {
 
         const sortedStats = Object.entries(statsPorJogador).sort(([, a], [, b]) => b.total - a.total);
 
-        // Gera o novo HTML com cabeçalho
         let html = `
             <div class="stat-header">
                 <span class="header-jogador">Jogador</span>
@@ -476,9 +484,9 @@ async function showFichaJogoDetalhes(campeonatoId, jogoId) {
 
 // --- INICIALIZAÇÃO E FUNÇÕES PÚBLICAS ---
 
-// CORREÇÃO: Restaurando a função de troca de abas
 function setupTabEventListeners() {
     const tabContainer = document.querySelector('#modal-ver-campeonato .tab-like-container');
+    if (!tabContainer) return;
     if (tabContainer.dataset.listenerAttached) return;
 
     tabContainer.addEventListener('click', (e) => {
@@ -487,7 +495,10 @@ function setupTabEventListeners() {
             tabContainer.querySelectorAll('.tab-like-btn').forEach(b => b.classList.remove('active'));
             tabContainer.querySelectorAll('.tab-like-content').forEach(c => c.classList.remove('active'));
             e.target.classList.add('active');
-            tabContainer.querySelector(`#${targetId}`).classList.add('active');
+            const targetContent = tabContainer.querySelector(`#${targetId}`);
+            if (targetContent) {
+                targetContent.classList.add('active');
+            }
         }
     });
     tabContainer.dataset.listenerAttached = 'true';
@@ -499,6 +510,7 @@ export function setCampeonatosUserRole(role) {
 }
 
 export function initCampeonatos() {
+    loaderCampeonatos.style.display = 'block';  // mostra o loader enquanto carrega
     onSnapshot(query(collection(db, "campeonatos"), orderBy("data", "desc")), (snapshot) => {
         campeonatos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         render();

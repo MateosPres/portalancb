@@ -16,6 +16,7 @@ let userRole = null;
 
 // --- Elementos do DOM ---
 const gridJogadores = document.getElementById('grid-jogadores');
+const loaderJogadores = document.querySelector('#tab-jogadores .grid-loader');
 const modalJogador = document.getElementById('modal-jogador');
 const modalVerJogador = document.getElementById('modal-ver-jogador');
 const formJogador = document.getElementById('form-jogador');
@@ -29,8 +30,17 @@ const formatDate = (dateStr) => {
     return `${day}/${month}/${year}`;
 };
 
+// Em js/modules/jogadores.js
+
 function render() {
-    gridJogadores.innerHTML = '';
+    loaderJogadores.style.display = 'none';  // some o loader quando termina
+    gridJogadores.innerHTML = ''; // Limpa o conteúdo (inclusive o spinner)
+
+    if (jogadores.length === 0) {
+        gridJogadores.innerHTML = '<p>Nenhum jogador cadastrado.</p>';
+        return;
+    }
+
     jogadores.forEach(j => {
         const card = document.createElement('div');
         const isAdmin = userRole === 'admin';
@@ -179,6 +189,7 @@ export function setJogadoresUserRole(role) {
 }
 
 export function initJogadores() {
+    loaderJogadores.style.display = 'block'; // mostra o loader
     onSnapshot(query(collection(db, "jogadores"), orderBy("nome")), (snapshot) => {
         jogadores = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         render();

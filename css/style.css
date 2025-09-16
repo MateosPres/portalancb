@@ -837,3 +837,125 @@ body.modal-open { overflow: hidden; }
         font-size: 4.5rem;
     }
 }
+
+/* Adicionar ao final de style.css - Simplificação do Painel de Jogo */
+
+/* Remove os estilos antigos das abas */
+.tab-like-container, .tab-like-nav, .tab-like-btn, .tab-like-content {
+    all: unset;
+    display: block;
+}
+
+/* Novo divisor visual */
+.painel-divisor {
+    border: none;
+    border-top: 2px solid #eee;
+    margin: 25px 0;
+}
+
+/* -- Layout para Telas Maiores (Desktop) com a nova estrutura -- */
+@media screen and (min-width: 768px) {
+    #painel-jogo-container {
+        display: grid;
+        grid-template-columns: 2fr 1fr; /* Coluna principal 2x maior que a do log */
+        gap: 20px 30px;
+        align-items: flex-start;
+    }
+    .painel-secao-aovivo {
+        grid-column: 1 / 2;
+    }
+    .painel-log-section {
+        grid-column: 2 / 3;
+        grid-row: 1 / 3; /* Ocupa a altura das duas seções da esquerda */
+    }
+    .painel-secao-distribuicao {
+        grid-column: 1 / 2;
+    }
+    .registro-cestas {
+        height: 100%;
+        max-height: 600px;
+    }
+}
+
+/* Adicionar ao final de style.css - CORREÇÃO PARA AS ABAS DO CAMPEONATO */
+
+.tab-like-content {
+    display: none; /* Esconde todas as abas por padrão */
+}
+
+.tab-like-content.active {
+    display: block; /* Mostra apenas a aba que estiver ativa */
+}
+/* Adicionar ao final de style.css - CORREÇÃO VISUAL DAS ABAS */
+
+.tab-like-nav {
+    display: flex; /* <-- Esta é a regra principal que alinha as abas */
+    border-bottom: 2px solid #eee;
+    margin-bottom: 15px;
+}
+
+.tab-like-btn {
+    padding: 10px 15px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #888;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s ease-in-out;
+}
+
+.tab-like-btn:hover {
+    color: var(--cor-azul-escuro);
+}
+
+.tab-like-btn.active {
+    color: var(--cor-azul-escuro);
+    border-bottom-color: var(--cor-azul-escuro);
+}
+/* Adicionar ao final de style.css - MELHORIAS DE USABILIDADE MOBILE */
+
+/* Correção 1: Impede o zoom indesejado ao tocar rapidamente nos botões do placar.
+  Aplica-se a todos os botões verdes e vermelhos do painel.
+*/
+.btn-placar {
+    touch-action: manipulation;
+}
+
+/* Correção 2: Garante que os botões de distribuição de pontos
+  fiquem sempre alinhados na mesma linha, sem quebras.
+*/
+.distribuicao-jogador-row {
+    display: flex;
+    justify-content: space-between; /* Alinha o nome à esquerda e os botões à direita */
+    align-items: center;
+}
+
+.botoes-distribuicao {
+    display: flex;
+    flex-wrap: nowrap; /* Impede que os botões quebrem para a linha de baixo */
+    flex-shrink: 0; /* Impede que o container de botões encolha */
+}
+
+/* Adicionar ao final de style.css - INDICADOR DE CARREGAMENTO PARA GRIDS */
+
+.card-grid {
+    position: relative;
+    min-height: 150px; /* Garante uma altura mínima para o spinner ficar visível */
+}
+
+.grid-loader {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 50px;
+    height: 50px;
+    border: 5px solid #f3f3f3; /* Cinza claro */
+    border-top: 5px solid var(--cor-azul-claro); /* Azul */
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* A animação @keyframes spin já deve existir no seu CSS, então não é preciso adicioná-la novamente */
