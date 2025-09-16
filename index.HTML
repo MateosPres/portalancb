@@ -167,39 +167,72 @@
         </div>
     </div>
 
-    <div id="modal-campeonato" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2 id="modal-campeonato-titulo"></h2>
-            <form id="form-campeonato">
-                <input type="hidden" id="campeonato-id">
-                <div class="form-group">
-                    <label for="campeonato-nome">Nome do Campeonato</label>
-                    <input type="text" id="campeonato-nome" required>
+   <div id="modal-campeonato" class="modal">
+    <div class="modal-content">
+        <button class="close-button" aria-label="Fechar">&times;</button>
+        <h2 id="modal-campeonato-titulo"></h2>
+        <form id="form-campeonato">
+            <input type="hidden" id="campeonato-id">
+            <div class="form-group">
+                <label for="campeonato-nome">Nome do Campeonato</label>
+                <input type="text" id="campeonato-nome" required>
+            </div>
+            <div class="form-group">
+                <label for="campeonato-data">Data</label>
+                <input type="date" id="campeonato-data" required>
+            </div>
+            <div class="form-group">
+                <label for="campeonato-tipo">Tipo de Campeonato</label>
+                <select id="campeonato-tipo" required>
+                    <option value="5x5">Basquete 5x5</option>
+                    <option value="3x3">Basquete 3x3</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Escalar Jogadores</label>
+                <div id="lista-jogadores-escalar"></div>
+            </div>
+            <button type="submit" class="btn btn-primary">Salvar Campeonato</button>
+        </form>
+        
+        <div id="secao-gerenciar-jogos" style="display: none;">
+            <hr style="margin: 20px 0;">
+            <h3>Jogos do Campeonato</h3>
+            <div id="lista-de-jogos">
                 </div>
-                <div class="form-group">
-                    <label for="campeonato-data">Data</label>
-                    <input type="date" id="campeonato-data" required>
-                </div>
-                <div class="form-group">
-                    <label>Escalar Jogadores</label>
-                    <div id="lista-jogadores-escalar"></div>
-                </div>
-                <button type="submit" class="btn btn-primary">Salvar Campeonato</button>
-            </form>
+            <button type="button" id="btn-adicionar-jogo" class="btn btn-secondary" style="margin-top: 10px;">Adicionar Jogo</button>
         </div>
     </div>
+</div>
 
-    <div id="modal-ver-campeonato" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2 id="ver-campeonato-titulo"></h2>
-            <p id="ver-campeonato-data"></p>
-            <hr>
-            <h3>Jogadores Escalados</h3>
-            <div id="escalacao-container"></div>
+  <div id="modal-ver-campeonato" class="modal">
+    <div class="modal-content">
+        <button class="close-button" aria-label="Fechar">&times;</button>
+        <h2 id="ver-campeonato-titulo"></h2>
+        <p id="ver-campeonato-data"></p>
+        
+        <div class="tab-like-container">
+            <div class="tab-like-nav">
+                <button class="tab-like-btn active" data-target="tab-jogos-view">Jogos</button>
+                <button class="tab-like-btn" data-target="tab-classificacao-view">Classificação</button>
+                <button class="tab-like-btn" data-target="tab-escalacao-view">Escalação</button>
+            </div>
+            
+            <div id="tab-jogos-view" class="tab-like-content active">
+                <h3>Jogos Realizados</h3>
+                <div id="jogos-realizados-container"></div>
+            </div>
+            <div id="tab-classificacao-view" class="tab-like-content">
+                <h3>Classificação de Pontos (Artilheiros)</h3>
+                <div id="classificacao-container"></div>
+            </div>
+            <div id="tab-escalacao-view" class="tab-like-content">
+                <h3>Jogadores Escalados</h3>
+                <div id="escalacao-container"></div>
+            </div>
         </div>
     </div>
+</div>
 
     <div id="modal-edit-user" class="modal">
         <div class="modal-content">
@@ -223,6 +256,36 @@
             </form>
         </div>
     </div>
+
+    <div id="modal-jogo" class="modal">
+    <div class="modal-content">
+        <div class="loading-overlay"><div class="spinner"></div></div>
+        <button class="close-button" aria-label="Fechar">&times;</button>
+        <h2 id="modal-jogo-titulo">Adicionar Jogo</h2>
+        <form id="form-jogo">
+            <input type="hidden" id="jogo-id">
+            <input type="hidden" id="jogo-campeonato-id">
+            
+            <div class="form-group">
+                <label for="jogo-data">Data do Jogo</label>
+                <input type="date" id="jogo-data" required>
+            </div>
+            <div class="form-group">
+                <label for="jogo-adversario">Time Adversário</label>
+                <input type="text" id="jogo-adversario" placeholder="Ex: Time Visitante" required>
+            </div>
+
+            <div id="placar-container"></div>
+
+            <hr style="margin: 20px 0;">
+            <h4>Estatísticas dos Jogadores</h4>
+            <div id="estatisticas-jogadores-container">
+                </div>
+
+            <button type="submit" class="btn btn-primary" style="margin-top: 15px;">Salvar Jogo</button>
+        </form>
+    </div>
+</div>
     
     <script type="module" src="js/main.js"></script>
 </body>
