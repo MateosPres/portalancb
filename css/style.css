@@ -1337,3 +1337,72 @@ body.modal-open { overflow: hidden; }
     font-size: 1.15rem; 
     font-weight: 700;
 }
+
+/* Adicionar ao final de style.css - REFINAMENTOS FINAIS DE UI */
+
+/* --- 1. AJUSTE NA LISTA DE JOGOS (PLACAR CENTRALIZADO) --- */
+
+/* Usamos Grid para um controlo perfeito das 3 colunas */
+.jogo-realizado-item .jogo-info {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr; /* Coluna da esquerda, do meio (auto-ajustável) e da direita */
+    align-items: center;
+    width: 100%;
+    gap: 10px;
+}
+
+.jogo-info .team-name {
+    font-size: 0.95rem; /* Fonte ligeiramente mais pequena para caber melhor */
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.jogo-info .team-a {
+    text-align: left;
+}
+
+.jogo-info .team-b {
+    text-align: right;
+}
+
+.jogo-info .score {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--cor-azul-escuro);
+    white-space: nowrap; /* Garante que o placar nunca quebre a linha */
+}
+
+
+/* --- 2. AJUSTE NA CLASSIFICAÇÃO GERAL (ALINHAMENTO MOBILE) --- */
+
+/* Aplicamos apenas a ecrãs de telemóvel */
+@media screen and (max-width: 768px) {
+    /* Ocupa o espaço restante, permitindo que encolha se necessário */
+    .stat-jogador-item .stat-jogador-info {
+       flex: 1;
+       min-width: 0;
+    }
+    
+    .stat-jogador-info span {
+        font-size: 1rem;
+    }
+
+    /* Garante que a secção de pontos não seja "espremida" */
+    .stat-jogador-item .stat-jogador-pontos {
+        flex-shrink: 0; 
+        justify-content: flex-end;
+        gap: 12px; /* Aumenta o espaçamento entre as colunas de pontos */
+    }
+
+    /* Define larguras base para um alinhamento consistente */
+    .header-pontos span, .stat-jogador-pontos span {
+        flex-basis: 28px; /* Espaço para 1PT, 2PT, 3PT */
+        text-align: center;
+    }
+    .header-pontos strong, .stat-jogador-pontos strong {
+        flex-basis: 65px; /* Mais espaço para o TOTAL */
+        text-align: right;
+    }
+}
