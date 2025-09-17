@@ -48,7 +48,7 @@
     
     <nav class="nav-tabs">
     <div class="nav-tab active" data-tab="ultimas-noticias">Últimas Notícias</div>
-    <div class="nav-tab" data-tab="jogos">Jogos</div>
+    <div class="nav-tab" data-tab="eventos">Jogos</div>
     <div class="nav-tab" data-tab="jogadores">Jogadores</div>
 </nav>
 
@@ -61,14 +61,16 @@
         </section>
     </div>
 
-    <div id="tab-jogos" class="tab-content">
+    <div id="tab-eventos" class="tab-content">
         <section class="content-section">
             <div class="section-actions">
-                <button id="btn-abrir-modal-campeonato" class="btn btn-primary admin-only">🏆 Adicionar Campeonato</button>
+            <button id="btn-abrir-modal-evento" class="btn btn-primary admin-only">🏆 Adicionar Evento</button>
             </div>
-            <div id="grid-jogos" class="card-grid">
-                <div class="grid-loader"></div>
-            </div>
+        
+            <div id="grid-eventos" class="card-grid">
+            <div class="grid-loader"></div>
+        </div>
+        
         </section>
     </div>
 
@@ -196,42 +198,74 @@
         </div>
     </div>
 
-   <div id="modal-campeonato" class="modal">
+   <div id="modal-evento" class="modal">
     <div class="modal-content">
         <button class="close-button" aria-label="Fechar">&times;</button>
-        <h2 id="modal-campeonato-titulo"></h2>
-        <form id="form-campeonato">
-            <input type="hidden" id="campeonato-id">
-            <div class="form-group">
-                <label for="campeonato-nome">Nome do Campeonato</label>
-                <input type="text" id="campeonato-nome" required>
-            </div>
-            <div class="form-group">
-                <label for="campeonato-data">Data</label>
-                <input type="date" id="campeonato-data" required>
-            </div>
-            <div class="form-group">
-                <label for="campeonato-tipo">Tipo de Campeonato</label>
-                <select id="campeonato-tipo" required>
-                    <option value="5x5">Basquete 5x5</option>
-                    <option value="3x3">Basquete 3x3</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Escalar Jogadores</label>
-                <div id="lista-jogadores-escalar"></div>
-            </div>
-            <button type="submit" class="btn btn-primary">Salvar Campeonato</button>
-        </form>
+        <h2 id="modal-evento-titulo">Adicionar Novo Evento</h2>
         
-        <div id="secao-gerenciar-jogos" style="display: none;">
-            <hr style="margin: 20px 0;">
-            <h3>Jogos do Campeonato</h3>
-            <div id="lista-de-jogos">
+        <div id="evento-step-1">
+            <label class="form-label">Qual tipo de evento deseja criar?</label>
+            <div class="event-type-selection">
+                <button class="event-type-btn" data-type="torneio_externo">
+                    <h4>🏆 Torneio Externo</h4>
+                    <p>A ANCB joga contra times de outras cidades/associações.</p>
+                </button>
+                <button class="event-type-btn" data-type="torneio_interno">
+                    <h4>🤝 Torneio Interno</h4>
+                    <p>Vários times customizados formados por jogadores da ANCB.</p>
+                </button>
+                <button class="event-type-btn" data-type="amistoso">
+                    <h4>🏀 Jogo Amistoso</h4>
+                    <p>Um único jogo ou partida isolada contra um adversário.</p>
+                </button>
+            </div>
+        </div>
+
+        <div id="evento-step-2" style="display: none;">
+            <form id="form-evento">
+
+                <input type="hidden" id="evento-id">
+                <input type="hidden" id="evento-type">
+                
+                <div class="form-group">
+                    <label for="evento-nome">Nome do Evento</label>
+                    <input type="text" id="evento-nome" required>
                 </div>
-            <button type="button" id="btn-adicionar-jogo" class="btn btn-secondary" style="margin-top: 10px;">Adicionar Jogo</button>
+                <div class="form-group">
+                    <label for="evento-data">Data</label>
+                    <input type="date" id="evento-data" required>
+                </div>
+                <div class="form-group">
+                    <label for="evento-modalidade">Modalidade</label>
+                    <select id="evento-modalidade" required>
+                        <option value="5x5">Basquete 5x5</option>
+                        <option value="3x3">Basquete 3x3</option>
+                    </select>
+                </div>
+
+                <div class="form-group campo-amistoso">
+                    <label for="evento-adversario">Nome do Adversário</label>
+                    <input type="text" id="evento-adversario">
+                </div>
+                <div class="form-group campo-torneio-externo campo-amistoso">
+                    <label>Escalar Jogadores (Time ANCB)</label>
+                    <div id="lista-jogadores-escalar"></div>
+                </div>
+
+                <div id="secao-gerenciar-times" class="form-group" style="display: none;">
+                    <hr>
+                    <label style="font-size: 1.2rem; margin-bottom: 10px;">Times do Torneio</label>
+                 <div id="lista-de-times">
+                </div>
+        <button type="button" id="btn-adicionar-time" class="btn btn-secondary" style="margin-top: 10px;">+ Adicionar Time</button>
+    </div>
+
+                <button type="submit" class="btn btn-primary">Salvar Evento</button>
+            </form>
         </div>
     </div>
+</div>
+</div>
 </div>
 
   <div id="modal-ver-campeonato" class="modal">
@@ -240,29 +274,43 @@
         <h2 id="ver-campeonato-titulo"></h2>
         <p id="ver-campeonato-data"></p>
         
-        <div class="tab-like-container">
-            <div class="tab-like-nav">
-                <button class="tab-like-btn active" data-target="tab-jogos-view">Jogos</button>
-                <button class="tab-like-btn" data-target="tab-classificacao-view">Classificação</button>
-                <button class="tab-like-btn" data-target="tab-escalacao-view">Escalação</button>
-            </div>
-            
-            <div id="tab-jogos-view" class="tab-like-content active">
-    <div class="section-header-inline">
-        <h3>Jogos Realizados</h3>
-        <button id="btn-add-game-from-view" class="btn btn-primary admin-only">Adicionar Jogo</button>
+        <div id="ver-campeonato-tabs-nav" class="tab-like-nav"></div>
+        <div id="ver-campeonato-tabs-content"></div>
     </div>
-    <div id="jogos-realizados-container"></div>
 </div>
-            <div id="tab-classificacao-view" class="tab-like-content">
-                <h3>Classificação de Pontos (Artilheiros)</h3>
-                <div id="classificacao-container"></div>
+
+<div id="modal-ver-time" class="modal">
+    <div class="modal-content">
+        <button class="close-button" aria-label="Fechar">&times;</button>
+        <h2 id="ver-time-nome"></h2>
+        <div id="ver-time-elenco-container">
             </div>
-            <div id="tab-escalacao-view" class="tab-like-content">
-                <h3>Jogadores Escalados</h3>
-                <div id="escalacao-container"></div>
+    </div>
+</div>
+
+<div id="modal-jogo-interno" class="modal">
+    <div class="modal-content">
+        <button class="close-button" aria-label="Fechar">&times;</button>
+        <h2>Adicionar Jogo Interno</h2>
+        <form id="form-jogo-interno">
+            <div class="form-group">
+                <label for="jogo-interno-data">Data do Jogo</label>
+                <input type="date" id="jogo-interno-data" required>
             </div>
-        </div>
+            <div class="form-group">
+                <label for="select-time-a">Time A</label>
+                <select id="select-time-a" required>
+                    <option value="">Selecione um time...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="select-time-b">Time B</label>
+                <select id="select-time-b" required>
+                    <option value="">Selecione um time...</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Salvar Jogo</button>
+        </form>
     </div>
 </div>
 
@@ -373,7 +421,7 @@
                             <button class="btn-placar add" data-points="2">+2</button>
                             <button class="btn-placar add" data-points="3">+3</button>
                         </div>
-                        <button class="btn-placar remove">-1</button>
+                        <button class="btn-placar remove">Desfazer</button>
                     </div>
                 </div>
             </div>
@@ -390,6 +438,33 @@
                  </div>
 
         </div>
+    </div>
+</div>
+
+<div id="modal-time" class="modal">
+    <div class="modal-content">
+        <button class="close-button" aria-label="Fechar">&times;</button>
+        <h2 id="modal-time-titulo">Adicionar Time</h2>
+        <form id="form-time">
+    <input type="hidden" id="time-id">
+    
+    <div class="form-group">
+        <label for="time-logo">Logo do Time</label>
+        <input type="file" id="time-logo" accept="image/*">
+        <img id="preview-logo-time" src="" alt="Pré-visualização do logo" class="preview-foto">
+    </div>
+
+    <div class="form-group">
+        <label for="time-nome">Nome do Time</label>
+        <input type="text" id="time-nome" required>
+    </div>
+    <div class="form-group">
+        <label>Escalar Jogadores para este Time</label>
+        <div id="lista-jogadores-escalar-time" class="lista-jogadores-escalar">
+            </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Salvar Time</button>
+</form>
     </div>
 </div>
 

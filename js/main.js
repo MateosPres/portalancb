@@ -1,9 +1,10 @@
-// js/main.js (VERSÃO CORRIGIDA E COMPLETA)
+// js/main.js (VERSÃO CORRIGIDA COM OS NOMES ATUALIZADOS)
 
 import { initModals } from './components/modal.js';
 import { initAuth } from './modules/auth.js';
 import { initJogadores, setJogadoresUserRole } from './modules/jogadores.js';
-import { initCampeonatos, setCampeonatosUserRole } from './modules/campeonatos.js';
+// MUDANÇA: Importando as funções com os nomes corretos de 'eventos.js'
+import { initEventos, setEventosUserRole } from './modules/eventos.js';
 import { initAdmin, setAdminVisibility } from './modules/admin.js';
 import { initPainelJogo } from './modules/painelJogo.js';
 
@@ -38,25 +39,27 @@ function onUserLogin(user, userProfile) {
     const role = userProfile ? userProfile.role : null;
     updateGlobalUI(true, userProfile);
     setJogadoresUserRole(role);
-    setCampeonatosUserRole(role);
+    // MUDANÇA: Chamando a função com o nome correto
+    setEventosUserRole(role);
     setAdminVisibility(role === 'admin', user.uid);
 }
 
 function onUserLogout() {
     updateGlobalUI(false);
     setJogadoresUserRole(null);
-    setCampeonatosUserRole(null);
+    // MUDANÇA: Chamando a função com o nome correto
+    setEventosUserRole(null);
     setAdminVisibility(false, null);
-    switchTab('ultimas-noticias'); // MUDANÇA AQUI
+    switchTab('ultimas-noticias');
 }
 
 function switchTab(targetTabName) {
     navTabs.querySelector('.active')?.classList.remove('active');
     tabContents.forEach(content => content.classList.remove('active'));
     
-    const navTabsItem = navTabs.querySelector(`[data-tab="${targetTabName}"]`);
-    if (navTabsItem) {
-        navTabsItem.classList.add('active');
+    const navTabItem = navTabs.querySelector(`[data-tab="${targetTabName}"]`);
+    if (navTabItem) {
+        navTabItem.classList.add('active');
     }
     
     const tabContentItem = document.getElementById(`tab-${targetTabName}`);
@@ -72,12 +75,12 @@ function handleTabClick(e) {
     }
 }
 
-// ÚNICA DECLARAÇÃO DA FUNÇÃO 'main'
 function main() {
     initModals();
     initAuth(onUserLogin, onUserLogout);
     initJogadores();
-    initCampeonatos();
+    // MUDANÇA: Chamando a função com o nome correto
+    initEventos();
     initAdmin();
     initPainelJogo();
     navTabs.addEventListener('click', handleTabClick);
@@ -89,10 +92,9 @@ function main() {
         });
     }
 
-    switchTab('ultimas-noticias'); // MUDANÇA AQUI
+    switchTab('ultimas-noticias');
     
     console.log("Aplicação ANCB-MT inicializada com sucesso!");
 }
 
-// ÚNICA CHAMADA DA FUNÇÃO 'main'
 main();
