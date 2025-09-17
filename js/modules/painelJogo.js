@@ -81,7 +81,7 @@ async function desfazerUltimaCesta(timeKey) {
 
 function renderPainelAoVivo() {
     const logTitle = logSection.querySelector('h3');
-    logTitle.textContent = `Registo de Cestas`;
+    logTitle.textContent = `Registro de Cestas`;
     registroCestasContainer.innerHTML = '';
     const cestasParaMostrar = listaDeCestas.filter(cesta => cesta.timeId !== 'adversario');
     if (cestasParaMostrar.length === 0) {
@@ -215,7 +215,7 @@ async function atribuirCesta(jogadorId, timeId, pontos) {
     const jogador = getJogadores().find(j => j.id === jogadorId);
     if (!jogador) return;
     
-    // Agora salvamos o nome completo no registo da cesta
+    // Agora salvamos o nome completo no registro da cesta
     const cestaRef = doc(db, "eventos", currentEvento.id, "jogos", currentGame.id, "cestas", cestaParaAtribuir.id);
     await updateDoc(cestaRef, {
         jogadorId: jogadorId,
