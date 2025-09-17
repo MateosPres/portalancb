@@ -1257,3 +1257,83 @@ body.modal-open { overflow: hidden; }
     background-color: var(--cor-cinza-fundo);
     font-size: 2.5rem;
 }
+
+/* Adicionar ao final de style.css - REFINAMENTOS FINAIS DE UI */
+
+/* 1. Estilos para a nova lista de jogos (Time A | Placar | Time B) */
+.jogo-realizado-item .jogo-info {
+    flex-grow: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.jogo-info .team-name {
+    flex: 1; /* Ocupa o espaço disponível */
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.jogo-info .team-a {
+    text-align: left;
+}
+
+.jogo-info .team-b {
+    text-align: right;
+}
+
+.jogo-info .score {
+    flex-shrink: 0; /* Impede que o placar encolha */
+    font-weight: bold;
+    font-size: 1.1rem;
+    color: var(--cor-azul-escuro);
+}
+
+/* 2. Estilos para a classificação no telemóvel */
+@media screen and (max-width: 768px) {
+    .stat-jogador-item .stat-jogador-info {
+        gap: 8px;
+    }
+    .stat-jogador-info span {
+        font-size: 0.9rem;
+    }
+    .stat-jogador-info img, .stat-jogador-info .placeholder {
+        width: 35px;
+        height: 35px;
+    }
+    .header-pontos, .stat-jogador-pontos {
+        gap: 8px;
+        min-width: 0;
+        width: auto;
+        flex: 1;
+        justify-content: flex-end;
+    }
+    .header-pontos span, .stat-jogador-pontos span {
+        width: auto;
+        min-width: 25px; /* Largura mínima para cada coluna de pontos */
+    }
+    .header-pontos strong, .stat-jogador-pontos strong {
+        width: auto;
+        min-width: 50px;
+    }
+}
+
+/* Adicionar ao final de style.css - Refinamento Visual da Lista de Jogos */
+
+.jogo-info .team-name {
+    /* Reduz o tamanho da fonte para os nomes das equipas */
+    font-size: 1rem;
+    /* Reduz o peso da fonte para um semi-negrito mais subtil */
+    font-weight: 500; 
+    /* Garante que o nome da equipa ANCB também fica com o novo estilo */
+    color: var(--cor-preto);
+}
+
+.jogo-info .score {
+    /* Aumenta ligeiramente o destaque do placar */
+    font-size: 1.15rem; 
+    font-weight: 700;
+}

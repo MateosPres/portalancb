@@ -610,11 +610,14 @@ async function renderJogosInternosList(eventoId) {
                  <button class="btn-delete-jogo-interno" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}" title="Excluir Jogo">🗑️</button>
                </div>` 
             : '';
+
+        // Nova estrutura HTML para o layout "Time A | Placar | Time B"
         container.innerHTML += `
             <div class="jogo-realizado-item clickable" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}">
                 <div class="jogo-info">
-                    <span><strong>${jogo.timeA_nome}</strong> vs <strong>${jogo.timeB_nome}</strong></span>
-                    <span class="resultado">${jogo.placarTimeA_final || 0} x ${jogo.placarTimeB_final || 0}</span>
+                    <span class="team-name team-a">${jogo.timeA_nome}</span>
+                    <span class="score">${jogo.placarTimeA_final || 0} x ${jogo.placarTimeB_final || 0}</span>
+                    <span class="team-name team-b">${jogo.timeB_nome}</span>
                 </div>
                 ${adminDeleteButton}
             </div>
@@ -717,11 +720,13 @@ async function renderClassificacaoGeralInterno(evento) {
         let jogadoresHTML = '';
         sortedLeaderboard.forEach(stats => {
             const fotoHTML = stats.foto ? `<img src="${stats.foto}" alt="${stats.nome}">` : '<div class="placeholder">🏀</div>';
+            // Pega apenas o primeiro nome para economizar espaço
+            const primeiroNome = stats.nome.split(' ')[0];
             jogadoresHTML += `
                 <div class="stat-jogador-item">
                     <div class="stat-jogador-info">
                         ${fotoHTML}
-                        <span>${stats.nome}</span>
+                        <span>${primeiroNome}</span>
                     </div>
                     <div class="stat-jogador-pontos">
                         <span>${stats.cestas1}</span>
@@ -745,17 +750,18 @@ async function renderJogosEClassificacao(eventoId) {
     if (!jogosContainer || !classContainer) return;
     jogosContainer.innerHTML = '<p>A carregar jogos...</p>';
     classContainer.innerHTML = '<p>A calcular classificação...</p>';
-    const todosJogadores = getJogadores();
+    
     const jogosRef = collection(db, "eventos", eventoId, "jogos");
     const q = query(jogosRef, orderBy("dataJogo", "desc"));
     const snapshotJogos = await getDocs(q);
+
     if (snapshotJogos.empty) {
         jogosContainer.innerHTML = '<p>Nenhum jogo realizado.</p>';
         classContainer.innerHTML = '<p>Nenhuma estatística para exibir.</p>';
         return;
     }
+
     jogosContainer.innerHTML = '';
-    const leaderboard = {};
     for (const jogoDoc of snapshotJogos.docs) {
         const jogo = { id: jogoDoc.id, ...jogoDoc.data() };
         let adminActionButtons = '';
@@ -771,8 +777,9 @@ async function renderJogosEClassificacao(eventoId) {
         jogosContainer.innerHTML += `
             <div class="jogo-realizado-item clickable" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}">
                 <div class="jogo-info">
-                    <span><strong>ANCB</strong> vs <strong>${jogo.adversario}</strong></span>
-                    <span class="resultado ${resultadoClass}">${jogo.placarANCB_final || 0} x ${jogo.placarAdversario_final || 0}</span>
+                    <span class="team-name team-a">ANCB</span>
+                    <span class="score">${jogo.placarANCB_final || 0} x ${jogo.placarAdversario_final || 0}</span>
+                    <span class="team-name team-b">${jogo.adversario}</span>
                 </div>
                 ${adminActionButtons}
             </div>`;
