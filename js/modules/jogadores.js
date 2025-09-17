@@ -65,6 +65,7 @@ function showJogadorModal(id = null) {
         if (!j) return;
         document.getElementById('modal-jogador-titulo').innerText = 'Editar Jogador';
         formJogador['nome'].value = j.nome;
+        formJogador['apelido'].value = j.apelido || ''; // <<< MOSTRAR O APELIDO
         formJogador['cpf'].value = j.cpf;
         formJogador['nascimento'].value = j.nascimento;
         formJogador['posicao'].value = j.posicao;
@@ -84,7 +85,14 @@ function showFichaJogador(id) {
     if (!j) return;
     const fichaContainer = modalVerJogador.querySelector('#ficha-jogador');
     const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : '<div class="placeholder">🏀</div>';
-    let detailsHTML = `<p><strong>Nome:</strong> ${j.nome}</p><p><strong>Posição:</strong> ${j.posicao}</p><p><strong>Nº Uniforme:</strong> ${j.numero_uniforme}</p>`;
+    
+    // Adiciona o apelido à ficha de visualização
+    let detailsHTML = `<p><strong>Nome:</strong> ${j.nome}</p>`;
+    if (j.apelido) { // Só mostra se o apelido existir
+        detailsHTML += `<p><strong>Apelido:</strong> ${j.apelido}</p>`;
+    }
+    detailsHTML += `<p><strong>Posição:</strong> ${j.posicao}</p><p><strong>Nº Uniforme:</strong> ${j.numero_uniforme}</p>`;
+    
     if (userRole === 'admin') {
         detailsHTML += `<p><strong>CPF:</strong> ${j.cpf}</p><p><strong>Nascimento:</strong> ${formatDate(j.nascimento)}</p>`;
     }
@@ -130,6 +138,7 @@ async function handleFormSubmit(e) {
         // Passo 2: Monte o objeto de dados para salvar no Firestore
         const dados = {
             nome: formJogador['nome'].value,
+            apelido: formJogador['apelido'].value, // <<< GUARDAR O APELIDO
             cpf: formJogador['cpf'].value,
             nascimento: formJogador['nascimento'].value,
             posicao: formJogador['posicao'].value,

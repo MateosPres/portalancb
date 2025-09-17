@@ -47,7 +47,6 @@ function render() {
         card.className = `championship-card card ${isAdmin ? 'admin-view' : ''}`;
         card.dataset.id = evento.id;
         const actionsHTML = isAdmin ? `<div class="card-actions"><button class="btn-edit-camp" title="Editar">✏️</button><button class="btn-delete-camp" title="Excluir">🗑️</button></div>` : '';
-        
         let infoLine = '';
         if (evento.type === 'torneio_externo') {
             infoLine = `<p><strong>Tipo:</strong> Torneio Externo</p><p>👥 <strong>Jogadores:</strong> ${evento.jogadoresEscalados?.length || 0}</p>`;
@@ -56,10 +55,7 @@ function render() {
         } else if (evento.type === 'amistoso') {
             infoLine = `<p><strong>Tipo:</strong> Jogo Amistoso</p><p><strong>Adversário:</strong> ${evento.adversario || 'N/D'}</p>`;
         }
-
-        // ADICIONA UMA CLASSE DINÂMICA (badge-3x3 ou badge-5x5) À TAG
         const badgeClass = evento.modalidade === '3x3' ? 'badge-3x3' : 'badge-5x5';
-
         card.innerHTML = `
             ${actionsHTML}
             <div>
@@ -533,15 +529,11 @@ async function renderFichaExterno(evento) {
 async function renderFichaInterno(evento) {
     const navContainer = document.getElementById('ver-campeonato-tabs-nav');
     const contentContainer = document.getElementById('ver-campeonato-tabs-content');
-
-    // MUDANÇA 1: Ordem das abas alterada
     navContainer.innerHTML = `
         <button class="tab-like-btn active" data-target="tab-jogos-interno">Jogos</button>
         <button class="tab-like-btn" data-target="tab-times-interno">Times</button>
         <button class="tab-like-btn" data-target="tab-classificacao-interno">Classificação Geral</button>
     `;
-
-    // MUDANÇA 1: Ordem do conteúdo alterada
     contentContainer.innerHTML = `
         <div id="tab-jogos-interno" class="tab-like-content active">
              <div class="section-header-inline">
@@ -555,14 +547,12 @@ async function renderFichaInterno(evento) {
         </div>
         <div id="tab-classificacao-interno" class="tab-like-content"></div>
     `;
-
     if (userRole === 'admin') {
         const btnAddJogoInterno = document.getElementById('btn-add-jogo-interno');
         if(btnAddJogoInterno) btnAddJogoInterno.onclick = () => showJogoInternoModal(evento.id);
     }
-
     setupTabEventListeners();
-    await renderTimesList(evento.id, true); // true para a visualização pública
+    await renderTimesList(evento.id, true);
     await renderJogosInternosList(evento.id);
     await renderClassificacaoGeralInterno(evento);
 }
@@ -599,34 +589,55 @@ async function showFichaTime(eventoId, timeId) {
 
 async function renderJogosInternosList(eventoId) {
     const container = document.getElementById('jogos-internos-container');
-    if(!container) return;
+    if (!container) return;
     container.innerHTML = 'A carregar jogos...';
+
     const jogosRef = collection(db, "eventos", eventoId, "jogos");
     const snapshot = await getDocs(query(jogosRef, orderBy("dataJogo", "desc")));
+
     if (snapshot.empty) {
         container.innerHTML = '<p>Nenhum jogo registado para este torneio.</p>';
         return;
     }
-    container.innerHTML = '';
+
+    // Passo 1: Agrupar os jogos por data
+    const jogosAgrupados = {};
     snapshot.forEach(jogoDoc => {
         const jogo = { id: jogoDoc.id, ...jogoDoc.data() };
-        const adminDeleteButton = userRole === 'admin' 
-            ? `<div class="game-item-actions-view">
-                 <button class="btn-delete-jogo-interno" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}" title="Excluir Jogo">🗑️</button>
-               </div>` 
-            : '';
+        const dataJogo = jogo.dataJogo; // Formato "AAAA-MM-DD"
+        if (!jogosAgrupados[dataJogo]) {
+            jogosAgrupados[dataJogo] = [];
+        }
+        jogosAgrupados[dataJogo].push(jogo);
+    });
 
-        // Nova estrutura HTML para o layout "Time A | Placar | Time B"
-        container.innerHTML += `
-            <div class="jogo-realizado-item clickable" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}">
-                <div class="jogo-info">
-                    <span class="team-name team-a">${jogo.timeA_nome}</span>
-                    <span class="score">${jogo.placarTimeA_final || 0} x ${jogo.placarTimeB_final || 0}</span>
-                    <span class="team-name team-b">${jogo.timeB_nome}</span>
+    // Passo 2: Gerar o HTML a partir dos grupos
+    container.innerHTML = '';
+    const datasOrdenadas = Object.keys(jogosAgrupados).sort((a, b) => new Date(b) - new Date(a)); // Ordena as datas
+
+    datasOrdenadas.forEach(data => {
+        // Adiciona o cabeçalho da data
+        container.innerHTML += `<div class="game-date-header">${formatDate(data)}</div>`;
+        
+        // Adiciona os jogos dessa data
+        jogosAgrupados[data].forEach(jogo => {
+            const adminDeleteButton = userRole === 'admin' 
+                ? `<div class="game-item-actions-view">
+                     <button class="btn-delete-jogo-interno" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}" title="Excluir Jogo">🗑️</button>
+                   </div>` 
+                : '';
+
+            container.innerHTML += `
+                <div class="jogo-realizado-item clickable" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}">
+                    <div class="jogo-info">
+                        <span class="team-name team-a">${jogo.timeA_nome}</span>
+                        <span class="score">${jogo.placarTimeA_final || 0} x ${jogo.placarTimeB_final || 0}</span>
+                        <span class="team-name team-b">${jogo.timeB_nome}</span>
+                    </div>
+                    ${adminDeleteButton}
                 </div>
-                ${adminDeleteButton}
-            </div>
-        `;
+            `;
+        });
     });
 }
 
@@ -694,7 +705,8 @@ async function renderClassificacaoGeralInterno(evento) {
                 if (!leaderboard[cesta.jogadorId]) {
                     const jogadorInfo = todosJogadores.find(j => j.id === cesta.jogadorId);
                     leaderboard[cesta.jogadorId] = {
-                        nome: cesta.nomeJogador,
+                        nome: jogadorInfo?.nome || cesta.nomeJogador,
+                        apelido: jogadorInfo?.apelido || null,
                         foto: jogadorInfo?.foto || null,
                         cestas1: 0, cestas2: 0, cestas3: 0, total: 0
                     };
@@ -711,6 +723,7 @@ async function renderClassificacaoGeralInterno(evento) {
             return;
         }
         const is5x5 = evento.modalidade === '5x5';
+
         let headerHTML = `
             <h3>Classificação Geral</h3>
             <div class="stat-header">
@@ -722,17 +735,23 @@ async function renderClassificacaoGeralInterno(evento) {
                     <strong>Total</strong>
                 </div>
             </div>`;
+
         let jogadoresHTML = '';
         sortedLeaderboard.forEach(stats => {
             const fotoHTML = stats.foto ? `<img src="${stats.foto}" alt="${stats.nome}">` : '<div class="placeholder">🏀</div>';
-            // Pega apenas o primeiro nome para economizar espaço
+            
+            // --- ALTERAÇÃO AQUI ---
+            // Verifica se existe um apelido e formata o nome de exibição
             const primeiroNome = stats.nome.split(' ')[0];
+            const nomeExibicao = stats.apelido ? `${primeiroNome} "${stats.apelido}"` : primeiroNome;
+
             jogadoresHTML += `
                 <div class="stat-jogador-item">
                     <div class="stat-jogador-info">
                         ${fotoHTML}
-                        <span>${primeiroNome}</span>
+                        <span>${nomeExibicao}</span>
                     </div>
+
                     <div class="stat-jogador-pontos">
                         <span>${stats.cestas1}</span>
                         <span>${stats.cestas2}</span>
@@ -750,95 +769,114 @@ async function renderClassificacaoGeralInterno(evento) {
 }
 
 async function renderJogosEClassificacao(eventoId) {
-    const jogosContainer = document.getElementById('jogos-realizados-container');
     const classContainer = document.getElementById('classificacao-container');
-    if (!jogosContainer || !classContainer) return;
-    jogosContainer.innerHTML = '<p>A carregar jogos...</p>';
+    if (!classContainer) return;
     classContainer.innerHTML = '<p>A calcular classificação...</p>';
     
-    const jogosRef = collection(db, "eventos", eventoId, "jogos");
-    const q = query(jogosRef, orderBy("dataJogo", "desc"));
-    const snapshotJogos = await getDocs(q);
+    try {
+        const todosJogadores = getJogadores();
+        const jogosRef = collection(db, "eventos", eventoId, "jogos");
+        const snapshotJogos = await getDocs(query(jogosRef, orderBy("dataJogo", "desc")));
 
-    if (snapshotJogos.empty) {
-        jogosContainer.innerHTML = '<p>Nenhum jogo realizado.</p>';
-        classContainer.innerHTML = '<p>Nenhuma estatística para exibir.</p>';
-        return;
-    }
-
-    jogosContainer.innerHTML = '';
-    for (const jogoDoc of snapshotJogos.docs) {
-        const jogo = { id: jogoDoc.id, ...jogoDoc.data() };
-        let adminActionButtons = '';
-        if (userRole === 'admin') {
-            adminActionButtons = `
-                <div class="game-item-actions-view">
-                    <button class="btn-painel-jogo-view" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}" title="Painel do Jogo">📊</button>
-                    <button class="btn-edit-jogo-view" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}" title="Editar Jogo">✏️</button>
-                    <button class="btn-delete-jogo-view" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}" title="Excluir Jogo">🗑️</button>
-                </div>`;
+        if (snapshotJogos.empty) {
+            jogosContainer.innerHTML = '<p>Nenhum jogo realizado.</p>';
+            classContainer.innerHTML = '<p>Nenhuma estatística para exibir.</p>';
+            return;
         }
-        const resultadoClass = jogo.placarANCB_final > jogo.placarAdversario_final ? 'vitoria' : 'derrota';
-        jogosContainer.innerHTML += `
-            <div class="jogo-realizado-item clickable" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}">
-                <div class="jogo-info">
-                    <span class="team-name team-a">ANCB</span>
-                    <span class="score">${jogo.placarANCB_final || 0} x ${jogo.placarAdversario_final || 0}</span>
-                    <span class="team-name team-b">${jogo.adversario}</span>
-                </div>
-                ${adminActionButtons}
-            </div>`;
-        const estatisticasRef = collection(db, "eventos", eventoId, "jogos", jogo.id, "estatisticas");
-        const snapshotStats = await getDocs(estatisticasRef);
-        snapshotStats.forEach(statDoc => {
-            const stat = statDoc.data();
-            if (stat.jogadorId && !leaderboard[stat.jogadorId]) {
-                leaderboard[stat.jogadorId] = { jogadorId: stat.jogadorId, nome: stat.nomeJogador, pontos: 0, jogos: 0 };
+
+        // Renderiza a lista de jogos primeiro
+        jogosContainer.innerHTML = '';
+        snapshotJogos.forEach(jogoDoc => {
+            const jogo = { id: jogoDoc.id, ...jogoDoc.data() };
+            let adminActionButtons = '';
+            if (userRole === 'admin') {
+                adminActionButtons = `
+                    <div class="game-item-actions-view">
+                        <button class="btn-painel-jogo-view" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}" title="Painel do Jogo">📊</button>
+                        <button class="btn-edit-jogo-view" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}" title="Editar Jogo">✏️</button>
+                        <button class="btn-delete-jogo-view" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}" title="Excluir Jogo">🗑️</button>
+                    </div>`;
             }
-            if (stat.jogadorId) {
-                leaderboard[stat.jogadorId].pontos += stat.pontos;
-                if (stat.pontos > 0) leaderboard[stat.jogadorId].jogos += 1;
-            }
-        });
-    }
-    const sortedLeaderboard = Object.values(leaderboard).sort((a, b) => b.pontos - a.pontos);
-    if (sortedLeaderboard.length === 0) {
-        classContainer.innerHTML = '<p>Nenhuma estatística de pontos registada.</p>';
-    } else {
-        let leaderboardHTML = '<div class="leaderboard-list">';
-        sortedLeaderboard.forEach((player, index) => {
-            const perfilJogador = todosJogadores.find(j => j.id === player.jogadorId);
-            const fotoHTML = perfilJogador?.foto ? `<img src="${perfilJogador.foto}" alt="${player.nome}" class="leaderboard-player-photo">` : '<div class="leaderboard-player-photo placeholder">🏀</div>';
-            const media = player.jogos > 0 ? (player.pontos / player.jogos).toFixed(1) : 0;
-            leaderboardHTML += `
-                <div class="leaderboard-item">
-                    <span class="leaderboard-rank">${index + 1}</span>
-                    ${fotoHTML}
-                    <div class="leaderboard-player-info">
-                        <span class="leaderboard-player-name">${player.nome}</span>
+            jogosContainer.innerHTML += `
+                <div class="jogo-realizado-item clickable" data-evento-id="${eventoId}" data-jogo-id="${jogo.id}">
+                    <div class="jogo-info">
+                        <span class="team-name team-a">ANCB</span>
+                        <span class="score">${jogo.placarANCB_final || 0} x ${jogo.placarAdversario_final || 0}</span>
+                        <span class="team-name team-b">${jogo.adversario}</span>
                     </div>
-                    <div class="leaderboard-player-stats">
-                        <div class="stat-item">
-                            <span class="stat-value">${player.pontos}</span>
-                            <span class="stat-label">Pontos</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-value">${media}</span>
-                            <span class="stat-label">Média</span>
-                        </div>
-                    </div>
+                    ${adminActionButtons}
                 </div>`;
         });
-        leaderboardHTML += '</div>';
-        classContainer.innerHTML = leaderboardHTML;
+
+        // Agora, calcula e renderiza a classificação
+        const leaderboard = {};
+        for (const jogoDoc of snapshotJogos.docs) {
+            const estatisticasRef = collection(db, "eventos", eventoId, "jogos", jogoDoc.id, "estatisticas");
+            const snapshotStats = await getDocs(estatisticasRef);
+            snapshotStats.forEach(statDoc => {
+                const stat = statDoc.data();
+                if (stat.jogadorId && !leaderboard[stat.jogadorId]) {
+                    const jogadorInfo = todosJogadores.find(j => j.id === stat.jogadorId);
+                    leaderboard[stat.jogadorId] = { 
+                        jogadorId: stat.jogadorId, 
+                        nome: jogadorInfo?.nome || stat.nomeJogador, 
+                        apelido: jogadorInfo?.apelido || null,
+                        foto: jogadorInfo?.foto || null,
+                        pontos: 0, 
+                        jogos: 0 
+                    };
+                }
+                if (stat.jogadorId) {
+                    leaderboard[stat.jogadorId].pontos += stat.pontos;
+                    if (stat.pontos > 0) leaderboard[stat.jogadorId].jogos += 1;
+                }
+            });
+        }
+
+        const sortedLeaderboard = Object.values(leaderboard).sort((a, b) => b.pontos - a.pontos);
+        if (sortedLeaderboard.length === 0) {
+            classContainer.innerHTML = '<p>Nenhuma estatística de pontos registada.</p>';
+        } else {
+            let leaderboardHTML = '<div class="leaderboard-list">';
+            sortedLeaderboard.forEach((player, index) => {
+                const fotoHTML = player.foto ? `<img src="${player.foto}" alt="${player.nome}" class="leaderboard-player-photo">` : '<div class="leaderboard-player-photo placeholder">🏀</div>';
+                const media = player.jogos > 0 ? (player.pontos / player.jogos).toFixed(1) : 0;
+                // Lógica para o nome de exibição
+                const nomeExibicao = player.apelido ? `${player.nome} "${player.apelido}"` : player.nome;
+                leaderboardHTML += `
+                    <div class="leaderboard-item">
+                        <span class="leaderboard-rank">${index + 1}</span>
+                        ${fotoHTML}
+                        <div class="leaderboard-player-info">
+                            <span class="leaderboard-player-name">${nomeExibicao}</span>
+                        </div>
+                        <div class="leaderboard-player-stats">
+                            <div class="stat-item">
+                                <span class="stat-value">${player.pontos}</span>
+                                <span class="stat-label">Pontos</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">${media}</span>
+                                <span class="stat-label">Média</span>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+            leaderboardHTML += '</div>';
+            classContainer.innerHTML = leaderboardHTML;
+        }
+    } catch (error) {
+        console.error("Erro ao carregar jogos e classificação:", error);
+        jogosContainer.innerHTML = '<p>Erro ao carregar jogos.</p>';
+        classContainer.innerHTML = '<p>Erro ao carregar classificação.</p>';
     }
 }
 
 async function showFichaJogoDetalhes(eventoId, jogoId) {
-    const modal = document.getElementById('modal-ver-jogo');
     const container = document.getElementById('jogo-estatisticas-container');
     container.innerHTML = '<p>Carregando estatísticas...</p>';
-    openModal(modal);
+    openModal(document.getElementById('modal-ver-jogo'));
+
     try {
         const todosJogadores = getJogadores();
         const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
@@ -850,9 +888,11 @@ async function showFichaJogoDetalhes(eventoId, jogoId) {
         const jogo = jogoDoc.data();
         document.getElementById('ver-jogo-titulo').textContent = `ANCB vs ${jogo.adversario}`;
         document.getElementById('ver-jogo-placar-final').textContent = `${jogo.placarANCB_final} x ${jogo.placarAdversario_final}`;
+
         const cestasRef = collection(db, "eventos", eventoId, "jogos", jogoId, "cestas");
         const q = query(cestasRef, where("jogadorId", "!=", null));
         const cestasSnapshot = await getDocs(q);
+
         if (cestasSnapshot.empty) {
             container.innerHTML = '<p>Nenhuma pontuação individual registada para este jogo.</p>';
             return;
@@ -861,12 +901,20 @@ async function showFichaJogoDetalhes(eventoId, jogoId) {
         cestasSnapshot.forEach(doc => {
             const cesta = doc.data();
             if (!statsPorJogador[cesta.jogadorId]) {
-                statsPorJogador[cesta.jogadorId] = { nome: cesta.nomeJogador, cestas1: 0, cestas2: 0, cestas3: 0, total: 0 };
+                const jogadorInfo = todosJogadores.find(j => j.id === cesta.jogadorId);
+                statsPorJogador[cesta.jogadorId] = {
+                    nome: jogadorInfo?.nome || cesta.nomeJogador,
+                    apelido: jogadorInfo?.apelido || null,
+                    foto: jogadorInfo?.foto || null,
+                    cestas1: 0, cestas2: 0, cestas3: 0, total: 0
+                };
             }
             statsPorJogador[cesta.jogadorId][`cestas${cesta.pontos}`]++;
             statsPorJogador[cesta.jogadorId].total += cesta.pontos;
         });
+
         const sortedStats = Object.entries(statsPorJogador).sort(([, a], [, b]) => b.total - a.total);
+
         let html = `
             <div class="stat-header">
                 <span class="header-jogador">Jogador</span>
@@ -878,6 +926,25 @@ async function showFichaJogoDetalhes(eventoId, jogoId) {
                 </div>
             </div>
         `;
+
+        let jogadoresHTML = '';
+        sortedStats.forEach(([jogadorId, stats]) => {
+            const fotoHTML = stats.foto ? `<img src="${stats.foto}" alt="${stats.nome}">` : '<div class="placeholder">🏀</div>';
+            // Lógica para o nome de exibição
+            const nomeExibicao = stats.apelido ? `${stats.nome} "${stats.apelido}"` : stats.nome;
+            jogadoresHTML += `
+                <div class="stat-jogador-item">
+                    <div class="stat-jogador-info">
+                        ${fotoHTML}
+                        <span>${nomeExibicao}</span>
+                    </div>
+                    ...
+                </div>
+            `;
+        });
+
+        container.innerHTML = headerHTML + jogadoresHTML;
+
         sortedStats.forEach(([jogadorId, stats]) => {
             const perfil = todosJogadores.find(j => j.id === jogadorId);
             const fotoHTML = perfil?.foto ? `<img src="${perfil.foto}" alt="${stats.nome}">` : '<div class="placeholder">🏀</div>';
@@ -929,10 +996,13 @@ export function setEventosUserRole(role) {
 }
 
 export function initEventos() {
+    // Listener para dados do Firestore (sem alterações)
     onSnapshot(query(collection(db, "eventos"), orderBy("data", "desc")), (snapshot) => {
         eventos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         render();
     });
+
+    // Listener para os CARDS PRINCIPAIS na página
     if (gridEventos) {
         gridEventos.addEventListener('click', (e) => {
             const card = e.target.closest('.championship-card');
@@ -947,57 +1017,74 @@ export function initEventos() {
             }
         });
     }
+    
+    // Listener para cliques DENTRO DO MODAL DE VISUALIZAÇÃO
     const modalContent = modalVerEvento.querySelector('.modal-content');
-    modalContent.addEventListener('click', (e) => {
-        const timeCard = e.target.closest('#times-container-view .clickable');
-        if (timeCard) {
-            const { timeId, eventoId } = timeCard.dataset;
-            if (timeId && eventoId) showFichaTime(eventoId, timeId);
-        }
-        const jogoInternoCard = e.target.closest('#jogos-internos-container .clickable');
-        if (jogoInternoCard) {
-            const { eventoId, jogoId } = jogoInternoCard.dataset;
-            const evento = eventos.find(ev => ev.id === eventoId);
-            const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
-            getDoc(jogoRef).then(jogoDoc => {
-                if (jogoDoc.exists()) {
-                    const jogo = { id: jogoDoc.id, ...jogoDoc.data() };
-                    abrirPainelJogo(evento, jogo);
-                }
-            });
-        }
-        const btnDeleteJogoInterno = e.target.closest('#jogos-internos-container .btn-delete-jogo-interno');
-        if (btnDeleteJogoInterno) {
-            e.stopPropagation();
-            const { eventoId, jogoId } = btnDeleteJogoInterno.dataset;
-            deleteJogo(eventoId, jogoId);
-        }
-        const btnPainelExterno = e.target.closest('#jogos-realizados-container .btn-painel-jogo-view');
-        const btnEditExterno = e.target.closest('#jogos-realizados-container .btn-edit-jogo-view');
-        const btnDeleteExterno = e.target.closest('#jogos-realizados-container .btn-delete-jogo-view');
-        const itemJogoExterno = e.target.closest('#jogos-realizados-container .clickable');
-        if (btnPainelExterno) {
-            e.stopPropagation();
-            const { eventoId, jogoId } = btnPainelExterno.dataset;
-            const evento = eventos.find(c => c.id === eventoId);
-            const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
-            getDoc(jogoRef).then(jogoDoc => {
-                if(jogoDoc.exists()) abrirPainelJogo(evento, { id: jogoDoc.id, ...jogoDoc.data() });
-            });
-        } else if (btnEditExterno) {
-            e.stopPropagation();
-            const { eventoId, jogoId } = btnEditExterno.dataset;
-            closeModal(modalVerEvento);
-            showJogoModal(eventoId, jogoId);
-        } else if (btnDeleteExterno) {
-            e.stopPropagation();
-            const { eventoId, jogoId } = btnDeleteExterno.dataset;
-            deleteJogo(eventoId, jogoId);
-        } else if (itemJogoExterno) {
-            const { eventoId, jogoId } = itemJogoExterno.dataset;
-            if (eventoId && jogoId) showFichaJogoDetalhes(eventoId, jogoId);
-        }
-    });
+    if (modalContent) {
+        modalContent.addEventListener('click', (e) => {
+            // Lógica para clicar nos times de um torneio interno
+            const timeCard = e.target.closest('#times-container-view .clickable');
+            if (timeCard) {
+                const { timeId, eventoId } = timeCard.dataset;
+                if (timeId && eventoId) showFichaTime(eventoId, timeId);
+                return;
+            }
+
+            // Lógica para APAGAR um jogo de um torneio INTERNO
+            const btnDeleteJogoInterno = e.target.closest('#jogos-internos-container .btn-delete-jogo-interno');
+            if (btnDeleteJogoInterno) {
+                e.stopPropagation();
+                const { eventoId, jogoId } = btnDeleteJogoInterno.dataset;
+                deleteJogo(eventoId, jogoId);
+                return;
+            }
+            
+            // Lógica para clicar nos JOGOS de um torneio INTERNO
+            const jogoInternoCard = e.target.closest('#jogos-internos-container .clickable');
+            if (jogoInternoCard) {
+                const { eventoId, jogoId } = jogoInternoCard.dataset;
+                const evento = eventos.find(ev => ev.id === eventoId);
+                const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
+                getDoc(jogoRef).then(jogoDoc => {
+                    if (jogoDoc.exists()) {
+                        const jogo = { id: jogoDoc.id, ...jogoDoc.data() };
+                        abrirPainelJogo(userRole, evento, jogo);
+                    }
+                });
+                return;
+            }
+
+            // Lógica para clicar nos JOGOS de um torneio EXTERNO
+            const btnPainelExterno = e.target.closest('#jogos-realizados-container .btn-painel-jogo-view');
+            const btnEditExterno = e.target.closest('#jogos-realizados-container .btn-edit-jogo-view');
+            const btnDeleteExterno = e.target.closest('#jogos-realizados-container .btn-delete-jogo-view');
+            const itemJogoExterno = e.target.closest('#jogos-realizados-container .clickable');
+
+            if (btnPainelExterno) {
+                e.stopPropagation();
+                const { eventoId, jogoId } = btnPainelExterno.dataset;
+                const evento = eventos.find(c => c.id === eventoId);
+                const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
+                getDoc(jogoRef).then(jogoDoc => {
+                    if(jogoDoc.exists()) abrirPainelJogo(userRole, evento, { id: jogoDoc.id, ...jogoDoc.data() });
+                });
+            } else if (btnEditExterno) {
+                e.stopPropagation();
+                const { eventoId, jogoId } = btnEditExterno.dataset;
+                closeModal(modalVerEvento);
+                showJogoModal(eventoId, jogoId);
+            } else if (btnDeleteExterno) {
+                e.stopPropagation();
+                const { eventoId, jogoId } = btnDeleteExterno.dataset;
+                deleteJogo(eventoId, jogoId);
+            } else if (itemJogoExterno) {
+                const { eventoId, jogoId } = itemJogoExterno.dataset;
+                if (eventoId && jogoId) showFichaJogoDetalhes(eventoId, jogoId);
+            }
+        });
+    }
+
+    // Listeners para os formulários (sem alterações)
     formEvento.addEventListener('submit', handleFormSubmitEvento);
     formJogo.addEventListener('submit', handleFormSubmitJogo);
     formTime.addEventListener('submit', handleFormTimeSubmit);

@@ -42,7 +42,7 @@ async function handleRegister(e) {
     e.preventDefault();
     registerError.style.display = 'none';
     const nome = registerForm['register-nome'].value;
-    const apelido = registerForm['register-apelido'].value;
+    const apelido = registerForm['register-apelido'].value; // <<< LER O APELIDO
     const nascimento = registerForm['register-nascimento'].value;
     const email = registerForm['register-email'].value;
     const password = registerForm['register-password'].value;
@@ -56,6 +56,7 @@ async function handleRegister(e) {
 
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Adiciona o apelido ao objeto que é salvo no Firestore
         await setDoc(doc(db, "usuarios", userCredential.user.uid), { nome, apelido, dataNascimento: nascimento, email, role: "jogador", status: "active" });
         await signOut(auth);
         alert('Cadastro realizado com sucesso! Por favor, faça o login.');

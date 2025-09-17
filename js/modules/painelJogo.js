@@ -16,7 +16,14 @@ const controlesTimeA = document.getElementById('controles-ancb');
 const controlesTimeB = document.getElementById('controles-adversario');
 const registroCestasContainer = document.getElementById('registro-cestas-container');
 const painelDistribuicaoContainer = document.getElementById('painel-distribuicao-container');
+const painelLayoutGrid = document.querySelector('.painel-layout-grid');
+
+
+const painelDivisor = document.querySelector('.painel-divisor');
 const logSection = document.querySelector('.painel-log-section');
+const painelControls = document.querySelector('.painel-controls-grid'); // Container dos botões
+
+
 
 // --- Variáveis de Estado ---
 let currentEvento = null;
@@ -24,6 +31,7 @@ let currentGame = null;
 let listaDeCestas = [];
 let unsubCestas = null;
 let unsubJogo = null;
+let painelUserRole = null; // Guarda o 'role' do utilizador que abriu o painel
 
 // --- LÓGICA DE PONTUAÇÃO ---
 
@@ -31,15 +39,11 @@ async function adicionarCesta(pontos, timeKey) {
     if (!currentEvento?.id || !currentGame?.id) return;
     const timeId = currentGame[`time${timeKey}_id`];
     if (timeId === undefined) return;
-
     const jogoRef = doc(db, "eventos", currentEvento.id, "jogos", currentGame.id);
-    
-    // Apenas regista cestas detalhadas para times que não são 'adversario'
     if (timeId !== 'adversario') {
         const cestasRef = collection(jogoRef, "cestas");
         await addDoc(cestasRef, { pontos, timestamp: new Date(), timeId, jogadorId: null, nomeJogador: null });
     }
-    
     const placarField = currentGame.type === 'torneio_interno' ? `placarTime${timeKey}_final` : (timeKey === 'A' ? 'placarANCB_final' : 'placarAdversario_final');
     await updateDoc(jogoRef, { [placarField]: increment(pontos) });
 }
@@ -48,15 +52,12 @@ async function desfazerUltimaCesta(timeKey) {
     if (!currentEvento?.id || !currentGame?.id) return;
     const timeId = currentGame[`time${timeKey}_id`];
     if (timeId === undefined) return;
-    
     try {
         const jogoRef = doc(db, "eventos", currentEvento.id, "jogos", currentGame.id);
-        
         if (timeId !== 'adversario') {
             const cestasRef = collection(jogoRef, "cestas");
             const q = query(cestasRef, where("timeId", "==", timeId), orderBy("timestamp", "desc"), limit(1));
             const snapshot = await getDocs(q);
-
             if (!snapshot.empty) {
                 const ultimaCesta = snapshot.docs[0].data();
                 await deleteDoc(snapshot.docs[0].ref);
@@ -80,11 +81,7 @@ async function desfazerUltimaCesta(timeKey) {
 
 function renderPainelAoVivo() {
     const logTitle = logSection.querySelector('h3');
-    logTitle.textContent = `Registo de Cestas (${currentGame.timeA_nome})`;
-    if (currentGame.type !== 'torneio_interno') {
-        logTitle.textContent = `Registo de Cestas (ANCB)`;
-    }
-    
+    logTitle.textContent = `Registo de Cestas`;
     registroCestasContainer.innerHTML = '';
     const cestasParaMostrar = listaDeCestas.filter(cesta => cesta.timeId !== 'adversario');
     if (cestasParaMostrar.length === 0) {
@@ -94,13 +91,19 @@ function renderPainelAoVivo() {
             [currentGame.timeA_id]: currentGame.timeA_nome,
             [currentGame.timeB_id]: currentGame.timeB_nome,
         };
+        const todosJogadores = getJogadores(); // Pega a lista de jogadores para aceder ao apelido
         [...cestasParaMostrar].reverse().forEach(cesta => {
             const item = document.createElement('div');
             item.className = 'cesta-item';
             let textoCesta = `Cesta de ${cesta.pontos} ponto(s) - ${nomesTimes[cesta.timeId]}`;
-            if (cesta.nomeJogador) {
-                textoCesta += ` (${cesta.nomeJogador.split(' ')[0]})`;
+            
+            // Lógica para adicionar o apelido
+            if (cesta.jogadorId && cesta.nomeJogador) {
+                const jogador = todosJogadores.find(j => j.id === cesta.jogadorId);
+                const nomeExibicao = jogador?.apelido ? `${jogador.nome.split(' ')[0]} "${jogador.apelido}"` : cesta.nomeJogador;
+                textoCesta += ` (${nomeExibicao})`;
             }
+            
             item.textContent = textoCesta;
             registroCestasContainer.appendChild(item);
         });
@@ -130,8 +133,15 @@ async function recalcularEstatisticasJogador(jogadorId) {
 
 function renderPainelDistribuicao() {
     painelDistribuicaoContainer.innerHTML = '';
+
+    // CORREÇÃO: Verifica se é admin antes de renderizar
+    if (painelUserRole !== 'admin') {
+        painelDistribuicaoContainer.style.display = 'none';
+        return;
+    }
+    painelDistribuicaoContainer.style.display = currentGame.type === 'torneio_interno' ? 'grid' : 'block';
+
     const todosJogadores = getJogadores();
-    
     const timesParaDistribuir = [];
     if (currentGame.type === 'torneio_interno') {
         timesParaDistribuir.push({ key: 'A', id: currentGame.timeA_id, nome: currentGame.timeA_nome });
@@ -139,7 +149,6 @@ function renderPainelDistribuicao() {
     } else {
         timesParaDistribuir.push({ key: 'A', id: 'ancb', nome: 'ANCB' });
     }
-
     timesParaDistribuir.forEach(time => {
         let timeJogadoresIds = [];
         if (currentGame.type === 'torneio_interno') {
@@ -147,7 +156,6 @@ function renderPainelDistribuicao() {
         } else {
             if (time.id === 'ancb') timeJogadoresIds = currentEvento.jogadoresEscalados || [];
         }
-
         const cestasNaoAtribuidas = listaDeCestas.filter(c => c.timeId === time.id && !c.jogadorId);
         const contagemCestas = cestasNaoAtribuidas.reduce((acc, cesta) => {
             acc[cesta.pontos] = (acc[cesta.pontos] || 0) + 1;
@@ -168,9 +176,10 @@ function renderPainelDistribuicao() {
         const jogadoresDoTime = todosJogadores.filter(j => timeJogadoresIds.includes(j.id));
         if (jogadoresDoTime.length > 0) {
             jogadoresDoTime.forEach(jogador => {
+                const primeiroNome = jogador.nome.split(' ')[0]; // Pega só o primeiro nome
                 timeHTML += `
                     <div class="distribuicao-jogador-row">
-                        <span>${jogador.nome}</span>
+                        <span>${primeiroNome}</span> 
                         <div class="botoes-distribuicao">
                             <button data-jogador-id="${jogador.id}" data-time-id="${time.id}" data-pontos="1" ${ (contagemCestas[1] || 0) === 0 ? 'disabled' : '' }>+1</button>
                             <button data-jogador-id="${jogador.id}" data-time-id="${time.id}" data-pontos="2" ${ (contagemCestas[2] || 0) === 0 ? 'disabled' : '' }>+2</button>
@@ -205,18 +214,22 @@ async function atribuirCesta(jogadorId, timeId, pontos) {
     }
     const jogador = getJogadores().find(j => j.id === jogadorId);
     if (!jogador) return;
+    
+    // Agora salvamos o nome completo no registo da cesta
     const cestaRef = doc(db, "eventos", currentEvento.id, "jogos", currentGame.id, "cestas", cestaParaAtribuir.id);
     await updateDoc(cestaRef, {
         jogadorId: jogadorId,
-        nomeJogador: jogador.nome
+        nomeJogador: jogador.nome // Salva o nome completo
     });
     await recalcularEstatisticasJogador(jogadorId);
 }
 
 // --- FUNÇÃO PRINCIPAL E INICIALIZAÇÃO ---
 
-export async function abrirPainelJogo(evento, jogo) {
+export async function abrirPainelJogo(userRole, evento, jogo) {
+    painelUserRole = userRole; // Guarda o 'role' para uso noutras funções
     currentEvento = evento;
+    
     const jogoNormalizado = {
         id: jogo.id,
         type: evento.type,
@@ -227,6 +240,17 @@ export async function abrirPainelJogo(evento, jogo) {
     };
     currentGame = jogoNormalizado;
 
+    // CORREÇÃO: Controlo de visibilidade feito diretamente com JavaScript
+    if (userRole === 'admin') {
+        painelControls.style.display = 'flex';
+        painelDistribuicaoContainer.style.display = 'grid';
+        painelDivisor.style.display = 'block';
+    } else {
+        painelControls.style.display = 'none';
+        painelDistribuicaoContainer.style.display = 'none';
+        painelDivisor.style.display = 'none';
+    }
+
     if (evento.type === 'torneio_interno') {
         const timesRef = collection(db, "eventos", evento.id, "times");
         const timesSnapshot = await getDocs(timesRef);
@@ -236,19 +260,6 @@ export async function abrirPainelJogo(evento, jogo) {
     painelTitulo.textContent = `Painel: ${currentGame.timeA_nome} vs ${currentGame.timeB_nome}`;
     nomeTimeADisplay.textContent = currentGame.timeA_nome;
     nomeTimeBDisplay.textContent = currentGame.timeB_nome;
-    
-    if (currentGame.type !== 'torneio_interno') {
-        painelDistribuicaoContainer.style.display = 'block'; // Garante que é visível
-        logSection.style.display = 'block';
-        // Oculta a coluna de distribuição do adversário em jogos externos
-        if(painelDistribuicaoContainer.children.length > 1) {
-            painelDistribuicaoContainer.children[1].style.display = 'none';
-        }
-    } else {
-        painelDistribuicaoContainer.style.display = 'grid';
-        logSection.style.display = 'block';
-    }
-
 
     if (unsubCestas) unsubCestas();
     if (unsubJogo) unsubJogo();
@@ -273,8 +284,10 @@ export async function abrirPainelJogo(evento, jogo) {
     openModal(modalPainelJogo);
 }
 
+
 export function initPainelJogo() {
     controlesTimeA.addEventListener('click', (e) => {
+        if (painelUserRole !== 'admin') return;
         const target = e.target.closest('.btn-placar');
         if (!target || !currentGame) return;
         if (target.classList.contains('add')) {
@@ -283,35 +296,31 @@ export function initPainelJogo() {
             desfazerUltimaCesta('A');
         }
     });
-
     controlesTimeB.addEventListener('click', (e) => {
+        if (painelUserRole !== 'admin') return;
         const target = e.target.closest('.btn-placar');
         if (!target || !currentGame) return;
         const pontos = parseInt(target.dataset.points, 10);
-        
-        // CORREÇÃO: As chamadas de função foram unificadas
         if (target.classList.contains('add')) {
             adicionarCesta(pontos, 'B');
         } else if (target.classList.contains('remove')) {
             desfazerUltimaCesta('B');
         }
     });
-
     painelDistribuicaoContainer.addEventListener('click', (e) => {
+        if (painelUserRole !== 'admin') return;
         const target = e.target.closest('button');
         if (target && target.dataset.jogadorId) {
             const { jogadorId, timeId, pontos } = target.dataset;
             atribuirCesta(jogadorId, timeId, parseInt(pontos, 10));
         }
     });
-    
     const stopListeners = () => {
         if (unsubCestas) unsubCestas();
         if (unsubJogo) unsubJogo();
         unsubCestas = null;
         unsubJogo = null;
     };
-    
     const backdrop = document.getElementById('modal-backdrop');
     modalPainelJogo.querySelector('.close-button').addEventListener('click', stopListeners);
     backdrop.addEventListener('click', () => {
