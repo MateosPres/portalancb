@@ -1,14 +1,13 @@
-// js/modules/jogadores.js (Com Lógica de Upload)
+// js/modules/jogadores.js
 
-import { collection, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { collection, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, addDoc, getDocs, collectionGroup, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { db } from '../services/firebase.js';
 import { openModal, closeModal } from '../components/modal.js';
 
 // --- CONFIGURAÇÃO DO CLOUDINARY ---
-// SUBSTITUA COM SEUS DADOS REAIS
-const CLOUDINARY_CLOUD_NAME = "dc3l3t1sl"; // <<<<<<< COLOQUE SEU CLOUD NAME AQUI
-const CLOUDINARY_UPLOAD_PRESET = "ancb_portal_uploads"; // <<<<<<< COLOQUE O NOME DO SEU PRESET AQUI
-const CLOUDINARY_FOLDER = "jogadores_perfis"; // Opcional: mesma pasta que você configurou no preset
+const CLOUDINARY_CLOUD_NAME = "dc3l3t1sl";
+const CLOUDINARY_UPLOAD_PRESET = "ancb_portal_uploads";
+const CLOUDINARY_FOLDER = "jogadores_perfis";
 
 // --- Estado do Módulo ---
 let jogadores = [];
@@ -30,11 +29,9 @@ const formatDate = (dateStr) => {
     return `${day}/${month}/${year}`;
 };
 
-// Em js/modules/jogadores.js
-
 function render() {
-    loaderJogadores.style.display = 'none';  // some o loader quando termina
-    gridJogadores.innerHTML = ''; // Limpa o conteúdo (inclusive o spinner)
+    loaderJogadores.style.display = 'none';
+    gridJogadores.innerHTML = '';
 
     if (jogadores.length === 0) {
         gridJogadores.innerHTML = '<p>Nenhum jogador cadastrado.</p>';
@@ -65,7 +62,7 @@ function showJogadorModal(id = null) {
         if (!j) return;
         document.getElementById('modal-jogador-titulo').innerText = 'Editar Jogador';
         formJogador['nome'].value = j.nome;
-        formJogador['apelido'].value = j.apelido || ''; // <<< MOSTRAR O APELIDO
+        formJogador['apelido'].value = j.apelido || '';
         formJogador['cpf'].value = j.cpf;
         formJogador['nascimento'].value = j.nascimento;
         formJogador['posicao'].value = j.posicao;
@@ -80,27 +77,151 @@ function showJogadorModal(id = null) {
     openModal(modalJogador);
 }
 
-function showFichaJogador(id) {
+async function showFichaJogador(id) {
     const j = jogadores.find(p => p.id === id);
     if (!j) return;
+
     const fichaContainer = modalVerJogador.querySelector('#ficha-jogador');
     const fotoHTML = j.foto ? `<img src="${j.foto}" alt="${j.nome}">` : '<div class="placeholder">🏀</div>';
-    
-    // Adiciona o apelido à ficha de visualização
     let detailsHTML = `<p><strong>Nome:</strong> ${j.nome}</p>`;
-    if (j.apelido) { // Só mostra se o apelido existir
+    if (j.apelido) {
         detailsHTML += `<p><strong>Apelido:</strong> ${j.apelido}</p>`;
     }
     detailsHTML += `<p><strong>Posição:</strong> ${j.posicao}</p><p><strong>Nº Uniforme:</strong> ${j.numero_uniforme}</p>`;
-    
     if (userRole === 'admin') {
         detailsHTML += `<p><strong>CPF:</strong> ${j.cpf}</p><p><strong>Nascimento:</strong> ${formatDate(j.nascimento)}</p>`;
     }
     fichaContainer.innerHTML = `${fotoHTML}<div>${detailsHTML}</div>`;
+
+    const statsContainer = modalVerJogador.querySelector('#jogador-estatisticas-container');
+    const careerStatsContainer = modalVerJogador.querySelector('#stats-resumo-carreira');
+    const eventStatsContainer = modalVerJogador.querySelector('#stats-por-evento');
+    
+    statsContainer.style.display = 'block';
+    careerStatsContainer.innerHTML = '<p class="loading-stats">A carregar estatísticas da carreira...</p>';
+    eventStatsContainer.innerHTML = '';
+
     openModal(modalVerJogador);
+
+    try {
+        const todosEventosSnapshot = await getDocs(collection(db, "eventos"));
+        const eventosMap = new Map();
+        todosEventosSnapshot.forEach(doc => eventosMap.set(doc.id, { nome: doc.data().nome, modalidade: doc.data().modalidade }));
+
+        const cestasQuery = query(collectionGroup(db, 'cestas'), where('jogadorId', '==', id));
+        const cestasSnapshot = await getDocs(cestasQuery);
+
+        if (cestasSnapshot.empty) {
+            careerStatsContainer.innerHTML = '<p>Este jogador ainda não possui cestas registadas.</p>';
+            return;
+        }
+
+        const statsPorEvento = {};
+        let totalCestasDentro = 0, totalCestasFora = 0, totalLancesLivres = 0, totalPontos = 0;
+
+        cestasSnapshot.forEach(cestaDoc => {
+            const cesta = cestaDoc.data();
+            const eventoId = cestaDoc.ref.path.split('/')[1]; 
+            const eventoInfo = eventosMap.get(eventoId);
+
+            if (!eventoInfo) return; 
+
+            if (!statsPorEvento[eventoId]) {
+                statsPorEvento[eventoId] = {
+                    nome: eventoInfo.nome || 'Evento Desconhecido',
+                    modalidade: eventoInfo.modalidade,
+                    cestasDentro: 0, cestasFora: 0, lancesLivres: 0, total: 0
+                };
+            }
+
+            if (eventoInfo.modalidade === '3x3') {
+                if (cesta.pontos === 1) {
+                    statsPorEvento[eventoId].cestasDentro++;
+                    totalCestasDentro++;
+                } else if (cesta.pontos === 2) {
+                    statsPorEvento[eventoId].cestasFora++;
+                    totalCestasFora++;
+                }
+            } else { // Assumimos 5x5 como padrão
+                 if (cesta.pontos === 1) {
+                    statsPorEvento[eventoId].lancesLivres++;
+                    totalLancesLivres++;
+                } else if (cesta.pontos === 2) {
+                    statsPorEvento[eventoId].cestasDentro++;
+                    totalCestasDentro++;
+                } else if (cesta.pontos === 3) {
+                    statsPorEvento[eventoId].cestasFora++;
+                    totalCestasFora++;
+                }
+            }
+            statsPorEvento[eventoId].total += cesta.pontos;
+            totalPontos += cesta.pontos;
+        });
+
+        careerStatsContainer.innerHTML = `
+            <div class="stat-summary-item">
+                <span class="stat-summary-value">${totalCestasDentro}</span>
+                <span class="stat-summary-label">Dentro</span>
+            </div>
+            <div class="stat-summary-item">
+                <span class="stat-summary-value">${totalCestasFora}</span>
+                <span class="stat-summary-label">Fora</span>
+            </div>
+            <div class="stat-summary-item">
+                <span class="stat-summary-value">${totalLancesLivres}</span>
+                <span class="stat-summary-label">L. Livres</span>
+            </div>
+             <div class="stat-summary-item">
+                <span class="stat-summary-value">${totalPontos}</span>
+                <span class="stat-summary-label">Pontos Totais</span>
+            </div>
+        `;
+
+        let eventHTML = '<h3>Desempenho por Evento</h3>';
+        for (const eventoId in statsPorEvento) {
+            const stats = statsPorEvento[eventoId];
+            const badgeClass = stats.modalidade === '3x3' ? 'badge-3x3' : 'badge-5x5';
+            
+            let detailsContent = '';
+            if (stats.modalidade === '3x3') {
+                detailsContent = `
+                    <p><strong>Cestas de Dentro (1pt):</strong> ${stats.cestasDentro}</p>
+                    <p><strong>Cestas de Fora (2pts):</strong> ${stats.cestasFora}</p>
+                `;
+            } else {
+                detailsContent = `
+                    <p><strong>Cestas de Dentro (2pts):</strong> ${stats.cestasDentro}</p>
+                    <p><strong>Cestas de Fora (3pts):</strong> ${stats.cestasFora}</p>
+                    <p><strong>Lances Livres (1pt):</strong> ${stats.lancesLivres}</p>
+                `;
+            }
+             detailsContent += `<p><strong>Total de Pontos no Evento:</strong> ${stats.total}</p>`;
+
+
+            eventHTML += `
+                <details class="event-stats-item">
+                    <summary>
+                        <div class="summary-content">
+                           <span class="event-stats-name">${stats.nome}</span>
+                           <span class="event-modality-badge ${badgeClass}">${stats.modalidade}</span>
+                        </div>
+                        <span class="event-stats-total">${stats.total} Pts</span>
+                    </summary>
+                    <div class="event-stats-details">
+                        ${detailsContent}
+                    </div>
+                </details>
+            `;
+        }
+        eventStatsContainer.innerHTML = eventHTML;
+
+    } catch (error) {
+        console.error("Erro ao buscar estatísticas do jogador:", error);
+        careerStatsContainer.innerHTML = '<p>Ocorreu um erro ao carregar as estatísticas.</p>';
+    }
 }
 
-// --- LÓGICA DE UPLOAD E SUBMISSÃO DO FORMULÁRIO (ATUALIZADA) ---
+
 async function handleFormSubmit(e) {
     e.preventDefault();
     if (userRole !== 'admin') return;
@@ -115,7 +236,6 @@ async function handleFormSubmit(e) {
 
     try {
         let imageUrl = null;
-        // Passo 1: Se um arquivo foi selecionado, faça o upload para o Cloudinary
         if (file) {
             const formData = new FormData();
             formData.append('file', file);
@@ -132,34 +252,25 @@ async function handleFormSubmit(e) {
             }
 
             const data = await response.json();
-            imageUrl = data.secure_url; // URL segura da imagem
+            imageUrl = data.secure_url;
         }
 
-        // Passo 2: Monte o objeto de dados para salvar no Firestore
         const dados = {
             nome: formJogador['nome'].value,
-            apelido: formJogador['apelido'].value, // <<< GUARDAR O APELIDO
+            apelido: formJogador['apelido'].value,
             cpf: formJogador['cpf'].value,
             nascimento: formJogador['nascimento'].value,
             posicao: formJogador['posicao'].value,
             numero_uniforme: formJogador['numero_uniforme'].value,
         };
 
-        // Adiciona a URL da foto apenas se uma nova foi enviada
-        // Se não, mantém a foto antiga (não a sobrescreve com null)
         if (imageUrl) {
             dados.foto = imageUrl;
         }
 
-        // Passo 3: Salve os dados no Firestore
         if (id) {
             await updateDoc(doc(db, "jogadores", id), dados);
         } else {
-            // Se for um novo jogador, é preciso garantir que a foto foi enviada.
-            if (!dados.foto) { 
-                // Se for obrigatório, podemos lançar um erro.
-                // Por enquanto, vamos permitir criar sem foto.
-            }
             await addDoc(collection(db, "jogadores"), dados);
         }
 
@@ -168,7 +279,6 @@ async function handleFormSubmit(e) {
         console.error("Erro ao salvar jogador: ", error);
         alert("Não foi possível salvar os dados do jogador. Verifique o console para mais detalhes.");
     } finally {
-        // Garante que o loading e o botão voltem ao normal, mesmo se der erro
         loadingOverlay.classList.remove('active');
         saveButton.disabled = false;
         saveButton.textContent = 'Salvar';
@@ -187,7 +297,6 @@ async function deleteJogador(id) {
     }
 }
 
-// --- Funções Públicas (Exportadas) ---
 export function getJogadores() {
     return [...jogadores].sort((a, b) => a.nome.localeCompare(b.nome));
 }
@@ -198,7 +307,7 @@ export function setJogadoresUserRole(role) {
 }
 
 export function initJogadores() {
-    loaderJogadores.style.display = 'block'; // mostra o loader
+    loaderJogadores.style.display = 'block';
     onSnapshot(query(collection(db, "jogadores"), orderBy("nome")), (snapshot) => {
         jogadores = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         render();
@@ -220,3 +329,4 @@ export function initJogadores() {
     formJogador.addEventListener('submit', handleFormSubmit);
     document.getElementById('btn-abrir-modal-jogador').addEventListener('click', () => showJogadorModal());
 }
+

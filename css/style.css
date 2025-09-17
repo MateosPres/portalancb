@@ -91,7 +91,6 @@ body.modal-open { overflow: hidden; }
 .jogador-escalado { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
 .jogador-escalado img, .jogador-escalado .placeholder { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; margin-right: 15px; }
 @media screen and (max-width: 768px) { .container { padding: 10px; } .header-container { flex-wrap: wrap; justify-content: center; gap: 10px;} .header-left { order: 1; } .header-right { order: 2; width: 100%; justify-content: center;} .logo { height: 40px; } .site-header h1 { font-size: 1.5rem; text-align: center; } #welcome-message { font-size: 0.8rem; text-align: right; } .btn-logout { padding: 8px 12px; } .nav-tabs { justify-content: space-around; } .nav-tab { padding: 8px 10px; font-size: 0.9rem; text-align: center; flex-grow: 1;} .section-header { flex-direction: column; align-items: flex-start; gap: 10px; } .section-header h2 { font-size: 2rem; } .content-section { padding: 15px; } .card-grid { grid-template-columns: 1fr; gap: 20px; } .modal-content { padding: 20px; } #ficha-jogador { flex-direction: column; } .auth-box { padding: 20px; } .auth-box h2 { font-size: 2rem; } .card-actions { bottom: 5px; right: 5px; } .card-actions button { width: 30px; height: 30px; font-size: 1rem; padding: 5px; } }
-/* Adicione ao final de css/style.css */
 .loading-overlay {
     position: absolute;
     top: 0;
@@ -99,14 +98,14 @@ body.modal-open { overflow: hidden; }
     width: 100%;
     height: 100%;
     background-color: rgba(255, 255, 255, 0.8);
-    display: none; /* Começa escondido */
+    display: none;
     justify-content: center;
     align-items: center;
     z-index: 10;
     border-radius: 12px;
 }
 .loading-overlay.active {
-    display: flex; /* Mostra quando ativo */
+    display: flex;
 }
 .spinner {
     border: 4px solid #f3f3f3;
@@ -120,10 +119,6 @@ body.modal-open { overflow: hidden; }
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
-
-/* Adicione ao final de css/style.css */
-
-/* Badge para tipo de campeonato */
 .championship-type-badge {
     position: absolute;
     top: 10px;
@@ -135,8 +130,6 @@ body.modal-open { overflow: hidden; }
     font-size: 0.8rem;
     font-weight: bold;
 }
-
-/* Estilos para a lista de jogos no modal de edição */
 .game-list-item {
     display: flex;
     justify-content: space-between;
@@ -159,8 +152,6 @@ body.modal-open { overflow: hidden; }
     background-color: var(--cor-azul-claro);
     color: white;
 }
-
-/* Estilos para o formulário de placar */
 .score-input-group {
     display: flex;
     align-items: center;
@@ -187,8 +178,6 @@ body.modal-open { overflow: hidden; }
 .score-grid input {
     text-align: center;
 }
-
-/* Estilos para as estatísticas dos jogadores */
 .player-stat-row {
     display: flex;
     align-items: center;
@@ -202,8 +191,6 @@ body.modal-open { overflow: hidden; }
     width: 100px;
     text-align: right;
 }
-
-/* Estilos para a visualização pública (abas) */
 .tab-like-nav {
     display: flex;
     border-bottom: 2px solid #eee;
@@ -229,8 +216,6 @@ body.modal-open { overflow: hidden; }
 .tab-like-content.active {
     display: block;
 }
-
-/* Estilos para a lista de jogos e classificação */
 .jogo-realizado-item {
     display: flex;
     justify-content: space-between;
@@ -256,8 +241,6 @@ body.modal-open { overflow: hidden; }
 .classificacao-table td:first-child, .classificacao-table td:nth-child(3), .classificacao-table td:nth-child(4) {
     text-align: center;
 }
-
-/* Estilos para a Nova Lista de Artilheiros (Leaderboard) */
 .leaderboard-list {
     display: flex;
     flex-direction: column;
@@ -332,13 +315,9 @@ body.modal-open { overflow: hidden; }
     font-size: 0.8rem;
     color: #666;
 }
-
-/* Ajustes no item da lista de jogos */
 .jogo-realizado-item strong {
     color: var(--cor-preto);
 }
-
-/* Estilos para o Painel de Jogo */
 .modal-xl {
     max-width: 900px;
 }
@@ -408,7 +387,7 @@ body.modal-open { overflow: hidden; }
 .btn-placar.remove {
     background-color: var(--cor-vermelho-claro);
     color: white;
-    grid-column: 1 / -1; /* Ocupa as duas colunas */
+    grid-column: 1 / -1;
 }
 .btn-placar.remove:hover {
     background-color: #c82333;
@@ -435,8 +414,6 @@ body.modal-open { overflow: hidden; }
     display: flex;
     gap: 5px;
 }
-
-/* Estilos para o Painel de Distribuição */
 .saldo-cestas {
     display: flex;
     justify-content: space-around;
@@ -473,8 +450,6 @@ body.modal-open { overflow: hidden; }
     cursor: not-allowed;
 }
 
-/* Adicione este código ao final de style.css */
-
 .section-header-inline {
     display: flex;
     justify-content: space-between;
@@ -485,11 +460,8 @@ body.modal-open { overflow: hidden; }
 .section-header-inline h3 {
     margin: 0;
 }
-
-/* Ajustes no Painel de Jogo */
 .painel-aovivo-grid {
     display: grid;
-    /* ANCB | Adversário | Registro */
     grid-template-columns: 1fr 180px 1fr;
     gap: 20px;
     margin-top: 15px;
@@ -503,7 +475,7 @@ body.modal-open { overflow: hidden; }
 
 .placar-display.adversario {
     font-size: 4rem;
-    padding: 10px 0; /* Reduz o padding vertical */
+    padding: 10px 0;
     margin-bottom: 15px;
     background-color: #fff;
 }
@@ -514,10 +486,6 @@ body.modal-open { overflow: hidden; }
     gap: 10px;
     width: 100%;
 }
-
-/* Adicionar ao final de style.css */
-
-/* Deixa o item da lista de jogos clicável */
 .jogo-realizado-item.clickable {
     cursor: pointer;
     transition: background-color 0.2s;
@@ -551,9 +519,6 @@ body.modal-open { overflow: hidden; }
     background-color: var(--cor-azul-claro);
     color: white;
 }
-
-
-/* Estilos para o Modal de Detalhes do Jogo */
 #ver-jogo-header {
     text-align: center;
     margin-bottom: 15px;
@@ -610,9 +575,6 @@ body.modal-open { overflow: hidden; }
     min-width: 60px;
     text-align: right;
 }
-
-/* Adicionar ao final de style.css para refinar a UI de estatísticas */
-
 .stat-header {
     display: flex;
     justify-content: space-between;
@@ -636,20 +598,16 @@ body.modal-open { overflow: hidden; }
 }
 
 .stat-jogador-info, .header-jogador {
-    flex-grow: 1; /* Ocupa o espaço restante */
+    flex-grow: 1;
 }
-
-/* Garante que a seção de pontos tenha um tamanho fixo para alinhamento */
 .stat-jogador-pontos, .header-pontos {
     display: flex;
     align-items: center;
     gap: 15px;
-    flex-shrink: 0; /* Impede que encolha */
-    width: 220px; /* Largura fixa para alinhar as colunas */
+    flex-shrink: 0;
+    width: 220px;
     justify-content: flex-end;
 }
-
-/* Garante que cada coluna de pontos tenha a mesma largura */
 .stat-jogador-pontos span, .header-pontos span {
     width: 35px;
     text-align: center;
@@ -668,9 +626,6 @@ body.modal-open { overflow: hidden; }
     text-align: right;
     font-size: 1.1rem;
 }
-
-/* Adicionar ao final de style.css */
-
 .game-item-actions-view {
     display: flex;
     gap: 5px;
@@ -684,7 +639,7 @@ body.modal-open { overflow: hidden; }
     width: 32px;
     height: 32px;
     cursor: pointer;
-    font-size: 1.1rem; /* Ajustado para ícones menores */
+    font-size: 1.1rem;
     flex-shrink: 0;
     display: flex;
     align-items: center;
@@ -695,17 +650,10 @@ body.modal-open { overflow: hidden; }
     background-color: var(--cor-azul-claro);
     color: white;
 }
-
-/* Adicionar ao final de style.css - NOVOS ESTILOS PARA O PAINEL DE JOGO */
-/* Em style.css, SUBSTITUA todos os estilos do painel de jogo por este bloco */
-
-/* Reseta estilos antigos para evitar conflitos */
 .painel-aovivo-grid, .col-placar, .botoes-placar, .placar-display {
     all: unset;
     display: block;
 }
-
-/* -- Estrutura Principal do Painel (Mobile-First) -- */
 #tab-painel-aovivo {
     padding: 10px;
 }
@@ -803,8 +751,6 @@ body.modal-open { overflow: hidden; }
     border-bottom: none;
 }
 
-
-/* -- Layout para Telas Maiores (Desktop) -- */
 @media screen and (min-width: 768px) {
     #tab-painel-aovivo {
         display: grid;
@@ -837,27 +783,19 @@ body.modal-open { overflow: hidden; }
         font-size: 4.5rem;
     }
 }
-
-/* Adicionar ao final de style.css - Simplificação do Painel de Jogo */
-
-/* Remove os estilos antigos das abas */
 .tab-like-container, .tab-like-nav, .tab-like-btn, .tab-like-content {
     all: unset;
     display: block;
 }
-
-/* Novo divisor visual */
 .painel-divisor {
     border: none;
     border-top: 2px solid #eee;
     margin: 25px 0;
 }
-
-/* -- Layout para Telas Maiores (Desktop) com a nova estrutura -- */
 @media screen and (min-width: 768px) {
     #painel-jogo-container {
         display: grid;
-        grid-template-columns: 2fr 1fr; /* Coluna principal 2x maior que a do log */
+        grid-template-columns: 2fr 1fr;
         gap: 20px 30px;
         align-items: flex-start;
     }
@@ -866,7 +804,7 @@ body.modal-open { overflow: hidden; }
     }
     .painel-log-section {
         grid-column: 2 / 3;
-        grid-row: 1 / 3; /* Ocupa a altura das duas seções da esquerda */
+        grid-row: 1 / 3;
     }
     .painel-secao-distribuicao {
         grid-column: 1 / 2;
@@ -876,20 +814,15 @@ body.modal-open { overflow: hidden; }
         max-height: 600px;
     }
 }
-
-/* Adicionar ao final de style.css - CORREÇÃO PARA AS ABAS DO CAMPEONATO */
-
 .tab-like-content {
-    display: none; /* Esconde todas as abas por padrão */
+    display: none;
 }
 
 .tab-like-content.active {
-    display: block; /* Mostra apenas a aba que estiver ativa */
+    display: block;
 }
-/* Adicionar ao final de style.css - CORREÇÃO VISUAL DAS ABAS */
-
 .tab-like-nav {
-    display: flex; /* <-- Esta é a regra principal que alinha as abas */
+    display: flex;
     border-bottom: 2px solid #eee;
     margin-bottom: 15px;
 }
@@ -914,35 +847,23 @@ body.modal-open { overflow: hidden; }
     color: var(--cor-azul-escuro);
     border-bottom-color: var(--cor-azul-escuro);
 }
-/* Adicionar ao final de style.css - MELHORIAS DE USABILIDADE MOBILE */
-
-/* Correção 1: Impede o zoom indesejado ao tocar rapidamente nos botões do placar.
-  Aplica-se a todos os botões verdes e vermelhos do painel.
-*/
 .btn-placar {
     touch-action: manipulation;
 }
-
-/* Correção 2: Garante que os botões de distribuição de pontos
-  fiquem sempre alinhados na mesma linha, sem quebras.
-*/
 .distribuicao-jogador-row {
     display: flex;
-    justify-content: space-between; /* Alinha o nome à esquerda e os botões à direita */
+    justify-content: space-between;
     align-items: center;
 }
 
 .botoes-distribuicao {
     display: flex;
-    flex-wrap: nowrap; /* Impede que os botões quebrem para a linha de baixo */
-    flex-shrink: 0; /* Impede que o container de botões encolha */
+    flex-wrap: nowrap;
+    flex-shrink: 0;
 }
-
-/* Adicionar ao final de style.css - INDICADOR DE CARREGAMENTO PARA GRIDS */
-
 .card-grid {
     position: relative;
-    min-height: 150px; /* Garante uma altura mínima para o spinner ficar visível */
+    min-height: 150px;
 }
 
 .grid-loader {
@@ -952,15 +873,11 @@ body.modal-open { overflow: hidden; }
     transform: translate(-50%, -50%);
     width: 50px;
     height: 50px;
-    border: 5px solid #f3f3f3; /* Cinza claro */
-    border-top: 5px solid var(--cor-azul-claro); /* Azul */
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid var(--cor-azul-claro);
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
-
-/* A animação @keyframes spin já deve existir no seu CSS, então não é preciso adicioná-la novamente */
-
-/* Adicionar ao final de style.css */
 #instagram-feed-container {
     width: 100%;
     margin-top: 20px;
@@ -968,48 +885,31 @@ body.modal-open { overflow: hidden; }
 
 .section-actions {
     display: flex;
-    justify-content: flex-end; /* Alinha o botão à direita */
-    margin-bottom: 20px; /* Espaçamento abaixo do botão */
+    justify-content: flex-end;
+    margin-bottom: 20px;
 }
-
-/* Ajuste opcional para o container do feed do Instagram */
 #instagram-feed-container {
-    margin-top: 0; /* Remove margem extra se houver */
+    margin-top: 0;
 }
-
-/* Adicionar ao final de style.css - MELHORIA DE LAYOUT MOBILE PARA JOGADORES */
-
-/* Media Query para ecrãs de telemóvel e tablets pequenos */
 @media screen and (max-width: 768px) {
-
-    /* Esta é a mudança principal:
-      Em vez de forçar 1 coluna (1fr), criamos um grid responsivo
-      que gera o máximo de colunas possíveis com no mínimo 150px de largura.
-      Num telemóvel típico, isto resulta em 2 colunas.
-    */
     #grid-jogadores.card-grid {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         gap: 15px;
     }
-
-    /* Ajustes visuais para que os cards fiquem bem no novo tamanho menor.
-    */
     .player-card {
-        padding: 15px; /* Reduz o espaçamento interno */
+        padding: 15px;
         padding-bottom: 45px;
     }
 
     .player-card .photo-container {
-        width: 90px;  /* Diminui o tamanho da foto */
+        width: 90px;
         height: 90px;
     }
     
     .player-card .player-name {
-        font-size: 1rem; /* Diminui o tamanho da fonte do nome */
+        font-size: 1rem;
     }
 }
-
-/* Adicionar ao final de style.css - Estilos para Seleção de Tipo de Evento */
 .form-label {
     display: block;
     font-weight: 600;
@@ -1053,9 +953,6 @@ body.modal-open { overflow: hidden; }
     font-size: 0.9rem;
     color: #555;
 }
-
-/* Adicionar ao final de style.css - Estilos para Gestão de Times */
-
 #secao-gerenciar-times > label {
     display: block;
     width: 100%;
@@ -1072,8 +969,6 @@ body.modal-open { overflow: hidden; }
     padding: 5px;
     border-radius: 8px;
 }
-/* Adicionar ao final de style.css - Estilos para Visualização de Times */
-
 #times-container-view {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -1099,9 +994,6 @@ body.modal-open { overflow: hidden; }
     font-size: 0.9rem;
     color: #666;
 }
-
-/* Adicionar ao final de style.css - Estilos para Times Expansíveis */
-
 .time-item-view.clickable {
     cursor: pointer;
     transition: all 0.2s ease-in-out;
@@ -1113,7 +1005,7 @@ body.modal-open { overflow: hidden; }
 }
 
 .time-roster-view {
-    display: none; /* O elenco começa escondido */
+    display: none;
     margin-top: 15px;
     padding-top: 10px;
     border-top: 1px solid #ddd;
@@ -1121,7 +1013,7 @@ body.modal-open { overflow: hidden; }
 }
 
 .time-item-view.expanded .time-roster-view {
-    display: block; /* Mostra o elenco quando o card está expandido */
+    display: block;
 }
 
 .time-roster-view h5 {
@@ -1134,15 +1026,9 @@ body.modal-open { overflow: hidden; }
     padding: 4px 0;
     color: #333;
 }
-
-/* Adicionar ao final de style.css */
-
-/* Remove estilos antigos (opcional) */
 .time-roster-view, .time-item-view.expanded {
     display: none !important;
 }
-
-/* Estilos para o novo modal de visualização de time */
 #ver-time-nome {
     text-align: center;
     margin-bottom: 20px;
@@ -1157,8 +1043,6 @@ body.modal-open { overflow: hidden; }
     max-height: 60vh;
     overflow-y: auto;
 }
-
-/* Estilo para o cabeçalho inline na aba de jogos */
 .section-header-inline {
     display: flex;
     justify-content: space-between;
@@ -1168,8 +1052,6 @@ body.modal-open { overflow: hidden; }
 .section-header-inline h3 {
     margin: 0;
 }
-/* Adicionar ao final de style.css */
-
 #painel-distribuicao-container {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1186,28 +1068,17 @@ body.modal-open { overflow: hidden; }
     text-align: center;
     margin-top: 0;
 }
-
-/* Adicionar ao final de style.css - Ajuste para Classificação Geral */
-
-/* Ajusta a largura da secção de pontos para acomodar a ausência da coluna 3PT no 3x3 */
 .header-pontos, .stat-jogador-pontos {
-    width: auto; /* Permite que a largura se ajuste */
-    min-width: 220px; /* Mantém um tamanho mínimo para 5x5 */
+    width: auto;
+    min-width: 220px;
 }
-
-/* Adicionar ao final de style.css */
-
 #jogos-internos-container .jogo-realizado-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
-
-/* Adicionar ao final de style.css - Estilos para Logos de Times */
-
-/* Pré-visualização do logo no formulário */
 #preview-logo-time {
-    display: none; /* Começa escondido */
+    display: none;
     width: 100px;
     height: 100px;
     object-fit: cover;
@@ -1215,8 +1086,6 @@ body.modal-open { overflow: hidden; }
     margin-top: 10px;
     border: 2px solid #eee;
 }
-
-/* Logo pequeno na lista de edição de evento */
 .game-list-item .item-logo, .game-list-item .item-logo-placeholder {
     width: 40px;
     height: 40px;
@@ -1234,8 +1103,6 @@ body.modal-open { overflow: hidden; }
     background-color: var(--cor-cinza-fundo);
     font-size: 1.5rem;
 }
-
-/* Logo grande nos cards de visualização pública */
 .time-item-view {
     display: flex;
     flex-direction: column;
@@ -1257,10 +1124,6 @@ body.modal-open { overflow: hidden; }
     background-color: var(--cor-cinza-fundo);
     font-size: 2.5rem;
 }
-
-/* Adicionar ao final de style.css - REFINAMENTOS FINAIS DE UI */
-
-/* 1. Estilos para a nova lista de jogos (Time A | Placar | Time B) */
 .jogo-realizado-item .jogo-info {
     flex-grow: 1;
     display: flex;
@@ -1270,7 +1133,7 @@ body.modal-open { overflow: hidden; }
 }
 
 .jogo-info .team-name {
-    flex: 1; /* Ocupa o espaço disponível */
+    flex: 1;
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1286,13 +1149,11 @@ body.modal-open { overflow: hidden; }
 }
 
 .jogo-info .score {
-    flex-shrink: 0; /* Impede que o placar encolha */
+    flex-shrink: 0;
     font-weight: bold;
     font-size: 1.1rem;
     color: var(--cor-azul-escuro);
 }
-
-/* 2. Estilos para a classificação no telemóvel */
 @media screen and (max-width: 768px) {
     .stat-jogador-item .stat-jogador-info {
         gap: 8px;
@@ -1313,46 +1174,33 @@ body.modal-open { overflow: hidden; }
     }
     .header-pontos span, .stat-jogador-pontos span {
         width: auto;
-        min-width: 25px; /* Largura mínima para cada coluna de pontos */
+        min-width: 25px;
     }
     .header-pontos strong, .stat-jogador-pontos strong {
         width: auto;
         min-width: 50px;
     }
 }
-
-/* Adicionar ao final de style.css - Refinamento Visual da Lista de Jogos */
-
 .jogo-info .team-name {
-    /* Reduz o tamanho da fonte para os nomes das equipas */
     font-size: 1rem;
-    /* Reduz o peso da fonte para um semi-negrito mais subtil */
     font-weight: 500; 
-    /* Garante que o nome da equipa ANCB também fica com o novo estilo */
     color: var(--cor-preto);
 }
 
 .jogo-info .score {
-    /* Aumenta ligeiramente o destaque do placar */
     font-size: 1.15rem; 
     font-weight: 700;
 }
-
-/* Adicionar ao final de style.css - REFINAMENTOS FINAIS DE UI */
-
-/* --- 1. AJUSTE NA LISTA DE JOGOS (PLACAR CENTRALIZADO) --- */
-
-/* Usamos Grid para um controlo perfeito das 3 colunas */
 .jogo-realizado-item .jogo-info {
     display: grid;
-    grid-template-columns: 1fr auto 1fr; /* Coluna da esquerda, do meio (auto-ajustável) e da direita */
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
     width: 100%;
     gap: 10px;
 }
 
 .jogo-info .team-name {
-    font-size: 0.95rem; /* Fonte ligeiramente mais pequena para caber melhor */
+    font-size: 0.95rem;
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1371,15 +1219,9 @@ body.modal-open { overflow: hidden; }
     font-size: 1.1rem;
     font-weight: 700;
     color: var(--cor-azul-escuro);
-    white-space: nowrap; /* Garante que o placar nunca quebre a linha */
+    white-space: nowrap;
 }
-
-
-/* --- 2. AJUSTE NA CLASSIFICAÇÃO GERAL (ALINHAMENTO MOBILE) --- */
-
-/* Aplicamos apenas a ecrãs de telemóvel */
 @media screen and (max-width: 768px) {
-    /* Ocupa o espaço restante, permitindo que encolha se necessário */
     .stat-jogador-item .stat-jogador-info {
        flex: 1;
        min-width: 0;
@@ -1388,52 +1230,32 @@ body.modal-open { overflow: hidden; }
     .stat-jogador-info span {
         font-size: 1rem;
     }
-
-    /* Garante que a secção de pontos não seja "espremida" */
     .stat-jogador-item .stat-jogador-pontos {
         flex-shrink: 0; 
         justify-content: flex-end;
-        gap: 12px; /* Aumenta o espaçamento entre as colunas de pontos */
+        gap: 12px;
     }
-
-    /* Define larguras base para um alinhamento consistente */
     .header-pontos span, .stat-jogador-pontos span {
-        flex-basis: 28px; /* Espaço para 1PT, 2PT, 3PT */
+        flex-basis: 28px;
         text-align: center;
     }
     .header-pontos strong, .stat-jogador-pontos strong {
-        flex-basis: 65px; /* Mais espaço para o TOTAL */
+        flex-basis: 65px;
         text-align: right;
     }
 }
-/* Adicionar ao final de style.css - CORES DAS TAGS DE MODALIDADE */
-
-/* Cor padrão para 5x5 */
 .championship-type-badge.badge-5x5 {
     background-color: var(--cor-laranja);
 }
-
-/* Nova cor para 3x3 */
 .championship-type-badge.badge-3x3 {
     background-color: var(--cor-azul-claro);
 }
-
-/* Adicionar ao final de style.css - REFINAMENTOS FINAIS DO PAINEL */
-
-
-
-/* 2. Corrige o layout da distribuição de pontos no telemóvel */
 @media screen and (max-width: 768px) {
     #painel-distribuicao-container {
-        grid-template-columns: 1fr; /* Muda para uma coluna única */
+        grid-template-columns: 1fr;
         gap: 20px;
     }
 }
-
-
-/* Adicionar ao final de style.css - BLOCO CONSOLIDADO DE ESTILOS FINAIS */
-
-/* --- GERAL --- */
 .section-header-inline {
     display: flex;
     justify-content: space-between;
@@ -1444,25 +1266,16 @@ body.modal-open { overflow: hidden; }
 .section-header-inline h3 {
     margin: 0;
 }
-
-/* --- PAINEL DE JOGO --- */
-
-/* Esconde controlos do painel para não-admins */
 .modal-painel-jogo.view-only-mode .painel-controls-grid,
 .modal-painel-jogo.view-only-mode #painel-distribuicao-container,
 .modal-painel-jogo.view-only-mode .painel-divisor {
     display: none;
 }
-
-/* Divisor visual */
 .painel-divisor {
     border: none;
     border-top: 2px solid #eee;
     margin: 25px 0;
 }
-
-/* --- LISTA DE JOGOS (AMBOS OS TIPOS) --- */
-
 .jogo-realizado-item .jogo-info {
     flex-grow: 1;
     display: grid;
@@ -1491,9 +1304,6 @@ body.modal-open { overflow: hidden; }
     font-weight: 700;
     white-space: nowrap;
 }
-
-/* --- CLASSIFICAÇÃO GERAL E DETALHES DE JOGO --- */
-
 .stat-header {
     display: flex;
     justify-content: space-between;
@@ -1517,16 +1327,11 @@ body.modal-open { overflow: hidden; }
     gap: 15px;
     flex-shrink: 0;
 }
-
-/* --- LAYOUTS ESPECÍFICOS PARA TELEMÓVEL --- */
 @media screen and (max-width: 768px) {
-    /* Layout da Distribuição de Pontos */
     #painel-distribuicao-container {
-        grid-template-columns: 1fr; /* Muda para uma coluna única */
+        grid-template-columns: 1fr;
         gap: 20px;
     }
-
-    /* Layout da Classificação Geral */
     .stat-jogador-item .stat-jogador-info {
        flex: 1;
        min-width: 0;
@@ -1554,34 +1359,23 @@ body.modal-open { overflow: hidden; }
         text-align: right;
     }
 }
-
-/* Adicionar ao final de style.css - BLOCO DE LAYOUT FINAL E CONSOLIDADO PARA O PAINEL */
-
-/* 1. Esconde os controlos e a distribuição para não-admins EM QUALQUER ECRÃ */
 .modal-painel-jogo.view-only-mode .painel-controls-grid,
 .modal-painel-jogo.view-only-mode #painel-distribuicao-container,
 .modal-painel-jogo.view-only-mode .painel-divisor {
     display: none;
 }
-
-/* 2. Para não-admins, força o layout de UMA COLUNA em qualquer ecrã */
 .modal-painel-jogo.view-only-mode .painel-layout-grid {
     display: block;
 }
 .modal-painel-jogo.view-only-mode .painel-log-section {
     margin-top: 25px;
 }
-
-/* 3. Layout GERAL para o painel */
 .painel-layout-grid {
-    /* Por defeito (mobile), é uma coluna */
     display: block;
 }
 .painel-log-section {
     margin-top: 25px;
 }
-
-/* 4. Para ADMINS, o layout de DUAS COLUNAS aplica-se apenas a ecrãs de PC */
 @media screen and (min-width: 769px) {
     .modal-painel-jogo:not(.view-only-mode) .painel-layout-grid {
         display: grid;
@@ -1594,9 +1388,6 @@ body.modal-open { overflow: hidden; }
         height: 100%;
     }
 }
-
-/* Adicionar ao final de style.css - Estilo para cabeçalho de data dos jogos */
-
 .game-date-header {
     background-color: var(--cor-azul-escuro);
     color: var(--cor-branco);
@@ -1612,30 +1403,130 @@ body.modal-open { overflow: hidden; }
 .game-date-header:first-child {
     margin-top: 0;
 }
-
-/* NOVOS ESTILOS - Adicionar ao final de style.css */
-
-/* Melhora a legibilidade dos títulos das seções de eventos */
 #tab-eventos .event-section h2 {
-    color: var(--cor-preto) !important; /* Usa a cor preta principal para contraste */
-    font-weight: 700; /* Deixa a fonte mais grossa */
-    font-size: 1.6rem; /* Aumenta um pouco o tamanho */
-    border-bottom: 3px solid var(--cor-laranja); /* Linha laranja para destaque */
+    color: var(--cor-preto) !important;
+    font-weight: 700;
+    font-size: 1.6rem;
+    border-bottom: 3px solid var(--cor-laranja);
     margin-bottom: 25px;
     padding-bottom: 8px;
 }
-
-/* Remove o fundo branco dos botões de ação (editar/excluir) para um visual mais limpo */
 .card-actions button.btn-edit-camp,
 .card-actions button.btn-delete-camp {
     background-color: transparent;
 }
-
-/* Garante que os botões de Iniciar/Finalizar se alinhem corretamente com os outros */
 .btn-status-change {
-    order: -1; /* Coloca os botões de status sempre primeiro */
-    margin-right: auto; /* Empurra os outros botões (editar/excluir) para a direita */
+    order: -1;
+    margin-right: auto;
 }
+.btn-status-change.start,
+.btn-status-change.finish {
+    border-radius: 6px;
+    padding: 6px 14px;
+    width: auto;
+    height: auto;
+}
+.stats-divisor {
+    border: none;
+    border-top: 2px solid #eee;
+    margin: 20px 0;
+}
+
+#stats-resumo-carreira {
+    display: flex;
+    justify-content: space-around;
+    text-align: center;
+    background-color: #f9f9f9;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.stat-summary-item .stat-summary-value {
+    display: block;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--cor-azul-escuro);
+}
+
+.stat-summary-item .stat-summary-label {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+#stats-por-evento h3 {
+    margin-bottom: 10px;
+}
+
+.event-stats-item {
+    border: 1px solid #eee;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.event-stats-item summary {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 15px;
+    cursor: pointer;
+    background-color: #fcfcfc;
+}
+.event-stats-item summary:hover {
+    background-color: #f5f5f5;
+}
+
+.event-stats-item .event-stats-name {
+    font-weight: 600;
+}
+
+.event-stats-item .event-stats-total {
+    font-weight: bold;
+    color: var(--cor-preto);
+}
+
+.event-stats-details {
+    padding: 15px;
+    background-color: #fff;
+    border-top: 1px solid #eee;
+}
+
+.event-stats-details p {
+    margin: 0 0 5px 0;
+}
+.event-stats-item summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center; /* Alinha verticalmente */
+    gap: 10px; /* Adiciona espaço entre os elementos */
+}
+
+.summary-content {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Espaço entre o nome e a badge */
+    flex-grow: 1; /* Permite que o nome e a badge ocupem o espaço necessário */
+}
+
+.event-modality-badge {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: var(--cor-branco);
+    flex-shrink: 0; /* Impede que a badge encolha */
+}
+.event-modality-badge.badge-5x5 {
+    background-color: var(--cor-laranja);
+}
+
+.event-modality-badge.badge-3x3 {
+    background-color: var(--cor-azul-claro);
+}
+
+
+
+
+
 
 /* Novo estilo para botões retangulares */
 .btn-status-change.start,
