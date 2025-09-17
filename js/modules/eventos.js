@@ -47,6 +47,7 @@ function render() {
         card.className = `championship-card card ${isAdmin ? 'admin-view' : ''}`;
         card.dataset.id = evento.id;
         const actionsHTML = isAdmin ? `<div class="card-actions"><button class="btn-edit-camp" title="Editar">✏️</button><button class="btn-delete-camp" title="Excluir">🗑️</button></div>` : '';
+        
         let infoLine = '';
         if (evento.type === 'torneio_externo') {
             infoLine = `<p><strong>Tipo:</strong> Torneio Externo</p><p>👥 <strong>Jogadores:</strong> ${evento.jogadoresEscalados?.length || 0}</p>`;
@@ -55,10 +56,14 @@ function render() {
         } else if (evento.type === 'amistoso') {
             infoLine = `<p><strong>Tipo:</strong> Jogo Amistoso</p><p><strong>Adversário:</strong> ${evento.adversario || 'N/D'}</p>`;
         }
+
+        // ADICIONA UMA CLASSE DINÂMICA (badge-3x3 ou badge-5x5) À TAG
+        const badgeClass = evento.modalidade === '3x3' ? 'badge-3x3' : 'badge-5x5';
+
         card.innerHTML = `
             ${actionsHTML}
             <div>
-                <span class="championship-type-badge">${evento.modalidade || '5x5'}</span>
+                <span class="championship-type-badge ${badgeClass}">${evento.modalidade || '5x5'}</span>
                 <h3 class="championship-name">${evento.nome}</h3>
                 <div class="championship-info">
                     <p>📅 <strong>Data:</strong> ${formatDate(evento.data)}</p>

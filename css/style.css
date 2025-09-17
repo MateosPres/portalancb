@@ -1406,3 +1406,14 @@ body.modal-open { overflow: hidden; }
         text-align: right;
     }
 }
+/* Adicionar ao final de style.css - CORES DAS TAGS DE MODALIDADE */
+
+/* Cor padrão para 5x5 */
+.championship-type-badge.badge-5x5 {
+    background-color: var(--cor-laranja);
+}
+
+/* Nova cor para 3x3 */
+.championship-type-badge.badge-3x3 {
+    background-color: var(--cor-azul-claro);
+}
