@@ -15,7 +15,12 @@ let eventos = [];
 let userRole = null;
 let currentEventoId = null;
 
-const gridEventos = document.getElementById('grid-eventos');
+// --- Elementos do DOM (ATUALIZADO) ---
+const tabEventos = document.getElementById('tab-eventos');
+const gridEventosAndamento = document.getElementById('grid-eventos-andamento');
+const gridEventosProximos = document.getElementById('grid-eventos-proximos');
+const gridEventosHistorico = document.getElementById('grid-eventos-historico');
+
 const modalEvento = document.getElementById('modal-evento');
 const modalVerEvento = document.getElementById('modal-ver-campeonato');
 const formEvento = document.getElementById('form-evento');
@@ -34,41 +39,96 @@ const formatDate = (dateStr) => {
     return `${day}/${month}/${year}`;
 };
 
-function render() {
-    if (!gridEventos) return;
-    gridEventos.innerHTML = '';
-    if (eventos.length === 0) {
-        gridEventos.innerHTML = '<p>Nenhum evento encontrado.</p>';
-        return;
+// --- FUNÇÃO DE RENDERIZAÇÃO DE CARD (HELPER) ---
+function renderEventCard(evento) {
+    const isAdmin = userRole === 'admin';
+    const status = evento.status || 'proximo';
+
+    // Badge de Status
+    let statusBadge = '';
+    if (status === 'andamento') {
+        statusBadge = '<span class="status-badge andamento">Em Andamento</span>';
+    } else if (status === 'finalizado') {
+        statusBadge = '<span class="status-badge finalizado">Finalizado</span>';
     }
-    eventos.forEach(evento => {
-        const card = document.createElement('div');
-        const isAdmin = userRole === 'admin';
-        card.className = `championship-card card ${isAdmin ? 'admin-view' : ''}`;
-        card.dataset.id = evento.id;
-        const actionsHTML = isAdmin ? `<div class="card-actions"><button class="btn-edit-camp" title="Editar">✏️</button><button class="btn-delete-camp" title="Excluir">🗑️</button></div>` : '';
-        let infoLine = '';
-        if (evento.type === 'torneio_externo') {
-            infoLine = `<p><strong>Tipo:</strong> Torneio Externo</p><p>👥 <strong>Jogadores:</strong> ${evento.jogadoresEscalados?.length || 0}</p>`;
-        } else if (evento.type === 'torneio_interno') {
-            infoLine = `<p><strong>Tipo:</strong> Torneio Interno</p>`;
-        } else if (evento.type === 'amistoso') {
-            infoLine = `<p><strong>Tipo:</strong> Jogo Amistoso</p><p><strong>Adversário:</strong> ${evento.adversario || 'N/D'}</p>`;
+
+    // Ações de mudança de status para Admin
+    let statusActionsHTML = '';
+    if (isAdmin) {
+        if (status === 'proximo') {
+            statusActionsHTML = `<button class="btn-status-change start" data-action="start" title="Iniciar Evento">Iniciar</button>`;
+        } else if (status === 'andamento') {
+            statusActionsHTML = `<button class="btn-status-change finish" data-action="finish" title="Finalizar Evento">Finalizar</button>`;
         }
-        const badgeClass = evento.modalidade === '3x3' ? 'badge-3x3' : 'badge-5x5';
-        card.innerHTML = `
-            ${actionsHTML}
+    }
+
+    const actionsHTML = isAdmin ? `
+        <div class="card-actions">
+            ${statusActionsHTML}
+            <button class="btn-edit-camp" title="Editar">✏️</button>
+            <button class="btn-delete-camp" title="Excluir">🗑️</button>
+        </div>` : '';
+
+    let infoLine = '';
+    if (evento.type === 'torneio_externo') {
+        infoLine = `<p><strong>Tipo:</strong> Torneio Externo</p><p>👥 <strong>Jogadores:</strong> ${evento.jogadoresEscalados?.length || 0}</p>`;
+    } else if (evento.type === 'torneio_interno') {
+        infoLine = `<p><strong>Tipo:</strong> Torneio Interno</p>`;
+    } else if (evento.type === 'amistoso') {
+        infoLine = `<p><strong>Tipo:</strong> Jogo Amistoso</p><p><strong>Adversário:</strong> ${evento.adversario || 'N/D'}</p>`;
+    }
+    const badgeClass = evento.modalidade === '3x3' ? 'badge-3x3' : 'badge-5x5';
+
+    return `
+        <div class="championship-card card ${isAdmin ? 'admin-view' : ''}" data-id="${evento.id}">
             <div>
+                ${statusBadge}
                 <span class="championship-type-badge ${badgeClass}">${evento.modalidade || '5x5'}</span>
                 <h3 class="championship-name">${evento.nome}</h3>
                 <div class="championship-info">
                     <p>📅 <strong>Data:</strong> ${formatDate(evento.data)}</p>
                     ${infoLine}
                 </div>
-            </div>`;
-        gridEventos.appendChild(card);
-    });
+            </div>
+            ${actionsHTML}
+        </div>`;
 }
+
+
+function render() {
+    // Separa os eventos por status
+    const eventosAndamento = eventos.filter(e => e.status === 'andamento');
+    const eventosProximos = eventos.filter(e => !e.status || e.status === 'proximo');
+    const eventosHistorico = eventos.filter(e => e.status === 'finalizado');
+
+    // Renderiza cada seção
+    gridEventosAndamento.innerHTML = eventosAndamento.length > 0
+        ? eventosAndamento.map(renderEventCard).join('')
+        : '<p class="empty-message">Nenhum evento em andamento no momento.</p>';
+
+    gridEventosProximos.innerHTML = eventosProximos.length > 0
+        ? eventosProximos.map(renderEventCard).join('')
+        : '<p class="empty-message">Nenhum próximo evento agendado.</p>';
+
+    gridEventosHistorico.innerHTML = eventosHistorico.length > 0
+        ? eventosHistorico.map(renderEventCard).join('')
+        : '<p class="empty-message">Nenhum evento no histórico.</p>';
+}
+
+async function changeEventoStatus(id, newStatus) {
+    if (userRole !== 'admin' || !id || !newStatus) return;
+    const statusText = newStatus === 'andamento' ? 'iniciar' : 'finalizar';
+    if (confirm(`Tem certeza que deseja ${statusText} este evento?`)) {
+        try {
+            await updateDoc(doc(db, "eventos", id), { status: newStatus });
+            // O listener onSnapshot irá atualizar a UI automaticamente
+        } catch (error) {
+            console.error("Erro ao alterar status do evento:", error);
+            alert("Não foi possível alterar o status do evento.");
+        }
+    }
+}
+
 
 async function showEventoModal(id = null) {
     if (userRole !== 'admin') return;
@@ -152,7 +212,8 @@ async function handleFormSubmitEvento(e) {
         nome: formEvento['evento-nome'].value,
         data: formEvento['evento-data'].value,
         modalidade: formEvento['evento-modalidade'].value,
-        type: type
+        type: type,
+        status: id ? eventos.find(ev => ev.id === id).status || 'proximo' : 'proximo' // Mantém status se editando, ou 'proximo' se novo
     };
     if (type === 'torneio_externo' || type === 'amistoso') {
         dados.jogadoresEscalados = jogadoresEscalados;
@@ -444,7 +505,7 @@ async function renderJogosList(eventoId) {
                 <button class="btn-delete-jogo btn-sm" title="Excluir Jogo">🗑️</button>
             </div>
         `;
-        item.querySelector('.btn-painel-jogo').addEventListener('click', () => abrirPainelJogo(evento, jogo));
+        item.querySelector('.btn-painel-jogo').addEventListener('click', () => abrirPainelJogo(userRole, evento, jogo));
         item.querySelector('.btn-edit-jogo').addEventListener('click', () => showJogoModal(eventoId, jogo.id));
         item.querySelector('.btn-delete-jogo').addEventListener('click', () => deleteJogo(eventoId, jogo.id));
         listaJogosContainer.appendChild(item);
@@ -719,7 +780,7 @@ async function renderClassificacaoGeralInterno(evento) {
         }
         const sortedLeaderboard = Object.values(leaderboard).sort((a, b) => b.total - a.total);
         if (sortedLeaderboard.length === 0) {
-            container.innerHTML = '<p>Nenhuma estatística de pontos registada no torneio.</p>';
+            container.innerHTML = '<h3>Classificação Geral</h3><p>Nenhuma estatística de pontos registada no torneio.</p>';
             return;
         }
         const is5x5 = evento.modalidade === '5x5';
@@ -769,14 +830,18 @@ async function renderClassificacaoGeralInterno(evento) {
 }
 
 async function renderJogosEClassificacao(eventoId) {
+    const jogosContainer = document.getElementById('jogos-realizados-container');
     const classContainer = document.getElementById('classificacao-container');
-    if (!classContainer) return;
+    if (!jogosContainer || !classContainer) return;
+
+    jogosContainer.innerHTML = '<p>A carregar jogos...</p>';
     classContainer.innerHTML = '<p>A calcular classificação...</p>';
     
     try {
         const todosJogadores = getJogadores();
         const jogosRef = collection(db, "eventos", eventoId, "jogos");
-        const snapshotJogos = await getDocs(query(jogosRef, orderBy("dataJogo", "desc")));
+        const q = query(jogosRef, orderBy("dataJogo", "desc"));
+        const snapshotJogos = await getDocs(q);
 
         if (snapshotJogos.empty) {
             jogosContainer.innerHTML = '<p>Nenhum jogo realizado.</p>';
@@ -839,9 +904,9 @@ async function renderJogosEClassificacao(eventoId) {
         } else {
             let leaderboardHTML = '<div class="leaderboard-list">';
             sortedLeaderboard.forEach((player, index) => {
-                const fotoHTML = player.foto ? `<img src="${player.foto}" alt="${player.nome}" class="leaderboard-player-photo">` : '<div class="leaderboard-player-photo placeholder">🏀</div>';
+                const perfilJogador = todosJogadores.find(j => j.id === player.jogadorId);
+                const fotoHTML = perfilJogador?.foto ? `<img src="${perfilJogador.foto}" alt="${player.nome}" class="leaderboard-player-photo">` : '<div class="leaderboard-player-photo placeholder">🏀</div>';
                 const media = player.jogos > 0 ? (player.pontos / player.jogos).toFixed(1) : 0;
-                // Lógica para o nome de exibição
                 const nomeExibicao = player.apelido ? `${player.nome} "${player.apelido}"` : player.nome;
                 leaderboardHTML += `
                     <div class="leaderboard-item">
@@ -1002,15 +1067,27 @@ export function initEventos() {
         render();
     });
 
-    // Listener para os CARDS PRINCIPAIS na página
-    if (gridEventos) {
-        gridEventos.addEventListener('click', (e) => {
+    // Listener de cliques na aba de eventos
+    if (tabEventos) {
+        tabEventos.addEventListener('click', (e) => {
             const card = e.target.closest('.championship-card');
             if (!card) return;
             const id = card.dataset.id;
-            if (e.target.closest('.btn-edit-camp')) {
+    
+            const statusChangeButton = e.target.closest('.btn-status-change');
+            const editButton = e.target.closest('.btn-edit-camp');
+            const deleteButton = e.target.closest('.btn-delete-camp');
+    
+            if (statusChangeButton) {
+                const action = statusChangeButton.dataset.action;
+                if (action === 'start') {
+                    changeEventoStatus(id, 'andamento');
+                } else if (action === 'finish') {
+                    changeEventoStatus(id, 'finalizado');
+                }
+            } else if (editButton) {
                 showEventoModal(id);
-            } else if (e.target.closest('.btn-delete-camp')) {
+            } else if (deleteButton) {
                 deleteEvento(id);
             } else {
                 showFichaEvento(id);

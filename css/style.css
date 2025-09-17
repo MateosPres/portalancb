@@ -52,19 +52,19 @@ body.modal-open { overflow: hidden; }
 .role-toggle.jogador { background-color: var(--cor-aviso); color: var(--cor-preto); }
 .role-toggle[disabled] { background-color: #aaa; cursor: not-allowed; }
 .user-status.banned { color: var(--cor-vermelho-escuro); font-weight: bold; }
-.player-card, .championship-card { background-color: var(--cor-branco); border-radius: 12px; box-shadow: var(--sombra-card); text-align: center; padding: 20px; cursor: pointer; transition: all 0.2s ease-in-out; position: relative; overflow: hidden; border: 1px solid #e2e8f0; padding-bottom: 50px; }
+.player-card, .championship-card { background-color: var(--cor-branco); border-radius: 12px; box-shadow: var(--sombra-card); text-align: center; padding: 20px; cursor: pointer; transition: all 0.2s ease-in-out; position: relative; overflow: hidden; border: 1px solid #e2e8f0; }
+.player-card { padding-bottom: 50px; }
 .player-card:hover, .championship-card:hover { transform: translateY(-5px); box-shadow: var(--sombra-card-hover); }
 .player-card .photo-container { width: 120px; height: 120px; margin: 0 auto 15px; border-radius: 50%; overflow: hidden; background-color: var(--cor-cinza-fundo); display: flex; align-items: center; justify-content: center; border: 4px solid var(--cor-branco); box-shadow: 0 0 10px rgba(0,0,0,0.1); }
 .player-card .photo-container img { width: 100%; height: 100%; object-fit: cover; }
 .player-card .photo-placeholder { font-size: 3rem; color: var(--cor-laranja); }
 .player-card .player-name { font-weight: 600; font-size: 1.2rem; color: var(--cor-preto); }
-.championship-card { text-align: left; }
+.championship-card { text-align: left; display: flex; flex-direction: column; justify-content: space-between; }
 .championship-card::after { content: '🏆'; position: absolute; right: -20px; top: -10px; font-size: 6rem; color: var(--cor-laranja); opacity: 0.1; transform: rotate(-15deg); }
 .championship-card .championship-name { font-size: 1.5rem; font-weight: bold; color: var(--cor-azul-escuro); margin-bottom: 10px; }
 .championship-card .championship-info p { margin: 4px 0; color: #555; }
-.card-actions { position: absolute; bottom: 10px; right: 10px; display: flex; gap: 8px; background: none; backdrop-filter: none; padding: 0; border-radius: 0; opacity: 0; transition: opacity 0.2s ease-in-out; z-index: 5; }
-.player-card:not(.admin-view):hover .card-actions, .championship-card:not(.admin-view):hover .card-actions { opacity: 1; }
-.card.admin-view .card-actions { opacity: 1; }
+.card-actions { position: static; bottom: auto; right: auto; display: flex; gap: 8px; background: none; backdrop-filter: none; padding: 0; border-radius: 0; opacity: 1; transition: opacity 0.2s ease-in-out; z-index: 5; justify-content: flex-end; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.player-card.admin-view .card-actions { position: absolute; bottom: 10px; right: 10px; margin-top: 0; padding-top: 0; border-top: none; }
 .card-actions button { font-size: 1.1rem; padding: 8px; border: none; border-radius: 50%; width: 36px; height: 36px; line-height: 1; color: var(--cor-cinza-texto); background-color: var(--cor-cinza-fundo); cursor: pointer; transition: background-color 0.2s, color 0.2s, transform 0.2s; display: flex; align-items: center; justify-content: center; }
 .card-actions button:hover { background-color: var(--cor-azul-claro); color: var(--cor-branco); transform: translateY(-2px); }
 .modal-backdrop { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(5px); }
@@ -1611,4 +1611,49 @@ body.modal-open { overflow: hidden; }
 
 .game-date-header:first-child {
     margin-top: 0;
+}
+
+/* NOVOS ESTILOS - Adicionar ao final de style.css */
+
+/* Melhora a legibilidade dos títulos das seções de eventos */
+#tab-eventos .event-section h2 {
+    color: var(--cor-preto) !important; /* Usa a cor preta principal para contraste */
+    font-weight: 700; /* Deixa a fonte mais grossa */
+    font-size: 1.6rem; /* Aumenta um pouco o tamanho */
+    border-bottom: 3px solid var(--cor-laranja); /* Linha laranja para destaque */
+    margin-bottom: 25px;
+    padding-bottom: 8px;
+}
+
+/* Remove o fundo branco dos botões de ação (editar/excluir) para um visual mais limpo */
+.card-actions button.btn-edit-camp,
+.card-actions button.btn-delete-camp {
+    background-color: transparent;
+}
+
+/* Garante que os botões de Iniciar/Finalizar se alinhem corretamente com os outros */
+.btn-status-change {
+    order: -1; /* Coloca os botões de status sempre primeiro */
+    margin-right: auto; /* Empurra os outros botões (editar/excluir) para a direita */
+}
+
+/* Novo estilo para botões retangulares */
+.btn-status-change.start,
+.btn-status-change.finish {
+    border-radius: 6px; /* Cantos arredondados */
+    padding: 6px 14px; /* Mais preenchimento horizontal */
+    width: auto; /* Largura automática baseada no conteúdo */
+    height: auto;
+}
+
+/* Cor do botão Iniciar (Verde) */
+.btn-status-change.start {
+    background-color: #28a745;
+    color: var(--cor-branco); /* Texto branco */
+}
+
+/* Cor do botão Finalizar (Vermelho) */
+.btn-status-change.finish {
+    background-color: #dc3545;
+    color: var(--cor-branco); /* Texto branco */
 }
