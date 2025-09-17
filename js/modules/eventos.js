@@ -719,13 +719,13 @@ async function renderClassificacaoGeralInterno(evento) {
         }
         const sortedLeaderboard = Object.values(leaderboard).sort((a, b) => b.total - a.total);
         if (sortedLeaderboard.length === 0) {
-            container.innerHTML = '<h3>Classificação Geral</h3><p>Nenhuma estatística de pontos registada no torneio.</p>';
+            container.innerHTML = '<p>Nenhuma estatística de pontos registada no torneio.</p>';
             return;
         }
         const is5x5 = evento.modalidade === '5x5';
 
         let headerHTML = `
-            <h3>Classificação Geral</h3>
+        
             <div class="stat-header">
                 <span class="header-jogador">Jogador</span>
                 <div class="header-pontos">
