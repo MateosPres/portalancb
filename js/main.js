@@ -1,12 +1,12 @@
-// js/main.js (VERSÃO CORRIGIDA COM OS NOMES ATUALIZADOS)
+// js/main.js
 
 import { initModals } from './components/modal.js';
 import { initAuth } from './modules/auth.js';
 import { initJogadores, setJogadoresUserRole } from './modules/jogadores.js';
-// MUDANÇA: Importando as funções com os nomes corretos de 'eventos.js'
 import { initEventos, setEventosUserRole } from './modules/eventos.js';
 import { initAdmin, setAdminVisibility } from './modules/admin.js';
 import { initPainelJogo } from './modules/painelJogo.js';
+import { auth } from './services/firebase.js';
 
 const navTabs = document.querySelector('.nav-tabs');
 const tabContents = document.querySelectorAll('.tab-content');
@@ -39,17 +39,17 @@ function onUserLogin(user, userProfile) {
     const role = userProfile ? userProfile.role : null;
     updateGlobalUI(true, userProfile);
     setJogadoresUserRole(role);
-    // MUDANÇA: Chamando a função com o nome correto
     setEventosUserRole(role);
-    setAdminVisibility(role === 'admin', user.uid);
+    // A visibilidade do admin agora é tratada principalmente pelo clique no botão.
+    // Podemos manter esta linha para pré-carregar os dados se quisermos.
+    setAdminVisibility(role === 'admin');
 }
 
 function onUserLogout() {
     updateGlobalUI(false);
     setJogadoresUserRole(null);
-    // MUDANÇA: Chamando a função com o nome correto
     setEventosUserRole(null);
-    setAdminVisibility(false, null);
+    setAdminVisibility(false);
     switchTab('ultimas-noticias');
 }
 
@@ -79,7 +79,6 @@ function main() {
     initModals();
     initAuth(onUserLogin, onUserLogout);
     initJogadores();
-    // MUDANÇA: Chamando a função com o nome correto
     initEventos();
     initAdmin();
     initPainelJogo();
@@ -88,6 +87,9 @@ function main() {
     const btnManageUsers = document.getElementById('btn-manage-users');
     if (btnManageUsers) {
         btnManageUsers.addEventListener('click', () => {
+            // Primeiro, ativa a visibilidade e o carregamento dos dados
+            setAdminVisibility(true);
+            // Depois, muda para a aba
             switchTab('admin');
         });
     }
@@ -98,3 +100,4 @@ function main() {
 }
 
 main();
+
