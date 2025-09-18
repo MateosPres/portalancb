@@ -1,20 +1,22 @@
 {
-  "name": "Portal ANCB-MT",
-  "short_name": "ANCB",
-  "icons": [
-    {
-      "src": "assets/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "assets/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ],
-  "start_url": "/index.HTML",
-  "display": "standalone",
-  "background_color": "#0B0F12",
-  "theme_color": "#0B0F12"
+    "name": "Portal ANCB-MT",
+    "short_name": "ANCB-MT",
+    "description": "Portal da Associação de Amigos do Basquetebol de Nova Canaã do Norte - MT",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0B0F12",
+    "theme_color": "#0D47A1",
+    "scope": ".",
+    "icons": [
+        {
+            "src": "assets/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "assets/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
 }

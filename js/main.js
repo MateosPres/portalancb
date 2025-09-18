@@ -1,12 +1,12 @@
-// js/main.js
-
 import { initModals } from './components/modal.js';
 import { initAuth } from './modules/auth.js';
 import { initJogadores, setJogadoresUserRole } from './modules/jogadores.js';
 import { initEventos, setEventosUserRole } from './modules/eventos.js';
 import { initAdmin, setAdminVisibility } from './modules/admin.js';
 import { initPainelJogo } from './modules/painelJogo.js';
-import { auth } from './services/firebase.js';
+
+let currentUser = null;
+let currentUserProfile = null;
 
 const navTabs = document.querySelector('.nav-tabs');
 const tabContents = document.querySelectorAll('.tab-content');
@@ -36,20 +36,22 @@ function updateGlobalUI(isLoggedIn, userProfile = null) {
 }
 
 function onUserLogin(user, userProfile) {
+    currentUser = user;
+    currentUserProfile = userProfile;
     const role = userProfile ? userProfile.role : null;
     updateGlobalUI(true, userProfile);
     setJogadoresUserRole(role);
     setEventosUserRole(role);
-    // A visibilidade do admin agora é tratada principalmente pelo clique no botão.
-    // Podemos manter esta linha para pré-carregar os dados se quisermos.
-    setAdminVisibility(role === 'admin');
+    // Não chamamos setAdminVisibility aqui para não carregar os dados sem necessidade
 }
 
 function onUserLogout() {
+    currentUser = null;
+    currentUserProfile = null;
     updateGlobalUI(false);
     setJogadoresUserRole(null);
     setEventosUserRole(null);
-    setAdminVisibility(false);
+    setAdminVisibility(false, null);
     switchTab('ultimas-noticias');
 }
 
@@ -87,15 +89,28 @@ function main() {
     const btnManageUsers = document.getElementById('btn-manage-users');
     if (btnManageUsers) {
         btnManageUsers.addEventListener('click', () => {
-            // Primeiro, ativa a visibilidade e o carregamento dos dados
-            setAdminVisibility(true);
-            // Depois, muda para a aba
+            // Apenas carregamos os dados de admin quando o botão é clicado
+            if (currentUser && currentUserProfile.role === 'admin') {
+                setAdminVisibility(true, currentUser.uid);
+            }
             switchTab('admin');
         });
     }
 
     switchTab('ultimas-noticias');
     
+    // --- REGISTO DO SERVICE WORKER ---
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            // CORREÇÃO: O caminho deve ser relativo para funcionar no GitHub Pages
+            navigator.serviceWorker.register('sw.js').then(registration => {
+                console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            }, err => {
+                console.log('ServiceWorker registration failed: ', err);
+            });
+        });
+    }
+
     console.log("Aplicação ANCB-MT inicializada com sucesso!");
 }
 
