@@ -1,27 +1,131 @@
-import { initModals } from './components/modal.js';
+// js/main.js (VERSÃO FINAL CENTRALIZADA)
+
+import { initModals, closeModal } from './components/modal.js';
 import { initAuth } from './modules/auth.js';
-import { initJogadores, setJogadoresUserRole } from './modules/jogadores.js';
-import { initEventos, setEventosUserRole } from './modules/eventos.js';
-import { initAdmin, setAdminVisibility } from './modules/admin.js';
+import { initJogadores, showJogadorModal, showFichaJogador, deleteJogador, setJogadoresUserRole } from './modules/jogadores.js';
+import { initEventos, showEventoModal, showFichaEvento, deleteEvento, updateEventStatus, setEventosUserRole } from './modules/eventos.js';
+import { initAdmin, handleTableClick as handleAdminActions, setAdminVisibility } from './modules/admin.js';
 import { initPainelJogo } from './modules/painelJogo.js';
+import { initHome } from './modules/home.js';
 
 let currentUser = null;
 let currentUserProfile = null;
 
-const navTabs = document.querySelector('.nav-tabs');
-const tabContents = document.querySelectorAll('.tab-content');
-const adminElements = document.querySelectorAll('.admin-only');
+const appContainer = document.getElementById('app-container');
 const welcomeMessage = document.getElementById('welcome-message');
 
+export function navigateTo(page) {
+    const template = document.getElementById(`template-${page}`);
+    if (template) {
+        appContainer.innerHTML = template.innerHTML;
+        const event = new CustomEvent('page-loaded', { detail: { page: page } });
+        document.body.dispatchEvent(event);
+    } else {
+        console.error(`Template para a página "${page}" não encontrado.`);
+        appContainer.innerHTML = `<p>Erro: Página não encontrada.</p>`;
+    }
+}
+
+// Listener ÚNICO e CENTRALIZADO para TODAS as ações de clique
+async function handleGlobalClick(e) {
+    const target = e.target;
+
+    // --- Lógica de Fechar Modal (Prioridade 1) ---
+    const closeButton = target.closest('.close-button');
+    if (closeButton) {
+        const modalToClose = closeButton.closest('.modal, .auth-container');
+        if (modalToClose) closeModal(modalToClose);
+        return;
+    }
+
+    // --- Lógica da Página de Jogadores ---
+    if (target.closest('#grid-jogadores')) {
+        const card = target.closest('.player-card');
+        if (card) {
+            const id = card.dataset.id;
+            if (target.closest('.btn-edit-jogador')) showJogadorModal(id);
+            else if (target.closest('.btn-delete-jogador')) deleteJogador(id);
+            else showFichaJogador(id);
+        }
+        return;
+    }
+    if (target.id === 'btn-abrir-modal-jogador') {
+        showJogadorModal();
+        return;
+    }
+
+    // --- Lógica da Página de Eventos ---
+    if (target.closest('.card-grid')) {
+        const card = target.closest('.championship-card');
+        if (card) {
+            const id = card.dataset.id;
+            if (target.dataset.action === 'start') updateEventStatus(id, 'andamento');
+            else if (target.dataset.action === 'finish') updateEventStatus(id, 'finalizado');
+            else if (target.closest('.btn-edit-camp')) showEventoModal(id);
+            else if (target.closest('.btn-delete-camp')) deleteEvento(id);
+            else showFichaEvento(id);
+            return;
+        }
+    }
+     if (target.id === 'btn-abrir-modal-evento') {
+        showEventoModal();
+        return;
+    }
+    
+    // --- Lógica da Página de Admin ---
+    if (target.closest('#admin-users-table')) {
+        handleAdminActions(e); // Delega a ação para a função do módulo admin
+        return;
+    }
+    
+    // --- Lógica de Navegação Principal ---
+    const navCard = target.closest('.nav-card');
+    if (navCard) {
+        const page = navCard.getAttribute('data-target');
+        if (page) navigateTo(page);
+        return;
+    }
+
+    const eventoCardHome = target.closest('.ongoing-event-card');
+    if (eventoCardHome) {
+        const eventoId = eventoCardHome.dataset.id;
+        if (eventoId) showFichaEvento(eventoId);
+        return;
+    }
+    
+    const backButton = target.closest('.btn-back-home');
+    if(backButton) {
+        navigateTo('home');
+        return;
+    }
+
+    const btnManageUsers = target.closest('#btn-manage-users');
+    if (btnManageUsers) {
+        navigateTo('admin');
+        if (currentUser && currentUserProfile.role === 'admin') {
+            setAdminVisibility(true, currentUser.uid);
+        }
+        return;
+    }
+
+    const homeLink = target.closest('.header-left');
+    if (homeLink) {
+        navigateTo('home');
+        return;
+    }
+}
+
 function updateGlobalUI(isLoggedIn, userProfile = null) {
+    // ... (esta função permanece a mesma)
     const loggedInElements = document.querySelectorAll('.logged-in-only');
     const loggedOutElements = document.querySelectorAll('.logged-out-only');
+    const adminElements = document.querySelectorAll('.admin-only');
     const userRole = userProfile ? userProfile.role : null;
     
     if (isLoggedIn) {
         loggedInElements.forEach(el => el.style.display = 'flex');
         loggedOutElements.forEach(el => el.style.display = 'none');
-        welcomeMessage.textContent = `Bem vindo(a) ${userProfile.nome} (${userProfile.apelido})`;
+        welcomeMessage.textContent = `Bem-vindo(a) ${userProfile.nome} (${userProfile.apelido})`;
     } else {
         loggedInElements.forEach(el => el.style.display = 'none');
         loggedOutElements.forEach(el => el.style.display = 'flex');
@@ -29,7 +133,7 @@ function updateGlobalUI(isLoggedIn, userProfile = null) {
     }
 
     if (userRole === 'admin') {
-        adminElements.forEach(el => el.style.display = el.matches('.nav-tab, .btn') ? 'inline-flex' : 'block');
+        adminElements.forEach(el => el.style.display = el.matches('.btn') ? 'inline-flex' : 'block');
     } else {
         adminElements.forEach(el => el.style.display = 'none');
     }
@@ -42,7 +146,6 @@ function onUserLogin(user, userProfile) {
     updateGlobalUI(true, userProfile);
     setJogadoresUserRole(role);
     setEventosUserRole(role);
-    // Não chamamos setAdminVisibility aqui para não carregar os dados sem necessidade
 }
 
 function onUserLogout() {
@@ -52,29 +155,7 @@ function onUserLogout() {
     setJogadoresUserRole(null);
     setEventosUserRole(null);
     setAdminVisibility(false, null);
-    switchTab('ultimas-noticias');
-}
-
-function switchTab(targetTabName) {
-    navTabs.querySelector('.active')?.classList.remove('active');
-    tabContents.forEach(content => content.classList.remove('active'));
-    
-    const navTabItem = navTabs.querySelector(`[data-tab="${targetTabName}"]`);
-    if (navTabItem) {
-        navTabItem.classList.add('active');
-    }
-    
-    const tabContentItem = document.getElementById(`tab-${targetTabName}`);
-    if (tabContentItem) {
-        tabContentItem.classList.add('active');
-    }
-}
-
-function handleTabClick(e) {
-    if (e.target.classList.contains('nav-tab')) {
-        const targetTab = e.target.dataset.tab;
-        switchTab(targetTab);
-    }
+    navigateTo('home');
 }
 
 function main() {
@@ -84,25 +165,15 @@ function main() {
     initEventos();
     initAdmin();
     initPainelJogo();
-    navTabs.addEventListener('click', handleTabClick);
+    initHome();
 
-    const btnManageUsers = document.getElementById('btn-manage-users');
-    if (btnManageUsers) {
-        btnManageUsers.addEventListener('click', () => {
-            // Apenas carregamos os dados de admin quando o botão é clicado
-            if (currentUser && currentUserProfile.role === 'admin') {
-                setAdminVisibility(true, currentUser.uid);
-            }
-            switchTab('admin');
-        });
-    }
+    // Adiciona o ÚNICO listener de clique global
+    document.body.addEventListener('click', handleGlobalClick);
 
-    switchTab('ultimas-noticias');
+    navigateTo('home');
     
-    // --- REGISTO DO SERVICE WORKER ---
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            // CORREÇÃO: O caminho deve ser relativo para funcionar no GitHub Pages
             navigator.serviceWorker.register('sw.js').then(registration => {
                 console.log('ServiceWorker registration successful with scope: ', registration.scope);
             }, err => {
@@ -110,9 +181,7 @@ function main() {
             });
         });
     }
-
     console.log("Aplicação ANCB-MT inicializada com sucesso!");
 }
 
 main();
-

@@ -6,21 +6,16 @@ import { openModal, closeModal } from '../components/modal.js';
 import { getJogadores } from './jogadores.js';
 import { abrirPainelJogo } from './painelJogo.js';
 
-// --- CONFIGURAÇÃO DO CLOUDINARY (ASSUMIDO DO FICHEIRO jogadores.js) ---
+// --- CONFIGURAÇÃO DO CLOUDINARY ---
 const CLOUDINARY_CLOUD_NAME = "dc3l3t1sl";
 const CLOUDINARY_UPLOAD_PRESET = "ancb_portal_uploads";
-const CLOUDINARY_FOLDER_TIMES = "times_logos"; // Nova pasta para os logos dos times
+const CLOUDINARY_FOLDER_TIMES = "times_logos";
 
 let eventos = [];
 let userRole = null;
 let currentEventoId = null;
 
-// --- Elementos do DOM (ATUALIZADO) ---
-const tabEventos = document.getElementById('tab-eventos');
-const gridEventosAndamento = document.getElementById('grid-eventos-andamento');
-const gridEventosProximos = document.getElementById('grid-eventos-proximos');
-const gridEventosHistorico = document.getElementById('grid-eventos-historico');
-
+// --- Elementos do DOM (Apenas os que são sempre visíveis) ---
 const modalEvento = document.getElementById('modal-evento');
 const modalVerEvento = document.getElementById('modal-ver-campeonato');
 const formEvento = document.getElementById('form-evento');
@@ -39,12 +34,9 @@ const formatDate = (dateStr) => {
     return `${day}/${month}/${year}`;
 };
 
-// --- FUNÇÃO DE RENDERIZAÇÃO DE CARD (HELPER) ---
 function renderEventCard(evento) {
     const isAdmin = userRole === 'admin';
     const status = evento.status || 'proximo';
-
-    // Badge de Status
     let statusBadge = '';
     if (status === 'andamento') {
         statusBadge = '<span class="status-badge andamento">Em Andamento</span>';
@@ -52,7 +44,6 @@ function renderEventCard(evento) {
         statusBadge = '<span class="status-badge finalizado">Finalizado</span>';
     }
 
-    // Ações de mudança de status para Admin
     let statusActionsHTML = '';
     if (isAdmin) {
         if (status === 'proximo') {
@@ -94,43 +85,59 @@ function renderEventCard(evento) {
         </div>`;
 }
 
-
 function render() {
-    // Separa os eventos por status
+    // Mantemos os logs para verificar o resultado
+    console.log('Função render() de eventos foi chamada.');
+    console.log('Conteúdo da variável "eventos":', eventos);
+
+    const gridEventosAndamento = document.getElementById('grid-eventos-andamento');
+    const gridEventosProximos = document.getElementById('grid-eventos-proximos');
+    const gridEventosFinalizados = document.getElementById('grid-eventos-finalizados');
+
+    if (!gridEventosAndamento || !gridEventosProximos || !gridEventosFinalizados) {
+        return;
+    }
+
     const eventosAndamento = eventos.filter(e => e.status === 'andamento');
     const eventosProximos = eventos.filter(e => !e.status || e.status === 'proximo');
-    const eventosHistorico = eventos.filter(e => e.status === 'finalizado');
+    const eventosFinalizados = eventos.filter(e => e.status === 'finalizado');
 
-    // Renderiza cada seção
-    gridEventosAndamento.innerHTML = eventosAndamento.length > 0
-        ? eventosAndamento.map(renderEventCard).join('')
-        : '<p class="empty-message">Nenhum evento em andamento no momento.</p>';
+    // --- LÓGICA MELHORADA ---
 
-    gridEventosProximos.innerHTML = eventosProximos.length > 0
-        ? eventosProximos.map(renderEventCard).join('')
-        : '<p class="empty-message">Nenhum próximo evento agendado.</p>';
+    // 1. Renderiza a seção "Em Andamento"
+    if (eventosAndamento.length > 0) {
+        gridEventosAndamento.innerHTML = eventosAndamento.map(renderEventCard).join('');
+    } else {
+        gridEventosAndamento.innerHTML = '<p>Nenhum evento em andamento.</p>';
+    }
 
-    gridEventosHistorico.innerHTML = eventosHistorico.length > 0
-        ? eventosHistorico.map(renderEventCard).join('')
-        : '<p class="empty-message">Nenhum evento no histórico.</p>';
-}
+    // 2. Renderiza a seção "Próximos Eventos"
+    if (eventosProximos.length > 0) {
+        gridEventosProximos.innerHTML = eventosProximos.map(renderEventCard).join('');
+    } else {
+        gridEventosProximos.innerHTML = '<p>Nenhum próximo evento agendado.</p>';
+    }
 
-async function changeEventoStatus(id, newStatus) {
-    if (userRole !== 'admin' || !id || !newStatus) return;
-    const statusText = newStatus === 'andamento' ? 'iniciar' : 'finalizar';
-    if (confirm(`Tem certeza que deseja ${statusText} este evento?`)) {
-        try {
-            await updateDoc(doc(db, "eventos", id), { status: newStatus });
-            // O listener onSnapshot irá atualizar a UI automaticamente
-        } catch (error) {
-            console.error("Erro ao alterar status do evento:", error);
-            alert("Não foi possível alterar o status do evento.");
-        }
+    // 3. Renderiza a seção "Histórico de Eventos"
+    if (eventosFinalizados.length > 0) {
+        gridEventosFinalizados.innerHTML = eventosFinalizados.map(renderEventCard).join('');
+    } else {
+        gridEventosFinalizados.innerHTML = '<p>Nenhum evento finalizado no histórico.</p>';
     }
 }
 
+export async function updateEventStatus(id, newStatus) {
+    if (userRole !== 'admin') return;
+    try {
+        await updateDoc(doc(db, "eventos", id), { status: newStatus });
+    } catch (error) {
+        console.error("Erro ao atualizar status do evento:", error);
+        alert("Não foi possível alterar o status do evento.");
+    }
+}
 
-async function showEventoModal(id = null) {
+export async function showEventoModal(id = null) {
+    // ... (O conteúdo desta função permanece o mesmo, pois ela opera em modais que sempre existem)
     if (userRole !== 'admin') return;
     const step1 = document.getElementById('evento-step-1');
     const step2 = document.getElementById('evento-step-2');
@@ -202,6 +209,7 @@ async function showEventoModal(id = null) {
     openModal(modalEvento);
 }
 
+// ... (todas as outras funções como handleFormSubmitEvento, deleteEvento, etc., permanecem as mesmas)
 async function handleFormSubmitEvento(e) {
     e.preventDefault();
     if (userRole !== 'admin') return;
@@ -212,9 +220,13 @@ async function handleFormSubmitEvento(e) {
         nome: formEvento['evento-nome'].value,
         data: formEvento['evento-data'].value,
         modalidade: formEvento['evento-modalidade'].value,
-        type: type,
-        status: id ? eventos.find(ev => ev.id === id).status || 'proximo' : 'proximo' // Mantém status se editando, ou 'proximo' se novo
+        type: type
     };
+
+    if (!id) {
+        dados.status = 'proximo';
+    }
+
     if (type === 'torneio_externo' || type === 'amistoso') {
         dados.jogadoresEscalados = jogadoresEscalados;
     }
@@ -246,7 +258,7 @@ async function handleFormSubmitEvento(e) {
     }
 }
 
-async function deleteEvento(id) {
+export async function deleteEvento(id) {
     if (userRole !== 'admin') return;
     if (confirm('Tem certeza que deseja excluir este evento e TODOS os seus jogos?')) {
         try {
@@ -323,7 +335,6 @@ async function showTimeModal(eventoId, timeId = null) {
             const time = timeDoc.data();
             formTime['time-nome'].value = time.nomeTime;
             jogadoresDoTime = time.jogadores || [];
-            // Mostra o logo existente
             if (time.logoUrl) {
                 previewLogoTime.src = time.logoUrl;
                 previewLogoTime.style.display = 'block';
@@ -344,50 +355,37 @@ async function showTimeModal(eventoId, timeId = null) {
 async function handleFormTimeSubmit(e) {
     e.preventDefault();
     if (!currentEventoId) return;
-
     const timeId = formTime['time-id'].value;
     const file = formTime['time-logo'].files[0];
     let logoUrl = null;
-
     try {
-        // Passo 1: Se um ficheiro de logo foi selecionado, faz o upload para o Cloudinary
         if (file) {
             const formData = new FormData();
             formData.append('file', file);
             formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
             formData.append('folder', CLOUDINARY_FOLDER_TIMES);
-
             const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
                 method: 'POST',
                 body: formData
             });
-
             if (!response.ok) throw new Error('Falha no upload da imagem.');
-            
             const data = await response.json();
             logoUrl = data.secure_url;
         }
-
-        // Passo 2: Monta o objeto de dados para salvar no Firestore
         const jogadoresSelecionados = Array.from(document.querySelectorAll('#lista-jogadores-escalar-time input:checked')).map(input => input.value);
         const dadosTime = {
             nomeTime: formTime['time-nome'].value,
             jogadores: jogadoresSelecionados
         };
-
-        // Adiciona a URL do logo apenas se um novo foi enviado
         if (logoUrl) {
             dadosTime.logoUrl = logoUrl;
         }
-
-        // Passo 3: Salva no Firestore
         const timesRef = collection(db, "eventos", currentEventoId, "times");
         if (timeId) {
-            await setDoc(doc(timesRef, timeId), dadosTime, { merge: true }); // Merge true para não apagar o logo antigo se nenhum novo for enviado
+            await setDoc(doc(timesRef, timeId), dadosTime, { merge: true });
         } else {
             await addDoc(timesRef, dadosTime);
         }
-
         closeModal(modalTime);
         renderTimesList(currentEventoId);
     } catch (error) {
@@ -505,26 +503,38 @@ async function renderJogosList(eventoId) {
                 <button class="btn-delete-jogo btn-sm" title="Excluir Jogo">🗑️</button>
             </div>
         `;
-        item.querySelector('.btn-painel-jogo').addEventListener('click', () => abrirPainelJogo(userRole, evento, jogo));
+        item.querySelector('.btn-painel-jogo').addEventListener('click', () => abrirPainelJogo(evento, jogo));
         item.querySelector('.btn-edit-jogo').addEventListener('click', () => showJogoModal(eventoId, jogo.id));
         item.querySelector('.btn-delete-jogo').addEventListener('click', () => deleteJogo(eventoId, jogo.id));
         listaJogosContainer.appendChild(item);
     });
 }
 
-async function showFichaEvento(id) {
+export async function showFichaEvento(id) {
     const evento = eventos.find(e => e.id === id);
     if (!evento) return;
+    const loader = modalVerEvento.querySelector('.modal-loader-container');
+    const dataContent = modalVerEvento.querySelector('.modal-data-content');
+    loader.style.display = 'flex';
+    dataContent.style.display = 'none';
+    openModal(modalVerEvento);
     document.getElementById('ver-campeonato-titulo').innerText = evento.nome;
     document.getElementById('ver-campeonato-data').innerText = `Data: ${formatDate(evento.data)}`;
     document.getElementById('ver-campeonato-tabs-nav').innerHTML = '';
     document.getElementById('ver-campeonato-tabs-content').innerHTML = '';
-    if (evento.type === 'torneio_externo' || evento.type === 'amistoso') {
-        await renderFichaExterno(evento);
-    } else if (evento.type === 'torneio_interno') {
-        await renderFichaInterno(evento);
+    try {
+        if (evento.type === 'torneio_externo' || evento.type === 'amistoso') {
+            await renderFichaExterno(evento);
+        } else if (evento.type === 'torneio_interno') {
+            await renderFichaInterno(evento);
+        }
+    } catch (error) {
+        console.error("Erro ao carregar dados do evento:", error);
+        dataContent.innerHTML = '<p>Ocorreu um erro ao carregar os detalhes do evento.</p>';
+    } finally {
+        loader.style.display = 'none';
+        dataContent.style.display = 'block';
     }
-    openModal(modalVerEvento);
 }
 
 function renderEscalacao(evento) {
@@ -1061,111 +1071,34 @@ export function setEventosUserRole(role) {
 }
 
 export function initEventos() {
-    // Listener para dados do Firestore (sem alterações)
+    // O onSnapshot agora tem duas tarefas:
+    // 1. Manter a variável 'eventos' sempre atualizada.
+    // 2. Chamar o render() de novo SE a página de eventos já estiver visível.
     onSnapshot(query(collection(db, "eventos"), orderBy("data", "desc")), (snapshot) => {
         eventos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        render();
+
+        // Verifica se estamos na página de eventos antes de tentar renderizar de novo.
+        // Se a div 'grid-eventos-andamento' existe, é porque a página está na tela.
+        if (document.getElementById('grid-eventos-andamento')) {
+            render();
+        }
     });
 
-    // Listener de cliques na aba de eventos
-    if (tabEventos) {
-        tabEventos.addEventListener('click', (e) => {
-            const card = e.target.closest('.championship-card');
-            if (!card) return;
-            const id = card.dataset.id;
-    
-            const statusChangeButton = e.target.closest('.btn-status-change');
-            const editButton = e.target.closest('.btn-edit-camp');
-            const deleteButton = e.target.closest('.btn-delete-camp');
-    
-            if (statusChangeButton) {
-                const action = statusChangeButton.dataset.action;
-                if (action === 'start') {
-                    changeEventoStatus(id, 'andamento');
-                } else if (action === 'finish') {
-                    changeEventoStatus(id, 'finalizado');
-                }
-            } else if (editButton) {
-                showEventoModal(id);
-            } else if (deleteButton) {
-                deleteEvento(id);
-            } else {
-                showFichaEvento(id);
-            }
-        });
-    }
-    
-    // Listener para cliques DENTRO DO MODAL DE VISUALIZAÇÃO
-    const modalContent = modalVerEvento.querySelector('.modal-content');
-    if (modalContent) {
-        modalContent.addEventListener('click', (e) => {
-            // Lógica para clicar nos times de um torneio interno
-            const timeCard = e.target.closest('#times-container-view .clickable');
-            if (timeCard) {
-                const { timeId, eventoId } = timeCard.dataset;
-                if (timeId && eventoId) showFichaTime(eventoId, timeId);
-                return;
-            }
+    // Reintroduzimos o listener 'page-loaded'. Sua tarefa é chamar o render()
+    // assim que a página de eventos for carregada na tela.
+    document.body.addEventListener('page-loaded', (e) => {
+        if (e.detail.page === 'eventos') {
+            render();
+        }
+    });
 
-            // Lógica para APAGAR um jogo de um torneio INTERNO
-            const btnDeleteJogoInterno = e.target.closest('#jogos-internos-container .btn-delete-jogo-interno');
-            if (btnDeleteJogoInterno) {
-                e.stopPropagation();
-                const { eventoId, jogoId } = btnDeleteJogoInterno.dataset;
-                deleteJogo(eventoId, jogoId);
-                return;
-            }
-            
-            // Lógica para clicar nos JOGOS de um torneio INTERNO
-            const jogoInternoCard = e.target.closest('#jogos-internos-container .clickable');
-            if (jogoInternoCard) {
-                const { eventoId, jogoId } = jogoInternoCard.dataset;
-                const evento = eventos.find(ev => ev.id === eventoId);
-                const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
-                getDoc(jogoRef).then(jogoDoc => {
-                    if (jogoDoc.exists()) {
-                        const jogo = { id: jogoDoc.id, ...jogoDoc.data() };
-                        abrirPainelJogo(userRole, evento, jogo);
-                    }
-                });
-                return;
-            }
-
-            // Lógica para clicar nos JOGOS de um torneio EXTERNO
-            const btnPainelExterno = e.target.closest('#jogos-realizados-container .btn-painel-jogo-view');
-            const btnEditExterno = e.target.closest('#jogos-realizados-container .btn-edit-jogo-view');
-            const btnDeleteExterno = e.target.closest('#jogos-realizados-container .btn-delete-jogo-view');
-            const itemJogoExterno = e.target.closest('#jogos-realizados-container .clickable');
-
-            if (btnPainelExterno) {
-                e.stopPropagation();
-                const { eventoId, jogoId } = btnPainelExterno.dataset;
-                const evento = eventos.find(c => c.id === eventoId);
-                const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
-                getDoc(jogoRef).then(jogoDoc => {
-                    if(jogoDoc.exists()) abrirPainelJogo(userRole, evento, { id: jogoDoc.id, ...jogoDoc.data() });
-                });
-            } else if (btnEditExterno) {
-                e.stopPropagation();
-                const { eventoId, jogoId } = btnEditExterno.dataset;
-                closeModal(modalVerEvento);
-                showJogoModal(eventoId, jogoId);
-            } else if (btnDeleteExterno) {
-                e.stopPropagation();
-                const { eventoId, jogoId } = btnDeleteExterno.dataset;
-                deleteJogo(eventoId, jogoId);
-            } else if (itemJogoExterno) {
-                const { eventoId, jogoId } = itemJogoExterno.dataset;
-                if (eventoId && jogoId) showFichaJogoDetalhes(eventoId, jogoId);
-            }
-        });
-    }
-
-    // Listeners para os formulários (sem alterações)
+    // O restante da sua função (listeners de formulários, etc.) permanece aqui...
+    // Note que o listener do modalContent foi movido para o main.js e não precisa estar aqui.
+ 
     formEvento.addEventListener('submit', handleFormSubmitEvento);
     formJogo.addEventListener('submit', handleFormSubmitJogo);
     formTime.addEventListener('submit', handleFormTimeSubmit);
     formJogoInterno.addEventListener('submit', handleFormJogoInternoSubmit);
-    document.getElementById('btn-abrir-modal-evento').addEventListener('click', () => showEventoModal());
+    
     setupTabEventListeners();
 }

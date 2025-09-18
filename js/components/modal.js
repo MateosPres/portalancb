@@ -1,15 +1,14 @@
-// js/components/modal.js (CORRIGIDO)
+// js/components/modal.js (VERSÃO FINAL SIMPLIFICADA)
 
 const backdrop = document.getElementById('modal-backdrop');
 const body = document.body;
 
-// ADICIONADO O "EXPORT" AQUI
 export function closeModal(modal) {
     if (modal) {
         modal.classList.remove('active');
     }
-    // Apenas remove o backdrop se nenhum outro modal estiver ativo
-    if (!document.querySelector('.modal.active')) {
+    const anyModalActive = document.querySelector('.modal.active, .auth-container.active');
+    if (!anyModalActive) {
         backdrop.classList.remove('active');
         body.classList.remove('modal-open');
     }
@@ -24,22 +23,12 @@ export function openModal(modal) {
 }
 
 export function closeAllModals() {
-    document.querySelectorAll('.modal.active').forEach(closeModal);
-    document.querySelectorAll('.auth-container.active').forEach(authModal => {
-        authModal.classList.remove('active');
+    document.querySelectorAll('.modal.active, .auth-container.active').forEach(m => {
+        closeModal(m);
     });
 }
 
+// A função agora SÓ adiciona o listener para o fundo
 export function initModals() {
     backdrop.addEventListener('click', closeAllModals);
-    document.querySelectorAll('.close-button').forEach(button => {
-        button.addEventListener('click', () => {
-            const modal = button.closest('.modal, .auth-container');
-            if (modal.classList.contains('modal')) {
-                closeModal(modal);
-            } else if (modal) {
-                modal.classList.remove('active');
-            }
-        });
-    });
 }

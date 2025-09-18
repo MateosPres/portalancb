@@ -13,9 +13,7 @@ const CLOUDINARY_FOLDER = "jogadores_perfis";
 let jogadores = [];
 let userRole = null;
 
-// --- Elementos do DOM ---
-const gridJogadores = document.getElementById('grid-jogadores');
-const loaderJogadores = document.querySelector('#tab-jogadores .grid-loader');
+// --- Elementos do DOM (Apenas os que são sempre visíveis, como modais) ---
 const modalJogador = document.getElementById('modal-jogador');
 const modalVerJogador = document.getElementById('modal-ver-jogador');
 const formJogador = document.getElementById('form-jogador');
@@ -30,7 +28,17 @@ const formatDate = (dateStr) => {
 };
 
 function render() {
-    loaderJogadores.style.display = 'none';
+    const gridJogadores = document.getElementById('grid-jogadores');
+    const loaderJogadores = document.querySelector('#grid-jogadores .grid-loader');
+
+    if (!gridJogadores) {
+        return;
+    }
+
+    if (loaderJogadores) {
+        loaderJogadores.style.display = 'none';
+    }
+
     gridJogadores.innerHTML = '';
 
     if (jogadores.length === 0) {
@@ -50,7 +58,7 @@ function render() {
     });
 }
 
-function showJogadorModal(id = null) {
+export function showJogadorModal(id = null) {
     if (userRole !== 'admin') return;
     formJogador.reset();
     fotoPreview.src = '';
@@ -77,7 +85,7 @@ function showJogadorModal(id = null) {
     openModal(modalJogador);
 }
 
-async function showFichaJogador(id) {
+export async function showFichaJogador(id) {
     const j = jogadores.find(p => p.id === id);
     if (!j) return;
 
@@ -286,7 +294,7 @@ async function handleFormSubmit(e) {
 }
 
 
-async function deleteJogador(id) {
+export async function deleteJogador(id) {
     if (userRole !== 'admin') return;
     if (confirm('Tem certeza que deseja excluir este jogador?')) {
         try {
@@ -307,26 +315,19 @@ export function setJogadoresUserRole(role) {
 }
 
 export function initJogadores() {
-    loaderJogadores.style.display = 'block';
     onSnapshot(query(collection(db, "jogadores"), orderBy("nome")), (snapshot) => {
         jogadores = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        render();
+        render(); // Renderiza caso a página de jogadores já esteja aberta
     });
 
-    gridJogadores.addEventListener('click', (e) => {
-        const card = e.target.closest('.player-card');
-        if (!card) return;
-        const id = card.dataset.id;
-        if (e.target.closest('.btn-edit-jogador')) {
-            showJogadorModal(id);
-        } else if (e.target.closest('.btn-delete-jogador')) {
-            deleteJogador(id);
-        } else {
-            showFichaJogador(id);
+    // Ouve o evento de navegação para renderizar o conteúdo quando a página for carregada
+    document.body.addEventListener('page-loaded', (e) => {
+        if (e.detail.page === 'jogadores') {
+            render();
         }
     });
+
     
     formJogador.addEventListener('submit', handleFormSubmit);
-    document.getElementById('btn-abrir-modal-jogador').addEventListener('click', () => showJogadorModal());
 }
 

@@ -1,15 +1,20 @@
 // js/modules/admin.js
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { collection, onSnapshot, query, orderBy, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { db } from '../services/firebase.js';
-// Este módulo não precisa mais de modais, pois a edição está embutida na tabela.
-// Se precisar do modal de edição de usuário, adicione o import do modal.js.
 
 let allUsers = [];
 let currentUserId = null;
-
-const usersTableBody = document.getElementById('users-table-body');
+let adminEventListenersAttached = false; // Flag para evitar adicionar o listener múltiplas vezes
 
 function render() {
+    // Pega o elemento dinamicamente
+    const usersTableBody = document.getElementById('users-table-body');
+    
+    // Se a tabela não existe na página atual, não faz nada.
+    if (!usersTableBody) {
+        return;
+    }
+
     usersTableBody.innerHTML = '';
     allUsers.forEach(user => {
         const tr = document.createElement('tr');
@@ -25,7 +30,6 @@ function render() {
             `<button class="action-btn btn-unban" title="Reativar" data-uid="${user.uid}">♻️</button>` : 
             `<button class="action-btn btn-ban" title="Banir" data-uid="${user.uid}">🚫</button>`;
 
-        // Ação de deletar usuário foi removida para segurança. Se necessário, pode ser reativada.
         const actions = isCurrentUser ? '' : `<div class="user-actions">${banButton}</div>`;
 
         tr.innerHTML = `<td>${user.email}</td><td>${user.nome || 'N/A'}</td><td>${statusText}</td><td>${roleButton}</td><td>${actions}</td>`;
@@ -33,10 +37,13 @@ function render() {
     });
 }
 
-async function handleTableClick(e) {
+export async function handleTableClick(e) {
     const target = e.target;
     const uid = target.dataset.uid;
     if (!uid) return;
+
+    // Apenas age se o clique for dentro da tabela de admin
+    if (!target.closest('#admin-users-table')) return;
 
     if (target.classList.contains('role-toggle')) {
         const currentRole = target.classList.contains('admin') ? 'admin' : 'jogador';
@@ -72,5 +79,9 @@ export function setAdminVisibility(isAdmin, uid) {
 }
 
 export function initAdmin() {
-    usersTableBody.addEventListener('click', handleTableClick);
+    // Usa delegação de eventos para a tabela de usuários
+    if (adminEventListenersAttached) return;
+
+
+    adminEventListenersAttached = true;
 }
