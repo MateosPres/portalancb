@@ -88,6 +88,8 @@ body.modal-open { overflow: hidden; }
     padding: 25px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.05);
     border-radius: 12px;
+    position: relative; /* ADICIONE: Torna este o contêiner de referência */
+    padding-top: 70px; /* ADICIONE: Cria espaço no topo para os botões */
 }
 
 .btn-back-home {
@@ -101,6 +103,9 @@ body.modal-open { overflow: hidden; }
     font-weight: 600;
     cursor: pointer;
     transition: background-color 0.2s;
+    position: absolute;
+    top: 20px;
+    left: 25px;
 }
 .btn-back-home:hover {
     background-color: #e2e8f0;
@@ -115,7 +120,6 @@ body.modal-open { overflow: hidden; }
     border-bottom: 0px solid var(--cor-laranja);
     padding-bottom: 0px;
     margin-bottom: 0px;
-    position: relative;
 }
 
 .section-header h2 {
@@ -125,7 +129,7 @@ body.modal-open { overflow: hidden; }
     margin: 0;
     width: 100%; 
     position: absolute;
-    top: 50%;
+    top: 80px;
     left: 50%;
     transform: translate(-50%, -50%); /* ALTERADO DE -50% PARA -60% */
     text-align: center;
@@ -1796,4 +1800,12 @@ body.modal-open { overflow: hidden; }
 .btn-status-change.finish {
     background-color: #dc3545;
     color: var(--cor-branco);
+}
+
+#btn-abrir-modal-evento {
+    position: absolute;
+    top: 20px;
+    right: 25px;
+    display: inline-flex !important; /* ADICIONE: Força o botão a ser visível */
+    z-index: 10; /* ADICIONE: Garante que o botão fique na frente de outros elementos */
 }
