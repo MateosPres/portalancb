@@ -176,10 +176,12 @@ function renderPainelDistribuicao() {
         const jogadoresDoTime = todosJogadores.filter(j => timeJogadoresIds.includes(j.id));
         if (jogadoresDoTime.length > 0) {
             jogadoresDoTime.forEach(jogador => {
-                const primeiroNome = jogador.nome.split(' ')[0]; // Pega só o primeiro nome
+                const primeiroNome = jogador.nome.split(' ')[0];
+                const nomeExibicao = jogador.apelido ? `${primeiroNome} "${jogador.apelido}"` : primeiroNome;
+
                 timeHTML += `
                     <div class="distribuicao-jogador-row">
-                        <span>${primeiroNome}</span> 
+                        <span>${nomeExibicao}</span> 
                         <div class="botoes-distribuicao">
                             <button data-jogador-id="${jogador.id}" data-time-id="${time.id}" data-pontos="1" ${ (contagemCestas[1] || 0) === 0 ? 'disabled' : '' }>+1</button>
                             <button data-jogador-id="${jogador.id}" data-time-id="${time.id}" data-pontos="2" ${ (contagemCestas[2] || 0) === 0 ? 'disabled' : '' }>+2</button>
