@@ -1806,6 +1806,4 @@ body.modal-open { overflow: hidden; }
     position: absolute;
     top: 20px;
     right: 25px;
-    display: inline-flex !important; /* ADICIONE: Força o botão a ser visível */
-    z-index: 10; /* ADICIONE: Garante que o botão fique na frente de outros elementos */
 }

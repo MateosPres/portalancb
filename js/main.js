@@ -226,6 +226,13 @@ function main() {
     // Adiciona o ÚNICO listener de clique global
     document.body.addEventListener('click', handleGlobalClick);
 
+     // Re-aplica as regras de visibilidade sempre que uma nova página é carregada.
+    // Isso garante que os botões de admin, etc., apareçam corretamente ao navegar
+    // ou recarregar a página.
+    document.body.addEventListener('page-loaded', () => {
+        updateGlobalUI(!!currentUser, currentUserProfile);
+    });
+
     navigateTo('home');
     
     if ('serviceWorker' in navigator) {
