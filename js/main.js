@@ -8,6 +8,7 @@ import { eventos, initEventos, showEventoModal, showFichaEvento, deleteEvento, u
 import { initAdmin, handleTableClick as handleAdminActions, setAdminVisibility } from './modules/admin.js';
 import { initPainelJogo, abrirPainelJogo } from './modules/painelJogo.js';
 import { initHome } from './modules/home.js';
+import { initRanking } from './modules/ranking.js'; // <-- ADICIONE ESTA LINHA
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 
@@ -222,6 +223,8 @@ function main() {
     initAdmin();
     initPainelJogo();
     initHome();
+    initRanking();
+
 
     // Adiciona o ÚNICO listener de clique global
     document.body.addEventListener('click', handleGlobalClick);

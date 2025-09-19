@@ -309,6 +309,40 @@ body.modal-open { overflow: hidden; }
 .jogador-escalado img, .jogador-escalado .placeholder { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; margin-right: 15px; }
 
 @media screen and (max-width: 768px) {
+
+    .ranking-header {
+    margin-bottom: 15px; /* Reduz o espaçamento inferior */
+    padding-bottom: 10px;
+    /* Removemos o flex-wrap para manter tudo na mesma linha */
+}
+
+/* Reduz o tamanho dos títulos dos controles */
+.control-group label {
+    font-size: 0.8rem;
+    margin-bottom: 5px; /* Reduz espaço abaixo do label */
+}
+
+/* Compacta a seção de Filtros */
+.ranking-controls {
+    margin-bottom: 15px; /* Reduz o espaçamento inferior */
+}
+
+.ranking-controls .control-group label {
+    font-size: 0.9rem; /* Reduz o tamanho da fonte do label "Filtro..." */
+    margin-bottom: 8px; /* Reduz o espaço abaixo dele */
+}
+
+/* Compacta o título principal do Ranking */
+#ranking-title {
+    font-size: 1.3rem; /* Diminui drasticamente o tamanho da fonte */
+    margin-bottom: 0px; /* Reduz o espaçamento inferior */
+}
+
+/* Ajusta o tamanho dos botões de filtro no mobile */
+.btn-group .btn-category, .btn-group .btn-filter {
+    padding: 6px 10px; /* Diminui o padding dos botões */
+    font-size: 0.8rem;
+}
     .container { padding: 10px; }
     .header-container { flex-wrap: wrap; justify-content: center; gap: 10px; padding: 0 10px;}
     .header-left { order: 1; }
@@ -1578,6 +1612,8 @@ body.modal-open { overflow: hidden; }
     flex-shrink: 0;
 }
 @media screen and (max-width: 768px) {
+
+    
     #painel-distribuicao-container {
         grid-template-columns: 1fr;
         gap: 20px;
@@ -1812,4 +1848,150 @@ body.modal-open { overflow: hidden; }
     position: absolute;
     top: 20px;
     right: 25px;
+}
+
+/* Estilos para a Página de Ranking Global */
+
+.ranking-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    background-color: #f8f9fa;
+    padding: 0px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    align-items: flex-end;
+    margin-top: -10px; /* ADICIONE ESTA LINHA */
+
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.control-group label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #555;
+}
+
+.btn-group {
+    display: flex;
+}
+
+.btn-group .btn {
+    border-radius: 0;
+    background-color: var(--cor-branco);
+    color: var(--cor-cinza-texto);
+    border: 1px solid #ddd;
+}
+
+.btn-group .btn:first-child {
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+}
+
+.btn-group .btn:last-child {
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    border-right: 1px solid #ddd;
+}
+
+.btn-group .btn.active {
+    background-color: var(--cor-azul-escuro);
+    color: var(--cor-branco);
+    border-color: var(--cor-azul-escuro);
+}
+
+.ranking-title {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 1.5rem;
+}
+
+.ranking-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.ranking-table th, .ranking-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.ranking-table th {
+    background-color: #f7f7f7;
+    font-weight: 600;
+}
+
+.ranking-table td:first-child, .ranking-table td:nth-child(3) {
+    font-weight: bold;
+}
+
+.ranking-table tbody tr:hover {
+    background-color: #fcfcfc;
+}
+
+/* Estilos para a nova célula de jogador na tabela de ranking */
+
+.ranking-table .player-col {
+    text-align: left !important;
+}
+
+.ranking-table .player-cell {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.player-photo-ranking {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0; /* Impede que a imagem encolha */
+}
+
+.player-photo-ranking.placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #eee;
+    font-size: 1.5rem;
+}
+
+.ranking-table .main-stat {
+    font-weight: bold;
+    font-size: 1.2rem;
+    text-align: center;
+}
+
+/* Estilos para o novo cabeçalho da página de ranking */
+.ranking-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--cor-laranja);
+}
+
+/* Ajusta o contêiner de filtros para ficar centralizado */
+.ranking-controls {
+    justify-content: center;
+    background-color: transparent;
+    padding: 0;
+}
+
+.ranking-controls .control-group {
+    align-items: center;
+}
+
+.ranking-controls .control-group label {
+    font-size: 1rem;
+    margin-bottom: 10px;
 }

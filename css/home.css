@@ -35,7 +35,7 @@
 /* --- Grelha HORIZONTAL para os cards de Navegação --- */
 .nav-grid-horizontal {
     display: grid;
-    grid-template-columns: 1fr 1fr; /* Duas colunas de tamanho igual */
+    grid-template-columns: 1fr 1fr 1fr; /* Duas colunas de tamanho igual */
     gap: 25px;
 }
 

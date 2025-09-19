@@ -62,7 +62,7 @@
         </section>
 
         <section class="dashboard-section">
-            <!-- Grelha para os cards de navegação ficarem lado a lado -->
+            <!-- Grelha para os cards de navegação ficarem lado a lado -->             
             <div class="nav-grid-horizontal">
                 <a class="nav-card" data-target="eventos" data-emoji="📅">
                     <h3>Eventos</h3>
@@ -71,6 +71,10 @@
                 <a class="nav-card" data-target="jogadores" data-emoji="🏀">
                     <h3>Jogadores</h3>
                     <p>Conheça os atletas da nossa associação.</p>
+                </a>
+                <a class="nav-card" data-target="ranking" data-emoji="🏆">
+                    <h3>Ranking Global</h3>
+                    <p>Veja as estatísticas e a classificação dos atletas.</p>
                 </a>
             </div>
         </section>
@@ -143,6 +147,43 @@
             </div>
         </div>
     </template>
+
+    <template id="template-ranking">
+    <div class="page-content">
+
+        <div class="ranking-header">
+            <button class="btn-back-home">← Voltar</button>
+            <div class="control-group">
+                <label>Categoria</label>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-category active" data-category="Aberta">Aberto</button>
+                    <button class="btn btn-sm btn-category" data-category="Juvenil">Juvenil</button>
+                </div>
+            </div>
+            <div class="control-group">
+                <label for="season-select">Temporada</label>
+                <select id="season-select" class="form-control-sm"></select>
+            </div>
+        </div>
+
+        <div class="ranking-controls">
+            <div class="control-group">
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-filter active" data-filter="pontos">Geral (Pontos)</button>
+                    <button class="btn btn-sm btn-filter" data-filter="cestasFora">Cestas de Fora</button>
+                    <button class="btn btn-sm btn-filter" data-filter="cestasDentro">Cestas de Dentro</button>
+                    <button class="btn btn-sm btn-filter" data-filter="lancesLivres">Lances Livres</button>
+                </div>
+            </div>
+        </div>
+
+        <h2 id="ranking-title" class="ranking-title"></h2>
+
+        <div id="ranking-table-container">
+            <div class="grid-loader"></div>
+        </div>
+    </div>
+</template>
 
 
     <!-- Modais e outros elementos ocultos -->
