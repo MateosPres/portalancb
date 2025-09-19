@@ -201,11 +201,19 @@ export async function showEventoModal(id = null) {
             }
         }
     });
+
+
+    const evento = id ? eventos.find(i => i.id === id) : null;
+    const jogadoresJaEscalados = evento ? evento.jogadoresEscalados || [] : [];
+
     const listaContainer = document.getElementById('lista-jogadores-escalar');
     listaContainer.innerHTML = '';
     const todosJogadores = getJogadores();
+
+    // Este loop agora verifica e marca os checkboxes corretos
     todosJogadores.forEach(j => {
-        listaContainer.innerHTML += `<label class="checkbox-item"><input type="checkbox" value="${j.id}"><span>${j.nome} (#${j.numero_uniforme})</span></label>`;
+        const isChecked = jogadoresJaEscalados.includes(j.id) ? 'checked' : '';
+        listaContainer.innerHTML += `<label class="checkbox-item"><input type="checkbox" value="${j.id}" ${isChecked}><span>${j.nome} (#${j.numero_uniforme})</span></label>`;
     });
     openModal(modalEvento);
 }
