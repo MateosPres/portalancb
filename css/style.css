@@ -113,22 +113,21 @@ body.modal-open { overflow: hidden; }
     flex-wrap: wrap;
     gap: 15px;
     border-bottom: 0px solid var(--cor-laranja);
-    padding-bottom: 15px;
+    padding-bottom: 0px;
     margin-bottom: 0px;
     position: relative;
-    padding-top: 0px; /* ADICIONE ESPAÇO NO TOPO */
 }
 
 .section-header h2 {
     font-family: var(--fonte-titulo);
-    font-size: 1.8rem;
+    font-size: 1.5rem;
     color: var(--cor-preto);
     margin: 0;
     width: 100%; 
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -140%); /* ALTERADO DE -50% PARA -60% */
+    transform: translate(-50%, -50%); /* ALTERADO DE -50% PARA -60% */
     text-align: center;
     pointer-events: none; 
 }

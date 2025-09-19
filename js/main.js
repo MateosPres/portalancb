@@ -1,12 +1,16 @@
 // js/main.js (VERSÃO FINAL CENTRALIZADA)
 
 import { initModals, closeModal } from './components/modal.js';
+import { db } from './services/firebase.js';
 import { initAuth } from './modules/auth.js';
 import { initJogadores, showJogadorModal, showFichaJogador, deleteJogador, setJogadoresUserRole } from './modules/jogadores.js';
-import { initEventos, showEventoModal, showFichaEvento, deleteEvento, updateEventStatus, setEventosUserRole } from './modules/eventos.js';
+import { eventos, initEventos, showEventoModal, showFichaEvento, deleteEvento, updateEventStatus, setEventosUserRole, showFichaJogoDetalhes, showFichaTime } from './modules/eventos.js';
 import { initAdmin, handleTableClick as handleAdminActions, setAdminVisibility } from './modules/admin.js';
-import { initPainelJogo } from './modules/painelJogo.js';
+import { initPainelJogo, abrirPainelJogo } from './modules/painelJogo.js';
 import { initHome } from './modules/home.js';
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+
 
 let currentUser = null;
 let currentUserProfile = null;
@@ -29,6 +33,16 @@ export function navigateTo(page) {
 // Listener ÚNICO e CENTRALIZADO para TODAS as ações de clique
 async function handleGlobalClick(e) {
     const target = e.target;
+
+    // Clique em um Time (na aba Times)
+    const timeCard = target.closest('#times-container-view .clickable');
+    if (timeCard) {
+        const { timeId, eventoId } = timeCard.dataset;
+        if (timeId && eventoId) {
+            showFichaTime(eventoId, timeId);
+        }
+        return;
+    }
 
     // --- Lógica de Fechar Modal (Prioridade 1) ---
     const closeButton = target.closest('.close-button');
@@ -77,6 +91,48 @@ async function handleGlobalClick(e) {
         handleAdminActions(e); // Delega a ação para a função do módulo admin
         return;
     }
+
+    const modalVerEvento = target.closest('#modal-ver-campeonato');
+if (modalVerEvento) {
+    // Clique em Jogo de Torneio INTERNO
+    const jogoInternoCard = target.closest('#jogos-internos-container .clickable');
+    if (jogoInternoCard) {
+        const { eventoId, jogoId } = jogoInternoCard.dataset;
+        const evento = eventos.find(ev => ev.id === eventoId); 
+        const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
+        const jogoDoc = await getDoc(jogoRef);
+        
+        if (evento && jogoDoc.exists()) {
+            const jogo = { id: jogoDoc.id, ...jogoDoc.data() };
+            // LÓGICA CORRIGIDA: Define a permissão como a do usuário ou null se não estiver logado
+            const role = currentUserProfile ? currentUserProfile.role : null;
+            abrirPainelJogo(role, evento, jogo);
+        }
+        return;
+    }
+
+    // Clique em Jogo de Torneio EXTERNO
+    const itemJogoExterno = target.closest('#jogos-realizados-container .clickable');
+    if (itemJogoExterno) {
+        const { eventoId, jogoId } = itemJogoExterno.dataset;
+        const role = currentUserProfile ? currentUserProfile.role : null; // Define a permissão da mesma forma
+
+        // Ações de admin (são tratadas dentro do painel)
+        if (target.closest('.btn-painel-jogo-view') || !target.closest('button')) {
+            const evento = eventos.find(c => c.id === eventoId);
+            const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
+            const jogoDoc = await getDoc(jogoRef);
+            if(jogoDoc.exists()) {
+                abrirPainelJogo(role, evento, { id: jogoDoc.id, ...jogoDoc.data() });
+            }
+        } 
+        // Ação padrão para qualquer usuário: ver detalhes do jogo (se não for o botão do painel)
+        else if (eventoId && jogoId && !target.closest('.btn-painel-jogo-view')) {
+             showFichaJogoDetalhes(eventoId, jogoId);
+        }
+        return;
+    }
+}
     
     // --- Lógica de Navegação Principal ---
     const navCard = target.closest('.nav-card');

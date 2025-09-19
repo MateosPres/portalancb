@@ -6,12 +6,13 @@ import { openModal, closeModal } from '../components/modal.js';
 import { getJogadores } from './jogadores.js';
 import { abrirPainelJogo } from './painelJogo.js';
 
+
 // --- CONFIGURAÇÃO DO CLOUDINARY ---
 const CLOUDINARY_CLOUD_NAME = "dc3l3t1sl";
 const CLOUDINARY_UPLOAD_PRESET = "ancb_portal_uploads";
 const CLOUDINARY_FOLDER_TIMES = "times_logos";
 
-let eventos = [];
+export let eventos = [];
 let userRole = null;
 let currentEventoId = null;
 
@@ -628,7 +629,7 @@ async function renderFichaInterno(evento) {
     await renderClassificacaoGeralInterno(evento);
 }
 
-async function showFichaTime(eventoId, timeId) {
+export async function showFichaTime(eventoId, timeId) {
     const timeRef = doc(db, "eventos", eventoId, "times", timeId);
     const timeDoc = await getDoc(timeRef);
     if (!timeDoc.exists()) return;
@@ -947,7 +948,7 @@ async function renderJogosEClassificacao(eventoId) {
     }
 }
 
-async function showFichaJogoDetalhes(eventoId, jogoId) {
+export async function showFichaJogoDetalhes(eventoId, jogoId) {
     const container = document.getElementById('jogo-estatisticas-container');
     container.innerHTML = '<p>Carregando estatísticas...</p>';
     openModal(document.getElementById('modal-ver-jogo'));
