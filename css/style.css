@@ -314,7 +314,7 @@ body.modal-open { overflow: hidden; }
     #welcome-message { font-size: 0.8rem; text-align: right; }
     #btn-manage-users, #btn-logout, #btn-show-login, #btn-show-register { padding: 8px 12px; }
     .section-header { 
-        gap: 0px; }
+        gap: 10px; }
     .section-header h2 { 
         font-size: 1.3rem; }
     .content-section { padding: 15px; }
@@ -326,6 +326,16 @@ body.modal-open { overflow: hidden; }
     .card-actions { bottom: 5px; right: 5px; }
     .card-actions button { width: 30px; height: 30px; font-size: 1rem; padding: 5px; }
 }
+
+@media screen and (max-width: 768px) {
+    .container { padding: 10px; }
+    .header-container { flex-wrap: wrap; justify-content: center; gap: 10px; padding: 0 10px;}
+    .site-header h1 { font-size: 1.5rem; text-align: center; }
+    .page-content, .section-header { padding: -15px; }
+    .section-header h2 { font-size: 1.5rem; }
+    .card-grid { grid-template-columns: 1fr; }
+}
+
 
 .loading-overlay {
     position: absolute;
