@@ -1807,3 +1807,9 @@ body.modal-open { overflow: hidden; }
     top: 20px;
     right: 25px;
 }
+
+#btn-abrir-modal-jogador {
+    position: absolute;
+    top: 20px;
+    right: 25px;
+}
