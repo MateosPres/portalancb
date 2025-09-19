@@ -1078,10 +1078,8 @@ body.modal-open { overflow: hidden; }
 }
 @media screen and (min-width: 768px) {
     #painel-jogo-container {
-        display: grid;
-        grid-template-columns: 2fr 1fr;
-        gap: 20px 30px;
-        align-items: flex-start;
+        display: flex;
+        flex-direction: column;
     }
     .painel-secao-aovivo {
         grid-column: 1 / 2;
@@ -1665,7 +1663,7 @@ body.modal-open { overflow: hidden; }
 @media screen and (min-width: 769px) {
     .modal-painel-jogo:not(.view-only-mode) .painel-layout-grid {
         display: grid;
-        grid-template-columns: 2fr 1fr;
+        grid-template-columns: 1fr;
         gap: 30px;
         align-items: flex-start;
     }
@@ -1995,3 +1993,19 @@ body.modal-open { overflow: hidden; }
     font-size: 1rem;
     margin-bottom: 10px;
 }
+
+/* Reordena as seções do Painel de Jogo */
+#painel-jogo-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.painel-layout-grid {
+    display: contents; /* Remove o container do fluxo, "promovendo" seus filhos */
+}
+
+/* Define a nova ordem visual dos elementos */
+.painel-secao-aovivo { order: 1; }
+#painel-distribuicao-container { order: 2; }
+.painel-divisor { order: 3; }
+.painel-log-section { order: 4; }
