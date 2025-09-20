@@ -450,7 +450,7 @@ async function handleFormSubmitJogo(e) {
     }
 }
 
-async function deleteJogo(eventoId, jogoId) {
+export async function deleteJogo(eventoId, jogoId) {
     if (userRole !== 'admin') return;
     if (confirm('Tem certeza que deseja excluir este jogo?')) {
         try {
@@ -467,7 +467,7 @@ async function deleteJogo(eventoId, jogoId) {
     }
 }
 
-async function showJogoModal(eventoId, jogoId = null) {
+export async function showJogoModal(eventoId, jogoId = null) {
     formJogo.reset();
     formJogo['jogo-campeonato-id'].value = eventoId;
     formJogo['jogo-id'].value = jogoId || '';

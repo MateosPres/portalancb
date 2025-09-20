@@ -4,7 +4,7 @@ import { initModals, closeModal } from './components/modal.js';
 import { db } from './services/firebase.js';
 import { initAuth } from './modules/auth.js';
 import { initJogadores, showJogadorModal, showFichaJogador, deleteJogador, setJogadoresUserRole } from './modules/jogadores.js';
-import { eventos, initEventos, showEventoModal, showFichaEvento, deleteEvento, updateEventStatus, setEventosUserRole, showFichaJogoDetalhes, showFichaTime } from './modules/eventos.js';
+import { eventos, initEventos, showEventoModal, showFichaEvento, deleteEvento, updateEventStatus, setEventosUserRole, showFichaJogoDetalhes, showFichaTime, deleteJogo, showJogoModal } from './modules/eventos.js';
 import { initAdmin, handleTableClick as handleAdminActions, setAdminVisibility } from './modules/admin.js';
 import { initPainelJogo, abrirPainelJogo } from './modules/painelJogo.js';
 import { initHome } from './modules/home.js';
@@ -35,17 +35,7 @@ export function navigateTo(page) {
 async function handleGlobalClick(e) {
     const target = e.target;
 
-    // Clique em um Time (na aba Times)
-    const timeCard = target.closest('#times-container-view .clickable');
-    if (timeCard) {
-        const { timeId, eventoId } = timeCard.dataset;
-        if (timeId && eventoId) {
-            showFichaTime(eventoId, timeId);
-        }
-        return;
-    }
-
-    // --- Lógica de Fechar Modal (Prioridade 1) ---
+    // --- 1. LÓGICA DE FECHAR MODAL (Maior Prioridade) ---
     const closeButton = target.closest('.close-button');
     if (closeButton) {
         const modalToClose = closeButton.closest('.modal, .auth-container');
@@ -53,89 +43,108 @@ async function handleGlobalClick(e) {
         return;
     }
 
-    // --- Lógica da Página de Jogadores ---
-    if (target.closest('#grid-jogadores')) {
-        const card = target.closest('.player-card');
-        if (card) {
+    // --- 2. LÓGICA PARA CLIQUES DENTRO DO MODAL DE EVENTO ---
+    const modalVerEvento = target.closest('#modal-ver-campeonato');
+    if (modalVerEvento) {
+        // Ações específicas dos botões (Editar, Excluir, Painel)
+        const btnEditExterno = target.closest('.btn-edit-jogo-view');
+        if (btnEditExterno) {
+            const { eventoId, jogoId } = btnEditExterno.dataset;
+            closeModal(modalVerEvento);
+            showJogoModal(eventoId, jogoId);
+            return;
+        }
+
+        const btnDeleteExterno = target.closest('.btn-delete-jogo-view');
+        if (btnDeleteExterno) {
+            const { eventoId, jogoId } = btnDeleteExterno.dataset;
+            deleteJogo(eventoId, jogoId);
+            return;
+        }
+
+        const btnPainelExterno = target.closest('.btn-painel-jogo-view');
+        if (btnPainelExterno) {
+            const { eventoId, jogoId } = btnPainelExterno.dataset;
+            const role = currentUserProfile ? currentUserProfile.role : null;
+            const evento = eventos.find(c => c.id === eventoId);
+            const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
+            const jogoDoc = await getDoc(jogoRef);
+            if (jogoDoc.exists()) {
+                abrirPainelJogo(role, evento, { id: jogoDoc.id, ...jogoDoc.data() });
+            }
+            return;
+        }
+        
+        const btnDeleteJogoInterno = target.closest('.btn-delete-jogo-interno');
+        if (btnDeleteJogoInterno) {
+            const { eventoId, jogoId } = btnDeleteJogoInterno.dataset;
+            deleteJogo(eventoId, jogoId);
+            return;
+        }
+
+        // Cliques em itens de lista (Times, Jogos)
+        const timeCard = target.closest('#times-container-view .clickable');
+        if (timeCard) {
+            const { timeId, eventoId } = timeCard.dataset;
+            if (timeId && eventoId) showFichaTime(eventoId, timeId);
+            return;
+        }
+
+        const jogoInternoCard = target.closest('#jogos-internos-container .clickable');
+        if (jogoInternoCard) {
+            const { eventoId, jogoId } = jogoInternoCard.dataset;
+            const evento = eventos.find(ev => ev.id === eventoId);
+            const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
+            const jogoDoc = await getDoc(jogoRef);
+            if (evento && jogoDoc.exists()) {
+                const jogo = { id: jogoDoc.id, ...jogoDoc.data() };
+                const role = currentUserProfile ? currentUserProfile.role : null;
+                abrirPainelJogo(role, evento, jogo);
+            }
+            return;
+        }
+        
+        const itemJogoExterno = target.closest('#jogos-realizados-container .clickable');
+        if (itemJogoExterno) {
+            const { eventoId, jogoId } = itemJogoExterno.dataset;
+            if (eventoId && jogoId) showFichaJogoDetalhes(eventoId, jogoId);
+            return;
+        }
+    }
+
+    // --- 3. LÓGICA DE NAVEGAÇÃO E AÇÕES GLOBAIS ---
+    const card = target.closest('.player-card, .championship-card');
+    if (card && card.closest('#grid-jogadores, #grid-eventos-andamento, #grid-eventos-proximos, #grid-eventos-finalizados')) {
+        if (card.classList.contains('player-card')) {
             const id = card.dataset.id;
             if (target.closest('.btn-edit-jogador')) showJogadorModal(id);
             else if (target.closest('.btn-delete-jogador')) deleteJogador(id);
             else showFichaJogador(id);
-        }
-        return;
-    }
-    if (target.id === 'btn-abrir-modal-jogador') {
-        showJogadorModal();
-        return;
-    }
-
-    // --- Lógica da Página de Eventos ---
-    if (target.closest('.card-grid')) {
-        const card = target.closest('.championship-card');
-        if (card) {
+        } else if (card.classList.contains('championship-card')) {
             const id = card.dataset.id;
             if (target.dataset.action === 'start') updateEventStatus(id, 'andamento');
             else if (target.dataset.action === 'finish') updateEventStatus(id, 'finalizado');
             else if (target.closest('.btn-edit-camp')) showEventoModal(id);
             else if (target.closest('.btn-delete-camp')) deleteEvento(id);
             else showFichaEvento(id);
-            return;
         }
+        return;
     }
-     if (target.id === 'btn-abrir-modal-evento') {
+
+    if (target.id === 'btn-abrir-modal-jogador') {
+        showJogadorModal();
+        return;
+    }
+    if (target.id === 'btn-abrir-modal-evento') {
         showEventoModal();
         return;
     }
-    
-    // --- Lógica da Página de Admin ---
+
     if (target.closest('#admin-users-table')) {
-        handleAdminActions(e); // Delega a ação para a função do módulo admin
+        handleAdminActions(e);
         return;
     }
 
-    const modalVerEvento = target.closest('#modal-ver-campeonato');
-if (modalVerEvento) {
-    // Clique em Jogo de Torneio INTERNO
-    const jogoInternoCard = target.closest('#jogos-internos-container .clickable');
-    if (jogoInternoCard) {
-        const { eventoId, jogoId } = jogoInternoCard.dataset;
-        const evento = eventos.find(ev => ev.id === eventoId); 
-        const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
-        const jogoDoc = await getDoc(jogoRef);
-        
-        if (evento && jogoDoc.exists()) {
-            const jogo = { id: jogoDoc.id, ...jogoDoc.data() };
-            // LÓGICA CORRIGIDA: Define a permissão como a do usuário ou null se não estiver logado
-            const role = currentUserProfile ? currentUserProfile.role : null;
-            abrirPainelJogo(role, evento, jogo);
-        }
-        return;
-    }
-
-    // Clique em Jogo de Torneio EXTERNO
-    const itemJogoExterno = target.closest('#jogos-realizados-container .clickable');
-    if (itemJogoExterno) {
-        const { eventoId, jogoId } = itemJogoExterno.dataset;
-        const role = currentUserProfile ? currentUserProfile.role : null; // Define a permissão da mesma forma
-
-        // Ações de admin (são tratadas dentro do painel)
-        if (target.closest('.btn-painel-jogo-view') || !target.closest('button')) {
-            const evento = eventos.find(c => c.id === eventoId);
-            const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
-            const jogoDoc = await getDoc(jogoRef);
-            if(jogoDoc.exists()) {
-                abrirPainelJogo(role, evento, { id: jogoDoc.id, ...jogoDoc.data() });
-            }
-        } 
-        // Ação padrão para qualquer usuário: ver detalhes do jogo (se não for o botão do painel)
-        else if (eventoId && jogoId && !target.closest('.btn-painel-jogo-view')) {
-             showFichaJogoDetalhes(eventoId, jogoId);
-        }
-        return;
-    }
-}
-    
-    // --- Lógica de Navegação Principal ---
     const navCard = target.closest('.nav-card');
     if (navCard) {
         const page = navCard.getAttribute('data-target');
@@ -149,9 +158,9 @@ if (modalVerEvento) {
         if (eventoId) showFichaEvento(eventoId);
         return;
     }
-    
+
     const backButton = target.closest('.btn-back-home');
-    if(backButton) {
+    if (backButton) {
         navigateTo('home');
         return;
     }
