@@ -22,9 +22,39 @@ const welcomeMessage = document.getElementById('welcome-message');
 export function navigateTo(page) {
     const template = document.getElementById(`template-${page}`);
     if (template) {
-        appContainer.innerHTML = template.innerHTML;
+        // Limpa o contêiner antes de adicionar novo conteúdo
+        appContainer.innerHTML = '';
+
+        // Clona o conteúdo do template para um fragmento de documento
+        const content = template.content.cloneNode(true);
+        
+        // Encontra todos os scripts dentro do template clonado
+        const scripts = content.querySelectorAll('script');
+        
+        // Adiciona o HTML/elementos (sem os scripts) ao contêiner principal
+        appContainer.appendChild(content);
+
+        // Executa os scripts encontrados
+        // O navegador não executa scripts inseridos via innerHTML ou appendChild diretamente.
+        // É preciso recriá-los para que sejam executados.
+        scripts.forEach(script => {
+            const newScript = document.createElement('script');
+            // Copia todos os atributos (src, defer, async, etc.) para o novo script
+            for (const attr of script.attributes) {
+                newScript.setAttribute(attr.name, attr.value);
+            }
+            // Se houver código dentro da tag <script>, copia também
+            if (script.innerHTML) {
+                newScript.innerHTML = script.innerHTML;
+            }
+            // Adiciona o novo script à página, o que fará com que ele seja executado
+            appContainer.appendChild(newScript);
+        });
+
+        // Dispara o evento para notificar que a página foi carregada
         const event = new CustomEvent('page-loaded', { detail: { page: page } });
         document.body.dispatchEvent(event);
+
     } else {
         console.error(`Template para a página "${page}" não encontrado.`);
         appContainer.innerHTML = `<p>Erro: Página não encontrada.</p>`;

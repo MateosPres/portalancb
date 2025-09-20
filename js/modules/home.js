@@ -46,13 +46,35 @@ function renderOngoingEvents() {
     });
 }
 
+function loadInstagramWidget() {
+    // Procura o contêiner do widget na página
+    const container = document.querySelector('.sk-instagram-feed');
+    if (container) {
+        // Remove qualquer script antigo para garantir uma recarga limpa
+        const oldScript = document.getElementById('sociablekit-script');
+        if (oldScript) {
+            oldScript.remove();
+        }
+
+        // Cria a nova tag de script
+        const script = document.createElement('script');
+        script.src = 'https://widgets.sociablekit.com/instagram-feed/widget.js';
+        script.id = 'sociablekit-script'; // Dá um ID para encontrá-lo depois
+        script.async = true;
+        script.defer = true;
+        
+        // Adiciona o script ao corpo do documento, o que fará com que ele seja executado
+        document.body.appendChild(script);
+    }
+}
+
 // Função de inicialização do módulo
+// A sua função initHome() deve ficar assim, sem a chamada para loadInstagramWidget
 export function initHome() {
-    // Ouve o evento de navegação para saber quando a página 'home' foi carregada
     document.body.addEventListener('page-loaded', (e) => {
         if (e.detail.page === 'home') {
             renderOngoingEvents();
+            // A chamada para loadInstagramWidget() foi removida daqui
         }
     });
 }
-
