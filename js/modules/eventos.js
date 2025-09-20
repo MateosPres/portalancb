@@ -269,12 +269,51 @@ async function handleFormSubmitEvento(e) {
 
 export async function deleteEvento(id) {
     if (userRole !== 'admin') return;
-    if (confirm('Tem certeza que deseja excluir este evento e TODOS os seus jogos?')) {
+    if (confirm('Tem certeza que deseja excluir este evento? TODOS os seus jogos e estatísticas de jogadores associadas serão PERMANENTEMENTE apagados. Esta ação é irreversível.')) {
+        
+        // Futuramente, aqui você pode adicionar um indicador de "carregando..."
+        
         try {
+            // Passo 1: Encontrar todos os jogos dentro da subcoleção do evento
+            const jogosRef = collection(db, "eventos", id, "jogos");
+            const jogosSnapshot = await getDocs(jogosRef);
+
+            const deletePromises = []; // Um array para guardar todas as operações de exclusão
+
+            // Passo 2: Iterar sobre cada jogo encontrado
+            for (const jogoDoc of jogosSnapshot.docs) {
+                // Para cada jogo, encontrar e adicionar à lista de exclusão todas as suas 'cestas'
+                const cestasRef = collection(db, "eventos", id, "jogos", jogoDoc.id, "cestas");
+                const cestasSnapshot = await getDocs(cestasRef);
+                cestasSnapshot.forEach(cestaDoc => {
+                    deletePromises.push(deleteDoc(cestaDoc.ref));
+                });
+
+                // Faz o mesmo para a subcoleção 'estatisticas', se houver
+                const statsRef = collection(db, "eventos", id, "jogos", jogoDoc.id, "estatisticas");
+                const statsSnapshot = await getDocs(statsRef);
+                statsSnapshot.forEach(statDoc => {
+                    deletePromises.push(deleteDoc(statDoc.ref));
+                });
+
+                // Adiciona a exclusão do próprio documento do jogo à lista
+                deletePromises.push(deleteDoc(jogoDoc.ref));
+            }
+
+            // Passo 3: Executar todas as promessas de exclusão de uma vez
+            await Promise.all(deletePromises);
+
+            // Passo 4: Depois que todo o conteúdo interno foi apagado, apagar o evento principal
             await deleteDoc(doc(db, "eventos", id));
+
+            alert('Evento e todos os seus dados associados foram excluídos com sucesso.');
             closeModal(modalVerEvento);
+
         } catch (error) {
-            alert("Não foi possível excluir o evento.");
+            console.error("Erro ao executar a exclusão em cascata:", error);
+            alert("Ocorreu um erro ao apagar todos os dados do evento. Verifique o console.");
+        } finally {
+            // Futuramente, aqui você pode remover o indicador de "carregando..."
         }
     }
 }
