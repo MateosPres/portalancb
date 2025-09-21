@@ -810,11 +810,7 @@ body.modal-open { overflow: hidden; }
 #ver-jogo-header h2 {
     margin: 0;
 }
-.placar-final {
-    font-size: 2rem;
-    font-weight: bold;
-    color: var(--cor-preto);
-}
+
 #jogo-estatisticas-container {
     display: flex;
     flex-direction: column;
@@ -946,7 +942,6 @@ body.modal-open { overflow: hidden; }
     display: flex;
     justify-content: space-around;
     align-items: center;
-    border: 2px solid #eee;
     background-color: var(--cor-preto);
     color: var(--cor-branco);
     border-radius: 12px;
@@ -2009,3 +2004,31 @@ body.modal-open { overflow: hidden; }
 #painel-distribuicao-container { order: 2; }
 .painel-divisor { order: 3; }
 .painel-log-section { order: 4; }
+
+
+/* Unifica o estilo do placar do modal "Ver Jogo" */
+
+#ver-jogo-header {
+    background-color: var(--cor-preto);
+    color: var(--cor-branco);
+    border-radius: 12px;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+#ver-jogo-header h2 {
+    font-size: 1.1rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.9;
+    margin: 0 0 5px 0;
+}
+
+#ver-jogo-header .placar-final {
+    font-size: 3.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--cor-branco); /* Garante que o texto do placar seja branco */
+}

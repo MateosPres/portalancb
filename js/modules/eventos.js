@@ -997,70 +997,77 @@ async function renderJogosEClassificacao(eventoId) {
 }
 
 export async function showFichaJogoDetalhes(eventoId, jogoId) {
-    const todosJogadores = getJogadores();
+    const modal = document.getElementById('modal-ver-jogo');
     const container = document.getElementById('jogo-estatisticas-container');
+    const header = document.getElementById('ver-jogo-header');
+    
     container.innerHTML = '<p>Carregando estatísticas...</p>';
-    openModal(document.getElementById('modal-ver-jogo'));
+    header.innerHTML = ''; // Limpa o cabeçalho antigo
+    openModal(modal);
 
     try {
         const todosJogadores = getJogadores();
         const jogoRef = doc(db, "eventos", eventoId, "jogos", jogoId);
         const jogoDoc = await getDoc(jogoRef);
+
         if (!jogoDoc.exists()) {
-            container.innerHTML = '<p>Jogo não encontrado.</p>';
+            header.innerHTML = '<h2>Jogo não encontrado</h2>';
+            container.innerHTML = '';
             return;
         }
+
         const jogo = jogoDoc.data();
-        document.getElementById('ver-jogo-titulo').textContent = `ANCB vs ${jogo.adversario}`;
-        document.getElementById('ver-jogo-placar-final').textContent = `${jogo.placarANCB_final} x ${jogo.placarAdversario_final}`;
+
+        // --- NOVA LÓGICA PARA RECONSTRUIR O PLACAR ---
+        const placarANCB = jogo.placarANCB_final || 0;
+        const placarAdversario = jogo.placarAdversario_final || 0;
+        
+        // Assume que o time da casa é sempre 'ANCB' para jogos externos
+        const timeCasaNome = 'ANCB'; 
+        const timeVisitanteNome = jogo.adversario;
+
+        header.innerHTML = `
+            <div class="painel-scoreboard" style="margin-bottom: 0;">
+                <div class="team-score">
+                    <span class="team-name">${timeCasaNome}</span>
+                    <div class="score-display">${placarANCB}</div>
+                </div>
+                <div class="team-score">
+                    <span class="team-name">${timeVisitanteNome}</span>
+                    <div class="score-display">${placarAdversario}</div>
+                </div>
+            </div>
+        `;
+        // --- FIM DA NOVA LÓGICA ---
 
         const cestasRef = collection(db, "eventos", eventoId, "jogos", jogoId, "cestas");
         const q = query(cestasRef, where("jogadorId", "!=", null));
         const cestasSnapshot = await getDocs(q);
 
         if (cestasSnapshot.empty) {
-            container.innerHTML = '<p>Nenhuma pontuação individual registada para este jogo.</p>';
+            container.innerHTML = '<p>Nenhuma pontuação individual registrada para este jogo.</p>';
             return;
         }
+
         const statsPorJogador = {};
         cestasSnapshot.forEach(doc => {
             const cesta = doc.data();
-            // Tenta encontrar o jogador correspondente na lista principal
-            const jogadorInfo = todosJogadores.find(j => j.id === cesta.jogadorId);
-
-            // SÓ PROSSEGUE SE O JOGADOR FOI ENCONTRADO
-            if (jogadorInfo) {
-                if (!statsPorJogador[cesta.jogadorId]) {
-                    statsPorJogador[cesta.jogadorId] = {
-                        nome: jogadorInfo.nome,
-                        apelido: jogadorInfo.apelido || null,
-                        foto: jogadorInfo.foto || null,
-                        cestas1: 0, cestas2: 0, cestas3: 0, total: 0
-                    };
-                }
-                statsPorJogador[cesta.jogadorId][`cestas${cesta.pontos}`]++;
-                statsPorJogador[cesta.jogadorId].total += cesta.pontos;
+            if (!statsPorJogador[cesta.jogadorId]) {
+                const jogadorInfo = todosJogadores.find(j => j.id === cesta.jogadorId);
+                statsPorJogador[cesta.jogadorId] = {
+                    nome: jogadorInfo?.nome || cesta.nomeJogador,
+                    apelido: jogadorInfo?.apelido || null,
+                    foto: jogadorInfo?.foto || null,
+                    cestas1: 0, cestas2: 0, cestas3: 0, total: 0
+                };
             }
+            statsPorJogador[cesta.jogadorId][`cestas${cesta.pontos}`]++;
+            statsPorJogador[cesta.jogadorId].total += cesta.pontos;
         });
 
-// --- BLOCO DE CÓDIGO FINAL E CORRIGIDO ---
+        const sortedStats = Object.entries(statsPorJogador).sort(([, a], [, b]) => b.total - a.total);
 
-        // Converte o objeto de estatísticas em uma lista (array)
-        const statsAsArray = Object.values(statsPorJogador);
-
-        // Filtra a lista para manter apenas jogadores com mais de 0 pontos
-        const filteredStats = statsAsArray.filter(stats => stats.total > 0);
-        
-        // Ordena a lista filtrada. A função .sort() modifica a própria variável 'filteredStats'.
-        filteredStats.sort((a, b) => b.total - a.total);
-        
-        // Agora, usamos a lista que já foi filtrada e ordenada.
-        const sortedStats = filteredStats;
-        // --- FIM DO BLOCO CORRIGIDO ---
-
-        console.log('Conteúdo de sortedStats:', sortedStats);
-
-        let headerHTML = `
+        let html = `
             <div class="stat-header">
                 <span class="header-jogador">Jogador</span>
                 <div class="header-pontos">
@@ -1069,37 +1076,28 @@ export async function showFichaJogoDetalhes(eventoId, jogoId) {
                     <span title="Cestas de 3 Pontos">3PT</span>
                     <strong>Total</strong>
                 </div>
-            </div>
-        `;
+            </div>`;
 
-        let jogadoresHTML = '';
-        // Substituímos o .forEach por um loop 'for' clássico
-        for (let i = 0; i < sortedStats.length; i++) {
-            const stats = sortedStats[i]; // Pega o jogador atual da lista
-
-            // O resto da lógica é exatamente o mesmo de antes
-            if (!stats) continue; // Medida de segurança extra
-
-            const fotoHTML = stats.foto ? `<img src="${stats.foto}" alt="${stats.nome}">` : '<div class="placeholder">🏀</div>';
-            const nomeExibicao = stats.apelido ? `${stats.nome.split(' ')[0]} "${stats.apelido}"` : stats.nome;
-            
-            jogadoresHTML += `
+        sortedStats.forEach(([jogadorId, stats]) => {
+            const perfil = todosJogadores.find(j => j.id === jogadorId);
+            const fotoHTML = perfil?.foto ? `<img src="${perfil.foto}" alt="${stats.nome}">` : '<div class="placeholder">🏀</div>';
+            const nomeExibicao = stats.apelido ? `${perfil.nome.split(' ')[0]} "${stats.apelido}"` : stats.nome;
+            html += `
                 <div class="stat-jogador-item">
                     <div class="stat-jogador-info">
                         ${fotoHTML}
                         <span>${nomeExibicao}</span>
                     </div>
                     <div class="stat-jogador-pontos">
-                        <span>${stats.cestas1 || 0}</span>
-                        <span>${stats.cestas2 || 0}</span>
-                        <span>${stats.cestas3 || 0}</span>
-                        <strong>${stats.total || 0} Pts</strong>
+                        <span>${stats.cestas1}</span>
+                        <span>${stats.cestas2}</span>
+                        <span>${stats.cestas3}</span>
+                        <strong>${stats.total} Pts</strong>
                     </div>
-                </div>
-            `;
-        }
+                </div>`;
+        });
+        container.innerHTML = html;
 
-        container.innerHTML = headerHTML + jogadoresHTML;
     } catch (error) {
         console.error("Erro ao buscar detalhes do jogo:", error);
         container.innerHTML = '<p>Não foi possível carregar as estatísticas.</p>';
