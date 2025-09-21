@@ -965,7 +965,8 @@ async function renderJogosEClassificacao(eventoId) {
                 const perfilJogador = todosJogadores.find(j => j.id === player.jogadorId);
                 const fotoHTML = perfilJogador?.foto ? `<img src="${perfilJogador.foto}" alt="${player.nome}" class="leaderboard-player-photo">` : '<div class="leaderboard-player-photo placeholder">🏀</div>';
                 const media = player.jogos > 0 ? (player.pontos / player.jogos).toFixed(1) : 0;
-                const nomeExibicao = player.apelido ? `${player.nome} "${player.apelido}"` : player.nome;
+                const primeiroNome = player.nome.split(' ')[0];
+                const nomeExibicao = player.apelido ? `${primeiroNome} "${player.apelido}"` : primeiroNome;
                 leaderboardHTML += `
                     <div class="leaderboard-item">
                         <span class="leaderboard-rank">${index + 1}</span>
@@ -996,6 +997,7 @@ async function renderJogosEClassificacao(eventoId) {
 }
 
 export async function showFichaJogoDetalhes(eventoId, jogoId) {
+    const todosJogadores = getJogadores();
     const container = document.getElementById('jogo-estatisticas-container');
     container.innerHTML = '<p>Carregando estatísticas...</p>';
     openModal(document.getElementById('modal-ver-jogo'));
@@ -1023,22 +1025,42 @@ export async function showFichaJogoDetalhes(eventoId, jogoId) {
         const statsPorJogador = {};
         cestasSnapshot.forEach(doc => {
             const cesta = doc.data();
-            if (!statsPorJogador[cesta.jogadorId]) {
-                const jogadorInfo = todosJogadores.find(j => j.id === cesta.jogadorId);
-                statsPorJogador[cesta.jogadorId] = {
-                    nome: jogadorInfo?.nome || cesta.nomeJogador,
-                    apelido: jogadorInfo?.apelido || null,
-                    foto: jogadorInfo?.foto || null,
-                    cestas1: 0, cestas2: 0, cestas3: 0, total: 0
-                };
+            // Tenta encontrar o jogador correspondente na lista principal
+            const jogadorInfo = todosJogadores.find(j => j.id === cesta.jogadorId);
+
+            // SÓ PROSSEGUE SE O JOGADOR FOI ENCONTRADO
+            if (jogadorInfo) {
+                if (!statsPorJogador[cesta.jogadorId]) {
+                    statsPorJogador[cesta.jogadorId] = {
+                        nome: jogadorInfo.nome,
+                        apelido: jogadorInfo.apelido || null,
+                        foto: jogadorInfo.foto || null,
+                        cestas1: 0, cestas2: 0, cestas3: 0, total: 0
+                    };
+                }
+                statsPorJogador[cesta.jogadorId][`cestas${cesta.pontos}`]++;
+                statsPorJogador[cesta.jogadorId].total += cesta.pontos;
             }
-            statsPorJogador[cesta.jogadorId][`cestas${cesta.pontos}`]++;
-            statsPorJogador[cesta.jogadorId].total += cesta.pontos;
         });
 
-        const sortedStats = Object.entries(statsPorJogador).sort(([, a], [, b]) => b.total - a.total);
+// --- BLOCO DE CÓDIGO FINAL E CORRIGIDO ---
 
-        let html = `
+        // Converte o objeto de estatísticas em uma lista (array)
+        const statsAsArray = Object.values(statsPorJogador);
+
+        // Filtra a lista para manter apenas jogadores com mais de 0 pontos
+        const filteredStats = statsAsArray.filter(stats => stats.total > 0);
+        
+        // Ordena a lista filtrada. A função .sort() modifica a própria variável 'filteredStats'.
+        filteredStats.sort((a, b) => b.total - a.total);
+        
+        // Agora, usamos a lista que já foi filtrada e ordenada.
+        const sortedStats = filteredStats;
+        // --- FIM DO BLOCO CORRIGIDO ---
+
+        console.log('Conteúdo de sortedStats:', sortedStats);
+
+        let headerHTML = `
             <div class="stat-header">
                 <span class="header-jogador">Jogador</span>
                 <div class="header-pontos">
@@ -1051,42 +1073,33 @@ export async function showFichaJogoDetalhes(eventoId, jogoId) {
         `;
 
         let jogadoresHTML = '';
-        sortedStats.forEach(([jogadorId, stats]) => {
+        // Substituímos o .forEach por um loop 'for' clássico
+        for (let i = 0; i < sortedStats.length; i++) {
+            const stats = sortedStats[i]; // Pega o jogador atual da lista
+
+            // O resto da lógica é exatamente o mesmo de antes
+            if (!stats) continue; // Medida de segurança extra
+
             const fotoHTML = stats.foto ? `<img src="${stats.foto}" alt="${stats.nome}">` : '<div class="placeholder">🏀</div>';
-            // Lógica para o nome de exibição
-            const nomeExibicao = stats.apelido ? `${stats.nome} "${stats.apelido}"` : stats.nome;
+            const nomeExibicao = stats.apelido ? `${stats.nome.split(' ')[0]} "${stats.apelido}"` : stats.nome;
+            
             jogadoresHTML += `
                 <div class="stat-jogador-item">
                     <div class="stat-jogador-info">
                         ${fotoHTML}
                         <span>${nomeExibicao}</span>
                     </div>
-                    ...
+                    <div class="stat-jogador-pontos">
+                        <span>${stats.cestas1 || 0}</span>
+                        <span>${stats.cestas2 || 0}</span>
+                        <span>${stats.cestas3 || 0}</span>
+                        <strong>${stats.total || 0} Pts</strong>
+                    </div>
                 </div>
             `;
-        });
+        }
 
         container.innerHTML = headerHTML + jogadoresHTML;
-
-        sortedStats.forEach(([jogadorId, stats]) => {
-            const perfil = todosJogadores.find(j => j.id === jogadorId);
-            const fotoHTML = perfil?.foto ? `<img src="${perfil.foto}" alt="${stats.nome}">` : '<div class="placeholder">🏀</div>';
-            html += `
-                <div class="stat-jogador-item">
-                    <div class="stat-jogador-info">
-                        ${fotoHTML}
-                        <span>${stats.nome}</span>
-                    </div>
-                    <div class="stat-jogador-pontos">
-                        <span>${stats.cestas1}</span>
-                        <span>${stats.cestas2}</span>
-                        <span>${stats.cestas3}</span>
-                        <strong>${stats.total} Pts</strong>
-                    </div>
-                </div>
-            `;
-        });
-        container.innerHTML = html;
     } catch (error) {
         console.error("Erro ao buscar detalhes do jogo:", error);
         container.innerHTML = '<p>Não foi possível carregar as estatísticas.</p>';
