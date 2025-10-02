@@ -26,23 +26,35 @@ function renderEventCard(evento) {
 // Função que busca e renderiza os eventos em andamento
 function renderOngoingEvents() {
     const grid = document.getElementById('grid-eventos-andamento-home');
-    if (!grid) return; // Se a grid não estiver na página, não faz nada
+    // Pega a seção inteira pelo novo ID que criamos
+    const secao = document.getElementById('secao-eventos-andamento');
+
+    if (!grid || !secao) {
+        // Se os elementos não existirem na página, não faz nada
+        return;
+    }
 
     const q = query(collection(db, "eventos"), where("status", "==", "andamento"), orderBy("data", "desc"));
     
     onSnapshot(q, (snapshot) => {
         if (snapshot.empty) {
-            grid.innerHTML = '<p>Nenhum evento em andamento no momento.</p>';
-            return;
+            // Se não houver eventos, simplesmente ESCONDE a seção inteira
+            secao.style.display = 'none';
+        } else {
+            // Se houver eventos, garante que a seção esteja VISÍVEL
+            secao.style.display = 'block';
+            
+            // E então, preenche a grid com os cards dos eventos
+            grid.innerHTML = '';
+            snapshot.forEach(doc => {
+                const evento = { id: doc.id, ...doc.data() };
+                grid.innerHTML += renderEventCard(evento);
+            });
         }
-        grid.innerHTML = '';
-        snapshot.forEach(doc => {
-            const evento = { id: doc.id, ...doc.data() };
-            grid.innerHTML += renderEventCard(evento);
-        });
     }, (error) => {
         console.error("Erro ao buscar eventos em andamento: ", error);
-        grid.innerHTML = '<p>Não foi possível carregar os eventos.</p>';
+        // Em caso de erro, também é uma boa prática esconder a seção
+        secao.style.display = 'none';
     });
 }
 

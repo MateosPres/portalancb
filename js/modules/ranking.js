@@ -8,6 +8,8 @@ import { getJogadores } from "./jogadores.js"; // Vamos reutilizar a função qu
 let allPlayers = [];
 let allBaskets = [];
 let allGames = [];
+let processedRankingData = [];
+let initializationPromise = null; 
 
 let currentSeason = new Date().getFullYear().toString();
 let currentCategory = 'Aberto';
@@ -80,7 +82,7 @@ function processStats() {
                 } else if (basket.pontos === 2) {
                     player.cestasFora++;
                 }
-            } else { 
+            } else if (game.modalidade === '5x5') { 
                 // No 5x5 (padrão): 1=LL, 2=dentro, 3=fora
                 if (basket.pontos === 1) {
                     player.lancesLivres++;
@@ -105,11 +107,11 @@ function render() {
     if (!container || !title) return;
 
     // 1. Processa as estatísticas gerais
-    let processedData = processStats();
+    processedRankingData = processStats();
 
     // 2. Filtra por Temporada
     const seasonGames = allGames.filter(g => g.dataJogo.startsWith(currentSeason)).map(g => g.id);
-    let seasonData = processedData.filter(p => {
+     let seasonData = processedRankingData.filter(p => {
         return allBaskets.some(b => b.jogadorId === p.info.id && seasonGames.includes(b.gameId));
     });
 
@@ -199,9 +201,14 @@ async function loadAndRenderRanking() {
 
 
 export function initRanking() {
-    document.body.addEventListener('page-loaded', (e) => {
+    document.body.addEventListener('page-loaded', async (e) => { // Adicione async
         if (e.detail.page === 'ranking') {
-            loadAndRenderRanking();
+            // Opcional: Mostra um loader enquanto os dados carregam
+            const container = document.getElementById('ranking-table-container');
+            if(container) container.innerHTML = '<div class="grid-loader"></div>';
+            
+            await initializeRankingData(); // Espera os dados estarem prontos
+            render(); // Apenas renderiza os dados que já foram carregados
         }
     });
 
@@ -227,4 +234,25 @@ export function initRanking() {
             render();
         }
     });
+}
+
+export async function getRankingData() {
+    await initializeRankingData(); // Garante que a inicialização terminou
+    return processedRankingData;
+}
+
+export async function getValidGames() {
+    await initializeRankingData(); // Garante que a inicialização terminou
+    return allGames;
+}
+
+export function initializeRankingData() {
+    if (!initializationPromise) {
+        initializationPromise = (async () => {
+            await fetchData();
+            processedRankingData = processStats();
+            console.log("Dados de ranking e jogos inicializados globalmente.");
+        })();
+    }
+    return initializationPromise;
 }
