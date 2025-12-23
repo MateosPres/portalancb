@@ -8,9 +8,8 @@ import { eventos, initEventos, showEventoModal, showFichaEvento, deleteEvento, u
 import { initAdmin, handleTableClick as handleAdminActions, setAdminVisibility } from './modules/admin.js';
 import { initPainelJogo, abrirPainelJogo } from './modules/painelJogo.js';
 import { initHome } from './modules/home.js';
-import { initRanking, initializeRankingData } from './modules/ranking.js';
+import { initRanking } from './modules/ranking.js'; // <-- ADICIONE ESTA LINHA
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-
 
 
 
@@ -258,7 +257,6 @@ function onUserLogout() {
 function main() {
     initModals();
     initAuth(onUserLogin, onUserLogout);
-    initializeRankingData();
     initJogadores();
     initEventos();
     initAdmin();
