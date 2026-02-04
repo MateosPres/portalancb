@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { FeedPost } from '../types';
-import { LucideAlertTriangle, LucideYoutube, LucideX, LucideCalendar } from 'lucide-react';
+import { LucideAlertTriangle, LucideYoutube, LucideX, LucideCalendar, LucidePlay } from 'lucide-react';
 
 export const Feed: React.FC = () => {
     const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -35,16 +35,31 @@ export const Feed: React.FC = () => {
         return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' }).format(date);
     };
 
-    const getYoutubeEmbed = (url: string) => {
+    // Helper to extract ID
+    const getYoutubeId = (url: string) => {
         try {
-            const videoId = url.split('v=')[1]?.split('&')[0] || url.split('youtu.be/')[1];
-            if (videoId) {
-                return `https://www.youtube.com/embed/${videoId}`;
-            }
-            return null;
+            return url.split('v=')[1]?.split('&')[0] || url.split('youtu.be/')[1];
         } catch {
             return null;
         }
+    };
+
+    const getYoutubeEmbed = (url: string) => {
+        const videoId = getYoutubeId(url);
+        if (videoId) {
+            return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+        }
+        return null;
+    };
+
+    const getYoutubeThumbnail = (url: string) => {
+        const videoId = getYoutubeId(url);
+        if (videoId) {
+            // Tenta pegar a imagem de alta resolução. 
+            // Se falhar visualmente em alguns vídeos antigos, pode-se usar hqdefault.jpg
+            return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+        }
+        return null;
     };
 
     // Helper to render the modal content based on post type
@@ -125,7 +140,7 @@ export const Feed: React.FC = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {posts.map(post => {
-                    const videoSrc = post.content.link_video ? getYoutubeEmbed(post.content.link_video) : null;
+                    const videoThumbnail = post.content.link_video ? getYoutubeThumbnail(post.content.link_video) : null;
                     const dateStr = formatTime(post.timestamp).split(' às ')[0]; // Show only date on card
 
                     // --- CARD: PLACAR ---
@@ -191,14 +206,20 @@ export const Feed: React.FC = () => {
                             onClick={() => setSelectedPost(post)}
                             className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group"
                         >
-                            {videoSrc ? (
-                                <div className="aspect-video w-full bg-black relative group-hover:opacity-90 transition-opacity">
-                                    <iframe 
-                                        src={videoSrc} 
-                                        className="w-full h-full pointer-events-none" // Disable pointer events on card so click goes to card handler
-                                        tabIndex={-1}
-                                    ></iframe>
-                                    <div className="absolute inset-0 bg-transparent"></div> {/* Overlay to capture click */}
+                            {/* VIDEO THUMBNAIL (FACADE) */}
+                            {videoThumbnail ? (
+                                <div className="aspect-video w-full bg-black relative flex items-center justify-center overflow-hidden">
+                                    <img 
+                                        src={videoThumbnail} 
+                                        alt="Video Thumbnail" 
+                                        className="w-full h-full object-cover opacity-80 group-hover:opacity-60 transition-opacity transform group-hover:scale-105 duration-500" 
+                                    />
+                                    {/* Custom Play Button Overlay */}
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                            <LucidePlay className="text-white fill-white ml-1" size={20} />
+                                        </div>
+                                    </div>
                                 </div>
                             ) : post.image_url ? (
                                 <div className="h-48 w-full overflow-hidden">
