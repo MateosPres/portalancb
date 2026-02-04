@@ -1,0 +1,5 @@
+{
+  "name": "Portal ANCB-MT",
+  "description": "Portal da Associação de Amigos do Basquetebol de Nova Canaã do Norte - MT. Gerenciamento de jogos, estatísticas e ranking.",
+  "requestFramePermissions": []
+}

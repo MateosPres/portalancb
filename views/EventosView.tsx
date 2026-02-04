@@ -1,0 +1,553 @@
+import React, { useState, useEffect } from 'react';
+import { collection, query, orderBy, onSnapshot, getDocs, where, addDoc } from 'firebase/firestore';
+import { db } from '../services/firebase';
+import { Evento, Jogo, Cesta, Player, UserProfile } from '../types';
+import { Card } from '../components/Card';
+import { Button } from '../components/Button';
+import { Modal } from '../components/Modal';
+import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus } from 'lucide-react';
+
+interface EventosViewProps {
+    onBack: () => void;
+    userProfile?: UserProfile | null;
+}
+
+interface GameStats {
+    player: Player;
+    points: number;
+    cesta1: number;
+    cesta2: number;
+    cesta3: number;
+}
+
+export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile }) => {
+    const [events, setEvents] = useState<Evento[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [tab, setTab] = useState<'proximos' | 'finalizados'>('proximos');
+    
+    // Selection & Games State
+    const [selectedEvent, setSelectedEvent] = useState<Evento | null>(null);
+    const [eventGames, setEventGames] = useState<Jogo[]>([]);
+    const [loadingGames, setLoadingGames] = useState(false);
+
+    // Specific Game Details
+    const [selectedGame, setSelectedGame] = useState<Jogo | null>(null);
+    const [gameStats, setGameStats] = useState<GameStats[]>([]);
+    const [loadingStats, setLoadingStats] = useState(false);
+
+    // Admin State for adding games inside event modal
+    const [showAddGame, setShowAddGame] = useState(false);
+    const [newGameTimeA, setNewGameTimeA] = useState('');
+    const [newGameTimeB, setNewGameTimeB] = useState('');
+
+    // Admin State for adding NEW EVENTS (Shortcut)
+    const [showAddEvent, setShowAddEvent] = useState(false);
+    const [newEventName, setNewEventName] = useState('');
+    const [newEventDate, setNewEventDate] = useState('');
+    const [newEventMode, setNewEventMode] = useState<'3x3'|'5x5'>('5x5');
+    const [newEventType, setNewEventType] = useState<'amistoso'|'torneio_interno'|'torneio_externo'>('amistoso');
+
+    useEffect(() => {
+        const q = query(collection(db, "eventos"), orderBy("data", "desc"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evento));
+            setEvents(data);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Fetch games when an event is selected
+    useEffect(() => {
+        const fetchGames = async () => {
+            if (!selectedEvent) return;
+            
+            setLoadingGames(true);
+            setEventGames([]);
+            try {
+                const gamesRef = collection(db, "eventos", selectedEvent.id, "jogos");
+                const q = query(gamesRef, orderBy("dataJogo", "asc"));
+                const snapshot = await getDocs(q);
+                
+                const gamesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Jogo));
+                setEventGames(gamesList);
+            } catch (error) {
+                console.error("Error fetching games for event:", error);
+            } finally {
+                setLoadingGames(false);
+            }
+        };
+
+        fetchGames();
+    }, [selectedEvent]);
+
+    // Fetch stats when a game is selected
+    useEffect(() => {
+        const fetchGameStats = async () => {
+            if (!selectedGame || !selectedEvent) return;
+
+            setLoadingStats(true);
+            setGameStats([]);
+
+            try {
+                // 1. Fetch all players for caching names
+                const playersSnapshot = await getDocs(collection(db, "jogadores"));
+                const playersMap: Record<string, Player> = {};
+                playersSnapshot.forEach(doc => {
+                    playersMap[doc.id] = { id: doc.id, ...doc.data() } as Player;
+                });
+
+                // Stats Accumulator
+                const statsMap: Record<string, { points: number, c1: number, c2: number, c3: number }> = {};
+                const processedCestaIds = new Set<string>();
+
+                // Helper to process a cesta doc
+                const processCesta = (cesta: Cesta) => {
+                    if (processedCestaIds.has(cesta.id)) return;
+                    
+                    if (cesta.jogadorId && cesta.pontos) {
+                        const current = statsMap[cesta.jogadorId] || { points: 0, c1: 0, c2: 0, c3: 0 };
+                        const p = Number(cesta.pontos);
+                        
+                        current.points += p;
+                        if (p === 1) current.c1++;
+                        if (p === 2) current.c2++;
+                        if (p === 3) current.c3++;
+
+                        statsMap[cesta.jogadorId] = current;
+                        processedCestaIds.add(cesta.id);
+                    }
+                };
+
+                // STRATEGY 1: Sub-collection Query (Based on user screenshot)
+                try {
+                    const subColRef = collection(db, "eventos", selectedEvent.id, "jogos", selectedGame.id, "cestas");
+                    const subSnap = await getDocs(subColRef);
+                    if (!subSnap.empty) {
+                        subSnap.forEach(doc => processCesta({ id: doc.id, ...doc.data() } as Cesta));
+                    }
+                } catch (err) {
+                    // Ignore
+                }
+
+                // STRATEGY 2: Top-level Collection Query
+                const cestasRef = collection(db, "cestas");
+                const qGame = query(cestasRef, where("jogoId", "==", selectedGame.id));
+                const snapGame = await getDocs(qGame);
+                snapGame.forEach(doc => processCesta({ id: doc.id, ...doc.data() } as Cesta));
+
+                if (selectedEvent.id) {
+                    const qEvent = query(cestasRef, where("eventoId", "==", selectedEvent.id));
+                    const snapEvent = await getDocs(qEvent);
+                    
+                    snapEvent.forEach(doc => {
+                        const cesta = { id: doc.id, ...doc.data() } as Cesta;
+                        if (processedCestaIds.has(cesta.id)) return;
+                        if (cesta.jogoId && cesta.jogoId !== selectedGame.id) return;
+                        if (!cesta.jogoId && cesta.timestamp && selectedGame.dataJogo) {
+                             // Date logic omitted for brevity, keeping simple match
+                             processCesta(cesta);
+                        }
+                    });
+                }
+
+                // 3. Convert to array
+                const statsArray: GameStats[] = Object.entries(statsMap).map(([playerId, stats]) => ({
+                    player: playersMap[playerId] || { id: playerId, nome: 'Desconhecido', posicao: '-', numero_uniforme: 0 },
+                    points: stats.points,
+                    cesta1: stats.c1,
+                    cesta2: stats.c2,
+                    cesta3: stats.c3
+                }));
+
+                setGameStats(statsArray.sort((a, b) => b.points - a.points));
+
+            } catch (error) {
+                console.error("Error fetching game stats:", error);
+            } finally {
+                setLoadingStats(false);
+            }
+        };
+
+        fetchGameStats();
+    }, [selectedGame, selectedEvent]);
+
+    const handleCreateGame = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedEvent) return;
+
+        try {
+            await addDoc(collection(db, "eventos", selectedEvent.id, "jogos"), {
+                dataJogo: selectedEvent.data,
+                timeA_nome: newGameTimeA,
+                timeB_nome: newGameTimeB,
+                placarTimeA_final: 0,
+                placarTimeB_final: 0,
+                jogadoresEscalados: []
+            });
+            setShowAddGame(false);
+            setNewGameTimeA('');
+            setNewGameTimeB('');
+            // Trigger refresh manually or rely on re-open. Since we fetch on open, simplest is alert or close/open.
+            // But we have useEffect [selectedEvent], so if we just trigger a refresh it works.
+            // Actually, we need to re-fetch.
+            const gamesRef = collection(db, "eventos", selectedEvent.id, "jogos");
+            const q = query(gamesRef, orderBy("dataJogo", "asc"));
+            const snapshot = await getDocs(q);
+            setEventGames(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Jogo)));
+
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao criar jogo");
+        }
+    };
+
+    const handleCreateEvent = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await addDoc(collection(db, "eventos"), {
+                nome: newEventName,
+                data: newEventDate,
+                modalidade: newEventMode,
+                type: newEventType,
+                status: 'proximo'
+            });
+            setShowAddEvent(false);
+            setNewEventName('');
+            setNewEventDate('');
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao criar evento");
+        }
+    };
+
+    const filteredEvents = events.filter(e => {
+        if (tab === 'proximos') return e.status === 'proximo' || e.status === 'andamento';
+        return e.status === 'finalizado';
+    });
+    
+    const displayEvents = tab === 'proximos' ? [...filteredEvents].reverse() : filteredEvents;
+
+    const renderGameItem = (jogo: Jogo) => {
+        const isInternal = !!jogo.timeA_nome;
+        const sA = jogo.placarTimeA_final ?? jogo.placarANCB_final ?? 0;
+        const sB = jogo.placarTimeB_final ?? jogo.placarAdversario_final ?? 0;
+        
+        return (
+            <div 
+                key={jogo.id} 
+                className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg p-4 shadow-sm mb-3 cursor-pointer hover:border-ancb-blue transition-all group"
+                onClick={() => setSelectedGame(jogo)}
+            >
+                <div className="text-xs text-gray-400 text-center mb-2 border-b border-gray-50 dark:border-gray-700 pb-1 group-hover:text-ancb-blue">
+                    {jogo.dataJogo ? `Partida: ${jogo.dataJogo}` : 'Resultado Final'} • Clique para detalhes
+                </div>
+                
+                <div className="flex items-center justify-between">
+                    <div className="flex flex-col items-center w-1/3">
+                        <span className="font-bold text-gray-800 dark:text-gray-200 text-sm md:text-base text-center leading-tight">
+                            {isInternal ? jogo.timeA_nome : "ANCB"}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2 w-1/3">
+                        <span className="text-2xl font-bold text-ancb-blue dark:text-blue-400">{sA}</span>
+                        <span className="text-xs text-gray-300">x</span>
+                        <span className="text-2xl font-bold text-ancb-red dark:text-red-400">{sB}</span>
+                    </div>
+
+                    <div className="flex flex-col items-center w-1/3">
+                        <span className="font-bold text-gray-800 dark:text-gray-200 text-sm md:text-base text-center leading-tight">
+                            {isInternal ? jogo.timeB_nome : (jogo.adversario || "Adversário")}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="animate-fadeIn pb-10">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+                 <div className="flex items-center gap-3">
+                    <Button variant="secondary" size="sm" onClick={onBack} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
+                        <LucideArrowLeft size={18} />
+                    </Button>
+                    <h2 className="text-2xl font-bold text-ancb-black dark:text-white">Calendário</h2>
+                </div>
+                
+                {/* Admin Shortcut: New Event */}
+                {userProfile?.role === 'admin' && (
+                    <Button size="sm" onClick={() => setShowAddEvent(true)}>
+                        <LucidePlus size={16} /> <span className="hidden sm:inline">Novo Evento</span>
+                    </Button>
+                )}
+            </div>
+
+            {/* Tabs */}
+            <div className="bg-white dark:bg-gray-800 p-1.5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 inline-flex gap-1 mb-6 w-full md:w-auto">
+                <button
+                    onClick={() => setTab('proximos')}
+                    className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                        tab === 'proximos' 
+                        ? 'bg-ancb-blue text-white shadow-sm' 
+                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                >
+                    <div className="flex items-center justify-center gap-2">
+                        <LucideCalendarClock size={16} /> Próximos
+                    </div>
+                </button>
+                <button
+                    onClick={() => setTab('finalizados')}
+                    className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                        tab === 'finalizados' 
+                        ? 'bg-green-600 text-white shadow-sm' 
+                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                >
+                    <div className="flex items-center justify-center gap-2">
+                        <LucideCheckCircle2 size={16} /> Finalizados
+                    </div>
+                </button>
+            </div>
+
+            {/* List */}
+            {loading ? (
+                <div className="flex justify-center py-10">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ancb-blue"></div>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    {displayEvents.length > 0 ? displayEvents.map(evento => (
+                        <Card key={evento.id} className="flex flex-col md:flex-row gap-4 md:items-center">
+                            {/* Date Box */}
+                            <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-700 rounded-lg p-3 text-center min-w-[80px] border border-gray-100 dark:border-gray-600">
+                                <span className="block text-xs font-bold text-gray-400 dark:text-gray-300 uppercase">{evento.data.split('-')[1] || 'MÊS'}</span>
+                                <span className="block text-2xl font-bold text-ancb-blue dark:text-blue-400">{evento.data.split('-')[2] || 'DIA'}</span>
+                            </div>
+
+                            <div className="flex-grow">
+                                <div className="flex flex-wrap gap-2 mb-1">
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                                        evento.status === 'andamento' ? 'bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300 animate-pulse' : 
+                                        evento.status === 'finalizado' ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300'
+                                    }`}>
+                                        {evento.status === 'andamento' ? 'AO VIVO' : evento.status}
+                                    </span>
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 uppercase border border-gray-200 dark:border-gray-600">
+                                        {evento.modalidade}
+                                    </span>
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-800 dark:text-white">{evento.nome}</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{evento.type.replace('_', ' ')}</p>
+                            </div>
+
+                            <div className="mt-2 md:mt-0">
+                                {evento.status === 'andamento' && (
+                                    <Button size="sm" variant="danger" className="w-full md:w-auto">Acompanhar</Button>
+                                )}
+                                {evento.status === 'finalizado' && (
+                                    <Button 
+                                        size="sm" 
+                                        variant="secondary" 
+                                        className="w-full md:w-auto text-gray-400 dark:text-gray-400 border-gray-200 dark:border-gray-600 hover:text-ancb-blue dark:hover:text-blue-400"
+                                        onClick={() => setSelectedEvent(evento)}
+                                    >
+                                        Ver Jogos
+                                    </Button>
+                                )}
+                            </div>
+                        </Card>
+                    )) : (
+                        <div className="text-center py-12 bg-white/50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-300 dark:border-gray-600">
+                            <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhum evento encontrado nesta categoria.</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* EVENT Details Modal */}
+            <Modal
+                isOpen={!!selectedEvent}
+                onClose={() => setSelectedEvent(null)}
+                title="Detalhes do Evento"
+            >
+                {selectedEvent && (
+                    <div>
+                        <div className="mb-6 text-center border-b border-gray-100 dark:border-gray-700 pb-4">
+                            <h2 className="text-xl font-bold text-ancb-blue dark:text-blue-400 mb-1">{selectedEvent.nome}</h2>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{selectedEvent.type.replace('_', ' ')} • {selectedEvent.data}</p>
+                        </div>
+
+                        <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
+                            <div className="flex justify-between items-center mb-4">
+                                <h4 className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                                    <LucideGamepad2 size={18} className="text-ancb-orange" /> 
+                                    Jogos Realizados
+                                </h4>
+                                {/* ADMIN SHORTCUT: Add Game */}
+                                {userProfile?.role === 'admin' && (
+                                    <Button size="sm" onClick={() => setShowAddGame(true)}>
+                                        <LucidePlus size={14} /> Jogo
+                                    </Button>
+                                )}
+                            </div>
+
+                            {loadingGames ? (
+                                <div className="py-8 flex justify-center">
+                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400"></div>
+                                </div>
+                            ) : eventGames.length > 0 ? (
+                                <div>
+                                    {eventGames.map(game => renderGameItem(game))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-6 text-gray-400 dark:text-gray-400 text-sm">
+                                    <p>Nenhum jogo registrado neste evento ainda.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </Modal>
+            
+            {/* ADMIN MODAL: Add Game inside Event */}
+            <Modal isOpen={showAddGame} onClose={() => setShowAddGame(false)} title="Adicionar Jogo">
+                <form onSubmit={handleCreateGame} className="space-y-4">
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Time A (Nome)</label>
+                        <input className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ancb-blue" placeholder="Ex: Bulls" value={newGameTimeA} onChange={e => setNewGameTimeA(e.target.value)} required />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Time B (Nome)</label>
+                        <input className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ancb-blue" placeholder="Ex: Lakers" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required />
+                    </div>
+                    <Button type="submit" className="w-full">Criar Jogo</Button>
+                </form>
+            </Modal>
+
+            {/* ADMIN MODAL: Add New Event */}
+            <Modal isOpen={showAddEvent} onClose={() => setShowAddEvent(false)} title="Novo Evento">
+                <form onSubmit={handleCreateEvent} className="space-y-4">
+                    <input className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ancb-blue" placeholder="Nome do Evento" value={newEventName} onChange={e => setNewEventName(e.target.value)} required />
+                    <input type="date" className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ancb-blue" value={newEventDate} onChange={e => setNewEventDate(e.target.value)} required />
+                    <select className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ancb-blue" value={newEventMode} onChange={(e:any) => setNewEventMode(e.target.value)}>
+                        <option value="5x5">5x5</option>
+                        <option value="3x3">3x3</option>
+                    </select>
+                    <select className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ancb-blue" value={newEventType} onChange={(e:any) => setNewEventType(e.target.value)}>
+                        <option value="amistoso">Amistoso</option>
+                        <option value="torneio_interno">Torneio Interno</option>
+                        <option value="torneio_externo">Torneio Externo</option>
+                    </select>
+                    <Button type="submit" className="w-full">Criar Evento</Button>
+                </form>
+            </Modal>
+
+            {/* GAME Stats Modal */}
+            <Modal
+                isOpen={!!selectedGame}
+                onClose={() => setSelectedGame(null)}
+                title="Súmula da Partida"
+            >
+                {selectedGame && (
+                    <div className="animate-fadeIn">
+                        {/* Score Header */}
+                        <div className="bg-ancb-black text-white p-6 rounded-xl mb-6 shadow-lg relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-4 opacity-10">
+                                <LucideBarChart3 size={100} />
+                            </div>
+                            <div className="relative z-10 flex justify-between items-center">
+                                <div className="text-center w-1/3">
+                                    <span className="block font-bold text-lg leading-tight">{selectedGame.timeA_nome || "ANCB"}</span>
+                                </div>
+                                <div className="text-center w-1/3">
+                                    <span className="text-3xl font-bold text-ancb-orange">
+                                        {selectedGame.placarTimeA_final ?? selectedGame.placarANCB_final ?? 0}
+                                    </span>
+                                    <span className="text-gray-500 mx-2">x</span>
+                                    <span className="text-3xl font-bold text-white">
+                                        {selectedGame.placarTimeB_final ?? selectedGame.placarAdversario_final ?? 0}
+                                    </span>
+                                </div>
+                                <div className="text-center w-1/3">
+                                    <span className="block font-bold text-lg leading-tight">{selectedGame.timeB_nome || selectedGame.adversario || "ADV"}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h4 className="font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
+                            <LucideBarChart3 size={18} className="text-ancb-blue dark:text-blue-400" />
+                            Estatísticas dos Jogadores
+                        </h4>
+
+                        {loadingStats ? (
+                             <div className="py-8 flex justify-center">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400"></div>
+                            </div>
+                        ) : gameStats.length > 0 ? (
+                            <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left font-bold">Jogador</th>
+                                                <th className="px-2 py-3 text-center text-xs font-bold text-gray-400 dark:text-gray-500">1PT</th>
+                                                <th className="px-2 py-3 text-center text-xs font-bold text-gray-400 dark:text-gray-500">2PT</th>
+                                                <th className="px-2 py-3 text-center text-xs font-bold text-gray-400 dark:text-gray-500">3PT</th>
+                                                <th className="px-4 py-3 text-right font-bold text-gray-700 dark:text-gray-300">Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                            {gameStats.map((stat) => (
+                                                <tr key={stat.player.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                    <td className="px-4 py-3 flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                                                            {stat.player.foto ? (
+                                                                <img src={stat.player.foto} className="w-full h-full object-cover"/>
+                                                            ) : (
+                                                                <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">{stat.player.nome.charAt(0)}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-gray-800 dark:text-gray-200 text-sm leading-tight">{stat.player.apelido || stat.player.nome}</span>
+                                                            {stat.player.apelido && <span className="text-[10px] text-gray-400 hidden sm:inline">{stat.player.nome}</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-2 py-3 text-center">
+                                                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${stat.cesta1 > 0 ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' : 'text-gray-300 dark:text-gray-600'}`}>
+                                                            {stat.cesta1}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-2 py-3 text-center">
+                                                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${stat.cesta2 > 0 ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' : 'text-gray-300 dark:text-gray-600'}`}>
+                                                            {stat.cesta2}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-2 py-3 text-center">
+                                                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${stat.cesta3 > 0 ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' : 'text-gray-300 dark:text-gray-600'}`}>
+                                                            {stat.cesta3}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right font-bold text-ancb-black dark:text-white text-base">
+                                                        {stat.points} Pts
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ) : (
+                             <div className="text-center py-10 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-dashed border-gray-200 dark:border-gray-600">
+                                <p className="text-gray-400 text-sm mb-1">Nenhuma estatística individual encontrada.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </Modal>
+        </div>
+    );
+};

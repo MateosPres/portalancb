@@ -2,515 +2,81 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Portal ANCB-MT</title>
-
-    <!-- Favicon para navegadores -->
-    <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
-    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="assets/icon-192.png">
-    
-    <!-- Manifest para PWA / Android -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#0B0F12">
-
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-    
-    <!-- CSS -->
-    <link rel="stylesheet" href="css/style.css?v=1.3">
-    <link rel="stylesheet" href="css/home.css?v=1.3">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class', // Enable manual dark mode toggling
+            theme: {
+                extend: {
+                    colors: {
+                        ancb: {
+                            red: '#A62626',
+                            redLight: '#D92E2E',
+                            blue: '#0D47A1',
+                            blueLight: '#1976D2',
+                            orange: '#F27405',
+                            black: '#0B0F12',
+                            grayBg: '#f3f4f6',
+                            darkBg: '#111827', // Gray-900
+                            darkCard: '#1f2937', // Gray-800
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Roboto', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            /* Handled by Tailwind classes on the body tag in App.tsx or default behavior, 
+               but we set a base here just in case */
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        .dark ::-webkit-scrollbar-track {
+            background: #1f2937; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ccc; 
+            border-radius: 3px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #4b5563; 
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #aaa; 
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "firebase/": "https://esm.sh/firebase@^12.8.0/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
 </head>
-<body>
-    <header class="site-header">
-        <div class="container header-container">
-            <div class="header-left">
-                <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="logo">
-                <h1>Portal ANCB-MT</h1>
-            </div>
-            <div class="header-right">
-                <div class="logged-in-only">
-                    <span id="welcome-message"></span>
-                    <button id="btn-manage-users" class="btn btn-secondary btn-sm admin-only">Gerenciar Usuários</button>
-                    <button id="btn-logout" class="btn btn-logout btn-sm">Sair</button>
-                </div>
-                <div class="logged-out-only">
-                    <button id="btn-show-login" class="btn btn-secondary btn-sm">Login</button>
-                    <button id="btn-show-register" class="btn btn-primary btn-sm">Registrar</button>
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <main class="container" id="app-container">
-        <!-- O conteúdo agora será gerenciado pelo main.js -->
-    </main>
-
-    <footer class="site-footer">
-        <p>&copy; 2025 ANCB-MT. Todos os direitos reservados.</p>
-    </footer>
-
-    <!-- Templates das Páginas -->
-    <template id="template-home">
-        <!-- Estrutura simplificada, sem colunas. Apenas secções uma abaixo da outra. -->
-        <section class="dashboard-section">
-            <h2>🏆 Eventos em Andamento</h2>
-            <div id="grid-eventos-andamento-home" class="card-grid-home">
-                <div class="grid-loader"></div>
-            </div>
-        </section>
-
-        <section class="dashboard-section">
-            <!-- Grelha para os cards de navegação ficarem lado a lado -->             
-            <div class="nav-grid-horizontal">
-                <a class="nav-card" data-target="eventos" data-emoji="📅">
-                    <h3>Eventos</h3>
-                    <p>Veja o calendário completo de jogos e torneios.</p>
-                </a>
-                <a class="nav-card" data-target="jogadores" data-emoji="🏀">
-                    <h3>Jogadores</h3>
-                    <p>Conheça os atletas da nossa associação.</p>
-                </a>
-                <a class="nav-card" data-target="ranking" data-emoji="🏆">
-                    <h3>Ranking Global</h3>
-                    <p>Veja as estatísticas e a classificação dos atletas.</p>
-                </a>
-            </div>
-        </section>
-
-<section class="dashboard-section">
-    <h2>Últimas Notícias</h2>
-<div class="embedsocial-hashtag" data-ref="859589469f77c6f28b08333a73e2d9c6cc962efc"> <a class="feed-powered-by-es feed-powered-by-es-feed-img es-widget-branding" href="https://embedsocial.com/social-media-aggregator/" target="_blank" title="Instagram widget"> <img src="https://embedsocial.com/cdn/icon/embedsocial-logo.webp" alt="EmbedSocial"> <div class="es-widget-branding-text">Instagram widget</div> </a> </div> <script> (function(d, s, id) { var js; if (d.getElementById(id)) {return;} js = d.createElement(s); js.id = id; js.src = "https://embedsocial.com/cdn/ht.js"; d.getElementsByTagName("head")[0].appendChild(js); }(document, "script", "EmbedSocialHashtagScript")); </script>
-</section>
-
-    </template>
-
-    <template id="template-eventos">
-        <div class="page-content">
-            <button class="btn-back-home">← Voltar</button>
-            <div class="section-header">
-                 <button id="btn-abrir-modal-evento" class="btn btn-primary admin-only">🏆 Adicionar Evento</button>
-            </div>
-            <div class="event-section">
-                <h2>Em Andamento</h2>
-                <div id="grid-eventos-andamento" class="card-grid"><div class="grid-loader"></div></div>
-            </div>
-            <div class="event-section">
-                <h2>Próximos Eventos</h2>
-                <div id="grid-eventos-proximos" class="card-grid">
-                     <div class="grid-loader"></div>
-                </div>
-            </div>
-            <div class="event-section">
-                <h2>Histórico de Eventos</h2>
-                <div id="grid-eventos-finalizados" class="card-grid">
-                     <div class="grid-loader"></div>
-                </div>
-            </div>
-        </div>
-    </template>
-    
-    <template id="template-jogadores">
-         <div class="page-content">
-            <button class="btn-back-home">← Voltar</button>
-            <div class="section-header">
-                <button id="btn-abrir-modal-jogador" class="btn btn-primary admin-only">➕ Cadastrar Jogador</button>
-            </div>
-            <div id="grid-jogadores" class="card-grid">
-                <div class="grid-loader"></div>
-            </div>
-        </div>
-    </template>
-
-    <template id="template-admin">
-        <div class="page-content">
-             <button class="btn-back-home">← Voltar</button>
-             <div class="section-header">
-                <h2>Gerenciar Usuários</h2>
-            </div>
-            <div id="admin-users-table-wrapper">
-                <table id="admin-users-table">
-                    <thead>
-                        <tr>
-                            <th>Email</th>
-                            <th>Nome</th>
-                            <th>Status</th>
-                            <th>Permissão</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-table-body"></tbody>
-                </table>
-            </div>
-        </div>
-    </template>
-
-    <template id="template-ranking">
-    <div class="page-content">
-
-        <div class="ranking-header">
-            <button class="btn-back-home">← Voltar</button>
-            <div class="control-group">
-                <label>Categoria</label>
-                <div class="btn-group">
-                    <button class="btn btn-sm btn-category active" data-category="Aberto">Aberto</button>
-                    <button class="btn btn-sm btn-category" data-category="Juvenil">Juvenil</button>
-                </div>
-            </div>
-            <div class="control-group">
-                <label for="season-select">Temporada</label>
-                <select id="season-select" class="form-control-sm"></select>
-            </div>
-        </div>
-
-        <div class="ranking-controls">
-            <div class="control-group">
-                <div class="btn-group">
-                    <button class="btn btn-sm btn-filter active" data-filter="pontos">Geral (Pontos)</button>
-                    <button class="btn btn-sm btn-filter" data-filter="cestasFora">Cestas de Fora</button>
-                    <button class="btn btn-sm btn-filter" data-filter="cestasDentro">Cestas de Dentro</button>
-                    <button class="btn btn-sm btn-filter" data-filter="lancesLivres">Lances Livres</button>
-                </div>
-            </div>
-        </div>
-
-        <h2 id="ranking-title" class="ranking-title"></h2>
-
-        <div id="ranking-table-container">
-            <div class="grid-loader"></div>
-        </div>
-    </div>
-</template>
-
-
-    <!-- Modais e outros elementos ocultos -->
-    <div id="login-container" class="auth-container">
-        <div class="auth-box">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="login-logo">
-            <h2>ANCB-MT Login</h2>
-            <form id="login-form">
-                <div class="form-group"> <input type="email" id="login-email" placeholder="Email" required> </div>
-                <div class="form-group"> <input type="password" id="login-password" placeholder="Senha" required> </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%;">Entrar</button>
-                <p id="login-error" class="auth-error">Email ou senha inválidos.</p>
-            </form>
-            <p id="toggle-to-register" class="auth-toggle-link">Não tem uma conta? Registre-se</p>
-        </div>
-    </div>
-    <div id="register-container" class="auth-container">
-        <div class="auth-box">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <img src="Escudo ABNC.png" alt="Escudo ANCB-MT" class="login-logo">
-            <h2>Criar Conta</h2>
-            <form id="register-form">
-                <div class="form-group"> <input type="text" id="register-nome" placeholder="Nome Completo" required> </div>
-                <div class="form-group"> <input type="text" id="register-apelido" placeholder="Apelido" required> </div>
-                <div class="form-group"> <label for="register-nascimento" class="inline-label">Data de Nascimento</label> <input type="date" id="register-nascimento" required> </div>
-                <div class="form-group"> <input type="email" id="register-email" placeholder="Email" required> </div>
-                <div class="form-group"> <input type="password" id="register-password" placeholder="Senha (mínimo 6 caracteres)" required> </div>
-                <div class="form-group"> <input type="password" id="register-password-confirm" placeholder="Confirmar Senha" required> </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%;">Registrar</button>
-                <p id="register-error" class="auth-error">Ocorreu um erro.</p>
-            </form>
-            <p id="toggle-to-login" class="auth-toggle-link">Já tem uma conta? Faça o login</p>
-        </div>
-    </div>
-    <div id="modal-backdrop" class="modal-backdrop"></div>
-    <div id="modal-jogador" class="modal">
-        <div class="modal-content">
-            <div class="loading-overlay"><div class="spinner"></div></div>
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2 id="modal-jogador-titulo"></h2>
-            <form id="form-jogador">
-                <input type="hidden" id="documento-id">
-                <div class="form-group">
-                    <label for="foto">Foto de Perfil</label>
-                    <input type="file" id="foto" accept="image/*">
-                    <img id="preview-foto" src="" alt="Pré-visualização da foto">
-                </div>
-                <div class="form-group">
-                    <label for="nome">Nome Completo</label>
-                    <input type="text" id="nome" required>
-                </div>
-                <div class="form-group">
-                    <label for="apelido">Apelido</label>
-                    <input type="text" id="apelido" required>
-                </div>
-                <div class="form-group">
-                    <label for="cpf">CPF</label>
-                    <input type="text" id="cpf" required>
-                </div>
-                <div class="form-group">
-                    <label for="nascimento">Data de Nascimento</label>
-                    <input type="date" id="nascimento" required>
-                </div>
-                <div class="form-group">
-                    <label for="posicao">Posição</label>
-                    <select id="posicao" required>
-                        <option value="">Selecione...</option>
-                        <option value="Armador (PG)">Armador (PG)</option>
-                        <option value="Ala-Armador (SG)">Ala-Armador (SG)</option>
-                        <option value="Ala (SF)">Ala (SF)</option>
-                        <option value="Ala-Pivô (PF)">Ala-Pivô (PF)</option>
-                        <option value="Pivô (C)">Pivô (C)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="numero_uniforme">Nº Uniforme</label>
-                    <input type="number" id="numero_uniforme" min="0" required>
-                </div>
-                <button type="submit" class="btn btn-primary">Salvar</button>
-            </form>
-        </div>
-    </div>
-    <div id="modal-ver-jogador" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2>Ficha do Jogador</h2>
-            <div id="ficha-jogador"></div>
-            <div id="jogador-estatisticas-container" style="display: none;">
-                <hr class="stats-divisor">
-                <div id="stats-resumo-carreira"></div>
-                <div id="stats-por-evento"></div>
-            </div>
-        </div>
-    </div>
-    <div id="modal-evento" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2 id="modal-evento-titulo">Adicionar Novo Evento</h2>
-            <div id="evento-step-1">
-                <label class="form-label">Qual tipo de evento deseja criar?</label>
-                <div class="event-type-selection">
-                    <button class="event-type-btn" data-type="torneio_externo">
-                        <h4>🏆 Torneio Externo</h4>
-                        <p>A ANCB joga contra times de outras cidades/associações.</p>
-                    </button>
-                    <button class="event-type-btn" data-type="torneio_interno">
-                        <h4>🤝 Torneio Interno</h4>
-                        <p>Vários times customizados formados por jogadores da ANCB.</p>
-                    </button>
-                    <button class="event-type-btn" data-type="amistoso">
-                        <h4>🏀 Jogo Amistoso</h4>
-                        <p>Um único jogo ou partida isolada contra um adversário.</p>
-                    </button>
-                </div>
-            </div>
-            <div id="evento-step-2" style="display: none;">
-                <form id="form-evento">
-                    <input type="hidden" id="evento-id">
-                    <input type="hidden" id="evento-type">
-                    <div class="form-group">
-                        <label for="evento-nome">Nome do Evento</label>
-                        <input type="text" id="evento-nome" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="evento-data">Data</label>
-                        <input type="date" id="evento-data" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="evento-modalidade">Modalidade</label>
-                        <select id="evento-modalidade" required>
-                            <option value="5x5">Basquete 5x5</option>
-                            <option value="3x3">Basquete 3x3</option>
-                        </select>
-                    </div>
-                    <div class="form-group campo-amistoso">
-                        <label for="evento-adversario">Nome do Adversário</label>
-                        <input type="text" id="evento-adversario">
-                    </div>
-                    <div class="form-group campo-torneio-externo campo-amistoso">
-                        <label>Escalar Jogadores (Time ANCB)</label>
-                        <div id="lista-jogadores-escalar"></div>
-                    </div>
-                    <div id="secao-gerenciar-times" class="form-group" style="display: none;">
-                        <hr>
-                        <label style="font-size: 1.2rem; margin-bottom: 10px;">Times do Torneio</label>
-                        <div id="lista-de-times"></div>
-                        <button type="button" id="btn-adicionar-time" class="btn btn-secondary" style="margin-top: 10px;">+ Adicionar Time</button>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Salvar Evento</button>
-                </form>
-            </div>
-        </div>
-    </div>
-    <div id="modal-ver-campeonato" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <div class="modal-loader-container" style="display: none;">
-                <div class="spinner"></div>
-                <p>Carregando dados do evento...</p>
-            </div>
-            <div class="modal-data-content">
-                <h2 id="ver-campeonato-titulo"></h2>
-                <p id="ver-campeonato-data"></p>
-                <div id="ver-campeonato-tabs-nav" class="tab-like-nav"></div>
-                <div id="ver-campeonato-tabs-content"></div>
-            </div>
-        </div>
-    </div>
-    <div id="modal-ver-time" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2 id="ver-time-nome"></h2>
-            <div id="ver-time-elenco-container"></div>
-        </div>
-    </div>
-    <div id="modal-jogo-interno" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2>Adicionar Jogo Interno</h2>
-            <form id="form-jogo-interno">
-                <div class="form-group">
-                    <label for="jogo-interno-data">Data do Jogo</label>
-                    <input type="date" id="jogo-interno-data" required>
-                </div>
-                <div class="form-group">
-                    <label for="select-time-a">Time A</label>
-                    <select id="select-time-a" required>
-                        <option value="">Selecione um time...</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="select-time-b">Time B</label>
-                    <select id="select-time-b" required>
-                        <option value="">Selecione um time...</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-primary">Salvar Jogo</button>
-            </form>
-        </div>
-    </div>
-    <div id="modal-edit-user" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2 id="modal-edit-user-titulo">Editar Usuário</h2>
-            <form id="form-edit-user">
-                <input type="hidden" id="edit-user-id">
-                <div class="form-group">
-                    <label for="edit-user-nome">Nome Completo</label>
-                    <input type="text" id="edit-user-nome" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit-user-apelido">Apelido</label>
-                    <input type="text" id="edit-user-apelido" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit-user-nascimento">Data de Nascimento</label>
-                    <input type="date" id="edit-user-nascimento" required>
-                </div>
-                <button type="submit" class="btn btn-primary">Salvar Alterações</button>
-            </form>
-        </div>
-    </div>
-    <div id="modal-jogo" class="modal">
-        <div class="modal-content">
-            <div class="loading-overlay"><div class="spinner"></div></div>
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2 id="modal-jogo-titulo">Adicionar Jogo</h2>
-            <form id="form-jogo">
-                <input type="hidden" id="jogo-id">
-                <input type="hidden" id="jogo-campeonato-id">
-                <div class="form-group">
-                    <label for="jogo-data">Data do Jogo</label>
-                    <input type="date" id="jogo-data" required>
-                </div>
-                <div class="form-group">
-                    <label for="jogo-adversario">Time Adversário</label>
-                    <input type="text" id="jogo-adversario" placeholder="Ex: Time Visitante" required>
-                </div>
-                <div id="placar-container"></div>
-                <hr style="margin: 20px 0;">
-                <h4>Estatísticas dos Jogadores</h4>
-                <div id="estatisticas-jogadores-container"></div>
-                <button type="submit" class="btn btn-primary" style="margin-top: 15px;">Salvar Jogo</button>
-            </form>
-        </div>
-    </div>
-    <div id="modal-ver-jogo" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <div id="ver-jogo-header">
-                <h2 id="ver-jogo-titulo"></h2>
-                <p id="ver-jogo-placar-final" class="placar-final"></p>
-            </div>
-            <hr>
-            <h3>Estatísticas dos Jogadores</h3>
-            <div id="jogo-estatisticas-container"></div>
-        </div>
-    </div>
-    <div id="modal-painel-jogo" class="modal modal-xl">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2 id="painel-jogo-titulo">Painel do Jogo: ANCB vs <span id="painel-adversario-nome-header"></span></h2>
-            <div id="painel-jogo-container">
-                <div class="painel-layout-grid">
-                    <div class="painel-secao-aovivo">
-                        <div class="painel-scoreboard">
-                            <div class="team-score">
-                                <span class="team-name">ANCB</span>
-                                <div id="placar-ancb-display" class="score-display">0</div>
-                            </div>
-                            <div class="team-score">
-                                <span id="painel-adversario-nome" class="team-name">Adversário</span>
-                                <div id="placar-adversario-display" class="score-display">0</div>
-                            </div>
-                        </div>
-                        <div class="painel-controls-grid">
-                            <div class="team-controls" id="controles-ancb">
-                                <div class="botoes-placar-pontos">
-                                    <button class="btn-placar add" data-points="1">+1</button>
-                                    <button class="btn-placar add" data-points="2">+2</button>
-                                    <button class="btn-placar add" data-points="3">+3</button>
-                                </div>
-                                <button id="btn-undo-point" class="btn-placar remove">Desfazer</button>
-                            </div>
-                            <div class="team-controls" id="controles-adversario">
-                                <div class="botoes-placar-pontos">
-                                    <button class="btn-placar add" data-points="1">+1</button>
-                                    <button class="btn-placar add" data-points="2">+2</button>
-                                    <button class="btn-placar add" data-points="3">+3</button>
-                                </div>
-                                <button class="btn-placar remove">Desfazer</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="painel-log-section">
-                        <h3>Registro de Cestas (ANCB)</h3>
-                        <div id="registro-cestas-container" class="registro-cestas"></div>
-                    </div>
-                </div>
-                <hr class="painel-divisor">
-                <div id="painel-distribuicao-container" class="painel-secao-distribuicao"></div>
-            </div>
-        </div>
-    </div>
-    <div id="modal-time" class="modal">
-        <div class="modal-content">
-            <button class="close-button" aria-label="Fechar">&times;</button>
-            <h2 id="modal-time-titulo">Adicionar Time</h2>
-            <form id="form-time">
-                <input type="hidden" id="time-id">
-                <div class="form-group">
-                    <label for="time-logo">Logo do Time</label>
-                    <input type="file" id="time-logo" accept="image/*">
-                    <img id="preview-logo-time" src="" alt="Pré-visualização do logo" class="preview-foto">
-                </div>
-                <div class="form-group">
-                    <label for="time-nome">Nome do Time</label>
-                    <input type="text" id="time-nome" required>
-                </div>
-                <div class="form-group">
-                    <label>Escalar Jogadores para este Time</label>
-                    <div id="lista-jogadores-escalar-time" class="lista-jogadores-escalar"></div>
-                </div>
-                <button type="submit" class="btn btn-primary">Salvar Time</button>
-            </form>
-        </div>
-    </div>
-
-    <script type="module" src="js/main.js"></script>
+<body class="bg-gray-100 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+    <div id="root"></div>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>
