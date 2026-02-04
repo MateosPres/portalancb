@@ -179,9 +179,9 @@ const App: React.FC = () => {
                 >
                     {/* Logo Image Replacement */}
                     <img 
-                        src="https://upload.wikimedia.org/wikipedia/commons/4/4e/Basketball_pictogram.svg" 
+                        src="https://i.imgur.com/4TxBrHs.png" 
                         alt="ANCB Logo" 
-                        className="h-10 w-auto invert brightness-0 filter"
+                        className="h-12 w-auto"
                     />
                     <h1 className="text-xl md:text-2xl font-bold tracking-wide">Portal ANCB-MT</h1>
                 </div>
