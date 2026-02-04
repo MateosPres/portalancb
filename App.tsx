@@ -81,7 +81,8 @@ const App: React.FC = () => {
             } else {
                 setUserProfile(null);
             }
-            setLoading(false);
+            // Delay slightly to show splash screen (optional, removes flicker)
+            setTimeout(() => setLoading(false), 800);
         });
         return () => unsubscribe();
     }, []);
@@ -170,8 +171,32 @@ const App: React.FC = () => {
         return `${day}/${month}/${year}`;
     };
 
+    // --- LOADING SPLASH SCREEN ---
+    if (loading) {
+        return (
+            <div className="fixed inset-0 bg-[#062553] flex flex-col items-center justify-center z-[9999] transition-opacity duration-500">
+                <div className="flex flex-col items-center animate-fadeIn">
+                    <div className="relative w-36 h-36 mb-8">
+                        {/* Glow Effect */}
+                        <div className="absolute inset-0 bg-blue-400 rounded-full blur-3xl opacity-20 animate-pulse"></div>
+                        <img 
+                            src="https://i.imgur.com/4TxBrHs.png" 
+                            alt="ANCB Logo" 
+                            className="relative w-full h-full object-contain"
+                        />
+                    </div>
+                    
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="w-12 h-12 border-4 border-blue-900 border-t-ancb-orange rounded-full animate-spin"></div>
+                        <span className="text-white/40 text-xs font-bold tracking-[0.3em] uppercase animate-pulse">Carregando</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const renderHeader = () => (
-        <header className="sticky top-0 z-50 bg-[#062553]/95 backdrop-blur-md shadow-lg text-white py-3 border-b border-white/10">
+        <header className="sticky top-0 z-50 bg-[#062553]/95 backdrop-blur-md shadow-lg text-white py-3 border-b border-white/10 animate-slideDown">
             <div className="container mx-auto px-4 flex flex-wrap justify-between items-center gap-4">
                 <div 
                     className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
@@ -348,17 +373,9 @@ const App: React.FC = () => {
     );
 
     const renderContent = () => {
-        if (loading) {
-            return (
-                <div className="flex items-center justify-center h-[60vh]">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ancb-orange"></div>
-                </div>
-            );
-        }
-
         switch (currentView) {
             case 'home': return renderHome();
-            case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} />;
+            case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onOpenGamePanel={handleOpenGamePanel} />;
             case 'jogadores': return <JogadoresView onBack={() => setCurrentView('home')} />;
             case 'ranking': return <RankingView onBack={() => setCurrentView('home')} />;
             case 'admin': 
@@ -367,7 +384,7 @@ const App: React.FC = () => {
                     : renderHome();
             case 'painel-jogo': 
                 return userProfile?.role === 'admin' && panelGame && panelEventId 
-                    ? <PainelJogoView game={panelGame} eventId={panelEventId} onBack={() => setCurrentView('admin')} /> 
+                    ? <PainelJogoView game={panelGame} eventId={panelEventId} onBack={() => setCurrentView('eventos')} /> 
                     : renderHome();
             case 'profile':
                 return userProfile 
