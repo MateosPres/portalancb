@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Portal ANCB-MT</title>
     
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
     <!-- Favicon e Ícone Mobile -->
-    <link rel="icon" type="image/png" href="https://i.imgur.com/4TxBrHs.png">
-    <link rel="apple-touch-icon" href="https://i.imgur.com/4TxBrHs.png">
+    <link rel="icon" type="image/png" href="https://i.imgur.com/SE2jHsz.png">
+    <link rel="apple-touch-icon" href="https://i.imgur.com/SE2jHsz.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#062553">
@@ -38,6 +41,26 @@
                     },
                     fontFamily: {
                         sans: ['Roboto', 'sans-serif'],
+                    },
+                    animation: {
+                        fadeIn: 'fadeIn 0.5s ease-in-out',
+                        slideUp: 'slideUp 0.5s ease-out',
+                        slideDown: 'slideDown 0.3s ease-out',
+                        'bounce-slow': 'bounce 3s infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        },
+                        slideDown: {
+                            '0%': { transform: 'translateY(-10px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        }
                     }
                 }
             }
