@@ -1,23 +1,29 @@
 {
-  "name": "portal-ancb-mt",
+  "name": "portal-ancb",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "homepage": "./",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
-    "react": "^19.2.4",
-    "firebase": "^12.8.0",
-    "lucide-react": "^0.563.0",
-    "react-dom": "^19.2.4"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "firebase": "^10.12.0",
+    "lucide-react": "^0.378.0",
+    "browser-image-compression": "^2.0.2"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.2.1",
+    "gh-pages": "^6.1.1",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11"
   }
 }

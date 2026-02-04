@@ -68,4 +68,20 @@ export interface Cesta {
     nomeJogador?: string | null;
 }
 
+export interface FeedPost {
+    id: string;
+    type: 'placar' | 'noticia' | 'aviso';
+    timestamp: any; // serverTimestamp
+    author_id: string;
+    image_url?: string | null;
+    content: {
+        titulo?: string;
+        resumo?: string;
+        time_adv?: string;
+        placar_ancb?: number;
+        placar_adv?: number;
+        link_video?: string;
+    };
+}
+
 export type ViewState = 'home' | 'eventos' | 'jogadores' | 'ranking' | 'admin' | 'painel-jogo' | 'profile';

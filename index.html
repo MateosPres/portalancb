@@ -4,13 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Portal ANCB-MT</title>
+    <!-- Mantemos o Tailwind via CDN para simplicidade na migração, 
+         mas em um projeto Vite profissional, recomenda-se instalar via PostCSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
-            darkMode: 'class', // Enable manual dark mode toggling
+            darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
@@ -22,8 +24,8 @@
                             orange: '#F27405',
                             black: '#0B0F12',
                             grayBg: '#f3f4f6',
-                            darkBg: '#111827', // Gray-900
-                            darkCard: '#1f2937', // Gray-800
+                            darkBg: '#111827',
+                            darkCard: '#1f2937',
                         }
                     },
                     fontFamily: {
@@ -35,12 +37,8 @@
     </script>
     <style>
         body {
-            /* Handled by Tailwind classes on the body tag in App.tsx or default behavior, 
-               but we set a base here just in case */
             transition: background-color 0.3s ease, color 0.3s ease;
         }
-        
-        /* Custom scrollbar for webkit */
         ::-webkit-scrollbar {
             width: 6px;
             height: 6px;
@@ -65,11 +63,14 @@
 <script type="importmap">
 {
   "imports": {
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
     "react/": "https://esm.sh/react@^19.2.4/",
     "react": "https://esm.sh/react@^19.2.4",
     "firebase/": "https://esm.sh/firebase@^12.8.0/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
+    "browser-image-compression": "https://esm.sh/browser-image-compression@^2.0.2"
   }
 }
 </script>
@@ -77,6 +78,6 @@
 </head>
 <body class="bg-gray-100 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
     <div id="root"></div>
-<script type="module" src="/index.tsx"></script>
+    <script type="module" src="/index.tsx"></script>
 </body>
 </html>

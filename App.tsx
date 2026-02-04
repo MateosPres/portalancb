@@ -6,6 +6,7 @@ import { doc, getDoc, setDoc, collection, query, where, onSnapshot, orderBy } fr
 import { Button } from './components/Button';
 import { Card } from './components/Card';
 import { Modal } from './components/Modal';
+import { Feed } from './components/Feed';
 import { JogadoresView } from './views/JogadoresView';
 import { EventosView } from './views/EventosView';
 import { RankingView } from './views/RankingView';
@@ -178,9 +179,9 @@ const App: React.FC = () => {
                 >
                     {/* Logo Image Replacement */}
                     <img 
-                        src="https://i.imgur.com/4TxBrHs.png" 
+                        src="https://upload.wikimedia.org/wikipedia/commons/4/4e/Basketball_pictogram.svg" 
                         alt="ANCB Logo" 
-                        className="h-14 w-auto object-contain drop-shadow-md"
+                        className="h-10 w-auto invert brightness-0 filter"
                     />
                     <h1 className="text-xl md:text-2xl font-bold tracking-wide">Portal ANCB-MT</h1>
                 </div>
@@ -341,13 +342,8 @@ const App: React.FC = () => {
                 </div>
             </section>
             
-            {/* Instagram Feed Placeholder */}
-            <section className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm text-center border border-gray-100 dark:border-gray-700 transition-colors">
-                 <h2 className="text-xl font-bold mb-4 text-gray-700 dark:text-gray-200">Últimas Notícias</h2>
-                 <div className="h-48 bg-gray-50 dark:bg-gray-700/50 rounded-lg flex items-center justify-center text-gray-400 dark:text-gray-500 border border-dashed border-gray-200 dark:border-gray-600">
-                    Siga @ancb_mt no Instagram
-                 </div>
-            </section>
+            {/* Feed Component */}
+            <Feed />
         </div>
     );
 
