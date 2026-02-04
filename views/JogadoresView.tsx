@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, getDocs, where } from 'firebase/firestore';
+import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Player, Evento, Jogo, Cesta } from '../types';
 import { PlayerCard } from '../components/PlayerCard';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucideSearch, LucideArrowLeft, LucideUsers, LucideRuler, LucideCalendarDays, LucideShirt, LucideChevronDown, LucideChevronUp, LucideGamepad2 } from 'lucide-react';
+import { LucideSearch, LucideArrowLeft, LucideUsers, LucideRuler, LucideCalendarDays, LucideShirt, LucideChevronDown, LucideChevronUp, LucideAlertCircle } from 'lucide-react';
+import { getDocs, where } from 'firebase/firestore';
 
 interface JogadoresViewProps {
     onBack: () => void;
@@ -31,8 +32,9 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
     const [players, setPlayers] = useState<Player[]>([]);
     const [filteredPlayers, setFilteredPlayers] = useState<Player[]>([]);
     const [loading, setLoading] = useState(true);
+    const [errorMsg, setErrorMsg] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterPos, setFilterPos] = useState<string>('todos');
+    const [filterPos, setFilterPos] = useState<string>('Todos');
     
     // State for Modal
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
@@ -40,12 +42,41 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
     const [loadingStats, setLoadingStats] = useState(false);
     const [expandedYear, setExpandedYear] = useState<string | null>(null);
 
+    const POSITION_FILTERS = [
+        "Todos",
+        "1 - Armador",
+        "2 - Ala/Armador",
+        "3 - Ala",
+        "4 - Ala/Pivô",
+        "5 - Pivô"
+    ];
+
     useEffect(() => {
-        const q = query(collection(db, "jogadores"), orderBy("nome"));
+        // Use basic collection query to ensure legacy data (without 'status' field) is fetched
+        // We filter in-memory to avoid "Missing Permissions" or "Missing Index" errors on mixed data
+        const q = query(collection(db, "jogadores"));
+        
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player));
+            const data = snapshot.docs
+                .map(doc => {
+                    const d = doc.data();
+                    return { 
+                        id: doc.id, 
+                        ...d,
+                        nome: d.nome || 'Desconhecido', // Garantir que nome existe
+                        posicao: d.posicao || ''        // Garantir que posicao existe para evitar crash no filtro/card
+                    } as Player;
+                })
+                // Include Active players AND Legacy players (undefined status)
+                .filter(p => p.status === 'active' || !p.status)
+                .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
             setPlayers(data);
             setFilteredPlayers(data);
+            setLoading(false);
+        }, (error) => {
+            console.error("Erro ao buscar jogadores:", error);
+            setErrorMsg("Erro ao carregar lista. Verifique sua conexão.");
             setLoading(false);
         });
         return () => unsubscribe();
@@ -57,14 +88,25 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
         if (searchTerm) {
             const lowerTerm = searchTerm.toLowerCase();
             result = result.filter(p => 
-                p.nome.toLowerCase().includes(lowerTerm) || 
+                (p.nome && p.nome.toLowerCase().includes(lowerTerm)) || 
                 (p.apelido && p.apelido.toLowerCase().includes(lowerTerm)) ||
-                p.numero_uniforme.toString() === lowerTerm
+                (p.numero_uniforme && p.numero_uniforme.toString() === lowerTerm)
             );
         }
 
-        if (filterPos !== 'todos') {
-            result = result.filter(p => p.posicao.toLowerCase().includes(filterPos));
+        if (filterPos !== 'Todos') {
+            // Flexible filtering to handle "1 - Armador" vs "Armador" (legacy)
+            const cleanFilterName = filterPos.split(' - ')[1] || filterPos; // Extracts "Armador" from "1 - Armador"
+
+            result = result.filter(p => {
+                if (!p.posicao) return false;
+                const pPos = p.posicao.toLowerCase();
+                const fPos = filterPos.toLowerCase();
+                const cPos = cleanFilterName.toLowerCase();
+                
+                // Exact match or match with the name part
+                return pPos === fPos || pPos === cPos;
+            });
         }
 
         setFilteredPlayers(result);
@@ -79,40 +121,33 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
             setExpandedYear(null);
 
             try {
-                // Data buckets by year
                 const yearData: Record<string, { points: number, games: number, matches: GameDetail[] }> = {
                     '2025': { points: 0, games: 0, matches: [] },
                     '2026': { points: 0, games: 0, matches: [] }
                 };
 
                 const processedCestaIds = new Set<string>();
-
-                // 1. Fetch ALL Events to map dates and get games
                 const eventsSnap = await getDocs(collection(db, "eventos"));
                 
-                // We use a classic for loop to handle async properly and sequentially if needed
                 for (const doc of eventsSnap.docs) {
                     const evento = doc.data() as Evento;
                     const eventId = doc.id;
                     const eventDate = evento.data || "";
                     
-                    let year = eventDate.split('-')[0]; // Assuming YYYY-MM-DD
-                    if (!year || year.length !== 4) year = "2025"; // Fallback
+                    let year = eventDate.split('-')[0];
+                    if (!year || year.length !== 4) year = "2025";
                     
-                    // Skip if not in our tracking range
                     if (!yearData[year]) continue;
 
-                    // Fetch Games for this Event
                     const gamesRef = collection(db, "eventos", eventId, "jogos");
                     const gamesSnap = await getDocs(gamesRef);
 
-                    // Iterate Games in this Event
                     for (const gDoc of gamesSnap.docs) {
                         const game = gDoc.data() as Jogo;
                         const gameId = gDoc.id;
                         let gamePoints = 0;
 
-                        // A. Fetch Sub-collection Cestas
+                        // Fetch Sub-collection Cestas
                         const subCestasRef = collection(db, "eventos", eventId, "jogos", gameId, "cestas");
                         const qSub = query(subCestasRef, where("jogadorId", "==", selectedPlayer.id));
                         const subSnap = await getDocs(qSub);
@@ -125,7 +160,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
                             }
                         });
 
-                        // B. Fetch Root Cestas (Legacy/Migrated linked to this game)
+                        // Fetch Root Cestas (Legacy)
                         const qRoot = query(collection(db, "cestas"), where("jogoId", "==", gameId), where("jogadorId", "==", selectedPlayer.id));
                         const rootSnap = await getDocs(qRoot);
                         
@@ -137,8 +172,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
                             }
                         });
 
-                        // CHECK PARTICIPATION
-                        // Player played if: explicitly in roster OR scored points
                         const isInRoster = game.jogadoresEscalados?.includes(selectedPlayer.id);
                         const hasPoints = gamePoints > 0;
 
@@ -146,10 +179,8 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
                             yearData[year].games += 1;
                             yearData[year].points += gamePoints;
                             
-                            // Determine opponent name
                             let opponentName = "Adversário";
                             if (game.timeA_nome && game.timeB_nome) {
-                                // Internal Game
                                 opponentName = `${game.timeA_nome} vs ${game.timeB_nome}`;
                             } else {
                                 opponentName = game.adversario || "Adversário";
@@ -166,16 +197,15 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
                     }
                 }
 
-                // 2. Transform to Array and Sort Matches
                 const statsArray: PlayerYearStats[] = Object.entries(yearData)
                     .map(([year, data]) => ({
                         year,
                         points: data.points,
                         games: data.games,
                         ppg: data.games > 0 ? (data.points / data.games).toFixed(1) : "0.0",
-                        matches: data.matches.sort((a, b) => b.date.localeCompare(a.date)) // Newest games first
+                        matches: data.matches.sort((a, b) => b.date.localeCompare(a.date))
                     }))
-                    .sort((a, b) => Number(b.year) - Number(a.year)); // Newest year first
+                    .sort((a, b) => Number(b.year) - Number(a.year));
 
                 setPlayerStats(statsArray);
 
@@ -222,15 +252,15 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
                 </div>
 
                 <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                    {['todos', 'armador', 'ala', 'pivô'].map(pos => (
+                    {POSITION_FILTERS.map(pos => (
                         <button
                             key={pos}
                             onClick={() => setFilterPos(pos)}
                             className={`
-                                px-4 py-1.5 rounded-full text-sm font-medium capitalize whitespace-nowrap transition-colors
+                                px-4 py-1.5 rounded-full text-xs font-bold uppercase whitespace-nowrap transition-colors border
                                 ${filterPos === pos 
-                                    ? 'bg-ancb-blue text-white shadow-md' 
-                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}
+                                    ? 'bg-ancb-blue text-white border-ancb-blue shadow-md' 
+                                    : 'bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'}
                             `}
                         >
                             {pos}
@@ -243,6 +273,11 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
             {loading ? (
                 <div className="flex justify-center py-20">
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ancb-blue"></div>
+                </div>
+            ) : errorMsg ? (
+                <div className="text-center py-20 text-red-500">
+                    <LucideAlertCircle className="mx-auto mb-2" size={48} />
+                    <p>{errorMsg}</p>
                 </div>
             ) : filteredPlayers.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -274,7 +309,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
                                 <img src={selectedPlayer.foto} alt={selectedPlayer.nome} className="w-full h-full object-cover" />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-gray-400 dark:text-gray-500">
-                                    {selectedPlayer.nome.charAt(0)}
+                                    {selectedPlayer.nome ? selectedPlayer.nome.charAt(0) : '?'}
                                 </div>
                             )}
                         </div>
@@ -304,6 +339,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
                             </div>
                         </div>
 
+                        {/* STATS SECTION */}
                         <div className="mt-6 w-full bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/40">
                             <h4 className="text-ancb-blue dark:text-blue-400 font-bold mb-4 text-sm uppercase flex items-center gap-2">
                                 <LucideRuler size={16} /> Estatísticas por Temporada

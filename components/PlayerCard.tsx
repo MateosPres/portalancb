@@ -8,14 +8,22 @@ interface PlayerCardProps {
 
 export const PlayerCard: React.FC<PlayerCardProps> = ({ player, onClick }) => {
     // Fallback for avatar if no photo is provided
-    const getInitials = (name: string) => name.substring(0, 2).toUpperCase();
+    const getInitials = (name: string) => (name || '?').substring(0, 2).toUpperCase();
 
-    const positionColor = (pos: string) => {
-        const p = pos.toLowerCase();
-        if (p.includes('armador')) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
+    const positionColor = (pos?: string) => {
+        const p = (pos || '').toLowerCase();
+        // Check for specific position keywords
+        if (p.includes('armador') && !p.includes('ala/armador')) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
         if (p.includes('pivô') || p.includes('pivo')) return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
-        return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'; // Alas and others
+        if (p.includes('ala/armador')) return 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300';
+        if (p.includes('ala') && !p.includes('pivô')) return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+        
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     };
+
+    // Format position string: "1 - Armador" -> "Armador" (cleaner look if desired, or keep as is)
+    // For now, let's keep it as is or just show the name part if it starts with a number
+    const displayPosition = player.posicao || '-'; 
 
     return (
         <div 
@@ -38,11 +46,11 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, onClick }) => {
 
             {/* Info */}
             <h3 className="font-bold text-gray-800 dark:text-white text-center leading-tight mb-1">
-                {player.apelido || player.nome}
+                {player.apelido || player.nome || 'Atleta'}
             </h3>
             
-            <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider mb-2 ${positionColor(player.posicao)}`}>
-                {player.posicao}
+            <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider mb-2 text-center whitespace-nowrap ${positionColor(player.posicao)}`}>
+                {displayPosition}
             </span>
 
             {/* Full Name (small) */}

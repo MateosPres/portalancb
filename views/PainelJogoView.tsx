@@ -39,7 +39,15 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
         // 3. Load all players (to map IDs to details)
         const fetchPlayers = async () => {
             const snap = await getDocs(query(collection(db, "jogadores"), orderBy("nome")));
-            setPlayers(snap.docs.map(d => ({ id: d.id, ...d.data() } as Player)));
+            setPlayers(snap.docs.map(d => {
+                const data = d.data();
+                return { 
+                    id: d.id, 
+                    ...data,
+                    nome: data.nome || 'Desconhecido',
+                    posicao: data.posicao || '' 
+                } as Player;
+            }));
         };
 
         fetchEventRoster();
@@ -82,10 +90,14 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
     // Filter players
     const filteredPlayers = players.filter(p => {
         const isInRoster = rosterIds.includes(p.id);
+        const pName = (p.nome || '').toLowerCase();
+        const pNick = (p.apelido || '').toLowerCase();
+        const search = searchPlayer.toLowerCase();
+
         const matchesSearch = searchPlayer === '' || 
-            p.nome.toLowerCase().includes(searchPlayer.toLowerCase()) || 
-            (p.apelido && p.apelido.toLowerCase().includes(searchPlayer.toLowerCase())) ||
-            String(p.numero_uniforme).includes(searchPlayer);
+            pName.includes(search) || 
+            pNick.includes(search) ||
+            String(p.numero_uniforme).includes(search);
         
         return isInRoster && matchesSearch;
     });
@@ -146,7 +158,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                                                 {player.apelido || player.nome}
                                             </p>
                                             <p className="text-[9px] text-gray-500 uppercase font-bold">
-                                                {player.posicao.substring(0,3)}
+                                                {(player.posicao || '').substring(0,3)}
                                             </p>
                                         </div>
                                     </div>

@@ -20,7 +20,6 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
     const [loading, setLoading] = useState(true);
     
     // Filters
-    // Default to current year, but ensure it's at least 2025
     const currentYear = new Date().getFullYear().toString();
     const defaultYear = parseInt(currentYear) < 2025 ? "2025" : currentYear;
     
@@ -31,11 +30,18 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
         const fetchRankingData = async () => {
             setLoading(true);
             try {
-                // 1. Fetch Players
-                const playersSnapshot = await getDocs(collection(db, "jogadores"));
+                // 1. Fetch Players (Fetch ALL to handle legacy data)
+                // Do NOT use where('status', '==', 'active') because legacy data has no status field
+                const qPlayers = query(collection(db, "jogadores"));
+                const playersSnapshot = await getDocs(qPlayers);
+                
                 const playersMap: Record<string, Player> = {};
                 playersSnapshot.forEach(doc => {
-                    playersMap[doc.id] = { id: doc.id, ...doc.data() } as Player;
+                    const p = { id: doc.id, ...doc.data() } as Player;
+                    // Include if active OR if status is undefined (legacy)
+                    if (p.status === 'active' || !p.status) {
+                        playersMap[doc.id] = p;
+                    }
                 });
 
                 // 2. Prepare Data Structures
@@ -60,7 +66,6 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                     const evento = doc.data() as Evento;
                     const eventId = doc.id;
                     
-                    // --- ROBUST DATE PARSING ---
                     const rawDate = String(evento.data || '');
                     let isYearMatch = false;
 
@@ -76,13 +81,8 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                     if (!isYearMatch) return;
                     if (evento.modalidade !== selectedMode) return;
                     
-                    // REMOVED STATUS CHECK:
-                    // Allow all events (including 'proximo') to calculate points if data exists.
-                    // This fixes the issue where test events or live events (not yet 'finalized') were hidden.
-
                     filteredEvents.push({ ...evento, id: eventId });
                     
-                    // Add basic Context IDs
                     validContextIds.add(eventId);
                     if (evento.times && Array.isArray(evento.times)) {
                         evento.times.forEach(time => {
@@ -98,13 +98,11 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                         const gamesSnap = await getDocs(gamesRef);
                         
                         if (!gamesSnap.empty) {
-                            // Process valid games
                             const gamePromises = gamesSnap.docs.map(async (gDoc) => {
                                 const game = gDoc.data() as Jogo;
                                 const gameId = gDoc.id;
                                 validContextIds.add(gameId); 
 
-                                // Count Participation from Game Roster
                                 if (game.jogadoresEscalados && Array.isArray(game.jogadoresEscalados)) {
                                     game.jogadoresEscalados.forEach(pid => {
                                         if (playerGamesMap[pid]) {
@@ -113,7 +111,6 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                     });
                                 }
 
-                                // FETCH SUB-COLLECTION CESTAS
                                 try {
                                     const subCestasRef = collection(db, "eventos", evento.id, "jogos", gameId, "cestas");
                                     const subCestasSnap = await getDocs(subCestasRef);
@@ -122,12 +119,14 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                         if (processedCestaIds.has(cesta.id)) return;
 
                                         if (cesta.jogadorId && cesta.pontos) {
-                                            pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + Number(cesta.pontos);
-                                            // If player scored, they played this game
-                                            if (playerGamesMap[cesta.jogadorId]) {
-                                                playerGamesMap[cesta.jogadorId].add(gameId);
+                                            // Only count points if player exists in our Active map
+                                            if (pointsMap[cesta.jogadorId] !== undefined || playersMap[cesta.jogadorId]) {
+                                                pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + Number(cesta.pontos);
+                                                if (playerGamesMap[cesta.jogadorId]) {
+                                                    playerGamesMap[cesta.jogadorId].add(gameId);
+                                                }
+                                                processedCestaIds.add(cesta.id);
                                             }
-                                            processedCestaIds.add(cesta.id);
                                         }
                                     });
                                 } catch (err) {
@@ -136,8 +135,6 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                             });
                             await Promise.all(gamePromises);
                         } else {
-                            // Legacy Event Participation (no games collection)
-                            // Treat the event ID as the game ID for counting purposes
                             if (evento.jogadoresEscalados && Array.isArray(evento.jogadoresEscalados)) {
                                 evento.jogadoresEscalados.forEach(pid => {
                                     if (playerGamesMap[pid]) {
@@ -163,23 +160,23 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                     const isLinkedToEvent = cesta.eventoId && validContextIds.has(cesta.eventoId);
 
                     if (cesta.jogadorId && cesta.pontos && (isLinkedToTeam || isLinkedToGame || isLinkedToEvent)) {
-                        pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + Number(cesta.pontos);
-                        
-                        // Count game participation for legacy baskets
-                        if (playerGamesMap[cesta.jogadorId]) {
-                            const contextId = cesta.jogoId || cesta.eventoId || 'unknown';
-                            if (contextId !== 'unknown') {
-                                playerGamesMap[cesta.jogadorId].add(contextId);
+                        if (playersMap[cesta.jogadorId]) {
+                            pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + Number(cesta.pontos);
+                            
+                            if (playerGamesMap[cesta.jogadorId]) {
+                                const contextId = cesta.jogoId || cesta.eventoId || 'unknown';
+                                if (contextId !== 'unknown') {
+                                    playerGamesMap[cesta.jogadorId].add(contextId);
+                                }
                             }
+                            processedCestaIds.add(cesta.id);
                         }
-                        processedCestaIds.add(cesta.id);
                     }
                 });
 
                 // 6. Merge & Calculate
                 const rankingList: PlayerStats[] = Object.values(playersMap).map(player => {
                     const totalPoints = pointsMap[player.id] || 0;
-                    // Count unique games found in the Set
                     const gamesPlayed = playerGamesMap[player.id] ? playerGamesMap[player.id].size : 0; 
                     const ppg = gamesPlayed > 0 ? Number((totalPoints / gamesPlayed).toFixed(1)) : 0;
 

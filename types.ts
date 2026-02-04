@@ -6,6 +6,7 @@ export interface UserProfile {
     role: 'admin' | 'jogador';
     status: 'active' | 'banned';
     dataNascimento?: string;
+    linkedPlayerId?: string; // ID do jogador na collection 'jogadores' que este usuário controla
 }
 
 export interface Player {
@@ -17,6 +18,30 @@ export interface Player {
     numero_uniforme: number;
     cpf?: string; // Admin only
     nascimento?: string;
+    userId?: string; // ID do usuário que reivindicou este perfil
+    status?: 'active' | 'pending' | 'rejected' | 'banned'; // Controle de aprovação e banimento
+    emailContato?: string;
+}
+
+export interface ClaimRequest {
+    id: string;
+    userId: string;
+    userName: string;
+    playerId: string;
+    playerName: string;
+    status: 'pending' | 'approved' | 'rejected';
+    timestamp: any;
+}
+
+export interface PhotoRequest {
+    id: string;
+    playerId: string;
+    playerName: string;
+    userId: string;
+    newPhotoUrl: string;
+    currentPhotoUrl?: string; // Para comparação
+    status: 'pending' | 'approved' | 'rejected';
+    timestamp: any;
 }
 
 export interface Evento {
