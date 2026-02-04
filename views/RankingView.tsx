@@ -76,8 +76,9 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                     if (!isYearMatch) return;
                     if (evento.modalidade !== selectedMode) return;
                     
-                    const status = evento.status ? evento.status.toLowerCase() : '';
-                    if (status !== 'finalizado') return;
+                    // REMOVED STATUS CHECK:
+                    // Allow all events (including 'proximo') to calculate points if data exists.
+                    // This fixes the issue where test events or live events (not yet 'finalized') were hidden.
 
                     filteredEvents.push({ ...evento, id: eventId });
                     

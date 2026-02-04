@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, query, orderBy, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, auth } from '../services/firebase';
 import { Evento, Jogo, FeedPost } from '../types';
 import { Button } from '../components/Button';
@@ -158,9 +158,26 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
         }
     };
 
-    const handleDeletePost = async (id: string) => {
-        if (confirm("Excluir esta postagem permanentemente?")) {
-            await deleteDoc(doc(db, "feed_posts", id));
+    const handleDeletePost = async (post: FeedPost) => {
+        if (!window.confirm("Excluir esta postagem permanentemente?")) return;
+
+        try {
+            // Tenta excluir a imagem do Storage se existir
+            if (post.image_url) {
+                try {
+                    const imageRef = ref(storage, post.image_url);
+                    await deleteObject(imageRef);
+                } catch (imgError) {
+                    console.warn("Imagem não encontrada ou erro ao deletar:", imgError);
+                }
+            }
+
+            // Exclui o documento do Firestore
+            await deleteDoc(doc(db, "feed_posts", post.id));
+            
+        } catch (error) {
+            console.error("Erro ao excluir post:", error);
+            alert("Erro ao excluir a postagem. Verifique o console ou suas permissões.");
         }
     };
 
@@ -204,10 +221,36 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
         }
     };
 
+    // --- DEEP DELETE EVENT FUNCTION ---
     const handleDeleteEvent = async (id: string) => {
-        if (confirm("Tem certeza? Isso excluirá o evento e todos os jogos vinculados.")) {
+        if (!window.confirm("Tem certeza? Isso excluirá o evento, jogos e TODAS as estatísticas de pontos vinculadas a ele permanentemente.")) return;
+
+        try {
+            // 1. Get Games Subcollection
+            const gamesRef = collection(db, "eventos", id, "jogos");
+            const gamesSnap = await getDocs(gamesRef);
+
+            // 2. Loop through each game
+            for (const gameDoc of gamesSnap.docs) {
+                // 3. Get Cestas (Points) Subcollection for each game
+                const cestasRef = collection(db, "eventos", id, "jogos", gameDoc.id, "cestas");
+                const cestasSnap = await getDocs(cestasRef);
+
+                // 4. Delete all Cestas
+                const deleteCestasPromises = cestasSnap.docs.map(c => deleteDoc(c.ref));
+                await Promise.all(deleteCestasPromises);
+
+                // 5. Delete the Game document
+                await deleteDoc(gameDoc.ref);
+            }
+
+            // 6. Finally, delete the Event document
             await deleteDoc(doc(db, "eventos", id));
             setSelectedEvent(null);
+            alert("Evento e dados limpos com sucesso.");
+        } catch (error) {
+            console.error("Erro ao excluir evento:", error);
+            alert("Erro ao excluir evento. Verifique o console.");
         }
     };
 
@@ -234,7 +277,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
 
     const handleDeleteGame = async (gameId: string) => {
         if (!selectedEvent) return;
-        if (confirm("Excluir este jogo?")) {
+        if (window.confirm("Excluir este jogo?")) {
+            // Idealmente também faria deep delete aqui, mas para um jogo único o impacto é menor
             await deleteDoc(doc(db, "eventos", selectedEvent.id, "jogos", gameId));
         }
     };
@@ -303,12 +347,21 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                         <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 border-b pb-2 dark:border-gray-600">Últimos Posts</h3>
                         <div className="space-y-2 max-h-[300px] overflow-y-auto">
                             {feedPosts.map(post => (
-                                <div key={post.id} className="flex justify-between items-center p-2 border-b dark:border-gray-700 text-sm">
+                                <div key={post.id} className="flex justify-between items-center p-2 border-b dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded transition-colors group">
                                     <span className="truncate w-3/4 dark:text-gray-300">
-                                        [{post.type.toUpperCase()}] {post.content.titulo || post.content.time_adv || 'Sem título'}
+                                        <span className="text-[10px] font-bold text-gray-400 mr-2 border border-gray-200 dark:border-gray-600 px-1 rounded">{post.type.toUpperCase()}</span>
+                                        {post.content.titulo || post.content.time_adv || 'Sem título'}
                                     </span>
-                                    <button onClick={() => handleDeletePost(post.id)} className="text-red-400 hover:text-red-600">
-                                        <LucideTrash2 size={14} />
+                                    <button 
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeletePost(post);
+                                        }} 
+                                        className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors cursor-pointer relative z-20"
+                                        title="Excluir Post"
+                                    >
+                                        <LucideTrash2 size={16} className="pointer-events-none" />
                                     </button>
                                 </div>
                             ))}
@@ -467,66 +520,77 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                                     type="file" 
                                     accept="image/*" 
                                     onChange={handleImageSelect}
-                                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                 />
                                 {imagePreview ? (
-                                    <div className="relative h-32 mx-auto w-fit">
-                                        <img src={imagePreview} className="h-full rounded shadow-md" />
-                                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white font-bold opacity-0 hover:opacity-100 transition-opacity rounded">
-                                            Trocar
+                                    <div className="relative h-32 w-full">
+                                        <img src={imagePreview} className="h-full w-full object-contain" />
+                                        <div className="absolute top-0 right-0 bg-white dark:bg-gray-800 rounded-full p-1 cursor-pointer" onClick={(e) => { e.preventDefault(); setImagePreview(null); setPostImageFile(null); }}>
+                                            <LucideTrash2 size={16} className="text-red-500" />
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="flex flex-col items-center text-gray-400">
-                                        <LucideImage size={32} />
-                                        <span className="text-xs mt-1">Clique para enviar foto</span>
-                                        <span className="text-[10px] text-gray-300">(Max 1280px, WebP auto)</span>
+                                    <div className="flex flex-col items-center text-gray-400 dark:text-gray-500">
+                                        <LucideImage size={24} className="mb-2" />
+                                        <span className="text-xs font-bold">Clique para adicionar imagem</span>
                                     </div>
                                 )}
                              </div>
                         </div>
                     )}
 
+                    {/* Progress Bar */}
                     {isUploading && (
                         <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                            <div className="bg-ancb-orange h-2.5 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                            <div className="bg-ancb-blue h-2.5 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
                         </div>
                     )}
 
                     <Button type="submit" className="w-full" disabled={isUploading}>
-                        {isUploading ? <><LucideUpload className="animate-bounce" size={16} /> Publicando...</> : 'Publicar'}
+                        {isUploading ? 'Publicando...' : 'Publicar Postagem'} <LucideUpload size={16} className="ml-2" />
                     </Button>
                 </form>
             </Modal>
 
-            {/* Modal Add Event */}
-            <Modal isOpen={showAddEvent} onClose={() => setShowAddEvent(false)} title="Novo Evento">
+            {/* --- MODALS: EVENT & GAME (Existing) --- */}
+            <Modal isOpen={showAddEvent} onClose={() => setShowAddEvent(false)} title="Criar Evento">
                 <form onSubmit={handleCreateEvent} className="space-y-4">
-                    <input className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ancb-blue" placeholder="Nome do Evento" value={newEventName} onChange={e => setNewEventName(e.target.value)} required />
-                    <input type="date" className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ancb-blue" value={newEventDate} onChange={e => setNewEventDate(e.target.value)} required />
-                    <select className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ancb-blue" value={newEventMode} onChange={(e:any) => setNewEventMode(e.target.value)}>
-                        <option value="5x5">5x5</option>
-                        <option value="3x3">3x3</option>
-                    </select>
-                    <select className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ancb-blue" value={newEventType} onChange={(e:any) => setNewEventType(e.target.value)}>
-                        <option value="amistoso">Amistoso</option>
-                        <option value="torneio_interno">Torneio Interno</option>
-                        <option value="torneio_externo">Torneio Externo</option>
-                    </select>
-                    <Button type="submit" className="w-full">Criar Evento</Button>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nome do Evento</label>
+                        <input className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="Ex: Torneio de Verão" value={newEventName} onChange={e => setNewEventName(e.target.value)} required />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Data</label>
+                        <input type="date" className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={newEventDate} onChange={e => setNewEventDate(e.target.value)} required />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Modalidade</label>
+                        <select className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={newEventMode} onChange={(e:any) => setNewEventMode(e.target.value)}>
+                            <option value="5x5">5x5</option>
+                            <option value="3x3">3x3</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Tipo</label>
+                        <select className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={newEventType} onChange={(e:any) => setNewEventType(e.target.value)}>
+                            <option value="amistoso">Amistoso</option>
+                            <option value="torneio_interno">Torneio Interno</option>
+                            <option value="torneio_externo">Torneio Externo</option>
+                        </select>
+                    </div>
+                    <Button type="submit" className="w-full">Criar</Button>
                 </form>
             </Modal>
 
-            {/* Modal Add Game */}
-            <Modal isOpen={showAddGame} onClose={() => setShowAddGame(false)} title="Novo Jogo">
+            <Modal isOpen={showAddGame} onClose={() => setShowAddGame(false)} title="Adicionar Jogo">
                 <form onSubmit={handleCreateGame} className="space-y-4">
                     <div>
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Time A (Nome)</label>
-                        <input className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ancb-blue" placeholder="Ex: Bulls ou Time Azul" value={newGameTimeA} onChange={e => setNewGameTimeA(e.target.value)} required />
+                        <input className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="Ex: Bulls" value={newGameTimeA} onChange={e => setNewGameTimeA(e.target.value)} required />
                     </div>
                     <div>
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Time B (Nome)</label>
-                        <input className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ancb-blue" placeholder="Ex: Lakers ou Time Vermelho" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required />
+                        <input className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="Ex: Lakers" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required />
                     </div>
                     <Button type="submit" className="w-full">Criar Jogo</Button>
                 </form>

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, getDocs, where, addDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, getDocs, where, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Evento, Jogo, Cesta, Player, UserProfile } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucidePlayCircle } from 'lucide-react';
+import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucidePlayCircle, LucideTrash2 } from 'lucide-react';
 
 interface EventosViewProps {
     onBack: () => void;
@@ -217,6 +217,64 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         }
     };
 
+    // DEEP DELETE EVENT
+    const handleDeleteEvent = async () => {
+        if (!selectedEvent) return;
+        if (!window.confirm("ATENÇÃO: Você está prestes a excluir este evento e TODOS os jogos/pontos associados.\n\nEssa ação limpará os pontos dos atletas no Ranking.\n\nTem certeza?")) return;
+        
+        setLoading(true); // Show global loading or just close modal
+        try {
+            const eventId = selectedEvent.id;
+            
+            // 1. Get Games
+            const gamesRef = collection(db, "eventos", eventId, "jogos");
+            const gamesSnap = await getDocs(gamesRef);
+
+            // 2. Delete Games & Cestas
+            for (const gDoc of gamesSnap.docs) {
+                 const cestasRef = collection(db, "eventos", eventId, "jogos", gDoc.id, "cestas");
+                 const cestasSnap = await getDocs(cestasRef);
+                 // Delete all cestas first
+                 const deleteCestas = cestasSnap.docs.map(c => deleteDoc(c.ref));
+                 await Promise.all(deleteCestas);
+                 // Delete game
+                 await deleteDoc(gDoc.ref);
+            }
+
+            // 3. Delete Event
+            await deleteDoc(doc(db, "eventos", eventId));
+            
+            setSelectedEvent(null);
+            alert("Evento excluído com sucesso.");
+        } catch (e) {
+            console.error("Error deleting event", e);
+            alert("Erro ao excluir evento.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // DEEP DELETE GAME
+    const handleDeleteGame = async (gameId: string) => {
+        if (!selectedEvent) return;
+        if (!window.confirm("Excluir este jogo e os pontos dos atletas?")) return;
+
+        try {
+             const cestasRef = collection(db, "eventos", selectedEvent.id, "jogos", gameId, "cestas");
+             const cestasSnap = await getDocs(cestasRef);
+             const deleteCestas = cestasSnap.docs.map(c => deleteDoc(c.ref));
+             await Promise.all(deleteCestas);
+
+             await deleteDoc(doc(db, "eventos", selectedEvent.id, "jogos", gameId));
+             
+             // Refresh list locally
+             setEventGames(prev => prev.filter(g => g.id !== gameId));
+        } catch (e) {
+            console.error("Error deleting game", e);
+            alert("Erro ao excluir jogo.");
+        }
+    };
+
     // Open Form for NEW Event
     const openNewEventForm = () => {
         setIsEditingEvent(false);
@@ -299,7 +357,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         return (
             <div 
                 key={jogo.id} 
-                className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg p-4 shadow-sm mb-3 cursor-pointer hover:border-ancb-blue transition-all group"
+                className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg p-4 shadow-sm mb-3 cursor-pointer hover:border-ancb-blue transition-all group relative"
                 onClick={() => setSelectedGame(jogo)}
             >
                 <div className="text-xs text-gray-400 text-center mb-2 border-b border-gray-50 dark:border-gray-700 pb-1 group-hover:text-ancb-blue">
@@ -326,19 +384,31 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     </div>
                 </div>
 
-                {userProfile?.role === 'admin' && onOpenGamePanel && selectedEvent && (
-                    <div className="flex justify-center mt-2 border-t border-gray-100 dark:border-gray-700 pt-2">
-                         <Button 
-                            size="sm" 
-                            variant="secondary"
-                            className="!py-1 text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-900/20"
+                {userProfile?.role === 'admin' && selectedEvent && (
+                    <div className="flex justify-center mt-2 border-t border-gray-100 dark:border-gray-700 pt-2 gap-2">
+                        {onOpenGamePanel && (
+                            <Button 
+                                size="sm" 
+                                variant="secondary"
+                                className="!py-1 text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenGamePanel(jogo, selectedEvent.id);
+                                }}
+                            >
+                                <LucidePlayCircle size={14} /> Painel
+                            </Button>
+                        )}
+                        <button 
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onOpenGamePanel(jogo, selectedEvent.id);
+                                handleDeleteGame(jogo.id);
                             }}
+                            className="p-1 px-2 rounded bg-red-50 text-red-500 hover:bg-red-100 border border-red-200 flex items-center gap-1 text-xs font-bold"
+                            title="Excluir Jogo"
                         >
-                            <LucidePlayCircle size={14} /> Painel Ao Vivo
-                        </Button>
+                            <LucideTrash2 size={14} /> Excluir
+                        </button>
                     </div>
                 )}
             </div>
@@ -475,20 +545,31 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             >
                 {selectedEvent && (
                     <div>
-                        <div className="mb-6 border-b border-gray-100 dark:border-gray-700 pb-4 flex justify-between items-start">
+                        <div className="mb-6 border-b border-gray-100 dark:border-gray-700 pb-4 flex flex-col gap-3">
                             <div>
                                 <h2 className="text-xl font-bold text-ancb-blue dark:text-blue-400 mb-1">{selectedEvent.nome}</h2>
                                 <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{selectedEvent.type.replace('_', ' ')} • {selectedEvent.data}</p>
                             </div>
+                            
                             {userProfile?.role === 'admin' && (
-                                <Button 
-                                    size="sm" 
-                                    variant="secondary" 
-                                    onClick={() => { setSelectedEvent(null); openEditEventForm(selectedEvent); }}
-                                    className="dark:text-white dark:border-gray-600"
-                                >
-                                    <LucideEdit size={16} /> Editar
-                                </Button>
+                                <div className="flex gap-2">
+                                    <Button 
+                                        size="sm" 
+                                        variant="secondary" 
+                                        onClick={() => { setSelectedEvent(null); openEditEventForm(selectedEvent); }}
+                                        className="flex-1 dark:text-white dark:border-gray-600"
+                                    >
+                                        <LucideEdit size={16} /> Editar
+                                    </Button>
+                                    <Button 
+                                        size="sm" 
+                                        variant="secondary" 
+                                        onClick={handleDeleteEvent}
+                                        className="flex-1 !text-red-500 !border-red-200 hover:!bg-red-50 dark:hover:!bg-red-900/20"
+                                    >
+                                        <LucideTrash2 size={16} /> Excluir Evento
+                                    </Button>
+                                </div>
                             )}
                         </div>
 
