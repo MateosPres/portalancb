@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query } from 'firebase/firestore';
+import { collection, onSnapshot, query, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Player, Evento, Jogo, Cesta } from '../types';
+import { Player, Evento, Jogo, Cesta, UserProfile } from '../types';
 import { PlayerCard } from '../components/PlayerCard';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucideSearch, LucideArrowLeft, LucideUsers, LucideRuler, LucideCalendarDays, LucideShirt, LucideChevronDown, LucideChevronUp, LucideAlertCircle } from 'lucide-react';
+import { LucideSearch, LucideArrowLeft, LucideUsers, LucideRuler, LucideCalendarDays, LucideShirt, LucideChevronDown, LucideChevronUp, LucideAlertCircle, LucideEdit, LucideTrash2, LucideSave, LucideX, LucideCamera } from 'lucide-react';
 import { getDocs, where } from 'firebase/firestore';
+import imageCompression from 'browser-image-compression';
 
 interface JogadoresViewProps {
     onBack: () => void;
+    userProfile?: UserProfile | null;
 }
 
 interface GameDetail {
@@ -28,7 +30,7 @@ interface PlayerYearStats {
     matches: GameDetail[];
 }
 
-export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
+export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfile }) => {
     const [players, setPlayers] = useState<Player[]>([]);
     const [filteredPlayers, setFilteredPlayers] = useState<Player[]>([]);
     const [loading, setLoading] = useState(true);
@@ -42,6 +44,10 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
     const [loadingStats, setLoadingStats] = useState(false);
     const [expandedYear, setExpandedYear] = useState<string | null>(null);
 
+    // Admin Edit Mode
+    const [isEditing, setIsEditing] = useState(false);
+    const [editFormData, setEditFormData] = useState<Partial<Player>>({});
+
     const POSITION_FILTERS = [
         "Todos",
         "1 - Armador",
@@ -51,23 +57,33 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
         "5 - Pivô"
     ];
 
+    // Helper to normalize legacy positions
+    const normalizePosition = (pos: string) => {
+        const p = (pos || '').toUpperCase();
+        if (p.includes('ALA (SF)') || p === 'ALA') return '3 - Ala';
+        if (p.includes('ALA-PIVÔ') || p.includes('PF')) return '4 - Ala/Pivô';
+        if (p.includes('PIVÔ') || p.includes('C')) return '5 - Pivô';
+        if (p.includes('ARMADOR (PG)') || p === 'ARMADOR') return '1 - Armador';
+        if (p.includes('ALA-ARMADOR') || p.includes('SG')) return '2 - Ala/Armador';
+        return pos; // Fallback or already correct
+    };
+
     useEffect(() => {
-        // Use basic collection query to ensure legacy data (without 'status' field) is fetched
-        // We filter in-memory to avoid "Missing Permissions" or "Missing Index" errors on mixed data
         const q = query(collection(db, "jogadores"));
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs
                 .map(doc => {
                     const d = doc.data();
+                    const rawPos = d.posicao || '';
                     return { 
                         id: doc.id, 
                         ...d,
-                        nome: d.nome || 'Desconhecido', // Garantir que nome existe
-                        posicao: d.posicao || ''        // Garantir que posicao existe para evitar crash no filtro/card
+                        nome: d.nome || 'Desconhecido',
+                        posicao: normalizePosition(rawPos), // Normalize here so filters work
+                        originalPos: rawPos // Keep original if needed for debug
                     } as Player;
                 })
-                // Include Active players AND Legacy players (undefined status)
                 .filter(p => p.status === 'active' || !p.status)
                 .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
@@ -95,8 +111,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
         }
 
         if (filterPos !== 'Todos') {
-            // Flexible filtering to handle "1 - Armador" vs "Armador" (legacy)
-            const cleanFilterName = filterPos.split(' - ')[1] || filterPos; // Extracts "Armador" from "1 - Armador"
+            const cleanFilterName = filterPos.split(' - ')[1] || filterPos;
 
             result = result.filter(p => {
                 if (!p.posicao) return false;
@@ -104,7 +119,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
                 const fPos = filterPos.toLowerCase();
                 const cPos = cleanFilterName.toLowerCase();
                 
-                // Exact match or match with the name part
                 return pPos === fPos || pPos === cPos;
             });
         }
@@ -112,13 +126,14 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
         setFilteredPlayers(result);
     }, [searchTerm, filterPos, players]);
 
-    // FETCH PLAYER STATS WHEN SELECTED
+    // FETCH PLAYER STATS
     useEffect(() => {
         const fetchStats = async () => {
             if (!selectedPlayer) return;
             setLoadingStats(true);
             setPlayerStats([]);
             setExpandedYear(null);
+            setIsEditing(false); // Reset edit mode on open
 
             try {
                 const yearData: Record<string, { points: number, games: number, matches: GameDetail[] }> = {
@@ -147,7 +162,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
                         const gameId = gDoc.id;
                         let gamePoints = 0;
 
-                        // Fetch Sub-collection Cestas
                         const subCestasRef = collection(db, "eventos", eventId, "jogos", gameId, "cestas");
                         const qSub = query(subCestasRef, where("jogadorId", "==", selectedPlayer.id));
                         const subSnap = await getDocs(qSub);
@@ -160,7 +174,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
                             }
                         });
 
-                        // Fetch Root Cestas (Legacy)
                         const qRoot = query(collection(db, "cestas"), where("jogoId", "==", gameId), where("jogadorId", "==", selectedPlayer.id));
                         const rootSnap = await getDocs(qRoot);
                         
@@ -220,12 +233,95 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
     }, [selectedPlayer]);
 
     const toggleYear = (year: string) => {
-        if (expandedYear === year) {
-            setExpandedYear(null);
-        } else {
-            setExpandedYear(year);
+        setExpandedYear(expandedYear === year ? null : year);
+    };
+
+    // --- ADMIN ACTIONS ---
+    const handleEditClick = () => {
+        if (!selectedPlayer) return;
+        setEditFormData({ ...selectedPlayer });
+        setIsEditing(true);
+    };
+
+    const handleCancelEdit = () => {
+        setIsEditing(false);
+        setEditFormData({});
+    };
+
+    const fileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = error => reject(error);
+        });
+    };
+
+    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            try {
+                const options = {
+                    maxSizeMB: 0.1,
+                    maxWidthOrHeight: 500,
+                    useWebWorker: true,
+                    fileType: 'image/webp'
+                };
+                const compressedFile = await imageCompression(file, options);
+                const base64 = await fileToBase64(compressedFile);
+                setEditFormData(prev => ({ ...prev, foto: base64 }));
+            } catch (error) {
+                console.error("Error processing image:", error);
+                alert("Erro ao processar imagem.");
+            }
         }
     };
+
+    const handleSavePlayer = async () => {
+        if (!selectedPlayer || !editFormData) return;
+        try {
+            await updateDoc(doc(db, "jogadores", selectedPlayer.id), editFormData);
+            
+            // Update local state to reflect changes immediately
+            const updatedPlayer = { ...selectedPlayer, ...editFormData } as Player;
+            setSelectedPlayer(updatedPlayer);
+            
+            // Update list state locally as well to avoid flicker before snapshot
+            setPlayers(prev => prev.map(p => p.id === updatedPlayer.id ? updatedPlayer : p));
+            
+            setIsEditing(false);
+            alert("Dados atualizados com sucesso!");
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao salvar alterações.");
+        }
+    };
+
+    const handleDeletePlayer = async () => {
+        if (!selectedPlayer) return;
+        if (!window.confirm(`ATENÇÃO: Você está prestes a excluir ${selectedPlayer.nome} do sistema.\nIsso não pode ser desfeito.\n\nConfirmar exclusão?`)) return;
+
+        try {
+            await deleteDoc(doc(db, "jogadores", selectedPlayer.id));
+            
+            // Try unlink user if exists
+            if (selectedPlayer.userId) {
+                try {
+                    await updateDoc(doc(db, "usuarios", selectedPlayer.userId), { linkedPlayerId: null as any });
+                } catch(e) {
+                    console.warn("Could not unlink user profile, user might be deleted already.");
+                }
+            }
+
+            setSelectedPlayer(null);
+            alert("Jogador excluído.");
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao excluir jogador.");
+        }
+    };
+
+    const isAdmin = userProfile?.role === 'admin';
 
     return (
         <div className="animate-fadeIn pb-20">
@@ -304,28 +400,82 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
             >
                 {selectedPlayer && (
                     <div className="flex flex-col items-center">
-                        <div className="w-32 h-32 rounded-full border-4 border-ancb-orange shadow-lg overflow-hidden mb-4 bg-gray-200 dark:bg-gray-700">
-                            {selectedPlayer.foto ? (
-                                <img src={selectedPlayer.foto} alt={selectedPlayer.nome} className="w-full h-full object-cover" />
+                        {/* Avatar */}
+                         <div className="w-32 h-32 rounded-full border-4 border-ancb-orange shadow-lg overflow-hidden mb-4 bg-gray-200 dark:bg-gray-700 relative group">
+                            {(isEditing && editFormData.foto) || selectedPlayer.foto ? (
+                                <img src={isEditing && editFormData.foto ? editFormData.foto : selectedPlayer.foto} alt={selectedPlayer.nome} className="w-full h-full object-cover" />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-gray-400 dark:text-gray-500">
                                     {selectedPlayer.nome ? selectedPlayer.nome.charAt(0) : '?'}
                                 </div>
                             )}
+
+                            {isEditing && (
+                                <label className="absolute inset-0 bg-black/50 flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <LucideCamera className="text-white" size={32} />
+                                    <input type="file" className="hidden" accept="image/*" onChange={handlePhotoSelect} />
+                                </label>
+                            )}
                         </div>
                         
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-                            {selectedPlayer.apelido || selectedPlayer.nome}
-                        </h2>
-                        <span className="bg-ancb-blue text-white px-3 py-1 rounded-full text-sm font-bold uppercase mb-6">
-                            {selectedPlayer.posicao}
-                        </span>
+                        {/* Name & Position (Or Edit Inputs) */}
+                        {isEditing ? (
+                            <div className="w-full space-y-3 mb-6">
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500">Nome Completo</label>
+                                    <input 
+                                        className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
+                                        value={editFormData.nome || ''}
+                                        onChange={e => setEditFormData({...editFormData, nome: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500">Apelido</label>
+                                    <input 
+                                        className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
+                                        value={editFormData.apelido || ''}
+                                        onChange={e => setEditFormData({...editFormData, apelido: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500">Posição</label>
+                                    <select 
+                                        className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
+                                        value={editFormData.posicao || '3 - Ala'}
+                                        onChange={e => setEditFormData({...editFormData, posicao: e.target.value})}
+                                    >
+                                        {POSITION_FILTERS.filter(p => p !== 'Todos').map(pos => (
+                                            <option key={pos} value={pos}>{pos}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1 text-center">
+                                    {selectedPlayer.apelido || selectedPlayer.nome}
+                                </h2>
+                                <span className="bg-ancb-blue text-white px-3 py-1 rounded-full text-sm font-bold uppercase mb-6">
+                                    {selectedPlayer.posicao}
+                                </span>
+                            </>
+                        )}
 
+                        {/* Basic Stats Grid */}
                         <div className="grid grid-cols-2 gap-4 w-full">
                             <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center">
                                 <LucideShirt className="text-ancb-orange mb-2" size={24} />
                                 <span className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold">Número</span>
-                                <span className="text-xl font-bold text-gray-800 dark:text-gray-200">#{selectedPlayer.numero_uniforme}</span>
+                                {isEditing ? (
+                                    <input 
+                                        type="number" 
+                                        className="w-20 text-center p-1 border rounded dark:bg-gray-700 dark:text-white mt-1"
+                                        value={editFormData.numero_uniforme || 0}
+                                        onChange={e => setEditFormData({...editFormData, numero_uniforme: Number(e.target.value)})}
+                                    />
+                                ) : (
+                                    <span className="text-xl font-bold text-gray-800 dark:text-gray-200">#{selectedPlayer.numero_uniforme}</span>
+                                )}
                             </div>
                             
                             <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center">
@@ -339,90 +489,168 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack }) => {
                             </div>
                         </div>
 
-                        {/* STATS SECTION */}
-                        <div className="mt-6 w-full bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/40">
-                            <h4 className="text-ancb-blue dark:text-blue-400 font-bold mb-4 text-sm uppercase flex items-center gap-2">
-                                <LucideRuler size={16} /> Estatísticas por Temporada
-                            </h4>
-                            
-                            {loadingStats ? (
-                                <div className="flex justify-center py-4">
-                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-ancb-blue"></div>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {playerStats.map((stat) => (
-                                        <div key={stat.year} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-blue-100 dark:border-gray-700 overflow-hidden transition-colors">
-                                            {/* Accordion Header */}
-                                            <div 
-                                                className="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                                                onClick={() => toggleYear(stat.year)}
-                                            >
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs font-bold text-gray-400 dark:text-gray-500">TEMPORADA</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-lg font-bold text-ancb-blue dark:text-blue-400">{stat.year}</span>
-                                                        {expandedYear === stat.year ? <LucideChevronUp size={16} className="text-gray-400"/> : <LucideChevronDown size={16} className="text-gray-400"/>}
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="flex gap-4 md:gap-6">
-                                                    <div className="flex flex-col items-center">
-                                                        <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase">Jogos</span>
-                                                        <span className="font-bold text-gray-800 dark:text-white">{stat.games}</span>
-                                                    </div>
-                                                    <div className="flex flex-col items-center">
-                                                        <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase">Pontos</span>
-                                                        <span className="font-bold text-gray-800 dark:text-white">{stat.points}</span>
-                                                    </div>
-                                                    <div className="flex flex-col items-center">
-                                                        <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase">Média</span>
-                                                        <span className="font-bold text-ancb-orange">{stat.ppg}</span>
-                                                    </div>
-                                                </div>
+                        {/* ADMIN ONLY: Sensitive Data & Actions */}
+                        {isAdmin && (
+                            <div className="w-full mt-6 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-xl p-4">
+                                <h3 className="text-xs font-bold text-red-600 dark:text-red-400 uppercase mb-3 flex items-center gap-2">
+                                    <LucideAlertCircle size={14} /> Dados Administrativos
+                                </h3>
+                                
+                                {isEditing ? (
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500">Data Nascimento (YYYY-MM-DD)</label>
+                                            <input 
+                                                type="date"
+                                                className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
+                                                value={editFormData.nascimento || ''}
+                                                onChange={e => setEditFormData({...editFormData, nascimento: e.target.value})}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500">CPF</label>
+                                            <input 
+                                                className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
+                                                value={editFormData.cpf || ''}
+                                                onChange={e => setEditFormData({...editFormData, cpf: e.target.value})}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500">Email Contato</label>
+                                            <input 
+                                                className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
+                                                value={editFormData.emailContato || ''}
+                                                onChange={e => setEditFormData({...editFormData, emailContato: e.target.value})}
+                                            />
+                                        </div>
+                                        
+                                        <div className="flex gap-2 mt-4 pt-2 border-t border-red-200 dark:border-red-900/30">
+                                            <Button size="sm" onClick={handleSavePlayer} className="flex-1 !bg-green-600">
+                                                <LucideSave size={14} /> Salvar
+                                            </Button>
+                                            <Button size="sm" onClick={handleCancelEdit} variant="secondary" className="flex-1">
+                                                <LucideX size={14} /> Cancelar
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="grid grid-cols-2 gap-2 text-sm text-gray-700 dark:text-gray-300 mb-4">
+                                            <div>
+                                                <span className="block text-[10px] text-gray-400 uppercase">Nascimento</span>
+                                                <span className="font-bold">{selectedPlayer.nascimento || '-'}</span>
                                             </div>
+                                            <div>
+                                                <span className="block text-[10px] text-gray-400 uppercase">CPF</span>
+                                                <span className="font-bold">{selectedPlayer.cpf || '-'}</span>
+                                            </div>
+                                            <div className="col-span-2">
+                                                <span className="block text-[10px] text-gray-400 uppercase">Email</span>
+                                                <span className="font-bold">{selectedPlayer.emailContato || '-'}</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex gap-2">
+                                            <Button size="sm" variant="secondary" onClick={handleEditClick} className="flex-1 !border-blue-200 hover:!bg-blue-50 dark:hover:!bg-blue-900/20 text-blue-600">
+                                                <LucideEdit size={14} /> Editar Dados
+                                            </Button>
+                                            <button 
+                                                onClick={handleDeletePlayer}
+                                                className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 border border-red-200 transition-colors"
+                                                title="Excluir Jogador"
+                                            >
+                                                <LucideTrash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
 
-                                            {/* Accordion Content (Matches List) */}
-                                            {expandedYear === stat.year && (
-                                                <div className="bg-gray-50 dark:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700 p-2 md:p-3 animate-slideDown">
-                                                    {stat.matches.length > 0 ? (
-                                                        <div className="space-y-2">
-                                                            {stat.matches.map((match) => (
-                                                                <div key={match.id} className="bg-white dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700 flex justify-between items-center text-sm">
-                                                                    <div className="flex flex-col overflow-hidden">
-                                                                        <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 mb-0.5">
-                                                                            <span>{match.date.split('-').reverse().slice(0, 2).join('/')}</span>
-                                                                            <span>•</span>
-                                                                            <span className="truncate max-w-[100px]">{match.eventName}</span>
-                                                                        </div>
-                                                                        <span className="font-medium text-gray-700 dark:text-gray-200 truncate">{match.opponent}</span>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2 pl-2">
-                                                                         <span className="font-bold text-ancb-blue dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded text-xs whitespace-nowrap">
-                                                                            {match.points} pts
-                                                                         </span>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
+                        {/* STATS SECTION (Hidden while editing for cleaner view) */}
+                        {!isEditing && (
+                            <div className="mt-6 w-full bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/40">
+                                <h4 className="text-ancb-blue dark:text-blue-400 font-bold mb-4 text-sm uppercase flex items-center gap-2">
+                                    <LucideRuler size={16} /> Estatísticas por Temporada
+                                </h4>
+                                
+                                {loadingStats ? (
+                                    <div className="flex justify-center py-4">
+                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-ancb-blue"></div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {playerStats.map((stat) => (
+                                            <div key={stat.year} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-blue-100 dark:border-gray-700 overflow-hidden transition-colors">
+                                                <div 
+                                                    className="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                                    onClick={() => toggleYear(stat.year)}
+                                                >
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-bold text-gray-400 dark:text-gray-500">TEMPORADA</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-lg font-bold text-ancb-blue dark:text-blue-400">{stat.year}</span>
+                                                            {expandedYear === stat.year ? <LucideChevronUp size={16} className="text-gray-400"/> : <LucideChevronDown size={16} className="text-gray-400"/>}
                                                         </div>
-                                                    ) : (
-                                                        <div className="text-center py-2 text-gray-400 text-xs">
-                                                            Detalhes não disponíveis.
+                                                    </div>
+                                                    
+                                                    <div className="flex gap-4 md:gap-6">
+                                                        <div className="flex flex-col items-center">
+                                                            <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase">Jogos</span>
+                                                            <span className="font-bold text-gray-800 dark:text-white">{stat.games}</span>
                                                         </div>
-                                                    )}
+                                                        <div className="flex flex-col items-center">
+                                                            <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase">Pontos</span>
+                                                            <span className="font-bold text-gray-800 dark:text-white">{stat.points}</span>
+                                                        </div>
+                                                        <div className="flex flex-col items-center">
+                                                            <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase">Média</span>
+                                                            <span className="font-bold text-ancb-orange">{stat.ppg}</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                    
-                                    {playerStats.every(s => s.games === 0) && (
-                                        <div className="text-center text-xs text-gray-400 py-2">
-                                            Nenhum registro encontrado nas temporadas ativas.
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+
+                                                {expandedYear === stat.year && (
+                                                    <div className="bg-gray-50 dark:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700 p-2 md:p-3 animate-slideDown">
+                                                        {stat.matches.length > 0 ? (
+                                                            <div className="space-y-2">
+                                                                {stat.matches.map((match) => (
+                                                                    <div key={match.id} className="bg-white dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700 flex justify-between items-center text-sm">
+                                                                        <div className="flex flex-col overflow-hidden">
+                                                                            <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 mb-0.5">
+                                                                                <span>{match.date.split('-').reverse().slice(0, 2).join('/')}</span>
+                                                                                <span>•</span>
+                                                                                <span className="truncate max-w-[100px]">{match.eventName}</span>
+                                                                            </div>
+                                                                            <span className="font-medium text-gray-700 dark:text-gray-200 truncate">{match.opponent}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2 pl-2">
+                                                                             <span className="font-bold text-ancb-blue dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded text-xs whitespace-nowrap">
+                                                                                {match.points} pts
+                                                                             </span>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-center py-2 text-gray-400 text-xs">
+                                                                Detalhes não disponíveis.
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                        
+                                        {playerStats.every(s => s.games === 0) && (
+                                            <div className="text-center text-xs text-gray-400 py-2">
+                                                Nenhum registro encontrado nas temporadas ativas.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
             </Modal>

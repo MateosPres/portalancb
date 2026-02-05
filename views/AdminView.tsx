@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, getDocs, updateDoc, where } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage, auth } from '../services/firebase';
+import { db, auth } from '../services/firebase';
 import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
@@ -41,7 +40,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     const [postImageFile, setPostImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
 
     const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
     const [claimRequests, setClaimRequests] = useState<ClaimRequest[]>([]);
@@ -121,43 +119,43 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     }, [selectedEvent]);
 
     const compressImage = async (file: File): Promise<File> => {
-        const options = { maxSizeMB: 0.3, maxWidthOrHeight: 1280, useWebWorker: true, fileType: 'image/webp', initialQuality: 0.7 };
+        // Agressive compression for feed posts to save DB space
+        const options = { maxSizeMB: 0.1, maxWidthOrHeight: 800, useWebWorker: true, fileType: 'image/webp' };
         try { return await imageCompression(file, options); } catch (error) { return file; }
     };
 
-    const uploadToStorage = async (file: File): Promise<string> => {
-        const compressedFile = await compressImage(file);
-        const fileName = `posts/${Date.now()}_${Math.floor(Math.random() * 1000)}.webp`;
-        const storageRef = ref(storage, fileName);
-        const snapshot = await uploadBytes(storageRef, compressedFile);
-        return await getDownloadURL(snapshot.ref);
+    const fileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = error => reject(error);
+        });
     };
 
     const createPost = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!auth.currentUser) return;
         setIsUploading(true);
-        setUploadProgress(20);
         try {
             let imageUrl = null;
             if (postImageFile && (postType === 'noticia' || postType === 'placar')) {
-                setUploadProgress(40);
-                imageUrl = await uploadToStorage(postImageFile);
-                setUploadProgress(80);
+                const compressed = await compressImage(postImageFile);
+                imageUrl = await fileToBase64(compressed);
             }
             const postContent: any = {};
             if (postType === 'noticia') { postContent.titulo = postTitle; postContent.resumo = postBody; if (postVideoLink) postContent.link_video = postVideoLink; } 
             else if (postType === 'placar') { postContent.time_adv = postTeamAdv; postContent.placar_ancb = Number(postScoreAncb); postContent.placar_adv = Number(postScoreAdv); postContent.titulo = postTitle; } 
             else if (postType === 'aviso') { postContent.titulo = postTitle; postContent.resumo = postBody; }
             await addDoc(collection(db, "feed_posts"), { type: postType, timestamp: serverTimestamp(), author_id: auth.currentUser.uid, image_url: imageUrl, content: postContent });
-            setUploadProgress(100); resetPostForm(); setShowAddPost(false);
-        } catch (error) { console.error("Error creating post:", error); alert("Erro ao criar postagem."); } finally { setIsUploading(false); setUploadProgress(0); }
+            resetPostForm(); setShowAddPost(false);
+        } catch (error) { console.error("Error creating post:", error); alert("Erro ao criar postagem."); } finally { setIsUploading(false); }
     };
 
     const handleDeletePost = async (post: FeedPost) => {
         if (!window.confirm("Excluir esta postagem permanentemente?")) return;
         try {
-            if (post.image_url) { try { const imageRef = ref(storage, post.image_url); await deleteObject(imageRef); } catch (imgError) { console.warn("Imagem não encontrada ou erro ao deletar:", imgError); } }
+            // Just delete the doc, image is inline text now
             await deleteDoc(doc(db, "feed_posts", post.id));
         } catch (error) { console.error("Erro ao excluir post:", error); }
     };

@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, ViewState, Evento, Jogo } from './types';
-import { auth, db, storage } from './services/firebase';
+import { auth, db } from './services/firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { doc, setDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
 import { Modal } from './components/Modal';
@@ -173,8 +172,8 @@ const App: React.FC = () => {
             const file = e.target.files[0];
             try {
                 const options = {
-                    maxSizeMB: 0.2, // Compress before preview to save memory/upload time later
-                    maxWidthOrHeight: 600,
+                    maxSizeMB: 0.1, // Compress aggressive (100kb limit for Base64 storage)
+                    maxWidthOrHeight: 500,
                     useWebWorker: true
                 };
                 const compressedFile = await imageCompression(file, options);
@@ -184,6 +183,16 @@ const App: React.FC = () => {
                 console.error("Erro ao processar imagem:", error);
             }
         }
+    };
+
+    // Helper: Convert File to Base64 String
+    const fileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = error => reject(error);
+        });
     };
 
     const handleRegister = async (e: React.FormEvent) => {
@@ -196,24 +205,22 @@ const App: React.FC = () => {
             const userCredential = await createUserWithEmailAndPassword(auth, regEmail, regPassword);
             const uid = userCredential.user.uid;
             
-            // 2. Upload Photo (if exists) - Fail silently to avoid stopping registration
-            let photoUrl = '';
+            // 2. Process Photo to Base64 (No Storage Bucket Needed)
+            let photoBase64 = '';
             if (regPhoto) {
                 try {
-                    const storageRef = ref(storage, `profile_photos/${uid}_${Date.now()}.webp`);
-                    const snapshot = await uploadBytes(storageRef, regPhoto);
-                    photoUrl = await getDownloadURL(snapshot.ref);
+                   photoBase64 = await fileToBase64(regPhoto);
                 } catch (imgError) {
-                    console.error("Foto não pôde ser enviada (permissões ou erro de rede), continuando registro sem foto.", imgError);
+                    console.error("Erro ao converter foto:", imgError);
                 }
             }
 
-            // Sanitização de dados (Firestore não aceita undefined)
+            // Sanitização de dados
             const safeNickname = regNickname ? regNickname : regName.split(' ')[0];
             
-            // 3. Create User Profile (System Access)
+            // 3. Create User Profile
             const newProfile = {
-                uid: uid, // redundante mas bom para garantir
+                uid: uid,
                 nome: regName,
                 apelido: safeNickname,
                 email: regEmail,
@@ -222,7 +229,7 @@ const App: React.FC = () => {
                 linkedPlayerId: uid
             };
             
-            // 4. Create Player Profile (Pending Approval)
+            // 4. Create Player Profile
             const newPlayerProfile = {
                 id: uid,
                 userId: uid,
@@ -232,7 +239,7 @@ const App: React.FC = () => {
                 nascimento: regBirthDate,
                 numero_uniforme: Number(regJerseyNumber) || 0,
                 posicao: regPosition,
-                foto: photoUrl, // empty string if failed
+                foto: photoBase64, // Saving string directly in Firestore
                 status: 'pending',
                 emailContato: regEmail
             };
@@ -261,10 +268,6 @@ const App: React.FC = () => {
                 setAuthError("Este email já está sendo utilizado.");
             } else if (error.code === 'auth/weak-password') {
                 setAuthError("A senha deve ter pelo menos 6 caracteres.");
-            } else if (error.message.includes("permission")) {
-                // Se a conta Auth foi criada mas o Firestore falhou
-                setShowRegister(false);
-                alert("Conta criada, mas houve um erro ao salvar o perfil. Tente fazer login e editar seus dados, ou contate o administrador.");
             } else {
                 setAuthError(`Erro ao registrar: ${error.message}`);
             }
@@ -309,20 +312,21 @@ const App: React.FC = () => {
     }
 
     const renderHeader = () => (
-        <header className="sticky top-0 z-50 bg-[#062553]/95 backdrop-blur-md shadow-lg text-white py-3 border-b border-white/10 animate-slideDown">
-            <div className="container mx-auto px-4 flex flex-wrap justify-between items-center gap-4">
-                <div className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setCurrentView('home')}>
-                    <img src="https://i.imgur.com/4TxBrHs.png" alt="ANCB Logo" className="h-12 w-auto" />
-                    <h1 className="text-xl md:text-2xl font-bold tracking-wide">Portal ANCB-MT</h1>
+        <header className="sticky top-0 z-50 bg-[#062553] text-white py-3 border-b border-white/10 shadow-lg">
+            {/* Removed flex-wrap to keep icons on the right on mobile */}
+            <div className="container mx-auto px-4 flex justify-between items-center h-12 md:h-auto">
+                <div className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity min-w-0" onClick={() => setCurrentView('home')}>
+                    <img src="https://i.imgur.com/4TxBrHs.png" alt="ANCB Logo" className="h-10 md:h-12 w-auto flex-shrink-0" />
+                    <h1 className="text-lg md:text-2xl font-bold tracking-wide truncate">Portal ANCB-MT</h1>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <button onClick={toggleTheme} className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors mr-1">
+                <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+                    <button onClick={toggleTheme} className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors">
                         {isDarkMode ? <LucideSun size={20} /> : <LucideMoon size={20} />}
                     </button>
 
                     {userProfile ? (
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 md:gap-3">
                             <div className="hidden md:flex flex-col text-right mr-2 leading-tight cursor-pointer group hover:opacity-80 transition-opacity" onClick={() => setCurrentView('profile')}>
                                 <div className="flex items-center gap-1 justify-end">
                                     <span className="text-sm font-semibold group-hover:text-ancb-orange transition-colors">{userProfile.nome}</span>
@@ -332,11 +336,11 @@ const App: React.FC = () => {
                             </div>
                             
                             {userProfile.role === 'admin' && (
-                                <Button variant="secondary" size="sm" onClick={() => setCurrentView('admin')} className={`!text-white !border-white/30 hover:!bg-white/10 ${currentView === 'admin' ? '!bg-ancb-orange !border-ancb-orange' : ''}`}>
+                                <Button variant="secondary" size="sm" onClick={() => setCurrentView('admin')} className={`!px-2 !text-white !border-white/30 hover:!bg-white/10 ${currentView === 'admin' ? '!bg-ancb-orange !border-ancb-orange' : ''}`}>
                                     <LucideShield size={16} /> <span className="hidden sm:inline">Admin</span>
                                 </Button>
                             )}
-                            <Button variant="secondary" size="sm" onClick={() => setCurrentView('profile')} className={`!text-white !border-white/30 hover:!bg-white/10 ${currentView === 'profile' ? '!bg-ancb-blueLight !border-ancb-blueLight' : ''}`}>
+                            <Button variant="secondary" size="sm" onClick={() => setCurrentView('profile')} className={`!px-2 !text-white !border-white/30 hover:!bg-white/10 ${currentView === 'profile' ? '!bg-ancb-blueLight !border-ancb-blueLight' : ''}`}>
                                 <LucideUser size={16} /> <span className="hidden sm:inline">Perfil</span>
                             </Button>
                             <Button variant="secondary" size="sm" onClick={handleLogout} className="!px-2 !text-red-300 !border-red-500/50 hover:!bg-red-500/20 hover:!text-white">
@@ -346,10 +350,14 @@ const App: React.FC = () => {
                     ) : (
                         <div className="flex gap-2">
                             <Button variant="secondary" size="sm" onClick={() => setShowLogin(true)} className="!text-white !border-white/30 hover:!bg-white/10">
-                                <LucideLock size={14} /> Entrar
+                                <LucideLock size={14} /> <span className="hidden sm:inline">Entrar</span>
                             </Button>
                             <Button variant="primary" size="sm" onClick={() => setShowRegister(true)} className="hidden sm:flex">
                                 Registrar
+                            </Button>
+                            {/* Mobile Register Icon if hidden */}
+                            <Button variant="primary" size="sm" onClick={() => setShowRegister(true)} className="sm:hidden !px-2">
+                                <LucideUser size={16} />
                             </Button>
                         </div>
                     )}
@@ -426,7 +434,7 @@ const App: React.FC = () => {
         switch (currentView) {
             case 'home': return renderHome();
             case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onOpenGamePanel={handleOpenGamePanel} />;
-            case 'jogadores': return <JogadoresView onBack={() => setCurrentView('home')} />;
+            case 'jogadores': return <JogadoresView onBack={() => setCurrentView('home')} userProfile={userProfile} />;
             case 'ranking': return <RankingView onBack={() => setCurrentView('home')} />;
             case 'admin': 
                 return userProfile?.role === 'admin' 
@@ -505,6 +513,7 @@ const App: React.FC = () => {
                                 </div>
                             )}
                         </div>
+                        <p className="text-[10px] text-gray-400 mt-2 text-center max-w-[200px]">A foto será salva diretamente no sistema (gratuito).</p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

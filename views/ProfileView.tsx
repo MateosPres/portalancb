@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../services/firebase';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { db } from '../services/firebase';
 import { UserProfile, Player } from '../types';
 import { Button } from '../components/Button';
 import { LucideArrowLeft, LucideSave, LucideCamera, LucideLink, LucideSearch, LucideCheckCircle2, LucideAlertCircle, LucideLoader2, LucideClock } from 'lucide-react';
@@ -145,6 +144,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack })
         return () => clearTimeout(timer);
     }, [claimSearch, userProfile.uid]);
 
+    // Helper: File to Base64
+    const fileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = error => reject(error);
+        });
+    };
+
     // --- PHOTO UPLOAD & MODERATION REQUEST ---
     const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || !e.target.files[0]) return;
@@ -153,10 +162,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack })
         setIsUploading(true);
 
         try {
-            // 1. Compression Options
+            // 1. Compression Options (Very Important for Database Storage)
             const options = {
-                maxSizeMB: 0.15, // Max 150KB
-                maxWidthOrHeight: 600, // Resize to decent profile size
+                maxSizeMB: 0.1, // Max 100KB - Crucial for Firestore
+                maxWidthOrHeight: 500, // Resize for avatar usage
                 useWebWorker: true,
                 fileType: 'image/webp'
             };
@@ -164,29 +173,26 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack })
             // 2. Compress
             const compressedFile = await imageCompression(file, options);
 
-            // 3. Upload to Firebase Storage (Pending Folder)
-            // Path: pending_photos/UID_timestamp.webp
-            const storageRef = ref(storage, `pending_photos/${userProfile.uid}_${Date.now()}.webp`);
-            const snapshot = await uploadBytes(storageRef, compressedFile);
-            const downloadURL = await getDownloadURL(snapshot.ref);
+            // 3. Convert to Base64
+            const base64String = await fileToBase64(compressedFile);
 
-            // 4. Create Approval Request
+            // 4. Create Approval Request with Base64 String
             await addDoc(collection(db, "solicitacoes_foto"), {
                 userId: userProfile.uid,
                 playerId: playerDocId,
                 playerName: formData.nome || 'Desconhecido',
-                newPhotoUrl: downloadURL,
+                newPhotoUrl: base64String, // Storing image data directly
                 currentPhotoUrl: formData.foto || null,
                 status: 'pending',
                 timestamp: serverTimestamp()
             });
 
-            // 5. Notify User (Do NOT update local state immediately)
+            // 5. Notify User
             setPendingPhotoRequest(true);
             alert("Sua foto foi enviada para análise e aparecerá no perfil após aprovação.");
 
         } catch (error) {
-            console.error("Erro ao fazer upload da foto:", error);
+            console.error("Erro ao processar foto:", error);
             alert("Erro ao processar imagem. Tente uma imagem menor.");
         } finally {
             setIsUploading(false);
@@ -421,8 +427,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack })
                         </select>
                     </div>
                 </div>
-
-                {/* Hidden URL input since we use file upload now, but kept in state for logic */}
                 
                 <Button type="submit" className="w-full mt-4">
                     <LucideSave size={18} /> Salvar Dados

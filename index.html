@@ -2,17 +2,18 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Portal ANCB-MT</title>
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json">
     
-    <!-- Favicon e Ícone Mobile -->
-    <link rel="icon" type="image/png" href="https://i.imgur.com/SE2jHsz.png">
+    <!-- Favicon (Fundo Transparente) e Ícone Mobile (Com Fundo) -->
+    <link rel="icon" type="image/png" href="https://i.imgur.com/4TxBrHs.png">
     <link rel="apple-touch-icon" href="https://i.imgur.com/SE2jHsz.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- Alterado de black-translucent para default para evitar sobreposição de conteúdo -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#062553">
 
     <!-- Mantemos o Tailwind via CDN para simplicidade na migração, 
@@ -69,6 +70,7 @@
     <style>
         body {
             transition: background-color 0.3s ease, color 0.3s ease;
+            overscroll-behavior-y: none; /* Previne o efeito elástico no mobile */
         }
         ::-webkit-scrollbar {
             width: 6px;
@@ -105,7 +107,6 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
 <body class="bg-gray-100 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
     <div id="root"></div>
