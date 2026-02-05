@@ -17,6 +17,8 @@ export default defineConfig({
         background_color: '#062553',
         display: 'standalone',
         orientation: 'portrait',
+        start_url: "./",
+        scope: "./",
         icons: [
           {
             src: 'https://i.imgur.com/SE2jHsz.png',
@@ -32,7 +34,7 @@ export default defineConfig({
       }
     })
   ],
-  base: '/',
+  base: './',
   build: {
     outDir: 'dist',
     assetsDir: 'assets',

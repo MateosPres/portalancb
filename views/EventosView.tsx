@@ -125,7 +125,10 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
         const standings: Record<string, TeamStanding> = {};
 
-        // Initialize
+        // Helper for normalization
+        const normalize = (s: string) => s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+        // Initialize with Map for quick ID access
         selectedEvent.times.forEach(t => {
             standings[t.id] = {
                 teamId: t.id,
@@ -140,14 +143,35 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             };
         });
 
+        // Create Name -> ID Map for Fallback Matching
+        const nameToIdMap: Record<string, string> = {};
+        selectedEvent.times.forEach(t => {
+            if (t.nomeTime) nameToIdMap[normalize(t.nomeTime)] = t.id;
+        });
+
         // Process Games
         eventGames.forEach(game => {
-            if (game.status === 'finalizado' && game.timeA_id && game.timeB_id) {
+            // Count game if finished OR if it has a score (Legacy/Recovery support)
+            const hasScore = (game.placarTimeA_final || 0) + (game.placarTimeB_final || 0) > 0;
+            const isValidGame = game.status === 'finalizado' || hasScore;
+
+            if (isValidGame) {
                 const scoreA = game.placarTimeA_final || 0;
                 const scoreB = game.placarTimeB_final || 0;
                 
-                const teamA = standings[game.timeA_id];
-                const teamB = standings[game.timeB_id];
+                // 1. Try match by ID
+                let teamA = standings[game.timeA_id || ''];
+                let teamB = standings[game.timeB_id || ''];
+
+                // 2. Fallback: Match by Name (Fuzzy)
+                if (!teamA && game.timeA_nome) {
+                    const id = nameToIdMap[normalize(game.timeA_nome)];
+                    if (id) teamA = standings[id];
+                }
+                if (!teamB && game.timeB_nome) {
+                    const id = nameToIdMap[normalize(game.timeB_nome)];
+                    if (id) teamB = standings[id];
+                }
 
                 if (teamA && teamB) {
                     teamA.games++;
@@ -573,6 +597,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                         <thead className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                                             <tr>
                                                 <th className="p-2 text-left">Time</th>
+                                                <th className="p-2 text-center">J</th>
                                                 <th className="p-2 text-center">V</th>
                                                 <th className="p-2 text-center">D</th>
                                                 <th className="p-2 text-center hidden sm:table-cell">Saldo</th>
@@ -586,13 +611,14 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                                         {team.logo && <img src={team.logo} className="w-6 h-6 rounded-full object-cover" />}
                                                         <span className="font-bold truncate max-w-[100px]">{team.teamName}</span>
                                                     </td>
+                                                    <td className="p-2 text-center font-bold text-gray-600 dark:text-gray-300">{team.games}</td>
                                                     <td className="p-2 text-center font-bold text-green-600">{team.wins}</td>
                                                     <td className="p-2 text-center text-red-500">{team.losses}</td>
                                                     <td className="p-2 text-center hidden sm:table-cell text-gray-500">{team.diff > 0 ? `+${team.diff}` : team.diff}</td>
                                                 </tr>
                                             ))}
                                             {(!selectedEvent.times || selectedEvent.times.length === 0) && (
-                                                <tr><td colSpan={4} className="p-4 text-center text-gray-400">Nenhum time cadastrado.</td></tr>
+                                                <tr><td colSpan={5} className="p-4 text-center text-gray-400">Nenhum time cadastrado.</td></tr>
                                             )}
                                         </tbody>
                                     </table>

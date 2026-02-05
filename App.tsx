@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player } from './types';
 import { auth, db } from './services/firebase';
-import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, collection, query, where, onSnapshot, orderBy, getDocs, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
@@ -25,6 +24,7 @@ const App: React.FC = () => {
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [ongoingEvents, setOngoingEvents] = useState<Evento[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showLoadingTimeout, setShowLoadingTimeout] = useState(false);
     const [isDarkMode, setIsDarkMode] = useState(false);
 
     // Auth Modals State
@@ -80,6 +80,14 @@ const App: React.FC = () => {
         }
     }, []);
 
+    // Loading Timeout Logic - Reduced to 5 seconds for better UX
+    useEffect(() => {
+        if (loading) {
+            const t = setTimeout(() => setShowLoadingTimeout(true), 5000); 
+            return () => clearTimeout(t);
+        }
+    }, [loading]);
+
     // PWA Install Logic
     useEffect(() => {
         // Check if already installed
@@ -127,29 +135,47 @@ const App: React.FC = () => {
     // --- AUTH LISTENER ---
     useEffect(() => {
         let unsubProfile: (() => void) | undefined;
-        const safetyTimer = setTimeout(() => setLoading(false), 7000);
+        // Safety timer to force app load even if Firebase hangs
+        const safetyTimer = setTimeout(() => setLoading(false), 6000);
 
-        const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+        // Using compat auth method
+        const unsubscribeAuth = auth.onAuthStateChanged(async (currentUser) => {
             setUser(currentUser);
             if (unsubProfile) unsubProfile();
 
             if (currentUser) {
-                unsubProfile = onSnapshot(doc(db, "usuarios", currentUser.uid), (docSnap) => {
-                    if (docSnap.exists()) {
-                        const profile = { ...docSnap.data(), uid: docSnap.id } as UserProfile;
-                        if (profile.status === 'banned') {
-                            signOut(auth);
-                            alert("Sua conta foi suspensa.");
-                            return;
+                try {
+                    unsubProfile = onSnapshot(
+                        doc(db, "usuarios", currentUser.uid), 
+                        (docSnap) => {
+                            if (docSnap.exists()) {
+                                const profile = { ...docSnap.data(), uid: docSnap.id } as UserProfile;
+                                if (profile.status === 'banned') {
+                                    auth.signOut();
+                                    alert("Sua conta foi suspensa.");
+                                    return;
+                                }
+                                setUserProfile(profile);
+                            }
+                            setLoading(false);
+                        },
+                        (error) => {
+                            console.error("Erro ao carregar perfil:", error);
+                            // Se der erro no listener (ex: permissão), libera o app
+                            setLoading(false);
                         }
-                        setUserProfile(profile);
-                    }
+                    );
+                } catch (e) {
+                    console.error("Erro ao configurar listener:", e);
                     setLoading(false);
-                });
+                }
             } else {
                 setUserProfile(null);
                 setLoading(false);
             }
+        }, (error) => {
+            console.error("Erro na autenticação:", error);
+            setLoading(false);
         });
 
         return () => { unsubscribeAuth(); if (unsubProfile) unsubProfile(); clearTimeout(safetyTimer); };
@@ -350,7 +376,7 @@ const App: React.FC = () => {
         e.preventDefault();
         setAuthError('');
         try {
-            await signInWithEmailAndPassword(auth, authEmail, authPassword);
+            await auth.signInWithEmailAndPassword(authEmail, authPassword);
             setShowLogin(false);
             setAuthEmail('');
             setAuthPassword('');
@@ -395,7 +421,7 @@ const App: React.FC = () => {
         
         try {
             // 1. Create Auth User
-            const userCredential = await createUserWithEmailAndPassword(auth, regEmail, regPassword);
+            const userCredential = await auth.createUserWithEmailAndPassword(regEmail, regPassword);
             const uid = userCredential.user.uid;
             
             // 2. Process Photo to Base64 (No Storage Bucket Needed)
@@ -470,7 +496,7 @@ const App: React.FC = () => {
     };
 
     const handleLogout = async () => {
-        await signOut(auth);
+        await auth.signOut();
         setCurrentView('home');
     };
 
@@ -504,6 +530,24 @@ const App: React.FC = () => {
                         <div className="w-12 h-12 border-4 border-blue-900 border-t-ancb-orange rounded-full animate-spin"></div>
                         <span className="text-white/40 text-xs font-bold tracking-[0.3em] uppercase animate-pulse">Carregando</span>
                     </div>
+                    {/* Fallback Button if loading takes too long */}
+                    {showLoadingTimeout && (
+                        <div className="mt-8 flex flex-col items-center animate-fadeIn">
+                            <p className="text-white/70 text-sm mb-4">Demorando muito?</p>
+                            <button 
+                                onClick={() => window.location.reload()} 
+                                className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-full text-sm font-bold transition-colors"
+                            >
+                                Recarregar Página
+                            </button>
+                            <button 
+                                onClick={() => setLoading(false)} 
+                                className="mt-2 text-white/40 text-xs hover:text-white transition-colors"
+                            >
+                                Entrar mesmo assim
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         );

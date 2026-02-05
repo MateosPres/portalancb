@@ -5,19 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Portal ANCB-MT</title>
     
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="/manifest.json">
+    <!-- PWA Manifest - Caminho Relativo -->
+    <link rel="manifest" href="./manifest.json">
     
-    <!-- Favicon (Fundo Transparente) e Ícone Mobile (Com Fundo) -->
+    <!-- Favicon -->
     <link rel="icon" type="image/png" href="https://i.imgur.com/4TxBrHs.png">
     <link rel="apple-touch-icon" href="https://i.imgur.com/SE2jHsz.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <!-- Alterado de black-translucent para default para evitar sobreposição de conteúdo -->
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#062553">
 
-    <!-- Mantemos o Tailwind via CDN para simplicidade na migração, 
-         mas em um projeto Vite profissional, recomenda-se instalar via PostCSS -->
+    <!-- Tailwind via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -70,7 +68,7 @@
     <style>
         body {
             transition: background-color 0.3s ease, color 0.3s ease;
-            overscroll-behavior-y: none; /* Previne o efeito elástico no mobile */
+            overscroll-behavior-y: none;
         }
         ::-webkit-scrollbar {
             width: 6px;
@@ -96,22 +94,30 @@
 <script type="importmap">
 {
   "imports": {
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "vite": "https://esm.sh/vite@^7.3.1",
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "lucide-react": "https://esm.sh/lucide-react@0.454.0",
+    "firebase/app": "https://esm.sh/firebase@10.12.2/app",
+    "firebase/firestore": "https://esm.sh/firebase@10.12.2/firestore",
+    "firebase/auth": "https://esm.sh/firebase@10.12.2/auth",
+    "firebase/storage": "https://esm.sh/firebase@10.12.2/storage",
+    "browser-image-compression": "https://esm.sh/browser-image-compression@2.0.2",
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
     "react/": "https://esm.sh/react@^19.2.4/",
-    "react": "https://esm.sh/react@^19.2.4",
-    "firebase/": "https://esm.sh/firebase@^12.8.0/",
-    "browser-image-compression": "https://esm.sh/browser-image-compression@^2.0.2",
+    "firebase/": "https://esm.sh/firebase@^12.9.0/",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3",
     "vite-plugin-pwa": "https://esm.sh/vite-plugin-pwa@^1.2.0"
   }
 }
 </script>
+<link rel="stylesheet" href="./index.css">
 <link rel="stylesheet" href="/index.css">
 </head>
 <body class="bg-gray-100 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <script type="module" src="./index.tsx"></script>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
-import { initializeApp } from "firebase/app";
+import firebase from "firebase/compat/app";
+import "firebase/compat/auth";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 
 // Using the config provided in your original JS file
@@ -14,7 +14,7 @@ const firebaseConfig = {
     measurementId: "G-VCMEKP1XP4" 
 };
 
-const app = initializeApp(firebaseConfig);
+const app = firebase.initializeApp(firebaseConfig);
 export const db = getFirestore(app);
-export const auth = getAuth(app);
+export const auth = app.auth();
 export const storage = getStorage(app);

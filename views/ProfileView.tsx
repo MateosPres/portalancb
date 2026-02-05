@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, deleteDoc, limit } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { UserProfile, Player, PlayerReview, Jogo, Evento } from '../types';
+import { UserProfile, Player, PlayerReview, Jogo, Evento, Cesta } from '../types';
 import { Button } from '../components/Button';
 import { LucideArrowLeft, LucideSave, LucideCamera, LucideLink, LucideSearch, LucideCheckCircle2, LucideAlertCircle, LucideLoader2, LucideClock, LucideMessageSquare, LucideStar, LucideHistory, LucideTrash2, LucidePlayCircle } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
@@ -22,6 +22,11 @@ interface MatchHistoryItem {
     scoreMyTeam: number;
     scoreOpponent: number;
     reviewed: boolean;
+    // Stats individuais
+    individualPoints: number;
+    cesta1: number;
+    cesta2: number;
+    cesta3: number;
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, onOpenReview }) => {
@@ -29,7 +34,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const [formData, setFormData] = useState<Partial<Player>>({});
     
     // Tab State
-    const [activeTab, setActiveTab] = useState<'info' | 'testimonials' | 'matches'>('info');
+    const [activeTab, setActiveTab] = useState<'info' | 'testimonials' | 'matches'>('matches'); // Default matches to see content immediately
     const [testimonials, setTestimonials] = useState<PlayerReview[]>([]);
     const [loadingTestimonials, setLoadingTestimonials] = useState(false);
     
@@ -47,7 +52,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const [claimSearch, setClaimSearch] = useState('');
     const [foundPlayers, setFoundPlayers] = useState<Player[]>([]);
     const [claimStatus, setClaimStatus] = useState<'none'|'pending'>('none');
-    const [claimingId, setClaimingId] = useState<string | null>(null); // To show loading on specific button
+    const [claimingId, setClaimingId] = useState<string | null>(null);
     
     // Determine which player ID to edit
     const playerDocId = userProfile.linkedPlayerId || userProfile.uid;
@@ -74,7 +79,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 if (snap.exists()) {
                     setFormData(snap.data() as Player);
                 } else {
-                    // Fallback: If player doc doesn't exist (e.g. new registration), init with defaults
                     setFormData({
                         id: playerDocId,
                         nome: userProfile.nome,
@@ -98,7 +102,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     if (!claimSnap.empty) {
                         setClaimStatus('pending');
                     } else if (!userProfile.linkedPlayerId) {
-                        // If no pending claim and no linked player, show search by default
                         setShowClaimSection(true);
                     }
                 } catch (claimErr) {
@@ -108,7 +111,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 // 3. Check for Pending Photo Requests
                 try {
                     const qPhoto = query(
-                        collection(db, "solicitacoes_foto"),
+                        collection(db, "solicitacoes_foto"), 
                         where("userId", "==", userProfile.uid),
                         where("status", "==", "pending")
                     );
@@ -138,7 +141,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
             const fetchTestimonials = async () => {
                 setLoadingTestimonials(true);
                 try {
-                    // Use Server-side sorting now that index exists
                     const q = query(
                         collection(db, "avaliacoes"), 
                         where("revieweeId", "==", playerDocId),
@@ -157,7 +159,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         }
     }, [activeTab, playerDocId]);
 
-    // FETCH MATCH HISTORY
+    // FETCH MATCH HISTORY - IMPROVED LOGIC
     useEffect(() => {
         if (activeTab === 'matches') {
             const fetchMatches = async () => {
@@ -171,16 +173,74 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
 
                     for (const eventDoc of eventsSnap.docs) {
                         const eventData = eventDoc.data() as Evento;
-                        // Skip if player wasn't in roster
-                        if (!eventData.jogadoresEscalados?.includes(playerDocId)) continue;
-
                         const gamesSnap = await getDocs(collection(db, "eventos", eventDoc.id, "jogos"));
                         
                         for (const gameDoc of gamesSnap.docs) {
                             const gameData = gameDoc.data() as Jogo;
-                            
+                            let played = false;
+                            let isTeamA = true; // Default assumption
+
+                            // 1. Determine Participation and Team Side
                             if (gameData.jogadoresEscalados?.includes(playerDocId)) {
-                                // Check if user already reviewed this game
+                                played = true;
+                                // Can't easily determine team side from simple roster array without extra data, 
+                                // so we check internal tournament teams logic below.
+                            }
+                            
+                            // 2. Internal Tournament Team Check (More accurate for Team assignment)
+                            if (eventData.type === 'torneio_interno' && eventData.times) {
+                                const teamA = eventData.times.find(t => t.id === gameData.timeA_id);
+                                const teamB = eventData.times.find(t => t.id === gameData.timeB_id);
+                                
+                                if (teamA?.jogadores?.includes(playerDocId)) {
+                                    played = true;
+                                    isTeamA = true;
+                                } else if (teamB?.jogadores?.includes(playerDocId)) {
+                                    played = true;
+                                    isTeamA = false;
+                                }
+                            }
+                            // 3. Fallback for External/Amistoso (Legacy)
+                            else if ((!gameData.jogadoresEscalados || gameData.jogadoresEscalados.length === 0) && eventData.jogadoresEscalados?.includes(playerDocId)) {
+                                played = true;
+                                isTeamA = true; // Usually ANCB is Team A in external games
+                            }
+
+                            if (played) {
+                                // --- FETCH INDIVIDUAL STATS FOR THIS GAME ---
+                                let points = 0;
+                                let c1 = 0;
+                                let c2 = 0;
+                                let c3 = 0;
+                                const processedCestaIds = new Set<string>();
+
+                                const countCesta = (cesta: Cesta) => {
+                                    if (processedCestaIds.has(cesta.id)) return;
+                                    if (cesta.jogadorId === playerDocId) {
+                                        const p = Number(cesta.pontos);
+                                        points += p;
+                                        if (p === 1) c1++;
+                                        if (p === 2) c2++;
+                                        if (p === 3) c3++;
+                                        processedCestaIds.add(cesta.id);
+                                    }
+                                };
+
+                                // 1. Try Subcollection first (Newer structure)
+                                try {
+                                    const subCestas = await getDocs(collection(db, "eventos", eventDoc.id, "jogos", gameDoc.id, "cestas"));
+                                    subCestas.forEach(d => countCesta({id: d.id, ...d.data()} as Cesta));
+                                } catch(e) {}
+
+                                // 2. Try Root Collection (Legacy/Fallback)
+                                try {
+                                    const rootCestasQuery = query(collection(db, "cestas"), where("jogoId", "==", gameDoc.id), where("jogadorId", "==", playerDocId));
+                                    const rootCestas = await getDocs(rootCestasQuery);
+                                    rootCestas.forEach(d => countCesta({id: d.id, ...d.data()} as Cesta));
+                                } catch (e) {}
+                                // ---------------------------------------------
+
+                                // Check review status
                                 const reviewQ = query(
                                     collection(db, "avaliacoes"), 
                                     where("gameId", "==", gameDoc.id),
@@ -188,21 +248,28 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                                 );
                                 const reviewSnap = await getDocs(reviewQ);
                                 
+                                // Score Logic with Legacy Fallback
+                                const sA = gameData.placarTimeA_final ?? gameData.placarANCB_final ?? 0;
+                                const sB = gameData.placarTimeB_final ?? gameData.placarAdversario_final ?? 0;
+
                                 historyList.push({
                                     eventId: eventDoc.id,
                                     gameId: gameDoc.id,
                                     eventName: eventData.nome,
                                     date: gameData.dataJogo || eventData.data,
-                                    opponent: gameData.adversario || gameData.timeB_nome || 'Adversário',
-                                    myTeam: gameData.timeA_nome || 'ANCB',
-                                    scoreMyTeam: gameData.placarTimeA_final || 0,
-                                    scoreOpponent: gameData.placarTimeB_final || 0,
-                                    reviewed: !reviewSnap.empty
+                                    opponent: isTeamA ? (gameData.adversario || gameData.timeB_nome || 'Adversário') : (gameData.timeA_nome || 'ANCB'),
+                                    myTeam: isTeamA ? (gameData.timeA_nome || 'ANCB') : (gameData.timeB_nome || 'Meu Time'),
+                                    scoreMyTeam: isTeamA ? sA : sB,
+                                    scoreOpponent: isTeamA ? sB : sA,
+                                    reviewed: !reviewSnap.empty,
+                                    individualPoints: points,
+                                    cesta1: c1,
+                                    cesta2: c2,
+                                    cesta3: c3
                                 });
                             }
                         }
                     }
-                    // Sort descending by date (naive string sort usually works for YYYY-MM-DD, otherwise sort by timestamp if available)
                     historyList.sort((a, b) => b.date.localeCompare(a.date));
                     setMatches(historyList);
                 } catch (e) {
@@ -231,14 +298,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 const matches = snap.docs
                     .map(d => ({id: d.id, ...d.data()} as Player))
                     .filter(p => {
-                        // Safe check for undefined properties to prevent crashes
                         const pName = p.nome ? p.nome.toLowerCase() : '';
                         const pNick = p.apelido ? p.apelido.toLowerCase() : '';
                         const search = claimSearch.toLowerCase();
-                        
                         return (pName.includes(search) || pNick.includes(search)) &&
-                               !p.userId && // Must be unclaimed
-                               p.id !== userProfile.uid; // Not self
+                               !p.userId && p.id !== userProfile.uid;
                     });
                 setFoundPlayers(matches);
             } catch (err) {
@@ -250,7 +314,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         return () => clearTimeout(timer);
     }, [claimSearch, userProfile.uid]);
 
-    // Helper: File to Base64
     const fileToBase64 = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -260,46 +323,28 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         });
     };
 
-    // --- PHOTO UPLOAD & MODERATION REQUEST ---
     const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || !e.target.files[0]) return;
-        
         const file = e.target.files[0];
         setIsUploading(true);
-
         try {
-            // 1. Compression Options (Very Important for Database Storage)
-            const options = {
-                maxSizeMB: 0.1, // Max 100KB - Crucial for Firestore
-                maxWidthOrHeight: 500, // Resize for avatar usage
-                useWebWorker: true,
-                fileType: 'image/webp'
-            };
-
-            // 2. Compress
+            const options = { maxSizeMB: 0.1, maxWidthOrHeight: 500, useWebWorker: true, fileType: 'image/webp' };
             const compressedFile = await imageCompression(file, options);
-
-            // 3. Convert to Base64
             const base64String = await fileToBase64(compressedFile);
-
-            // 4. Create Approval Request with Base64 String
             await addDoc(collection(db, "solicitacoes_foto"), {
                 userId: userProfile.uid,
                 playerId: playerDocId,
                 playerName: formData.nome || 'Desconhecido',
-                newPhotoUrl: base64String, // Storing image data directly
+                newPhotoUrl: base64String,
                 currentPhotoUrl: formData.foto || null,
                 status: 'pending',
                 timestamp: serverTimestamp()
             });
-
-            // 5. Notify User
             setPendingPhotoRequest(true);
             alert("Sua foto foi enviada para análise e aparecerá no perfil após aprovação.");
-
         } catch (error) {
             console.error("Erro ao processar foto:", error);
-            alert("Erro ao processar imagem. Tente uma imagem menor.");
+            alert("Erro ao processar imagem.");
         } finally {
             setIsUploading(false);
         }
@@ -310,9 +355,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         try {
             const dataToSave = { ...formData };
             if (!dataToSave.id) dataToSave.id = playerDocId;
-            
-            // Note: We do NOT save formData.foto here, because the photo update is async via request
-            
             await setDoc(doc(db, "jogadores", playerDocId), dataToSave, { merge: true });
             alert("Dados do perfil atualizados com sucesso!");
         } catch (error) {
@@ -322,14 +364,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     };
 
     const handleClaim = async (targetPlayer: Player) => {
-        // Critical Validation: Ensure User UID exists
         if (!userProfile || !userProfile.uid) {
-            alert("Erro de autenticação: ID do usuário não encontrado. Tente fazer login novamente.");
+            alert("Erro de autenticação: ID do usuário não encontrado.");
             return;
         }
-
         setClaimingId(targetPlayer.id);
-
         try {
             await addDoc(collection(db, "solicitacoes_vinculo"), {
                 userId: userProfile.uid,
@@ -344,7 +383,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
             alert("Solicitação enviada! Aguarde a aprovação do administrador.");
         } catch (e: any) {
             console.error("Error claiming profile:", e);
-            alert(`Erro ao enviar solicitação: ${e.message || 'Erro desconhecido'}`);
+            alert(`Erro ao enviar solicitação: ${e.message}`);
         } finally {
             setClaimingId(null);
         }
@@ -367,7 +406,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(date);
     };
 
-    // Helper for date formatting
     const formatDate = (dateStr?: string) => {
         if (!dateStr) return '';
         return dateStr.split('-').reverse().join('/');
@@ -396,16 +434,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
             {/* TAB SWITCHER */}
             <div className="flex border-b border-gray-100 dark:border-gray-700 px-6 overflow-x-auto">
                 <button 
-                    onClick={() => setActiveTab('info')}
-                    className={`pb-3 px-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'info' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                >
-                    Dados
-                </button>
-                <button 
                     onClick={() => setActiveTab('matches')}
                     className={`pb-3 px-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'matches' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
                 >
                     Partidas
+                </button>
+                <button 
+                    onClick={() => setActiveTab('info')}
+                    className={`pb-3 px-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'info' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                >
+                    Dados
                 </button>
                 <button 
                     onClick={() => setActiveTab('testimonials')}
@@ -589,36 +627,56 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                             </div>
                         ) : matches.length > 0 ? (
                             <div className="space-y-3">
-                                {matches.map((match) => (
-                                    <div key={match.gameId} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 p-3">
-                                        <div className="text-xs text-gray-400 mb-2 flex justify-between">
-                                            <span>{formatDate(match.date)} • {match.eventName}</span>
-                                            {match.reviewed ? (
-                                                <span className="text-green-500 font-bold flex items-center gap-1"><LucideCheckCircle2 size={12}/> Avaliado</span>
-                                            ) : (
-                                                <span className="text-orange-500 font-bold">Pendente</span>
+                                {matches.map((match) => {
+                                    const isWin = match.scoreMyTeam > match.scoreOpponent;
+                                    const isLoss = match.scoreMyTeam < match.scoreOpponent;
+                                    const borderClass = isWin ? 'border-green-500 dark:border-green-500' : isLoss ? 'border-red-500 dark:border-red-500' : 'border-gray-100 dark:border-gray-700';
+
+                                    return (
+                                        <div key={match.gameId} className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${borderClass} p-3`}>
+                                            <div className="text-xs text-gray-400 mb-2 flex justify-between">
+                                                <span>{formatDate(match.date)} • {match.eventName}</span>
+                                                {match.reviewed ? (
+                                                    <span className="text-green-500 font-bold flex items-center gap-1"><LucideCheckCircle2 size={12}/> Avaliado</span>
+                                                ) : (
+                                                    <span className="text-orange-500 font-bold">Pendente</span>
+                                                )}
+                                            </div>
+                                            
+                                            <div className="flex justify-between items-center mb-3 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                                                <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{match.myTeam}</span>
+                                                <span className="font-mono font-bold bg-white dark:bg-gray-600 px-2 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-500">
+                                                    {match.scoreMyTeam} x {match.scoreOpponent}
+                                                </span>
+                                                <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{match.opponent}</span>
+                                            </div>
+                                            
+                                            {/* INDIVIDUAL STATS BADGE */}
+                                            <div className="flex flex-wrap gap-2 items-center justify-center border-t border-gray-100 dark:border-gray-700 pt-2 mb-2">
+                                                 <div className="flex items-center gap-1 bg-ancb-blue/10 dark:bg-blue-900/30 px-2 py-1 rounded text-ancb-blue dark:text-blue-300 font-bold text-xs">
+                                                    <span>{match.individualPoints} Pts</span>
+                                                 </div>
+                                                 <div className="text-[10px] text-gray-500 dark:text-gray-400 flex gap-2">
+                                                    <span title="Bolas de 3 Pontos">3PT: <b>{match.cesta3}</b></span>
+                                                    <span className="text-gray-300 dark:text-gray-600">|</span>
+                                                    <span title="Bolas de 2 Pontos">2PT: <b>{match.cesta2}</b></span>
+                                                    <span className="text-gray-300 dark:text-gray-600">|</span>
+                                                    <span title="Lances Livres">1PT: <b>{match.cesta1}</b></span>
+                                                 </div>
+                                            </div>
+
+                                            {!match.reviewed && onOpenReview && (
+                                                <Button 
+                                                    size="sm" 
+                                                    className="w-full !py-1 text-xs" 
+                                                    onClick={() => onOpenReview(match.gameId, match.eventId)}
+                                                >
+                                                    <LucideStar size={12} /> Avaliar Time
+                                                </Button>
                                             )}
                                         </div>
-                                        
-                                        <div className="flex justify-between items-center mb-3">
-                                            <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{match.myTeam}</span>
-                                            <span className="font-mono font-bold bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-xs">
-                                                {match.scoreMyTeam} x {match.scoreOpponent}
-                                            </span>
-                                            <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{match.opponent}</span>
-                                        </div>
-
-                                        {!match.reviewed && onOpenReview && (
-                                            <Button 
-                                                size="sm" 
-                                                className="w-full !py-1 text-xs" 
-                                                onClick={() => onOpenReview(match.gameId, match.eventId)}
-                                            >
-                                                <LucideStar size={12} /> Avaliar Time
-                                            </Button>
-                                        )}
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         ) : (
                             <div className="text-center py-12 bg-gray-50 dark:bg-gray-700/20 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">

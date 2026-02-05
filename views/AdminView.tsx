@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, getDocs, updateDoc, where } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
-import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player } from '../types';
+import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player, Time, Cesta } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers } from 'lucide-react';
+import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 interface AdminViewProps {
@@ -51,6 +52,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     // --- NEW: Active Players Management ---
     const [activePlayers, setActivePlayers] = useState<Player[]>([]);
     const [playerSearch, setPlayerSearch] = useState('');
+
+    // --- NEW: Recover Data State ---
+    const [isRecovering, setIsRecovering] = useState(false);
 
     useEffect(() => {
         // Fetch Events
@@ -233,6 +237,75 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     const handleCreateEvent = async (e: React.FormEvent) => { e.preventDefault(); try { await addDoc(collection(db, "eventos"), { nome: newEventName, data: newEventDate, modalidade: newEventMode, type: newEventType, status: 'proximo' }); setShowAddEvent(false); setNewEventName(''); setNewEventDate(''); } catch (error) { console.error(error); alert("Erro ao criar evento"); } };
     const handleDeleteEvent = async (id: string) => { if (!window.confirm("Tem certeza? Isso excluirá o evento, jogos e TODAS as estatísticas de pontos vinculadas a ele permanentemente.")) return; try { const gamesRef = collection(db, "eventos", id, "jogos"); const gamesSnap = await getDocs(gamesRef); for (const gameDoc of gamesSnap.docs) { const cestasRef = collection(db, "eventos", id, "jogos", gameDoc.id, "cestas"); const cestasSnap = await getDocs(cestasRef); const deleteCestasPromises = cestasSnap.docs.map(c => deleteDoc(c.ref)); await Promise.all(deleteCestasPromises); await deleteDoc(gameDoc.ref); } await deleteDoc(doc(db, "eventos", id)); setSelectedEvent(null); alert("Evento e dados limpos com sucesso."); } catch (error) { console.error("Erro ao excluir evento:", error); alert("Erro ao excluir evento."); } };
     
+    // --- RECOVER EVENT DATA (Fix for migration issues) ---
+    const handleRecoverEventData = async (event: Evento) => {
+        if (event.type !== 'torneio_interno') return;
+        if (!window.confirm(`REPARAR DADOS DA ${event.nome.toUpperCase()}?\n\nIsso tentará reconstruir os Times e Elencos analisando o histórico de todos os jogos e cestas existentes.\nUse apenas se a lista de times estiver vazia ou corrompida.`)) return;
+
+        setIsRecovering(true);
+        try {
+            // 1. Get all games
+            const gamesRef = collection(db, "eventos", event.id, "jogos");
+            const gamesSnap = await getDocs(gamesRef);
+            
+            const recoveredTeamsMap = new Map<string, Time>();
+            
+            // Helper to get or create team
+            const getOrCreateTeam = (id: string, name: string) => {
+                if (!recoveredTeamsMap.has(id)) {
+                    recoveredTeamsMap.set(id, {
+                        id: id,
+                        nomeTime: name,
+                        jogadores: [], // Will fill next
+                        logoUrl: '' // Lost in migration usually, can't recover
+                    });
+                }
+            };
+
+            // 2. Identify Teams from Games
+            for (const gDoc of gamesSnap.docs) {
+                const g = gDoc.data() as Jogo;
+                if (g.timeA_id && g.timeA_nome) getOrCreateTeam(g.timeA_id, g.timeA_nome);
+                if (g.timeB_id && g.timeB_nome) getOrCreateTeam(g.timeB_id, g.timeB_nome);
+            }
+
+            // 3. Identify Players from Cestas (Baskets) to rebuild Rosters
+            // We need to scan baskets game by game because they are subcollections
+            for (const gDoc of gamesSnap.docs) {
+                const cestasRef = collection(db, "eventos", event.id, "jogos", gDoc.id, "cestas");
+                const cestasSnap = await getDocs(cestasRef);
+                
+                cestasSnap.forEach(cDoc => {
+                    const c = cDoc.data() as Cesta;
+                    if (c.timeId && c.jogadorId) {
+                        const team = recoveredTeamsMap.get(c.timeId);
+                        if (team && !team.jogadores.includes(c.jogadorId)) {
+                            team.jogadores.push(c.jogadorId);
+                        }
+                    }
+                });
+            }
+
+            const recoveredTeams = Array.from(recoveredTeamsMap.values());
+            
+            if (recoveredTeams.length > 0) {
+                // 4. Update Event
+                await updateDoc(doc(db, "eventos", event.id), {
+                    times: recoveredTeams
+                });
+                alert(`Sucesso! ${recoveredTeams.length} times recuperados.`);
+            } else {
+                alert("Não foi possível encontrar dados suficientes nos jogos para reconstruir os times.");
+            }
+
+        } catch (error) {
+            console.error("Error recovering data:", error);
+            alert("Erro ao tentar reparar dados.");
+        } finally {
+            setIsRecovering(false);
+        }
+    };
+
     // UPDATED CREATE GAME LOGIC
     const handleCreateGame = async (e: React.FormEvent) => { 
         e.preventDefault(); 
@@ -450,7 +523,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                                             <h4 className="font-bold text-gray-800 dark:text-gray-200 text-sm">{ev.nome}</h4>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(ev.data)} • {ev.modalidade}</p>
                                         </div>
-                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteEvent(ev.id); }} className="text-red-300 hover:text-red-600 p-1"><LucideTrash2 size={14} /></button>
+                                        <div className="flex flex-col gap-1">
+                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteEvent(ev.id); }} className="text-red-300 hover:text-red-600 p-1"><LucideTrash2 size={14} /></button>
+                                            {ev.type === 'torneio_interno' && (
+                                                <button onClick={(e) => { e.stopPropagation(); handleRecoverEventData(ev); }} className="text-orange-300 hover:text-orange-600 p-1" title="Reparar Dados de Times (Migração)">
+                                                    <LucideWrench size={14} />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -572,6 +652,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                     <Button type="submit" className="w-full">Criar Jogo</Button>
                 </form>
             </Modal>
+
+            {/* Recovering Spinner Modal */}
+            {isRecovering && (
+                <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl flex flex-col items-center shadow-2xl">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ancb-orange mb-4"></div>
+                        <h3 className="font-bold text-lg dark:text-white">Reparando Dados...</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 text-center mt-2 max-w-xs">
+                            Analisando histórico de jogos e reconstruindo times. Isso pode levar alguns segundos.
+                        </p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
