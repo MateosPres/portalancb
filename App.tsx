@@ -44,7 +44,7 @@ const App: React.FC = () => {
     const [regCpf, setRegCpf] = useState('');
     const [regBirthDate, setRegBirthDate] = useState('');
     const [regJerseyNumber, setRegJerseyNumber] = useState('');
-    const [regPosition, setRegPosition] = useState('3 - Ala');
+    const [regPosition, setRegPosition] = useState('Ala (3)');
     const [regPhoto, setRegPhoto] = useState<File | null>(null);
     const [regPhotoPreview, setRegPhotoPreview] = useState<string | null>(null);
     const [isRegistering, setIsRegistering] = useState(false);
@@ -825,11 +825,11 @@ const App: React.FC = () => {
                         <div className="md:col-span-2">
                             <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Posição Principal</label>
                             <select className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 dark:text-white" value={regPosition} onChange={e => setRegPosition(e.target.value)}>
-                                <option value="1 - Armador">1 - Armador</option>
-                                <option value="2 - Ala/Armador">2 - Ala/Armador</option>
-                                <option value="3 - Ala">3 - Ala</option>
-                                <option value="4 - Ala/Pivô">4 - Ala/Pivô</option>
-                                <option value="5 - Pivô">5 - Pivô</option>
+                                <option value="Armador (1)">Armador (1)</option>
+                                <option value="Ala/Armador (2)">Ala/Armador (2)</option>
+                                <option value="Ala (3)">Ala (3)</option>
+                                <option value="Ala/Pivô (4)">Ala/Pivô (4)</option>
+                                <option value="Pivô (5)">Pivô (5)</option>
                             </select>
                         </div>
 

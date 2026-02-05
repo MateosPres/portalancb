@@ -53,11 +53,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const playerDocId = userProfile.linkedPlayerId || userProfile.uid;
 
     const POSITIONS = [
-        "1 - Armador",
-        "2 - Ala/Armador",
-        "3 - Ala",
-        "4 - Ala/Pivô",
-        "5 - Pivô"
+        "Armador (1)",
+        "Ala/Armador (2)",
+        "Ala (3)",
+        "Ala/Pivô (4)",
+        "Pivô (5)"
     ];
 
     useEffect(() => {
@@ -79,7 +79,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                         id: playerDocId,
                         nome: userProfile.nome,
                         numero_uniforme: 0,
-                        posicao: '3 - Ala',
+                        posicao: 'Ala (3)',
                         foto: ''
                     });
                 }
@@ -564,7 +564,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">Posição</label>
                                     <select 
                                         className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ancb-blue"
-                                        value={formData.posicao || '3 - Ala'}
+                                        value={formData.posicao || 'Ala (3)'}
                                         onChange={e => setFormData({...formData, posicao: e.target.value})}
                                     >
                                         {POSITIONS.map(pos => (

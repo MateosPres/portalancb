@@ -10,20 +10,37 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, onClick }) => {
     // Fallback for avatar if no photo is provided
     const getInitials = (name: string) => (name || '?').substring(0, 2).toUpperCase();
 
-    const positionColor = (pos?: string) => {
-        const p = (pos || '').toLowerCase();
-        // Check for specific position keywords
-        if (p.includes('armador') && !p.includes('ala/armador')) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
-        if (p.includes('pivô') || p.includes('pivo')) return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
-        if (p.includes('ala/armador')) return 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300';
-        if (p.includes('ala') && !p.includes('pivô')) return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+    // Helper to normalize mixed DB data to new standard for display
+    const normalizePosition = (pos: string | undefined): string => {
+        if (!pos) return '-';
+        const p = pos.toLowerCase();
+        
+        // 1 - Armador
+        if (p.includes('1') || (p.includes('armador') && !p.includes('ala'))) return 'Armador (1)';
+        // 2 - Ala/Armador
+        if (p.includes('2') || p.includes('ala/armador') || p.includes('ala-armador') || p.includes('sg')) return 'Ala/Armador (2)';
+        // 3 - Ala
+        if (p.includes('3') || (p.includes('ala') && !p.includes('armador') && !p.includes('piv') && !p.includes('pivo')) || p.includes('sf')) return 'Ala (3)';
+        // 4 - Ala/Pivô
+        if (p.includes('4') || p.includes('ala/piv') || p.includes('ala-piv') || p.includes('pf')) return 'Ala/Pivô (4)';
+        // 5 - Pivô
+        if (p.includes('5') || (p.includes('piv') && !p.includes('ala')) || p.includes('c)') || p.trim().endsWith('(c)')) return 'Pivô (5)';
+        
+        return pos;
+    };
+
+    const displayPosition = normalizePosition(player.posicao);
+
+    const positionColor = (normalizedPos: string) => {
+        // Simple string check since we normalized it
+        if (normalizedPos.includes('(1)')) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
+        if (normalizedPos.includes('(2)')) return 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300';
+        if (normalizedPos.includes('(3)')) return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+        if (normalizedPos.includes('(4)')) return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
+        if (normalizedPos.includes('(5)')) return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300';
         
         return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     };
-
-    // Format position string: "1 - Armador" -> "Armador" (cleaner look if desired, or keep as is)
-    // For now, let's keep it as is or just show the name part if it starts with a number
-    const displayPosition = player.posicao || '-'; 
 
     return (
         <div 
@@ -49,7 +66,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, onClick }) => {
                 {player.apelido || player.nome || 'Atleta'}
             </h3>
             
-            <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider mb-2 text-center whitespace-nowrap ${positionColor(player.posicao)}`}>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider mb-2 text-center whitespace-nowrap ${positionColor(displayPosition)}`}>
                 {displayPosition}
             </span>
 
