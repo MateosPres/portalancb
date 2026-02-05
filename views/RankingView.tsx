@@ -3,14 +3,14 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Player, Cesta, Evento, Jogo } from '../types';
 import { Button } from '../components/Button';
-import { LucideArrowLeft, LucideTrophy, LucideCalendarRange, LucideFilter } from 'lucide-react';
+import { LucideArrowLeft, LucideTrophy, LucideCalendarRange, LucideFilter, LucideCrosshair } from 'lucide-react';
 
 interface RankingViewProps {
     onBack: () => void;
 }
 
 interface PlayerStats extends Player {
-    totalPoints: number;
+    totalPoints: number; // In 'shooters' mode, this represents total count of shots
     ppg: number;
     gamesPlayed: number;
 }
@@ -24,21 +24,19 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
     const defaultYear = parseInt(currentYear) < 2025 ? "2025" : currentYear;
     
     const [selectedYear, setSelectedYear] = useState<string>(defaultYear);
-    const [selectedMode, setSelectedMode] = useState<'3x3' | '5x5'>('5x5');
+    const [selectedMode, setSelectedMode] = useState<'3x3' | '5x5' | 'shooters'>('5x5');
 
     useEffect(() => {
         const fetchRankingData = async () => {
             setLoading(true);
             try {
                 // 1. Fetch Players (Fetch ALL to handle legacy data)
-                // Do NOT use where('status', '==', 'active') because legacy data has no status field
                 const qPlayers = query(collection(db, "jogadores"));
                 const playersSnapshot = await getDocs(qPlayers);
                 
                 const playersMap: Record<string, Player> = {};
                 playersSnapshot.forEach(doc => {
                     const p = { id: doc.id, ...doc.data() } as Player;
-                    // Include if active OR if status is undefined (legacy)
                     if (p.status === 'active' || !p.status) {
                         playersMap[doc.id] = p;
                     }
@@ -46,11 +44,10 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
 
                 // 2. Prepare Data Structures
                 const validContextIds = new Set<string>(); 
+                const contextModalityMap: Record<string, '3x3' | '5x5'> = {}; // Map eventId/gameId to modality
                 const processedCestaIds = new Set<string>();
                 
-                // Track unique game IDs per player to calculate games played correctly
                 const playerGamesMap: Record<string, Set<string>> = {};
-
                 const pointsMap: Record<string, number> = {};
 
                 // Initialize player sets
@@ -58,7 +55,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                     playerGamesMap[pid] = new Set();
                 });
 
-                // 3. Fetch Events (Filtered by Year and Mode)
+                // 3. Fetch Events (Filtered by Year)
                 const eventosSnapshot = await getDocs(collection(db, "eventos"));
                 const filteredEvents: Evento[] = [];
 
@@ -79,14 +76,23 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                     }
 
                     if (!isYearMatch) return;
-                    if (evento.modalidade !== selectedMode) return;
+
+                    // Filter logic:
+                    // If 'shooters', we allow BOTH 3x3 and 5x5.
+                    // Otherwise, we filter strictly by the selected mode.
+                    if (selectedMode !== 'shooters' && evento.modalidade !== selectedMode) return;
                     
                     filteredEvents.push({ ...evento, id: eventId });
                     
                     validContextIds.add(eventId);
+                    contextModalityMap[eventId] = evento.modalidade; // Store modality for later lookup
+
                     if (evento.times && Array.isArray(evento.times)) {
                         evento.times.forEach(time => {
-                            if (time.id) validContextIds.add(time.id);
+                            if (time.id) {
+                                validContextIds.add(time.id);
+                                contextModalityMap[time.id] = evento.modalidade;
+                            }
                         });
                     }
                 });
@@ -102,6 +108,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                 const game = gDoc.data() as Jogo;
                                 const gameId = gDoc.id;
                                 validContextIds.add(gameId); 
+                                contextModalityMap[gameId] = evento.modalidade;
 
                                 if (game.jogadoresEscalados && Array.isArray(game.jogadoresEscalados)) {
                                     game.jogadoresEscalados.forEach(pid => {
@@ -119,13 +126,26 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                         if (processedCestaIds.has(cesta.id)) return;
 
                                         if (cesta.jogadorId && cesta.pontos) {
-                                            // Only count points if player exists in our Active map
-                                            if (pointsMap[cesta.jogadorId] !== undefined || playersMap[cesta.jogadorId]) {
-                                                pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + Number(cesta.pontos);
-                                                if (playerGamesMap[cesta.jogadorId]) {
-                                                    playerGamesMap[cesta.jogadorId].add(gameId);
+                                            const points = Number(cesta.pontos);
+                                            
+                                            // LOGIC FOR SHOOTERS vs NORMAL
+                                            if (selectedMode === 'shooters') {
+                                                const is3x3 = evento.modalidade === '3x3';
+                                                // 3x3 Long range = 2pts, 5x5 Long range = 3pts
+                                                const isLongRange = is3x3 ? (points === 2) : (points === 3);
+                                                
+                                                if (isLongRange && (playersMap[cesta.jogadorId])) {
+                                                    pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + 1; // Count quantity
+                                                    if (playerGamesMap[cesta.jogadorId]) playerGamesMap[cesta.jogadorId].add(gameId);
+                                                    processedCestaIds.add(cesta.id);
                                                 }
-                                                processedCestaIds.add(cesta.id);
+                                            } else {
+                                                // Normal Logic
+                                                if (playersMap[cesta.jogadorId]) {
+                                                    pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + points;
+                                                    if (playerGamesMap[cesta.jogadorId]) playerGamesMap[cesta.jogadorId].add(gameId);
+                                                    processedCestaIds.add(cesta.id);
+                                                }
                                             }
                                         }
                                     });
@@ -148,28 +168,36 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                     }
                 }));
 
-                // 5. Fetch Cestas from ROOT collection (Legacy)
+                // 5. Fetch Cestas from ROOT collection (Legacy support)
                 const cestasSnapshot = await getDocs(collection(db, "cestas"));
                 
                 cestasSnapshot.forEach(doc => {
                     const cesta = { id: doc.id, ...doc.data() } as Cesta;
                     if (processedCestaIds.has(cesta.id)) return;
 
-                    const isLinkedToTeam = cesta.timeId && validContextIds.has(cesta.timeId);
-                    const isLinkedToGame = cesta.jogoId && validContextIds.has(cesta.jogoId);
-                    const isLinkedToEvent = cesta.eventoId && validContextIds.has(cesta.eventoId);
+                    const contextId = cesta.jogoId || cesta.eventoId || cesta.timeId;
+                    if (!contextId || !validContextIds.has(contextId)) return;
 
-                    if (cesta.jogadorId && cesta.pontos && (isLinkedToTeam || isLinkedToGame || isLinkedToEvent)) {
-                        if (playersMap[cesta.jogadorId]) {
-                            pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + Number(cesta.pontos);
-                            
-                            if (playerGamesMap[cesta.jogadorId]) {
-                                const contextId = cesta.jogoId || cesta.eventoId || 'unknown';
-                                if (contextId !== 'unknown') {
-                                    playerGamesMap[cesta.jogadorId].add(contextId);
-                                }
+                    const modality = contextModalityMap[contextId] || '5x5'; // Default to 5x5 if unknown
+
+                    if (cesta.jogadorId && cesta.pontos) {
+                        const points = Number(cesta.pontos);
+
+                        if (selectedMode === 'shooters') {
+                            const is3x3 = modality === '3x3';
+                            const isLongRange = is3x3 ? (points === 2) : (points === 3);
+
+                            if (isLongRange && playersMap[cesta.jogadorId]) {
+                                pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + 1; // Count quantity
+                                if (playerGamesMap[cesta.jogadorId]) playerGamesMap[cesta.jogadorId].add(contextId);
+                                processedCestaIds.add(cesta.id);
                             }
-                            processedCestaIds.add(cesta.id);
+                        } else {
+                            if (playersMap[cesta.jogadorId]) {
+                                pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + points;
+                                if (playerGamesMap[cesta.jogadorId]) playerGamesMap[cesta.jogadorId].add(contextId);
+                                processedCestaIds.add(cesta.id);
+                            }
                         }
                     }
                 });
@@ -178,6 +206,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                 const rankingList: PlayerStats[] = Object.values(playersMap).map(player => {
                     const totalPoints = pointsMap[player.id] || 0;
                     const gamesPlayed = playerGamesMap[player.id] ? playerGamesMap[player.id].size : 0; 
+                    // Use a slightly different PPG calc logic if needed, but standard avg works for both counts and points
                     const ppg = gamesPlayed > 0 ? Number((totalPoints / gamesPlayed).toFixed(1)) : 0;
 
                     return {
@@ -208,6 +237,16 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
         fetchRankingData();
     }, [selectedYear, selectedMode]);
 
+    const getRuleText = () => {
+        if (selectedMode === 'shooters') return 'Contabiliza apenas cestas de longa distância (3pts no 5x5 e 2pts no 3x3). Soma quantidade, não pontos.';
+        if (selectedMode === '3x3') return 'Lance Livre (1pt) • Dentro (1pt) • Fora (2pts)';
+        return 'Lance Livre (1pt) • Dentro (2pts) • Fora (3pts)';
+    };
+
+    const getMetricLabel = () => {
+        return selectedMode === 'shooters' ? 'bolas' : 'pts';
+    };
+
     return (
         <div className="animate-fadeIn pb-20">
             {/* Header & Controls */}
@@ -235,10 +274,10 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                 </div>
 
                 {/* Mode Toggles */}
-                <div className="flex p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                <div className="flex p-1 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-x-auto">
                     <button
                         onClick={() => setSelectedMode('5x5')}
-                        className={`flex-1 py-1.5 text-sm font-bold rounded-md transition-all ${
+                        className={`flex-1 py-1.5 px-2 text-xs md:text-sm font-bold rounded-md transition-all whitespace-nowrap ${
                             selectedMode === '5x5' 
                             ? 'bg-ancb-orange text-white shadow-sm' 
                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
@@ -248,7 +287,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                     </button>
                     <button
                         onClick={() => setSelectedMode('3x3')}
-                        className={`flex-1 py-1.5 text-sm font-bold rounded-md transition-all ${
+                        className={`flex-1 py-1.5 px-2 text-xs md:text-sm font-bold rounded-md transition-all whitespace-nowrap ${
                             selectedMode === '3x3' 
                             ? 'bg-ancb-orange text-white shadow-sm' 
                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
@@ -256,16 +295,24 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                     >
                         FIBA 3x3
                     </button>
+                    <button
+                        onClick={() => setSelectedMode('shooters')}
+                        className={`flex-1 py-1.5 px-2 text-xs md:text-sm font-bold rounded-md transition-all whitespace-nowrap flex items-center justify-center gap-1 ${
+                            selectedMode === 'shooters' 
+                            ? 'bg-ancb-blue text-white shadow-sm' 
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                        }`}
+                    >
+                        <LucideCrosshair size={14} /> Arremessadores
+                    </button>
                 </div>
                 
                 <div className="mt-3 text-xs text-center text-gray-500 dark:text-gray-400 bg-blue-50/50 dark:bg-blue-900/20 p-2 rounded-lg border border-blue-100 dark:border-blue-900/30">
                     <div className="flex items-center justify-center gap-1 font-bold text-ancb-blue dark:text-blue-400 mb-1">
                         <LucideFilter size={12} />
-                        Regras de Pontuação ({selectedMode})
+                        Regras de Classificação
                     </div>
-                    {selectedMode === '3x3' 
-                        ? 'Lance Livre (1pt) • Dentro (1pt) • Fora (2pts)' 
-                        : 'Lance Livre (1pt) • Dentro (2pts) • Fora (3pts)'}
+                    {getRuleText()}
                 </div>
             </div>
 
@@ -277,12 +324,11 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                 <div className="text-center py-20 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mx-4">
                     <LucideTrophy className="mx-auto text-gray-300 dark:text-gray-600 mb-4" size={48} />
                     <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">Ranking indisponível</h3>
-                    <p className="text-gray-500 dark:text-gray-400 px-6">Nenhum dado encontrado para {selectedMode} em {selectedYear}.</p>
+                    <p className="text-gray-500 dark:text-gray-400 px-6">Nenhum dado encontrado para {selectedMode === 'shooters' ? 'arremessadores' : selectedMode} em {selectedYear}.</p>
                 </div>
             ) : (
                 <>
                     {/* PODIUM SECTION */}
-                    {/* Increased margin top from mt-8 to mt-14 to avoid clipping with the header */}
                     <div className="flex justify-center items-end gap-2 md:gap-6 mb-12 px-2 mt-14">
                         {/* 2nd Place */}
                         {stats[1] && stats[1].totalPoints > 0 && (
@@ -302,7 +348,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                     </div>
                                 </div>
                                 <h4 className="font-bold text-gray-700 dark:text-gray-200 text-sm text-center line-clamp-1">{stats[1].apelido || stats[1].nome}</h4>
-                                <p className="text-ancb-orange font-bold text-sm">{stats[1].totalPoints} pts</p>
+                                <p className="text-ancb-orange font-bold text-sm">{stats[1].totalPoints} {getMetricLabel()}</p>
                             </div>
                         )}
 
@@ -310,7 +356,6 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                         {stats[0] && stats[0].totalPoints > 0 && (
                             <div className="flex flex-col items-center w-1/3 md:w-40 order-2 -mt-6">
                                 <div className="relative mb-3">
-                                    {/* UPDATED TROPHY POSITION: Right and Lower - Outline Style */}
                                     <LucideTrophy 
                                         className="absolute -top-3 -right-2 text-yellow-400 drop-shadow-md animate-bounce z-20" 
                                         size={36}
@@ -330,8 +375,8 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                     </div>
                                 </div>
                                 <h4 className="font-bold text-gray-800 dark:text-white text-lg text-center line-clamp-1">{stats[0].apelido || stats[0].nome}</h4>
-                                <p className="text-ancb-orange font-bold text-xl">{stats[0].totalPoints} pts</p>
-                                <p className="text-gray-400 dark:text-gray-500 text-xs font-medium">{stats[0].ppg} PPG</p>
+                                <p className="text-ancb-orange font-bold text-xl">{stats[0].totalPoints} {getMetricLabel()}</p>
+                                <p className="text-gray-400 dark:text-gray-500 text-xs font-medium">{stats[0].ppg} {selectedMode === 'shooters' ? '/jogo' : 'PPG'}</p>
                             </div>
                         )}
 
@@ -353,7 +398,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                     </div>
                                 </div>
                                 <h4 className="font-bold text-gray-700 dark:text-gray-200 text-sm text-center line-clamp-1">{stats[2].apelido || stats[2].nome}</h4>
-                                <p className="text-ancb-orange font-bold text-sm">{stats[2].totalPoints} pts</p>
+                                <p className="text-ancb-orange font-bold text-sm">{stats[2].totalPoints} {getMetricLabel()}</p>
                             </div>
                         )}
                     </div>
@@ -364,7 +409,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                             <div className="col-span-2 text-center">Pos</div>
                             <div className="col-span-6">Atleta</div>
                             <div className="col-span-2 text-center">Jogos</div>
-                            <div className="col-span-2 text-center">Pts</div>
+                            <div className="col-span-2 text-center">{selectedMode === 'shooters' ? 'Conv' : 'Pts'}</div>
                         </div>
                         
                         <div className="divide-y divide-gray-100 dark:divide-gray-700">
