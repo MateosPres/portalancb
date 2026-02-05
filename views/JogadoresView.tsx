@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, updateDoc, deleteDoc, doc, limit } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Player, Evento, Jogo, Cesta, UserProfile } from '../types';
+import { Player, Evento, Jogo, Cesta, UserProfile, PlayerReview } from '../types';
 import { PlayerCard } from '../components/PlayerCard';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucideSearch, LucideArrowLeft, LucideUsers, LucideRuler, LucideCalendarDays, LucideShirt, LucideChevronDown, LucideChevronUp, LucideAlertCircle, LucideEdit, LucideTrash2, LucideSave, LucideX, LucideCamera } from 'lucide-react';
-import { getDocs, where } from 'firebase/firestore';
+import { LucideSearch, LucideArrowLeft, LucideUsers, LucideRuler, LucideCalendarDays, LucideShirt, LucideChevronDown, LucideChevronUp, LucideAlertCircle, LucideEdit, LucideTrash2, LucideSave, LucideX, LucideCamera, LucideMessageSquare, LucideStar } from 'lucide-react';
+import { getDocs, where, orderBy } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
 
 interface JogadoresViewProps {
@@ -44,6 +44,10 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const [loadingStats, setLoadingStats] = useState(false);
     const [expandedYear, setExpandedYear] = useState<string | null>(null);
 
+    // Reviews / Depoimentos State
+    const [testimonials, setTestimonials] = useState<PlayerReview[]>([]);
+    const [loadingTestimonials, setLoadingTestimonials] = useState(false);
+
     // Admin Edit Mode
     const [isEditing, setIsEditing] = useState(false);
     const [editFormData, setEditFormData] = useState<Partial<Player>>({});
@@ -66,6 +70,12 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         if (p.includes('ARMADOR (PG)') || p === 'ARMADOR') return '1 - Armador';
         if (p.includes('ALA-ARMADOR') || p.includes('SG')) return '2 - Ala/Armador';
         return pos; // Fallback or already correct
+    };
+
+    // Date formatter DD/MM/YYYY
+    const formatDate = (dateStr: string) => {
+        if (!dateStr) return '-';
+        return dateStr.split('-').reverse().join('/');
     };
 
     useEffect(() => {
@@ -126,16 +136,19 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         setFilteredPlayers(result);
     }, [searchTerm, filterPos, players]);
 
-    // FETCH PLAYER STATS
+    // FETCH PLAYER STATS & REVIEWS
     useEffect(() => {
-        const fetchStats = async () => {
+        const fetchStatsAndReviews = async () => {
             if (!selectedPlayer) return;
             setLoadingStats(true);
+            setLoadingTestimonials(true);
             setPlayerStats([]);
+            setTestimonials([]);
             setExpandedYear(null);
             setIsEditing(false); // Reset edit mode on open
 
             try {
+                // --- 1. Fetch Stats Logic ---
                 const yearData: Record<string, { points: number, games: number, matches: GameDetail[] }> = {
                     '2025': { points: 0, games: 0, matches: [] },
                     '2026': { points: 0, games: 0, matches: [] }
@@ -162,28 +175,32 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                         const gameId = gDoc.id;
                         let gamePoints = 0;
 
-                        const subCestasRef = collection(db, "eventos", eventId, "jogos", gameId, "cestas");
-                        const qSub = query(subCestasRef, where("jogadorId", "==", selectedPlayer.id));
-                        const subSnap = await getDocs(qSub);
-                        
-                        subSnap.forEach(cDoc => {
-                            const cesta = cDoc.data() as Cesta;
-                            if (!processedCestaIds.has(cDoc.id)) {
-                                gamePoints += Number(cesta.pontos || 0);
-                                processedCestaIds.add(cDoc.id);
-                            }
-                        });
+                        // Check subcollection
+                        try {
+                            const subCestasRef = collection(db, "eventos", eventId, "jogos", gameId, "cestas");
+                            const qSub = query(subCestasRef, where("jogadorId", "==", selectedPlayer.id));
+                            const subSnap = await getDocs(qSub);
+                            subSnap.forEach(cDoc => {
+                                const cesta = cDoc.data() as Cesta;
+                                if (!processedCestaIds.has(cDoc.id)) {
+                                    gamePoints += Number(cesta.pontos || 0);
+                                    processedCestaIds.add(cDoc.id);
+                                }
+                            });
+                        } catch (e) {}
 
-                        const qRoot = query(collection(db, "cestas"), where("jogoId", "==", gameId), where("jogadorId", "==", selectedPlayer.id));
-                        const rootSnap = await getDocs(qRoot);
-                        
-                        rootSnap.forEach(cDoc => {
-                            const cesta = cDoc.data() as Cesta;
-                            if (!processedCestaIds.has(cDoc.id)) {
-                                gamePoints += Number(cesta.pontos || 0);
-                                processedCestaIds.add(cDoc.id);
-                            }
-                        });
+                        // Check root collection
+                        try {
+                            const qRoot = query(collection(db, "cestas"), where("jogoId", "==", gameId), where("jogadorId", "==", selectedPlayer.id));
+                            const rootSnap = await getDocs(qRoot);
+                            rootSnap.forEach(cDoc => {
+                                const cesta = cDoc.data() as Cesta;
+                                if (!processedCestaIds.has(cDoc.id)) {
+                                    gamePoints += Number(cesta.pontos || 0);
+                                    processedCestaIds.add(cDoc.id);
+                                }
+                            });
+                        } catch (e) {}
 
                         const isInRoster = game.jogadoresEscalados?.includes(selectedPlayer.id);
                         const hasPoints = gamePoints > 0;
@@ -221,19 +238,54 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                     .sort((a, b) => Number(b.year) - Number(a.year));
 
                 setPlayerStats(statsArray);
+                setLoadingStats(false);
+
+                // --- 2. Fetch Testimonials Logic ---
+                // With Index created, we can use orderBy on server side
+                try {
+                    const reviewsRef = collection(db, "avaliacoes");
+                    const qReviews = query(
+                        reviewsRef, 
+                        where("revieweeId", "==", selectedPlayer.id),
+                        orderBy("timestamp", "desc"),
+                        limit(10)
+                    );
+                    const reviewsSnap = await getDocs(qReviews);
+                    const reviewsData = reviewsSnap.docs.map(d => ({ id: d.id, ...d.data() } as PlayerReview));
+                    setTestimonials(reviewsData);
+                } catch (reviewErr) {
+                    console.error("Error fetching reviews:", reviewErr);
+                } finally {
+                    setLoadingTestimonials(false);
+                }
 
             } catch (err) {
                 console.error("Error fetching player stats:", err);
-            } finally {
                 setLoadingStats(false);
+                setLoadingTestimonials(false);
             }
         };
 
-        fetchStats();
+        fetchStatsAndReviews();
     }, [selectedPlayer]);
 
     const toggleYear = (year: string) => {
         setExpandedYear(expandedYear === year ? null : year);
+    };
+
+    const handleDeleteReview = async (reviewId: string) => {
+        if (!window.confirm("Excluir este depoimento permanentemente?")) return;
+        try {
+            await deleteDoc(doc(db, "avaliacoes", reviewId));
+            setTestimonials(prev => prev.filter(t => t.id !== reviewId));
+        } catch (e: any) {
+            console.error(e);
+            if (e.code === 'permission-denied') {
+                alert("Permissão negada. Verifique se você está logado com a conta correta ou se as regras do banco de dados permitem esta exclusão.");
+            } else {
+                alert("Erro ao excluir.");
+            }
+        }
     };
 
     // --- ADMIN ACTIONS ---
@@ -322,6 +374,12 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     };
 
     const isAdmin = userProfile?.role === 'admin';
+
+    const formatReviewDate = (timestamp: any) => {
+        if (!timestamp) return '';
+        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(date);
+    };
 
     return (
         <div className="animate-fadeIn pb-20">
@@ -569,87 +627,154 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
 
                         {/* STATS SECTION (Hidden while editing for cleaner view) */}
                         {!isEditing && (
-                            <div className="mt-6 w-full bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/40">
-                                <h4 className="text-ancb-blue dark:text-blue-400 font-bold mb-4 text-sm uppercase flex items-center gap-2">
-                                    <LucideRuler size={16} /> Estatísticas por Temporada
-                                </h4>
-                                
-                                {loadingStats ? (
-                                    <div className="flex justify-center py-4">
-                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-ancb-blue"></div>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {playerStats.map((stat) => (
-                                            <div key={stat.year} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-blue-100 dark:border-gray-700 overflow-hidden transition-colors">
-                                                <div 
-                                                    className="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                                                    onClick={() => toggleYear(stat.year)}
-                                                >
-                                                    <div className="flex flex-col">
-                                                        <span className="text-xs font-bold text-gray-400 dark:text-gray-500">TEMPORADA</span>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-lg font-bold text-ancb-blue dark:text-blue-400">{stat.year}</span>
-                                                            {expandedYear === stat.year ? <LucideChevronUp size={16} className="text-gray-400"/> : <LucideChevronDown size={16} className="text-gray-400"/>}
+                            <>
+                                <div className="mt-6 w-full bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/40">
+                                    <h4 className="text-ancb-blue dark:text-blue-400 font-bold mb-4 text-sm uppercase flex items-center gap-2">
+                                        <LucideRuler size={16} /> Estatísticas por Temporada
+                                    </h4>
+                                    
+                                    {loadingStats ? (
+                                        <div className="flex justify-center py-4">
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-ancb-blue"></div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {playerStats.map((stat) => (
+                                                <div key={stat.year} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-blue-100 dark:border-gray-700 overflow-hidden transition-colors">
+                                                    <div 
+                                                        className="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                                        onClick={() => toggleYear(stat.year)}
+                                                    >
+                                                        <div className="flex flex-col">
+                                                            <span className="text-xs font-bold text-gray-400 dark:text-gray-500">TEMPORADA</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-lg font-bold text-ancb-blue dark:text-blue-400">{stat.year}</span>
+                                                                {expandedYear === stat.year ? <LucideChevronUp size={16} className="text-gray-400"/> : <LucideChevronDown size={16} className="text-gray-400"/>}
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="flex gap-4 md:gap-6">
+                                                            <div className="flex flex-col items-center">
+                                                                <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase">Jogos</span>
+                                                                <span className="font-bold text-gray-800 dark:text-white">{stat.games}</span>
+                                                            </div>
+                                                            <div className="flex flex-col items-center">
+                                                                <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase">Pontos</span>
+                                                                <span className="font-bold text-gray-800 dark:text-white">{stat.points}</span>
+                                                            </div>
+                                                            <div className="flex flex-col items-center">
+                                                                <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase">Média</span>
+                                                                <span className="font-bold text-ancb-orange">{stat.ppg}</span>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    
-                                                    <div className="flex gap-4 md:gap-6">
-                                                        <div className="flex flex-col items-center">
-                                                            <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase">Jogos</span>
-                                                            <span className="font-bold text-gray-800 dark:text-white">{stat.games}</span>
-                                                        </div>
-                                                        <div className="flex flex-col items-center">
-                                                            <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase">Pontos</span>
-                                                            <span className="font-bold text-gray-800 dark:text-white">{stat.points}</span>
-                                                        </div>
-                                                        <div className="flex flex-col items-center">
-                                                            <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase">Média</span>
-                                                            <span className="font-bold text-ancb-orange">{stat.ppg}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
 
-                                                {expandedYear === stat.year && (
-                                                    <div className="bg-gray-50 dark:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700 p-2 md:p-3 animate-slideDown">
-                                                        {stat.matches.length > 0 ? (
-                                                            <div className="space-y-2">
-                                                                {stat.matches.map((match) => (
-                                                                    <div key={match.id} className="bg-white dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700 flex justify-between items-center text-sm">
-                                                                        <div className="flex flex-col overflow-hidden">
-                                                                            <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 mb-0.5">
-                                                                                <span>{match.date.split('-').reverse().slice(0, 2).join('/')}</span>
-                                                                                <span>•</span>
-                                                                                <span className="truncate max-w-[100px]">{match.eventName}</span>
+                                                    {expandedYear === stat.year && (
+                                                        <div className="bg-gray-50 dark:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700 p-2 md:p-3 animate-slideDown">
+                                                            {stat.matches.length > 0 ? (
+                                                                <div className="space-y-2">
+                                                                    {stat.matches.map((match) => (
+                                                                        <div key={match.id} className="bg-white dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700 flex justify-between items-center text-sm">
+                                                                            <div className="flex flex-col overflow-hidden">
+                                                                                <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 mb-0.5">
+                                                                                    <span>{formatDate(match.date)}</span>
+                                                                                    <span>•</span>
+                                                                                    <span className="truncate max-w-[100px]">{match.eventName}</span>
+                                                                                </div>
+                                                                                <span className="font-medium text-gray-700 dark:text-gray-200 truncate">{match.opponent}</span>
                                                                             </div>
-                                                                            <span className="font-medium text-gray-700 dark:text-gray-200 truncate">{match.opponent}</span>
+                                                                            <div className="flex items-center gap-2 pl-2">
+                                                                                <span className="font-bold text-ancb-blue dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded text-xs whitespace-nowrap">
+                                                                                    {match.points} pts
+                                                                                </span>
+                                                                            </div>
                                                                         </div>
-                                                                        <div className="flex items-center gap-2 pl-2">
-                                                                             <span className="font-bold text-ancb-blue dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded text-xs whitespace-nowrap">
-                                                                                {match.points} pts
-                                                                             </span>
-                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-center py-2 text-gray-400 text-xs">
+                                                                    Detalhes não disponíveis.
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            
+                                            {playerStats.every(s => s.games === 0) && (
+                                                <div className="text-center text-xs text-gray-400 py-2">
+                                                    Nenhum registro encontrado nas temporadas ativas.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* DEPOIMENTOS / AVALIAÇÕES */}
+                                <div className="mt-6 w-full bg-orange-50 dark:bg-orange-900/10 p-4 rounded-xl border border-orange-100 dark:border-orange-900/30">
+                                    <h4 className="text-ancb-orange dark:text-orange-400 font-bold mb-4 text-sm uppercase flex items-center gap-2">
+                                        <LucideMessageSquare size={16} /> Depoimentos & Destaques
+                                    </h4>
+
+                                    {loadingTestimonials ? (
+                                        <div className="flex justify-center py-4">
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-ancb-orange"></div>
+                                        </div>
+                                    ) : testimonials.length > 0 ? (
+                                        <div className="space-y-3">
+                                            {testimonials.map(review => {
+                                                // Check permission: Admin or The Reviewer
+                                                const canDelete = userProfile && (userProfile.role === 'admin' || userProfile.linkedPlayerId === review.reviewerId);
+                                                
+                                                return (
+                                                    <div key={review.id} className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-orange-100 dark:border-gray-700 shadow-sm relative group">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center font-bold text-xs text-gray-500 overflow-hidden">
+                                                                    {review.reviewerPhoto ? (
+                                                                        <img src={review.reviewerPhoto} alt="" className="w-full h-full object-cover"/>
+                                                                    ) : (
+                                                                        review.reviewerName.charAt(0)
+                                                                    )}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs font-bold text-gray-800 dark:text-gray-200">{review.reviewerName}</p>
+                                                                    <div className="flex text-yellow-400">
+                                                                        {[...Array(review.rating)].map((_, i) => <LucideStar key={i} size={10} fill="currentColor" />)}
                                                                     </div>
-                                                                ))}
+                                                                </div>
                                                             </div>
-                                                        ) : (
-                                                            <div className="text-center py-2 text-gray-400 text-xs">
-                                                                Detalhes não disponíveis.
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="text-xl" title="Tag">{review.emojiTag}</span>
+                                                                <span className="text-[9px] text-gray-400">{formatReviewDate(review.timestamp)}</span>
                                                             </div>
+                                                        </div>
+                                                        {review.comment && (
+                                                            <p className="text-xs text-gray-600 dark:text-gray-400 italic bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
+                                                                "{review.comment}"
+                                                            </p>
+                                                        )}
+
+                                                        {canDelete && (
+                                                            <button 
+                                                                onClick={() => handleDeleteReview(review.id)}
+                                                                className="absolute top-2 right-12 p-1.5 text-red-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                title="Excluir Comentário"
+                                                            >
+                                                                <LucideTrash2 size={14} />
+                                                            </button>
                                                         )}
                                                     </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                        
-                                        {playerStats.every(s => s.games === 0) && (
-                                            <div className="text-center text-xs text-gray-400 py-2">
-                                                Nenhum registro encontrado nas temporadas ativas.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-6 text-gray-400 text-xs">
+                                            Nenhum depoimento recebido ainda.
+                                        </div>
+                                    )}
+                                </div>
+                            </>
                         )}
                     </div>
                 )}

@@ -1,19 +1,22 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { UserProfile, ViewState, Evento, Jogo } from './types';
+import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player } from './types';
 import { auth, db } from './services/firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, onSnapshot, orderBy, getDocs, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
 import { Modal } from './components/Modal';
 import { Feed } from './components/Feed';
+import { NotificationFab } from './components/NotificationFab';
+import { ReviewModal } from './components/ReviewModal';
 import { JogadoresView } from './views/JogadoresView';
 import { EventosView } from './views/EventosView';
 import { RankingView } from './views/RankingView';
 import { AdminView } from './views/AdminView';
 import { PainelJogoView } from './views/PainelJogoView';
 import { ProfileView } from './views/ProfileView';
-import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn } from 'lucide-react';
+import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 const App: React.FC = () => {
@@ -51,6 +54,18 @@ const App: React.FC = () => {
     const [panelGame, setPanelGame] = useState<Jogo | null>(null);
     const [panelEventId, setPanelEventId] = useState<string | null>(null);
 
+    // --- NOTIFICATIONS & REVIEWS STATE ---
+    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+    const [showNotifications, setShowNotifications] = useState(false);
+    const [showReviewModal, setShowReviewModal] = useState(false);
+    const [reviewTargetGame, setReviewTargetGame] = useState<{ gameId: string, eventId: string, teammates: Player[] } | null>(null);
+
+    // --- PWA INSTALL STATE ---
+    const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+    const [showInstallModal, setShowInstallModal] = useState(false);
+    const [isIos, setIsIos] = useState(false);
+    const [isStandalone, setIsStandalone] = useState(false);
+
     // Theme Initialization
     useEffect(() => {
         const savedTheme = localStorage.getItem('theme');
@@ -65,6 +80,38 @@ const App: React.FC = () => {
         }
     }, []);
 
+    // PWA Install Logic
+    useEffect(() => {
+        // Check if already installed
+        const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+        setIsStandalone(isStandaloneMode);
+
+        // Check for iOS
+        const userAgent = window.navigator.userAgent.toLowerCase();
+        setIsIos(/iphone|ipad|ipod/.test(userAgent));
+
+        // Capture install prompt
+        const handleBeforeInstallPrompt = (e: any) => {
+            e.preventDefault();
+            setDeferredPrompt(e);
+        };
+
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    }, []);
+
+    const handleInstallClick = async () => {
+        if (isIos) {
+            setShowInstallModal(true);
+        } else if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                setDeferredPrompt(null);
+            }
+        }
+    };
+
     const toggleTheme = () => {
         if (isDarkMode) {
             document.documentElement.classList.remove('dark');
@@ -77,65 +124,211 @@ const App: React.FC = () => {
         }
     };
 
-    // --- AUTH LISTENER COM TRAVA DE SEGURANÇA ---
+    // --- AUTH LISTENER ---
     useEffect(() => {
         let unsubProfile: (() => void) | undefined;
-
-        const safetyTimer = setTimeout(() => {
-            setLoading((prev) => {
-                if (prev) {
-                    console.warn("⚠️ Firebase demorou para responder. Forçando carregamento da UI.");
-                    return false;
-                }
-                return prev;
-            });
-        }, 7000);
+        const safetyTimer = setTimeout(() => setLoading(false), 7000);
 
         const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
-            
-            if (unsubProfile) {
-                unsubProfile();
-                unsubProfile = undefined;
-            }
+            if (unsubProfile) unsubProfile();
 
             if (currentUser) {
-                unsubProfile = onSnapshot(
-                    doc(db, "usuarios", currentUser.uid), 
-                    (docSnap) => {
-                        if (docSnap.exists()) {
-                            const data = docSnap.data();
-                            const profile = { 
-                                ...data, 
-                                uid: docSnap.id 
-                            } as UserProfile;
-                            
-                            if (profile.status === 'banned') {
-                                signOut(auth);
-                                alert("Sua conta foi suspensa ou banida. Entre em contato com a administração.");
-                                return;
-                            }
-                            setUserProfile(profile);
+                unsubProfile = onSnapshot(doc(db, "usuarios", currentUser.uid), (docSnap) => {
+                    if (docSnap.exists()) {
+                        const profile = { ...docSnap.data(), uid: docSnap.id } as UserProfile;
+                        if (profile.status === 'banned') {
+                            signOut(auth);
+                            alert("Sua conta foi suspensa.");
+                            return;
                         }
-                        setLoading(false);
-                    },
-                    (error) => {
-                        console.error("❌ Erro ao buscar perfil:", error);
-                        setLoading(false);
+                        setUserProfile(profile);
                     }
-                );
+                    setLoading(false);
+                });
             } else {
                 setUserProfile(null);
                 setLoading(false);
             }
         });
 
-        return () => {
-            unsubscribeAuth();
-            if (unsubProfile) unsubProfile();
-            clearTimeout(safetyTimer);
-        };
+        return () => { unsubscribeAuth(); if (unsubProfile) unsubProfile(); clearTimeout(safetyTimer); };
     }, []);
+
+    // --- NOTIFICATION LOGIC: CHECK PENDING REVIEWS & ROSTER ---
+    useEffect(() => {
+        if (!userProfile?.linkedPlayerId) return;
+
+        const checkNotifications = async () => {
+            const myPlayerId = userProfile.linkedPlayerId!;
+            const newNotifications: NotificationItem[] = [];
+
+            try {
+                // 1. ROSTER ALERTS (Check upcoming/ongoing events)
+                const rosterQ = query(collection(db, "eventos"), where("status", "in", ["proximo", "andamento"]));
+                const rosterSnap = await getDocs(rosterQ);
+                
+                rosterSnap.forEach(doc => {
+                    const eventData = doc.data() as Evento;
+                    if (eventData.jogadoresEscalados?.includes(myPlayerId)) {
+                        newNotifications.push({
+                            id: `roster-${doc.id}`,
+                            type: 'roster_alert',
+                            title: 'Convocação!',
+                            message: `Você está escalado para o evento: ${eventData.nome}`,
+                            data: { eventId: doc.id },
+                            read: false,
+                            timestamp: new Date()
+                        });
+                    }
+                });
+
+                // 2. PENDING REVIEWS (Check finished GAMES inside events)
+                // We fetch all recent events (finalized or ongoing) to check their games
+                const eventsQ = query(collection(db, "eventos")); 
+                // Optimization: In a real app, we would limit this query or index games directly.
+                const eventsSnap = await getDocs(eventsQ);
+
+                for (const eventDoc of eventsSnap.docs) {
+                    const eventData = eventDoc.data() as Evento;
+                    // Check if player is part of the event roster OR if they played a game
+                    const eventRoster = eventData.jogadoresEscalados || [];
+                    
+                    // Fetch games for this event
+                    const gamesRef = collection(db, "eventos", eventDoc.id, "jogos");
+                    const gamesSnap = await getDocs(gamesRef);
+                    
+                    for (const gameDoc of gamesSnap.docs) {
+                        const gameData = gameDoc.data() as Jogo;
+                        
+                        // Rule: Game must be 'finalizado'
+                        if (gameData.status === 'finalizado') {
+                            // Check if player played in this specific game
+                            const gameRoster = gameData.jogadoresEscalados || [];
+                            
+                            // If player was in the game roster OR is in event roster (fallback for older games)
+                            if (gameRoster.includes(myPlayerId) || (gameRoster.length === 0 && eventRoster.includes(myPlayerId))) {
+                                
+                                // Check if already reviewed
+                                const reviewQ = query(
+                                    collection(db, "avaliacoes"), 
+                                    where("gameId", "==", gameDoc.id),
+                                    where("reviewerId", "==", myPlayerId)
+                                );
+                                const reviewSnap = await getDocs(reviewQ);
+
+                                if (reviewSnap.empty) {
+                                    newNotifications.push({
+                                        id: `review-${gameDoc.id}`,
+                                        type: 'pending_review',
+                                        title: 'Avaliação Pendente',
+                                        message: `Partida finalizada! Avalie seu time no jogo contra ${gameData.adversario || gameData.timeB_nome || 'Adversário'}`,
+                                        data: { gameId: gameDoc.id, eventId: eventDoc.id },
+                                        read: false,
+                                        timestamp: new Date()
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                setNotifications(newNotifications);
+
+            } catch (error) {
+                console.error("Error checking notifications:", error);
+            }
+        };
+
+        checkNotifications();
+        // Polling notifications every 60 seconds to catch game finishes
+        const interval = setInterval(checkNotifications, 60000);
+        return () => clearInterval(interval);
+    }, [userProfile]);
+
+    // Handler to open review modal (used by Notification and Profile History)
+    const handleOpenReviewModal = async (gameId: string, eventId: string) => {
+        try {
+            const playersSnap = await getDocs(collection(db, "jogadores"));
+            const allPlayers = playersSnap.docs.map(d => ({id: d.id, ...d.data()} as Player));
+            
+            const gameSnap = await getDocs(query(collection(db, "eventos", eventId, "jogos")));
+            const gameData = gameSnap.docs.find(d => d.id === gameId)?.data() as Jogo;
+
+            if (gameData) {
+                // Determine roster: Game roster > Event roster
+                const eventDoc = await getDoc(doc(db, "eventos", eventId));
+                const eventRoster = eventDoc.exists() ? (eventDoc.data() as Evento).jogadoresEscalados || [] : [];
+                const finalRosterIds = gameData.jogadoresEscalados?.length ? gameData.jogadoresEscalados : eventRoster;
+
+                const teammates = allPlayers.filter(p => 
+                    finalRosterIds.includes(p.id) && 
+                    p.id !== userProfile?.linkedPlayerId
+                );
+                
+                setReviewTargetGame({
+                    gameId: gameId,
+                    eventId: eventId,
+                    teammates: teammates
+                });
+                setShowReviewModal(true);
+            }
+        } catch (e) {
+            console.error("Error preparing review modal", e);
+            alert("Erro ao carregar dados da partida.");
+        }
+    };
+
+    const handleNotificationClick = async (notif: NotificationItem) => {
+        // Mark as read immediately
+        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+
+        if (notif.type === 'pending_review') {
+            await handleOpenReviewModal(notif.data.gameId, notif.data.eventId);
+            setShowNotifications(false);
+        } else if (notif.type === 'roster_alert') {
+            setCurrentView('eventos');
+            setShowNotifications(false);
+        }
+    };
+
+    const submitReview = async (reviewData: { revieweeId: string; rating: number; emojiTag: string; comment: string }) => {
+        if (!userProfile?.linkedPlayerId || !reviewTargetGame) return;
+
+        try {
+            // CRITICAL: Fetch Linked Player Profile for Identity (Nickname/Photo)
+            let reviewerName = userProfile.nome; // Fallback
+            let reviewerPhoto = null;
+
+            try {
+                const playerDoc = await getDoc(doc(db, "jogadores", userProfile.linkedPlayerId));
+                if (playerDoc.exists()) {
+                    const pData = playerDoc.data() as Player;
+                    reviewerName = pData.apelido || pData.nome; // Use Nickname
+                    reviewerPhoto = pData.foto || null; // Use Player Photo
+                }
+            } catch (err) {
+                console.warn("Could not fetch player details for review", err);
+            }
+
+            await addDoc(collection(db, "avaliacoes"), {
+                gameId: reviewTargetGame.gameId,
+                eventId: reviewTargetGame.eventId,
+                reviewerId: userProfile.linkedPlayerId,
+                userId: userProfile.uid, // STORE USER ID FOR SECURITY RULES
+                reviewerName: reviewerName,
+                reviewerPhoto: reviewerPhoto,
+                revieweeId: reviewData.revieweeId,
+                rating: reviewData.rating,
+                emojiTag: reviewData.emojiTag,
+                comment: reviewData.comment,
+                timestamp: serverTimestamp()
+            });
+            alert("Avaliação enviada!");
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao enviar avaliação.");
+        }
+    };
 
     // Ongoing Events Listener
     useEffect(() => {
@@ -287,10 +480,15 @@ const App: React.FC = () => {
         setCurrentView('painel-jogo');
     };
 
+    // Format Date to DD/MM/YYYY
     const formatDate = (dateStr: string) => {
         if (!dateStr) return 'N/A';
-        const [year, month, day] = dateStr.split('-');
-        return `${day}/${month}/${year}`;
+        // Handle ISO YYYY-MM-DD
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+        return dateStr;
     };
 
     // --- LOADING SPLASH SCREEN ---
@@ -441,12 +639,12 @@ const App: React.FC = () => {
                     ? <AdminView onBack={() => setCurrentView('home')} onOpenGamePanel={handleOpenGamePanel} /> 
                     : renderHome();
             case 'painel-jogo': 
-                return userProfile?.role === 'admin' && panelGame && panelEventId 
-                    ? <PainelJogoView game={panelGame} eventId={panelEventId} onBack={() => setCurrentView('eventos')} /> 
+                return panelGame && panelEventId 
+                    ? <PainelJogoView game={panelGame} eventId={panelEventId} onBack={() => setCurrentView('eventos')} userProfile={userProfile} /> 
                     : renderHome();
             case 'profile':
                 return userProfile 
-                    ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} />
+                    ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} onOpenReview={handleOpenReviewModal} />
                     : renderHome();
             default: return renderHome();
         }
@@ -460,11 +658,93 @@ const App: React.FC = () => {
                 {renderContent()}
             </main>
 
-            <footer className="bg-[#062553] text-white text-center py-8 mt-10">
+            <footer className="bg-[#062553] text-white text-center py-8 mt-10 relative">
                 <p className="font-bold mb-2">Associação Nova Canaã de Basquete do Mato Grosso</p>
-                <p className="text-sm text-gray-400">&copy; 2025 Todos os direitos reservados.</p>
+                <p className="text-sm text-gray-400 mb-4">&copy; 2025 Todos os direitos reservados.</p>
+                
+                {/* INSTALL BUTTON (Visible if installable) */}
+                {(!isStandalone && (deferredPrompt || isIos)) && (
+                    <button 
+                        onClick={handleInstallClick}
+                        className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full text-sm font-bold transition-colors border border-white/20"
+                    >
+                        <LucideDownload size={16} />
+                        Instalar App
+                    </button>
+                )}
             </footer>
 
+            {/* NOTIFICATION FAB */}
+            <NotificationFab notifications={notifications} onClick={() => setShowNotifications(true)} />
+
+            {/* NOTIFICATION DRAWER / MODAL */}
+            <Modal isOpen={showNotifications} onClose={() => setShowNotifications(false)} title="Notificações">
+                {notifications.length > 0 ? (
+                    <div className="space-y-3">
+                        {notifications.map(notif => (
+                            <div 
+                                key={notif.id} 
+                                className={`
+                                    p-4 rounded-lg border flex justify-between items-center cursor-pointer transition-colors
+                                    ${notif.type === 'roster_alert' 
+                                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'
+                                        : 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900/40'}
+                                    ${notif.read ? 'opacity-50 grayscale-[0.5]' : ''}
+                                `}
+                                onClick={() => handleNotificationClick(notif)}
+                            >
+                                <div className="flex gap-3">
+                                    <div className={`mt-1 ${notif.type === 'roster_alert' ? 'text-blue-500' : 'text-orange-500'}`}>
+                                        {notif.type === 'roster_alert' ? <LucideMegaphone size={20} /> : <LucideCheckSquare size={20} />}
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-gray-800 dark:text-white text-sm">{notif.title}</h4>
+                                        <p className="text-xs text-gray-600 dark:text-gray-400">{notif.message}</p>
+                                    </div>
+                                </div>
+                                {!notif.read && <div className="w-2 h-2 rounded-full bg-red-500"></div>}
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-8 text-gray-400">
+                        <LucideBell size={48} className="mx-auto mb-2 opacity-20" />
+                        <p>Nenhuma notificação nova.</p>
+                    </div>
+                )}
+            </Modal>
+
+            {/* IOS INSTALL INSTRUCTIONS MODAL */}
+            <Modal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} title="Instalar Aplicativo">
+                <div className="flex flex-col items-center text-center space-y-4">
+                    <p className="text-gray-600 dark:text-gray-300">
+                        Para instalar o app no seu iPhone/iPad, siga os passos abaixo:
+                    </p>
+                    <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-xl w-full text-left space-y-3">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-blue-100 dark:bg-blue-900 p-2 rounded text-blue-600 dark:text-blue-300">
+                                <LucideShare size={20} />
+                            </div>
+                            <span className="text-sm">1. Toque no botão <strong>Compartilhar</strong> do navegador.</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="bg-gray-200 dark:bg-gray-600 p-2 rounded text-gray-600 dark:text-gray-300">
+                                <LucidePlus size={20} />
+                            </div>
+                            <span className="text-sm">2. Selecione <strong>Adicionar à Tela de Início</strong>.</span>
+                        </div>
+                    </div>
+                    <Button onClick={() => setShowInstallModal(false)} className="w-full">Entendi</Button>
+                </div>
+            </Modal>
+
+            {/* REVIEW MODAL */}
+            <ReviewModal 
+                isOpen={showReviewModal}
+                onClose={() => setShowReviewModal(false)}
+                teammates={reviewTargetGame?.teammates || []}
+                onSubmit={submitReview}
+            />
             {/* LOGIN MODAL */}
             <Modal isOpen={showLogin} onClose={() => setShowLogin(false)} title="Área de Membros">
                 <form onSubmit={handleLogin} className="space-y-4">

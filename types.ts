@@ -1,3 +1,4 @@
+
 export interface UserProfile {
     uid: string;
     nome: string;
@@ -66,6 +67,7 @@ export interface Time {
 export interface Jogo {
     id: string;
     dataJogo: string;
+    status?: 'agendado' | 'andamento' | 'finalizado'; // Novo campo para controle
     adversario?: string; // Para externo/amistoso
     jogadoresEscalados?: string[]; // Lista de IDs de jogadores que jogaram
     
@@ -107,6 +109,32 @@ export interface FeedPost {
         placar_adv?: number;
         link_video?: string;
     };
+}
+
+// --- NOVAS INTERFACES PARA GAMIFICAÇÃO SOCIAL ---
+
+export interface PlayerReview {
+    id: string;
+    gameId: string;
+    eventId: string;
+    reviewerId: string; // Quem avaliou (ID do Jogador)
+    reviewerName: string;
+    reviewerPhoto?: string;
+    revieweeId: string; // Quem foi avaliado
+    rating: number; // 1 a 5
+    emojiTag: string; // 'MVP', 'Garçom', etc.
+    comment?: string;
+    timestamp: any;
+}
+
+export interface NotificationItem {
+    id: string;
+    type: 'pending_review' | 'roster_alert';
+    title: string;
+    message: string;
+    data: any; // Dados extras (gameId, eventId, etc)
+    read: boolean;
+    timestamp: any;
 }
 
 export type ViewState = 'home' | 'eventos' | 'jogadores' | 'ranking' | 'admin' | 'painel-jogo' | 'profile';

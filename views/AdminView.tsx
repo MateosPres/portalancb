@@ -232,13 +232,46 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     // ... (Event & Game handlers)
     const handleCreateEvent = async (e: React.FormEvent) => { e.preventDefault(); try { await addDoc(collection(db, "eventos"), { nome: newEventName, data: newEventDate, modalidade: newEventMode, type: newEventType, status: 'proximo' }); setShowAddEvent(false); setNewEventName(''); setNewEventDate(''); } catch (error) { console.error(error); alert("Erro ao criar evento"); } };
     const handleDeleteEvent = async (id: string) => { if (!window.confirm("Tem certeza? Isso excluirá o evento, jogos e TODAS as estatísticas de pontos vinculadas a ele permanentemente.")) return; try { const gamesRef = collection(db, "eventos", id, "jogos"); const gamesSnap = await getDocs(gamesRef); for (const gameDoc of gamesSnap.docs) { const cestasRef = collection(db, "eventos", id, "jogos", gameDoc.id, "cestas"); const cestasSnap = await getDocs(cestasRef); const deleteCestasPromises = cestasSnap.docs.map(c => deleteDoc(c.ref)); await Promise.all(deleteCestasPromises); await deleteDoc(gameDoc.ref); } await deleteDoc(doc(db, "eventos", id)); setSelectedEvent(null); alert("Evento e dados limpos com sucesso."); } catch (error) { console.error("Erro ao excluir evento:", error); alert("Erro ao excluir evento."); } };
-    const handleCreateGame = async (e: React.FormEvent) => { e.preventDefault(); if (!selectedEvent) return; try { await addDoc(collection(db, "eventos", selectedEvent.id, "jogos"), { dataJogo: selectedEvent.data, timeA_nome: newGameTimeA, timeB_nome: newGameTimeB, placarTimeA_final: 0, placarTimeB_final: 0, jogadoresEscalados: [] }); setShowAddGame(false); setNewGameTimeA(''); setNewGameTimeB(''); } catch (error) { console.error(error); alert("Erro ao criar jogo"); } };
+    
+    // UPDATED CREATE GAME LOGIC
+    const handleCreateGame = async (e: React.FormEvent) => { 
+        e.preventDefault(); 
+        if (!selectedEvent) return; 
+        try { 
+            const isInternal = selectedEvent.type === 'torneio_interno';
+            const teamAName = isInternal ? newGameTimeA : 'ANCB';
+            const teamBName = newGameTimeB;
+
+            await addDoc(collection(db, "eventos", selectedEvent.id, "jogos"), { 
+                dataJogo: selectedEvent.data, 
+                timeA_nome: teamAName, 
+                timeB_nome: isInternal ? teamBName : '', 
+                adversario: isInternal ? '' : teamBName,
+                placarTimeA_final: 0, 
+                placarTimeB_final: 0, 
+                jogadoresEscalados: [] 
+            }); 
+            setShowAddGame(false); 
+            setNewGameTimeA(''); 
+            setNewGameTimeB(''); 
+        } catch (error) { 
+            console.error(error); 
+            alert("Erro ao criar jogo"); 
+        } 
+    };
+    
     const handleDeleteGame = async (gameId: string) => { if (!selectedEvent) return; if (window.confirm("Excluir este jogo?")) { await deleteDoc(doc(db, "eventos", selectedEvent.id, "jogos", gameId)); } };
 
     const getScores = (game: Jogo) => {
         const sA = game.placarTimeA_final ?? game.placarANCB_final ?? 0;
         const sB = game.placarTimeB_final ?? game.placarAdversario_final ?? 0;
         return { sA, sB };
+    };
+
+    // Helper for date formatting
+    const formatDate = (dateStr?: string) => {
+        if (!dateStr) return '';
+        return dateStr.split('-').reverse().join('/');
     };
 
     return (
@@ -415,7 +448,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <h4 className="font-bold text-gray-800 dark:text-gray-200 text-sm">{ev.nome}</h4>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">{ev.data} • {ev.modalidade}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(ev.data)} • {ev.modalidade}</p>
                                         </div>
                                         <button onClick={(e) => { e.stopPropagation(); handleDeleteEvent(ev.id); }} className="text-red-300 hover:text-red-600 p-1"><LucideTrash2 size={14} /></button>
                                     </div>
@@ -457,14 +490,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                                 {eventGames.length === 0 && <p className="text-gray-400 text-center py-8">Nenhum jogo criado.</p>}
                                 {eventGames.map(game => {
                                     const { sA, sB } = getScores(game);
+                                    const isInternal = !!game.timeA_nome && game.timeA_nome !== 'ANCB';
                                     return (
                                         <div key={game.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border border-gray-200 dark:border-gray-600">
                                             <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
-                                                <div className="font-bold text-gray-700 dark:text-gray-200 w-32 truncate">{game.timeA_nome || 'Time A/ANCB'}</div>
+                                                <div className="font-bold text-gray-700 dark:text-gray-200 w-32 truncate">{isInternal ? game.timeA_nome : 'ANCB'}</div>
                                                 <div className="font-mono font-bold bg-white dark:bg-gray-800 px-2 py-1 rounded border dark:border-gray-600 text-center dark:text-white">
                                                     {sA} x {sB}
                                                 </div>
-                                                <div className="font-bold text-gray-700 dark:text-gray-200 w-32 truncate">{game.timeB_nome || game.adversario || 'Time B'}</div>
+                                                <div className="font-bold text-gray-700 dark:text-gray-200 w-32 truncate">{isInternal ? game.timeB_nome : (game.adversario || 'Adversário')}</div>
                                             </div>
                                             
                                             <div className="flex items-center gap-2">
@@ -517,8 +551,24 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
 
             <Modal isOpen={showAddGame} onClose={() => setShowAddGame(false)} title="Adicionar Jogo">
                 <form onSubmit={handleCreateGame} className="space-y-4">
-                    <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Time A" value={newGameTimeA} onChange={e => setNewGameTimeA(e.target.value)} required />
-                    <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Time B" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required />
+                    {selectedEvent && selectedEvent.type === 'torneio_interno' ? (
+                        <>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500">Nome Time A</label>
+                                <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Ex: Time Vermelho" value={newGameTimeA} onChange={e => setNewGameTimeA(e.target.value)} required />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500">Nome Time B</label>
+                                <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Ex: Time Azul" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required />
+                            </div>
+                        </>
+                    ) : (
+                        <div>
+                            <label className="text-xs font-bold text-gray-500">Nome Adversário</label>
+                            <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Nome do time rival" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required />
+                            <p className="text-xs text-gray-400 mt-1">O Time A será automaticamente definido como "ANCB".</p>
+                        </div>
+                    )}
                     <Button type="submit" className="w-full">Criar Jogo</Button>
                 </form>
             </Modal>
