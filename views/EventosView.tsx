@@ -388,8 +388,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         fetchGameData();
     }, [selectedGame, selectedEvent, allPlayers, showReviewModal]);
 
-    // ... (Existing Helpers: handleDeleteEvent, handleDeleteGame, Form handlers, Review Submit) ...
-    // [Keeping existing helper functions for brevity, assume they are unchanged unless noted]
+    // Helpers
     const handleDeleteEvent = async () => { if (!selectedEvent || !window.confirm("Excluir evento e jogos?")) return; try { await deleteDoc(doc(db, "eventos", selectedEvent.id)); setSelectedEvent(null); } catch (e) { alert("Erro ao excluir"); } };
     const handleDeleteGame = async (gameId: string) => { if (!selectedEvent || !window.confirm("Excluir jogo?")) return; try { await deleteDoc(doc(db, "eventos", selectedEvent.id, "jogos", gameId)); setEventGames(prev => prev.filter(g => g.id !== gameId)); } catch (e) { alert("Erro ao excluir"); } };
     const openNewEventForm = () => { setIsEditingEvent(false); setFormEventId(null); setFormName(''); setFormDate(new Date().toISOString().split('T')[0]); setFormMode('5x5'); setFormType('amistoso'); setFormStatus('proximo'); setFormRoster([]); setShowEventForm(true); };
@@ -484,30 +483,85 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
                         {/* TAB: JOGOS */}
                         {(eventDetailTab === 'jogos' || selectedEvent.type !== 'torneio_interno') && (
-                            <>
+                            <div className="space-y-6">
+                                {/* Games List Container */}
                                 <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
-                                    <div className="flex justify-between items-center mb-4"><h4 className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2"><LucideGamepad2 size={18} className="text-ancb-orange" /> Cronograma</h4>{userProfile?.role === 'admin' && <Button size="sm" onClick={() => setShowAddGame(true)}><LucidePlus size={14} /> Jogo</Button>}</div>
-                                    {loadingGames ? <div className="py-8 flex justify-center"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400"></div></div> : eventGames.length > 0 ? <div className="max-h-64 overflow-y-auto custom-scrollbar">{eventGames.map(game => {
-                                        const sA = game.placarTimeA_final ?? game.placarANCB_final ?? 0;
-                                        const sB = game.placarTimeB_final ?? game.placarAdversario_final ?? 0;
-                                        const isInternal = !!game.timeA_nome && game.timeA_nome !== 'ANCB';
-                                        return (
-                                            <div key={game.id} className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg p-3 shadow-sm mb-2 cursor-pointer hover:border-ancb-blue transition-all" onClick={() => setSelectedGame(game)}>
-                                                <div className="flex items-center justify-between">
-                                                    <span className="font-bold text-xs w-1/3 text-center dark:text-gray-200">{isInternal ? game.timeA_nome : 'ANCB'}</span>
-                                                    <div className="font-bold text-ancb-blue">{sA} <span className="text-gray-400 mx-1">x</span> {sB}</div>
-                                                    <span className="font-bold text-xs w-1/3 text-center dark:text-gray-200">{isInternal ? game.timeB_nome : (game.adversario || 'Adv')}</span>
-                                                </div>
-                                                {userProfile?.role === 'admin' && <div className="flex justify-center gap-2 mt-2 pt-2 border-t dark:border-gray-700"><Button size="sm" className="!py-0.5 !px-2 text-[10px]" onClick={(e) => { e.stopPropagation(); onOpenGamePanel && onOpenGamePanel(game, selectedEvent.id); }}>Painel</Button><button onClick={(e) => { e.stopPropagation(); handleDeleteGame(game.id); }} className="text-red-400 hover:text-red-600 text-[10px]">Excluir</button></div>}
-                                            </div>
-                                        );
-                                    })}</div> : <div className="text-center py-6 text-gray-400 dark:text-gray-400 text-sm"><p>Nenhum jogo cadastrado.</p></div>}
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h4 className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                                            <LucideGamepad2 size={18} className="text-ancb-orange" /> Cronograma
+                                        </h4>
+                                        {userProfile?.role === 'admin' && (
+                                            <Button size="sm" onClick={() => setShowAddGame(true)}>
+                                                <LucidePlus size={14} /> Jogo
+                                            </Button>
+                                        )}
+                                    </div>
+                                    
+                                    {loadingGames ? (
+                                        <div className="py-8 flex justify-center">
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400"></div>
+                                        </div>
+                                    ) : eventGames.length > 0 ? (
+                                        <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                                            {eventGames.map(game => {
+                                                const sA = game.placarTimeA_final ?? game.placarANCB_final ?? 0;
+                                                const sB = game.placarTimeB_final ?? game.placarAdversario_final ?? 0;
+                                                const isInternal = !!game.timeA_nome && game.timeA_nome !== 'ANCB';
+                                                
+                                                return (
+                                                    <div 
+                                                        key={game.id} 
+                                                        className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg p-3 shadow-sm mb-2 cursor-pointer hover:border-ancb-blue transition-all" 
+                                                        onClick={() => setSelectedGame(game)}
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="font-bold text-xs w-1/3 text-center dark:text-gray-200 truncate">{isInternal ? game.timeA_nome : 'ANCB'}</span>
+                                                            <div className="font-bold text-ancb-blue whitespace-nowrap">
+                                                                {sA} <span className="text-gray-400 mx-1">x</span> {sB}
+                                                            </div>
+                                                            <span className="font-bold text-xs w-1/3 text-center dark:text-gray-200 truncate">{isInternal ? game.timeB_nome : (game.adversario || 'Adv')}</span>
+                                                        </div>
+                                                        {userProfile?.role === 'admin' && (
+                                                            <div className="flex justify-center gap-2 mt-2 pt-2 border-t dark:border-gray-700">
+                                                                <Button size="sm" className="!py-0.5 !px-2 text-[10px]" onClick={(e) => { e.stopPropagation(); onOpenGamePanel && onOpenGamePanel(game, selectedEvent.id); }}>Painel</Button>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteGame(game.id); }} className="text-red-400 hover:text-red-600 text-[10px]">Excluir</button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-6 text-gray-400 dark:text-gray-400 text-sm">
+                                            <p>Nenhum jogo cadastrado.</p>
+                                        </div>
+                                    )}
                                 </div>
                                 
+                                {/* General Roster Section */}
                                 {selectedEvent.type !== 'torneio_interno' && (
-                                    <div className="mt-6"><h4 className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2 mb-3"><LucideUsers size={18} className="text-ancb-blue dark:text-blue-400" /> Elenco Geral ({selectedEvent.jogadoresEscalados?.length || 0})</h4>{selectedEvent.jogadoresEscalados && selectedEvent.jogadoresEscalados.length > 0 ? <div className="flex flex-wrap gap-2">{allPlayers.filter(p => selectedEvent.jogadoresEscalados?.includes(p.id)).map(p => <span key={p.id} className="text-xs bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded text-gray-700 dark:text-gray-200">{p.apelido || p.nome}</span>)}</div> : <p className="text-xs text-gray-400 italic">Nenhum jogador escalado.</p></div>
+                                    <div>
+                                        <h4 className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2 mb-3">
+                                            <LucideUsers size={18} className="text-ancb-blue dark:text-blue-400" /> 
+                                            Elenco Geral ({selectedEvent.jogadoresEscalados?.length || 0})
+                                        </h4>
+                                        {selectedEvent.jogadoresEscalados && selectedEvent.jogadoresEscalados.length > 0 ? (
+                                            <div className="flex flex-wrap gap-2">
+                                                {allPlayers
+                                                    .filter(p => selectedEvent.jogadoresEscalados?.includes(p.id))
+                                                    .map(p => (
+                                                        <span key={p.id} className="text-xs bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded text-gray-700 dark:text-gray-200">
+                                                            {p.apelido || p.nome}
+                                                        </span>
+                                                    ))
+                                                }
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-gray-400 italic">Nenhum jogador escalado.</p>
+                                        )}
+                                    </div>
                                 )}
-                            </>
+                            </div>
                         )}
 
                         {/* TAB: TIMES & CLASSIFICAÇÃO (Internal Only) */}

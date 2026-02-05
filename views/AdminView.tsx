@@ -115,7 +115,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
         const unsubscribe = onSnapshot(q, (snapshot) => {
             setEventGames(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Jogo)));
         });
-        return () => unsubscribe;
+        return () => unsubscribe();
     }, [selectedEvent]);
 
     const compressImage = async (file: File): Promise<File> => {
