@@ -6,6 +6,7 @@ import { Player, UserProfile, Evento, Jogo, PlayerReview, Cesta } from '../types
 import { PlayerCard } from '../components/PlayerCard';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
+import { RadarChart } from '../components/RadarChart'; 
 import { 
     CalendarDays as LucideCalendarDays, 
     AlertCircle as LucideAlertCircle, 
@@ -20,7 +21,8 @@ import {
     LucideLoader2,
     LucideCheckCircle2,
     LucideCrosshair,
-    LucideUsers
+    LucideUsers,
+    LucideHexagon
 } from 'lucide-react';
 
 interface JogadoresViewProps {
@@ -46,6 +48,63 @@ interface MatchHistoryItem {
     cesta3: number;
 }
 
+// Helper to calculate Stats from Tags (5 Attributes)
+const calculateStatsFromTags = (tags?: Record<string, number>) => {
+    // Base stats
+    let stats = { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
+    
+    if (!tags) return stats;
+
+    const WEIGHTS: Record<string, any> = {
+        'muralha': { defesa: 5, forca: 2 },
+        'sniper': { ataque: 5 },
+        'garcom': { visao: 5 },
+        'flash': { velocidade: 4, ataque: 2 },
+        'lider': { visao: 4, defesa: 2 },
+        'guerreiro': { forca: 5, defesa: 2 },
+        'avenida': { defesa: -5 },
+        'fominha': { visao: -5 },
+        'tijoleiro': { ataque: -3 },
+        'cone': { velocidade: -5, defesa: -2 }
+    };
+
+    Object.entries(tags).forEach(([tag, count]) => {
+        const impact = WEIGHTS[tag];
+        if (impact) {
+            if (impact.ataque) stats.ataque += (impact.ataque * count);
+            if (impact.defesa) stats.defesa += (impact.defesa * count);
+            if (impact.forca) stats.forca += (impact.forca * count);
+            if (impact.velocidade) stats.velocidade += (impact.velocidade * count);
+            if (impact.visao) stats.visao += (impact.visao * count);
+        }
+    });
+
+    // Clamp between 20 and 99
+    const clamp = (n: number) => Math.max(20, Math.min(n, 99));
+    
+    return {
+        ataque: clamp(stats.ataque),
+        defesa: clamp(stats.defesa),
+        forca: clamp(stats.forca),
+        velocidade: clamp(stats.velocidade),
+        visao: clamp(stats.visao)
+    };
+};
+
+// Tag Metadata for UI display
+const TAG_META: Record<string, {label: string, emoji: string}> = {
+    'muralha': { label: 'Muralha', emoji: '🧱' },
+    'sniper': { label: 'Sniper', emoji: '🎯' },
+    'garcom': { label: 'Garçom', emoji: '🤝' },
+    'flash': { label: 'Flash', emoji: '⚡' },
+    'lider': { label: 'Líder', emoji: '🧠' },
+    'guerreiro': { label: 'Guerreiro', emoji: '🛡️' },
+    'avenida': { label: 'Avenida', emoji: '🛣️' },
+    'fominha': { label: 'Fominha', emoji: '🍽️' },
+    'tijoleiro': { label: 'Pedreiro', emoji: '🏗️' },
+    'cone': { label: 'Cone', emoji: '⚠️' }
+};
+
 export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfile }) => {
     const [players, setPlayers] = useState<Player[]>([]);
     const [loading, setLoading] = useState(true);
@@ -57,8 +116,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const [activeTab, setActiveTab] = useState<'matches' | 'info'>('matches');
     const [matches, setMatches] = useState<MatchHistoryItem[]>([]);
     const [loadingMatches, setLoadingMatches] = useState(false);
-    const [testimonials, setTestimonials] = useState<PlayerReview[]>([]);
-    const [loadingTestimonials, setLoadingTestimonials] = useState(false);
     
     // Admin Edit State
     const [isEditing, setIsEditing] = useState(false);
@@ -105,7 +162,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                 const historyList: MatchHistoryItem[] = [];
                 
                 // PRE-FETCH: Get all games where player scored (Definitive Proof of Participation)
-                // Map stores: GameID -> Side ('A' | 'B' | undefined)
                 const scoredGamesMap = new Map<string, string | undefined>(); 
                 try {
                     const qCestas = query(collectionGroup(db, 'cestas'), where('jogadorId', '==', selectedPlayer.id));
@@ -113,20 +169,16 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                     snapCestas.forEach(d => {
                         const data = d.data();
                         let gId = data.jogoId;
-                        // Handle Subcollection Path: eventos/ID/jogos/GAME_ID/cestas/ID
                         if (!gId && d.ref.parent && d.ref.parent.parent) {
                             gId = d.ref.parent.parent.id;
                         }
                         if (gId) {
-                            // Only set if not already set, or prioritize explicit side if available
                             if (!scoredGamesMap.has(gId) || data.timeId) {
                                 scoredGamesMap.set(gId, data.timeId);
                             }
                         }
                     });
-                } catch (e) {
-                    console.warn("Error fetching player cestas history:", e);
-                }
+                } catch (e) {}
 
                 try {
                     const eventsQ = query(collection(db, "eventos"), where("status", "==", "finalizado"));
@@ -139,65 +191,48 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                         for (const gameDoc of gamesSnap.docs) {
                             const gameData = gameDoc.data() as Jogo;
                             let played = false;
-                            let isTeamA = true; // Default to Team A (Home/ANCB)
+                            let isTeamA = true;
 
                             const isExternal = eventData.type !== 'torneio_interno';
 
                             if (isExternal) {
-                                // --- EXTERNAL GAMES (5x5 / Amistoso) ---
-                                // Player is ALWAYS on Team A (ANCB).
-                                
-                                // Check participation:
                                 if (scoredGamesMap.has(gameDoc.id) || 
                                     gameData.jogadoresEscalados?.includes(selectedPlayer.id) || 
                                     eventData.jogadoresEscalados?.includes(selectedPlayer.id)) {
                                     played = true;
-                                    isTeamA = true; // Force Team A for external
+                                    isTeamA = true;
                                 }
                             } else {
-                                // --- INTERNAL GAMES (3x3 / Internal Tournament) ---
-                                // Logic Updated to handle Migrated Data Robustly
-
-                                // 1. Find player's team in the event definition
                                 const playerTeam = eventData.times?.find(t => t.jogadores?.includes(selectedPlayer.id));
-                                
-                                // Normalization helper
                                 const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
 
-                                // 2. Determine if played based on Team Roster match against Game Teams
                                 if (playerTeam) {
                                     const pTeamId = playerTeam.id;
                                     const pTeamName = normalize(playerTeam.nomeTime);
-                                    
                                     const gTeamAId = gameData.timeA_id;
                                     const gTeamAName = normalize(gameData.timeA_nome || '');
                                     const gTeamBId = gameData.timeB_id;
                                     const gTeamBName = normalize(gameData.timeB_nome || '');
                                     
-                                    // Match A
                                     if ((gTeamAId && gTeamAId === pTeamId) || (gTeamAName === pTeamName)) {
                                         played = true;
                                         isTeamA = true;
                                     }
-                                    // Match B
                                     else if ((gTeamBId && gTeamBId === pTeamId) || (gTeamBName === pTeamName)) {
                                         played = true;
                                         isTeamA = false;
                                     }
                                 }
 
-                                // 3. Fallback: Check if they scored (for loose players or missing team data)
                                 if (!played && scoredGamesMap.has(gameDoc.id)) {
                                     played = true;
-                                    // Try to determine side if we couldn't match teams
                                     const scoredSide = scoredGamesMap.get(gameDoc.id);
                                     if (scoredSide === 'B') isTeamA = false;
-                                    else isTeamA = true; // Default A
+                                    else isTeamA = true;
                                 }
                             }
 
                             if (played) {
-                                // --- FETCH INDIVIDUAL STATS FOR THIS GAME ---
                                 let points = 0;
                                 let c1 = 0;
                                 let c2 = 0;
@@ -215,42 +250,23 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                         processedCestaIds.add(cesta.id);
                                     }
                                 };
-
-                                // 1. Subcollection
                                 try {
                                     const subCestas = await getDocs(collection(db, "eventos", eventDoc.id, "jogos", gameDoc.id, "cestas"));
                                     subCestas.forEach(d => countCesta({id: d.id, ...d.data()} as Cesta));
                                 } catch(e) {}
-
-                                // 2. Root Collection (Legacy)
                                 try {
                                     const rootCestasQuery = query(collection(db, "cestas"), where("jogoId", "==", gameDoc.id), where("jogadorId", "==", selectedPlayer.id));
                                     const rootCestas = await getDocs(rootCestasQuery);
                                     rootCestas.forEach(d => countCesta({id: d.id, ...d.data()} as Cesta));
                                 } catch (e) {}
 
-                                // Score Logic
                                 const sA = gameData.placarTimeA_final ?? gameData.placarANCB_final ?? 0;
                                 const sB = gameData.placarTimeB_final ?? gameData.placarAdversario_final ?? 0;
 
-                                // --- HEURISTIC CHECK FOR SIDE CORRECTION ---
-                                // If player points > Team A Score, they CANNOT be Team A.
-                                // If player points > Team B Score, they CANNOT be Team B.
                                 if (!isExternal && points > 0) {
-                                    if (isTeamA && points > sA) {
-                                        isTeamA = false; // Must be B
-                                    } else if (!isTeamA && points > sB) {
-                                        isTeamA = true; // Must be A
-                                    }
+                                    if (isTeamA && points > sA) isTeamA = false;
+                                    else if (!isTeamA && points > sB) isTeamA = true;
                                 }
-
-                                // Check review status
-                                const reviewQ = query(
-                                    collection(db, "avaliacoes"), 
-                                    where("gameId", "==", gameDoc.id),
-                                    where("reviewerId", "==", selectedPlayer.id)
-                                );
-                                const reviewSnap = await getDocs(reviewQ);
 
                                 historyList.push({
                                     eventId: eventDoc.id,
@@ -262,7 +278,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                     myTeam: isTeamA ? (gameData.timeA_nome || 'ANCB') : (gameData.timeB_nome || 'Meu Time'),
                                     scoreMyTeam: isTeamA ? sA : sB,
                                     scoreOpponent: isTeamA ? sB : sA,
-                                    reviewed: !reviewSnap.empty,
+                                    reviewed: false, 
                                     individualPoints: points,
                                     cesta1: c1,
                                     cesta2: c2,
@@ -280,41 +296,18 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                 }
             };
             fetchMatches();
-
-            // Fetch Testimonials (unchanged)
-            const fetchTestimonials = async () => {
-                setLoadingTestimonials(true);
-                try {
-                    const q = query(collection(db, "avaliacoes"), where("revieweeId", "==", selectedPlayer.id), orderBy("timestamp", "desc"));
-                    const snap = await getDocs(q);
-                    setTestimonials(snap.docs.map(d => ({id: d.id, ...d.data()} as PlayerReview)));
-                } catch (e) {
-                    console.error(e);
-                } finally {
-                    setLoadingTestimonials(false);
-                }
-            };
-            fetchTestimonials();
         }
 
     }, [activeTab, selectedPlayer]);
 
-    // Helper to normalize mixed DB data to new standard
     const normalizePosition = (pos: string | undefined): string => {
         if (!pos) return '-';
         const p = pos.toLowerCase();
-        
-        // 1 - Armador
         if (p.includes('1') || (p.includes('armador') && !p.includes('ala'))) return 'Armador (1)';
-        // 2 - Ala/Armador
         if (p.includes('2') || p.includes('ala/armador') || p.includes('ala-armador') || p.includes('sg')) return 'Ala/Armador (2)';
-        // 3 - Ala
         if (p.includes('3') || (p.includes('ala') && !p.includes('armador') && !p.includes('piv') && !p.includes('pivo')) || p.includes('sf')) return 'Ala (3)';
-        // 4 - Ala/Pivô
         if (p.includes('4') || p.includes('ala/piv') || p.includes('ala-piv') || p.includes('pf')) return 'Ala/Pivô (4)';
-        // 5 - Pivô
         if (p.includes('5') || (p.includes('piv') && !p.includes('ala')) || p.includes('c)') || p.trim().endsWith('(c)')) return 'Pivô (5)';
-        
         return pos;
     };
 
@@ -347,15 +340,9 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         return dateStr.split('-').reverse().join('/');
     };
     
-    const formatReviewDate = (timestamp: any) => {
-        if (!timestamp) return '';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(date);
-    };
-
     const handlePlayerClick = (player: Player) => {
         setSelectedPlayer(player);
-        setActiveTab('matches'); // Default to Matches
+        setActiveTab('matches'); 
         setIsEditing(false);
         setEditFormData({});
     };
@@ -365,7 +352,8 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         setEditFormData({
             nascimento: selectedPlayer.nascimento,
             cpf: selectedPlayer.cpf,
-            emailContato: selectedPlayer.emailContato
+            emailContato: selectedPlayer.emailContato,
+            telefone: selectedPlayer.telefone
         });
         setIsEditing(true);
     };
@@ -379,8 +367,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         if (!selectedPlayer) return;
         try {
             await updateDoc(doc(db, "jogadores", selectedPlayer.id), editFormData);
-            
-            // Update local state
             const updatedPlayer = { ...selectedPlayer, ...editFormData };
             setPlayers(prev => prev.map(p => p.id === updatedPlayer.id ? updatedPlayer : p));
             setSelectedPlayer(updatedPlayer);
@@ -390,6 +376,17 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
             alert("Erro ao atualizar dados.");
         }
     };
+
+    const radarStats = selectedPlayer 
+        ? calculateStatsFromTags(selectedPlayer.stats_tags) 
+        : { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
+    
+    const topTags = selectedPlayer?.stats_tags 
+        ? Object.entries(selectedPlayer.stats_tags)
+            .sort((a, b) => (b[1] as number) - (a[1] as number))
+            .slice(0, 3)
+            .map(([key, count]) => ({ key, count, ...TAG_META[key] }))
+        : [];
 
     return (
         <div className="animate-fadeIn pb-20">
@@ -482,7 +479,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                 onClick={() => setActiveTab('info')}
                                 className={`flex-1 pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'info' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
                             >
-                                Dados
+                                Scouting
                             </button>
                         </div>
 
@@ -490,16 +487,41 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                         <div className="w-full">
                             {activeTab === 'info' && (
                                 <div className="space-y-4 animate-fadeIn">
+                                    {/* RADAR CHART & BADGES (New Scouting Section) */}
+                                    <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                                        <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-4 text-center">Atributos (Peer Review)</h3>
+                                        
+                                        <div className="mb-6">
+                                            <RadarChart stats={radarStats} size={220} />
+                                        </div>
+
+                                        {topTags.length > 0 && (
+                                            <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                                                <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 text-center">Principais Características</h4>
+                                                <div className="flex justify-center gap-2">
+                                                    {topTags.map(tag => (
+                                                        <div key={tag.key} className="flex flex-col items-center bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm min-w-[70px]">
+                                                            <span className="text-xl mb-1">{tag.emoji}</span>
+                                                            <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase">{tag.label}</span>
+                                                            <span className="text-[9px] text-ancb-blue font-bold">x{tag.count}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Basic Info (Collapsed) */}
                                     <div className="grid grid-cols-2 gap-3 w-full">
-                                        <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center">
+                                        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center">
                                             <LucideCalendarDays className="text-ancb-blue dark:text-blue-400 mb-1" size={20} />
                                             <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">Idade</span>
                                             <span className="text-lg font-bold text-gray-800 dark:text-gray-200">
                                                 {selectedPlayer.nascimento ? calculateAge(selectedPlayer.nascimento) : '-'}
                                             </span>
                                         </div>
-                                        <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center justify-center">
-                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Nome Completo</span>
+                                        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center justify-center">
+                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Nome</span>
                                             <span className="text-xs font-bold text-gray-800 dark:text-gray-200 leading-tight">
                                                 {selectedPlayer.nome}
                                             </span>
@@ -547,6 +569,15 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                                             onChange={e => setEditFormData({...editFormData, emailContato: e.target.value})}
                                                         />
                                                     </div>
+                                                    <div>
+                                                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">WhatsApp (Sem formato)</label>
+                                                        <input 
+                                                            className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                                                            placeholder="5566999999999"
+                                                            value={editFormData.telefone || ''}
+                                                            onChange={e => setEditFormData({...editFormData, telefone: e.target.value})}
+                                                        />
+                                                    </div>
                                                     
                                                     <div className="flex gap-2 mt-4 pt-2 border-t border-red-200 dark:border-red-900/30">
                                                         <Button size="sm" onClick={handleSavePlayer} className="flex-1 !bg-green-600">
@@ -571,6 +602,10 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                                         <div className="col-span-2">
                                                             <span className="block text-[10px] text-gray-400 uppercase">Email</span>
                                                             <span className="font-bold">{selectedPlayer.emailContato || '-'}</span>
+                                                        </div>
+                                                        <div className="col-span-2">
+                                                            <span className="block text-[10px] text-gray-400 uppercase">WhatsApp</span>
+                                                            <span className="font-bold">{selectedPlayer.telefone || '-'}</span>
                                                         </div>
                                                     </div>
                                                 </>
@@ -636,55 +671,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                         ) : (
                                             <div className="text-center py-8 bg-gray-50 dark:bg-gray-700/20 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
                                                 <p className="text-gray-500 text-xs">Nenhum jogo finalizado.</p>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Testimonials List (Now inside Matches tab) */}
-                                    <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
-                                        <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 flex items-center gap-1">
-                                            <LucideMessageSquare size={14} /> Depoimentos
-                                        </h4>
-                                        {loadingTestimonials ? (
-                                            <div className="flex justify-center py-4">
-                                                <LucideLoader2 className="animate-spin text-ancb-blue" size={16} />
-                                            </div>
-                                        ) : testimonials.length > 0 ? (
-                                            <div className="space-y-3 max-h-40 overflow-y-auto custom-scrollbar">
-                                                {testimonials.map(review => (
-                                                    <div key={review.id} className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
-                                                        <div className="flex justify-between items-start mb-2">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden">
-                                                                    {review.reviewerPhoto ? (
-                                                                        <img src={review.reviewerPhoto} className="w-full h-full object-cover" />
-                                                                    ) : (
-                                                                        <div className="w-full h-full flex items-center justify-center font-bold text-[10px] text-gray-500">{review.reviewerName.charAt(0)}</div>
-                                                                    )}
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-xs font-bold text-gray-800 dark:text-white">{review.reviewerName}</p>
-                                                                    <p className="text-[9px] text-gray-400 uppercase">{formatReviewDate(review.timestamp)}</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center gap-1">
-                                                                <div className="flex text-yellow-400">
-                                                                    {[...Array(review.rating)].map((_, i) => <LucideStar key={i} size={10} fill="currentColor" />)}
-                                                                </div>
-                                                                <span className="text-lg" title="Tag">{review.emojiTag}</span>
-                                                            </div>
-                                                        </div>
-                                                        {review.comment && (
-                                                            <div className="bg-white dark:bg-gray-800 p-2 rounded-lg text-xs text-gray-600 dark:text-gray-300 italic relative">
-                                                                "{review.comment}"
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="text-center py-4">
-                                                <p className="text-gray-400 text-xs italic">Nenhum depoimento ainda.</p>
                                             </div>
                                         )}
                                     </div>

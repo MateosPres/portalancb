@@ -8,6 +8,7 @@ export interface UserProfile {
     status: 'active' | 'banned';
     dataNascimento?: string;
     linkedPlayerId?: string; // ID do jogador na collection 'jogadores' que este usuário controla
+    fcmToken?: string; // Token para Notificações Push
 }
 
 export interface Player {
@@ -19,9 +20,12 @@ export interface Player {
     numero_uniforme: number;
     cpf?: string; // Admin only
     nascimento?: string;
+    telefone?: string; // WhatsApp Format: 5566999999999
     userId?: string; // ID do usuário que reivindicou este perfil
     status?: 'active' | 'pending' | 'rejected' | 'banned'; // Controle de aprovação e banimento
     emailContato?: string;
+    // New Gamification Stats
+    stats_tags?: Record<string, number>; // e.g. { 'muralha': 10, 'sniper': 5 }
 }
 
 export interface ClaimRequest {
@@ -111,8 +115,7 @@ export interface FeedPost {
     };
 }
 
-// --- NOVAS INTERFACES PARA GAMIFICAÇÃO SOCIAL ---
-
+// --- INTERFACES ANTIGAS (Mantidas para compatibilidade se necessário, mas deprecated) ---
 export interface PlayerReview {
     id: string;
     gameId: string;
@@ -125,6 +128,26 @@ export interface PlayerReview {
     emojiTag: string; // 'MVP', 'Garçom', etc.
     comment?: string;
     timestamp: any;
+}
+
+// --- NOVA ESTRUTURA DE GAMIFICAÇÃO ---
+
+export type TagType = 'positive' | 'negative';
+
+export interface ReviewTagDefinition {
+    id: string;
+    label: string;
+    emoji: string;
+    type: TagType;
+    description: string;
+    // Impact on stats (0-3 scale usually) - UPDATED TO 5 ATTRIBUTES
+    impact: {
+        ataque?: number;
+        defesa?: number;
+        velocidade?: number;
+        forca?: number;
+        visao?: number; // Visão de Jogo
+    }
 }
 
 export interface NotificationItem {
