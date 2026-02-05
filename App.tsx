@@ -13,7 +13,7 @@ import { RankingView } from './views/RankingView';
 import { AdminView } from './views/AdminView';
 import { PainelJogoView } from './views/PainelJogoView';
 import { ProfileView } from './views/ProfileView';
-import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2 } from 'lucide-react';
+import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 const App: React.FC = () => {
@@ -350,7 +350,7 @@ const App: React.FC = () => {
                     ) : (
                         <div className="flex gap-2">
                             <Button variant="secondary" size="sm" onClick={() => setShowLogin(true)} className="!text-white !border-white/30 hover:!bg-white/10">
-                                <LucideLock size={14} /> <span className="hidden sm:inline">Entrar</span>
+                                <LucideLogIn size={16} /> <span className="hidden sm:inline">Entrar</span>
                             </Button>
                             <Button variant="primary" size="sm" onClick={() => setShowRegister(true)} className="hidden sm:flex">
                                 Registrar
