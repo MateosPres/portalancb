@@ -34,16 +34,31 @@ try {
 export const requestFCMToken = async (vapidKey: string): Promise<string | null> => {
     if (!messaging) return null;
     try {
+        // Tenta registrar o service worker explicitamente antes de pedir o token
+        // Isso ajuda a evitar o 'Registration failed - push service error' em alguns navegadores
+        if ('serviceWorker' in navigator) {
+            await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        }
+
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            const token = await getToken(messaging, { vapidKey });
+            const token = await getToken(messaging, { 
+                vapidKey,
+                // Força o service worker registrado no root
+                serviceWorkerRegistration: await navigator.serviceWorker.ready
+            });
             return token;
         } else {
             console.log("Notification permission denied");
             return null;
         }
-    } catch (error) {
-        console.error("An error occurred while retrieving token. ", error);
+    } catch (error: any) {
+        // Se falhar o Push nativo, o app ainda funcionará com notificações internas
+        if (error.name === 'AbortError' || error.message?.includes('push service error')) {
+            console.warn("Navegador bloqueou o serviço de push nativo. Usando notificações in-app apenas.");
+        } else {
+            console.error("Erro ao recuperar token FCM:", error);
+        }
         return null;
     }
 };
