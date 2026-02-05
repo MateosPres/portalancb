@@ -156,65 +156,43 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                 }
                             } else {
                                 // --- INTERNAL GAMES (3x3 / Internal Tournament) ---
-                                // Player can be Team A or Team B. Side determination is critical.
+                                // Logic Updated to handle Migrated Data Robustly
 
-                                const scoredSide = scoredGamesMap.get(gameDoc.id); // 'A' | 'B' | undefined
-                                
-                                // Find player's team definition in event
+                                // 1. Find player's team in the event definition
                                 const playerTeam = eventData.times?.find(t => t.jogadores?.includes(selectedPlayer.id));
                                 
-                                // Helper to match game team to player team with normalization and accent removal
-                                const normalizeTeamName = (name: string | undefined) => 
-                                    (name || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                                
-                                const isTeamMatch = (side: 'A' | 'B') => {
-                                    if (!playerTeam) return false;
-                                    const gId = side === 'A' ? gameData.timeA_id : gameData.timeB_id;
-                                    const gName = side === 'A' ? gameData.timeA_nome : gameData.timeB_nome;
-                                    
-                                    // 1. Strict ID Match
-                                    if (gId && gId === playerTeam.id) return true;
-                                    
-                                    // 2. Fuzzy Name Match
-                                    const normGameName = normalizeTeamName(gName);
-                                    const normPlayerTeamName = normalizeTeamName(playerTeam.nomeTime);
-                                    
-                                    if (!normGameName || !normPlayerTeamName) return false;
-                                    
-                                    // Bidirectional inclusion
-                                    return normGameName === normPlayerTeamName || 
-                                           (normGameName.length > 3 && normPlayerTeamName.length > 3 && 
-                                           (normGameName.includes(normPlayerTeamName) || normPlayerTeamName.includes(normGameName)));
-                                };
+                                // Normalization helper
+                                const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
 
-                                if (scoredGamesMap.has(gameDoc.id)) {
-                                    played = true; // They scored, so they played.
+                                // 2. Determine if played based on Team Roster match against Game Teams
+                                if (playerTeam) {
+                                    const pTeamId = playerTeam.id;
+                                    const pTeamName = normalize(playerTeam.nomeTime);
                                     
-                                    if (scoredSide) {
-                                        // Trust the recorded side in the stats
-                                        isTeamA = (scoredSide === 'A');
-                                    } else {
-                                        // Legacy Data (No side in Cesta): Deduce from Team Definition
-                                        // CRITICAL: Check Team B match FIRST to avoid defaulting to A mistakenly
-                                        if (isTeamMatch('B')) isTeamA = false;
-                                        else if (isTeamMatch('A')) isTeamA = true;
-                                        else isTeamA = true; // Fallback default
-                                    }
-                                } else {
-                                    // Didn't score, check rosters/team matching
-                                    if (isTeamMatch('B')) { 
-                                        played = true; 
-                                        isTeamA = false; 
-                                    } else if (isTeamMatch('A')) { 
-                                        played = true; 
-                                        isTeamA = true; 
-                                    }
+                                    const gTeamAId = gameData.timeA_id;
+                                    const gTeamAName = normalize(gameData.timeA_nome || '');
+                                    const gTeamBId = gameData.timeB_id;
+                                    const gTeamBName = normalize(gameData.timeB_nome || '');
                                     
-                                    // Fallback: Direct roster check (if ad-hoc)
-                                    if (!played && gameData.jogadoresEscalados?.includes(selectedPlayer.id)) {
+                                    // Match A
+                                    if ((gTeamAId && gTeamAId === pTeamId) || (gTeamAName === pTeamName)) {
                                         played = true;
-                                        isTeamA = true; // Default A
+                                        isTeamA = true;
                                     }
+                                    // Match B
+                                    else if ((gTeamBId && gTeamBId === pTeamId) || (gTeamBName === pTeamName)) {
+                                        played = true;
+                                        isTeamA = false;
+                                    }
+                                }
+
+                                // 3. Fallback: Check if they scored (for loose players or missing team data)
+                                if (!played && scoredGamesMap.has(gameDoc.id)) {
+                                    played = true;
+                                    // Try to determine side if we couldn't match teams
+                                    const scoredSide = scoredGamesMap.get(gameDoc.id);
+                                    if (scoredSide === 'B') isTeamA = false;
+                                    else isTeamA = true; // Default A
                                 }
                             }
 
