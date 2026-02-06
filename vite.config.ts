@@ -10,15 +10,17 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate', // Força a atualização do Service Worker
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
-      // CORREÇÃO: Removemos 'filename: manifest.json' que estava quebrando o Service Worker.
-      // Usamos manifestFilename para garantir o nome do arquivo JSON do manifesto.
       manifestFilename: 'manifest.json', 
       workbox: {
           // Importa o script do Firebase dentro do Service Worker principal do PWA
           // Isso permite que o PWA gerencie o cache E as notificações background
           importScripts: ['firebase-messaging-sw.js'],
           // Garante que não haja conflitos de cache
-          cleanupOutdatedCaches: true
+          cleanupOutdatedCaches: true,
+          // CRUCIAL: Estas opções forçam o novo SW a assumir o controle imediatamente,
+          // consertando bugs onde a notificação não chega com o app fechado até a próxima visita.
+          skipWaiting: true,
+          clientsClaim: true
       },
       manifest: {
         name: 'Portal ANCB-MT',
