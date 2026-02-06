@@ -34,18 +34,15 @@ try {
 export const requestFCMToken = async (vapidKey: string): Promise<string | null> => {
     if (!messaging) return null;
     try {
-        // Tenta registrar o service worker explicitamente antes de pedir o token
-        // Isso ajuda a evitar o 'Registration failed - push service error' em alguns navegadores
-        if ('serviceWorker' in navigator) {
-            await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-        }
-
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
+            // Tenta obter o registro do Service Worker ativo (gerado pelo Vite PWA)
+            // Isso evita o erro 404 ao tentar buscar 'firebase-messaging-sw.js' se ele não estiver na pasta public/dist
+            const serviceWorkerRegistration = await navigator.serviceWorker.ready;
+            
             const token = await getToken(messaging, { 
                 vapidKey,
-                // Força o service worker registrado no root
-                serviceWorkerRegistration: await navigator.serviceWorker.ready
+                serviceWorkerRegistration
             });
             return token;
         } else {

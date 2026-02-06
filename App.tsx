@@ -159,7 +159,8 @@ const App: React.FC = () => {
                         badge: 'https://i.imgur.com/SE2jHsz.png',
                         vibrate: [200, 100, 200]
                     } as any);
-                }).catch(() => {
+                }).catch((e) => {
+                    console.warn("SW notification failed, falling back", e);
                     // Fallback para notificação simples
                     new Notification(title, {
                         body: body,
@@ -168,6 +169,11 @@ const App: React.FC = () => {
                 });
             } catch (e) {
                 console.error("Erro ao disparar notificação de sistema:", e);
+                // Fallback final
+                new Notification(title, {
+                    body: body,
+                    icon: 'https://i.imgur.com/SE2jHsz.png'
+                });
             }
         }
     };
@@ -178,13 +184,17 @@ const App: React.FC = () => {
         const myPlayerId = userProfile.linkedPlayerId;
         const q = query(collection(db, "eventos"), where("status", "in", ["proximo", "andamento"]));
 
-        // Added type cast for snapshot to fix Property 'docChanges' error
         return onSnapshot(q, (snapshot: any) => {
+            // Carrega eventos já notificados do localStorage
             const notifiedEvents = JSON.parse(localStorage.getItem('ancb_notified_rosters') || '[]');
+            
             snapshot.docChanges().forEach((change: any) => {
+                // Verifica adição ou modificação (ex: jogador adicionado depois)
                 if (change.type === "added" || change.type === "modified") {
                     const eventData = change.doc.data() as Evento;
                     const eventId = change.doc.id;
+                    
+                    // Verifica se o jogador está na lista E se já não foi notificado para este evento
                     if (eventData.jogadoresEscalados?.includes(myPlayerId) && !notifiedEvents.includes(eventId)) {
                         const title = "Convocação!";
                         const body = `Você foi escalado para: ${eventData.nome}`;
@@ -196,8 +206,12 @@ const App: React.FC = () => {
                         triggerSystemNotification(title, body);
 
                         setTimeout(() => setForegroundNotification(null), 10000);
+                        
+                        // Marca como notificado
                         notifiedEvents.push(eventId);
                         localStorage.setItem('ancb_notified_rosters', JSON.stringify(notifiedEvents));
+                        
+                        // Atualiza a lista interna
                         checkStaticNotifications();
                     }
                 }
