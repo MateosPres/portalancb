@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, deleteDoc, limit } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -609,34 +608,45 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                                         </div>
                                     </div>
                                     
-                                    <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg mb-3">
-                                        <div className="font-bold text-sm text-gray-800 dark:text-gray-200 w-1/3 truncate text-center">{match.myTeam}</div>
-                                        <div className="font-mono text-lg font-bold bg-white dark:bg-gray-600 px-3 py-1 rounded-md shadow-sm border border-gray-200 dark:border-gray-500 text-gray-800 dark:text-white">
-                                            {match.scoreMyTeam} <span className="text-gray-300 text-sm mx-1">:</span> {match.scoreOpponent}
+                                    <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg mb-3 gap-2">
+                                        <div className="font-bold text-xs text-gray-800 dark:text-gray-200 w-1/3 truncate text-right">{match.myTeam}</div>
+                                        
+                                        {/* Score Container - Forced Horizontal */}
+                                        <div className="flex items-center justify-center gap-1 font-mono text-base font-bold bg-white dark:bg-gray-600 px-3 py-1 rounded-md shadow-sm border border-gray-200 dark:border-gray-500 text-gray-800 dark:text-white whitespace-nowrap shrink-0">
+                                            <span>{match.scoreMyTeam}</span>
+                                            <span className="text-gray-300 text-xs mx-0.5">:</span>
+                                            <span>{match.scoreOpponent}</span>
                                         </div>
-                                        <div className="font-bold text-sm text-gray-800 dark:text-gray-200 w-1/3 truncate text-center">{match.opponent}</div>
+                                        
+                                        <div className="font-bold text-xs text-gray-800 dark:text-gray-200 w-1/3 truncate text-left">{match.opponent}</div>
                                     </div>
                                     
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded text-ancb-blue dark:text-blue-300 font-bold text-xs">
+                                    <div className="flex items-center justify-between mt-2 flex-wrap gap-y-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <div className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded text-ancb-blue dark:text-blue-300 font-bold text-xs whitespace-nowrap">
                                                 <LucideZap size={12} /> {match.individualPoints} Pts
                                             </div>
-                                            {match.cesta3 > 0 && <span className="text-[10px] text-gray-400 font-bold bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">3PT: {match.cesta3}</span>}
+                                            <div className="flex flex-wrap gap-2 text-[10px]">
+                                                {match.cesta1 > 0 && <span className="text-gray-500 dark:text-gray-400 font-bold bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded whitespace-nowrap">1PT: {match.cesta1}</span>}
+                                                {match.cesta2 > 0 && <span className="text-gray-500 dark:text-gray-400 font-bold bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded whitespace-nowrap">2PT: {match.cesta2}</span>}
+                                                {match.cesta3 > 0 && <span className="text-gray-500 dark:text-gray-400 font-bold bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded whitespace-nowrap">3PT: {match.cesta3}</span>}
+                                            </div>
                                         </div>
 
-                                        {!match.reviewed && onOpenReview && (
-                                            <Button 
-                                                size="sm" 
-                                                className="!py-1 !px-3 text-xs !bg-ancb-orange hover:!bg-orange-600 shadow-md" 
-                                                onClick={() => onOpenReview(match.gameId, match.eventId)}
-                                            >
-                                                Avaliar Time
-                                            </Button>
-                                        )}
-                                        {match.reviewed && (
-                                            <span className="text-green-500 text-xs font-bold flex items-center gap-1"><LucideCheckCircle2 size={12}/> Avaliado</span>
-                                        )}
+                                        <div className="flex-shrink-0 ml-auto">
+                                            {!match.reviewed && onOpenReview && (
+                                                <Button 
+                                                    size="sm" 
+                                                    className="!py-1 !px-3 text-xs !bg-ancb-orange hover:!bg-orange-600 shadow-md whitespace-nowrap" 
+                                                    onClick={() => onOpenReview(match.gameId, match.eventId)}
+                                                >
+                                                    Avaliar Time
+                                                </Button>
+                                            )}
+                                            {match.reviewed && (
+                                                <span className="text-green-500 text-xs font-bold flex items-center gap-1 whitespace-nowrap"><LucideCheckCircle2 size={12}/> Avaliado</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             );
