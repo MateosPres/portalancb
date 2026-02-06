@@ -3,7 +3,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Player, Cesta, Evento, Jogo } from '../types';
 import { Button } from '../components/Button';
-import { LucideArrowLeft, LucideTrophy, LucideCalendarRange, LucideFilter, LucideCrosshair } from 'lucide-react';
+import { LucideArrowLeft, LucideTrophy, LucideCalendarRange, LucideFilter, LucideCrosshair, LucideUsers, LucideGraduationCap } from 'lucide-react';
 
 interface RankingViewProps {
     onBack: () => void;
@@ -25,6 +25,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
     
     const [selectedYear, setSelectedYear] = useState<string>(defaultYear);
     const [selectedMode, setSelectedMode] = useState<'3x3' | '5x5' | 'shooters'>('5x5');
+    const [selectedCategory, setSelectedCategory] = useState<'aberta' | 'juvenil'>('aberta');
 
     useEffect(() => {
         const fetchRankingData = async () => {
@@ -203,7 +204,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                 });
 
                 // 6. Merge & Calculate
-                const rankingList: PlayerStats[] = Object.values(playersMap).map(player => {
+                let rankingList: PlayerStats[] = Object.values(playersMap).map(player => {
                     const totalPoints = pointsMap[player.id] || 0;
                     const gamesPlayed = playerGamesMap[player.id] ? playerGamesMap[player.id].size : 0; 
                     // Use a slightly different PPG calc logic if needed, but standard avg works for both counts and points
@@ -216,6 +217,18 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                         ppg
                     };
                 });
+
+                // 6.5 FILTER BY CATEGORY
+                if (selectedCategory === 'juvenil') {
+                    rankingList = rankingList.filter(p => {
+                        if (!p.nascimento) return false;
+                        const birthYear = parseInt(p.nascimento.split('-')[0]);
+                        if (isNaN(birthYear)) return false;
+                        const seasonYear = parseInt(selectedYear);
+                        // Juvenil: 17 anos ou menos no ano da temporada
+                        return (seasonYear - birthYear) <= 17;
+                    });
+                }
 
                 // 7. Sort
                 const sorted = rankingList.sort((a, b) => {
@@ -235,7 +248,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
         };
 
         fetchRankingData();
-    }, [selectedYear, selectedMode]);
+    }, [selectedYear, selectedMode, selectedCategory]);
 
     const getRuleText = () => {
         if (selectedMode === 'shooters') return 'Contabiliza apenas cestas de longa distância (3pts no 5x5 e 2pts no 3x3). Soma quantidade, não pontos.';
@@ -251,7 +264,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
         <div className="animate-fadeIn pb-20">
             {/* Header & Controls */}
             <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6 sticky top-[70px] z-30 transition-colors">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                     <div className="flex items-center gap-3">
                         <Button variant="secondary" size="sm" onClick={onBack} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
                             <LucideArrowLeft size={18} />
@@ -259,17 +272,32 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                         <h2 className="text-xl font-bold text-ancb-blue dark:text-blue-400">Ranking</h2>
                     </div>
                     
-                    {/* Season Selector */}
-                    <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600">
-                        <LucideCalendarRange size={16} className="text-gray-400 dark:text-gray-300"/>
-                        <select 
-                            value={selectedYear} 
-                            onChange={(e) => setSelectedYear(e.target.value)}
-                            className="bg-transparent text-sm font-bold text-gray-700 dark:text-white focus:outline-none cursor-pointer"
-                        >
-                            <option value="2025" className="text-black">2025</option>
-                            <option value="2026" className="text-black">2026</option>
-                        </select>
+                    <div className="flex flex-wrap gap-2">
+                        {/* Season Selector */}
+                        <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600">
+                            <LucideCalendarRange size={16} className="text-gray-400 dark:text-gray-300"/>
+                            <select 
+                                value={selectedYear} 
+                                onChange={(e) => setSelectedYear(e.target.value)}
+                                className="bg-transparent text-sm font-bold text-gray-700 dark:text-white focus:outline-none cursor-pointer"
+                            >
+                                <option value="2025" className="text-black">2025</option>
+                                <option value="2026" className="text-black">2026</option>
+                            </select>
+                        </div>
+
+                        {/* Category Selector */}
+                        <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600">
+                            <LucideGraduationCap size={16} className="text-gray-400 dark:text-gray-300"/>
+                            <select 
+                                value={selectedCategory} 
+                                onChange={(e) => setSelectedCategory(e.target.value as any)}
+                                className="bg-transparent text-sm font-bold text-gray-700 dark:text-white focus:outline-none cursor-pointer"
+                            >
+                                <option value="aberta" className="text-black">Aberta (Todos)</option>
+                                <option value="juvenil" className="text-black">Juvenil (Sub-17)</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -324,7 +352,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                 <div className="text-center py-20 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mx-4">
                     <LucideTrophy className="mx-auto text-gray-300 dark:text-gray-600 mb-4" size={48} />
                     <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">Ranking indisponível</h3>
-                    <p className="text-gray-500 dark:text-gray-400 px-6">Nenhum dado encontrado para {selectedMode === 'shooters' ? 'arremessadores' : selectedMode} em {selectedYear}.</p>
+                    <p className="text-gray-500 dark:text-gray-400 px-6">Nenhum dado encontrado para {selectedMode === 'shooters' ? 'arremessadores' : selectedMode} em {selectedYear} ({selectedCategory}).</p>
                 </div>
             ) : (
                 <>

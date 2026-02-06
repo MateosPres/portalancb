@@ -314,7 +314,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
             // 4. Award Season Badges
             Object.keys(seasonStats).forEach(year => {
                 const yearData = seasonStats[year];
+                const yearNum = parseInt(year);
                 
+                // --- CATEGORY: ABERTA (Open) ---
                 // MVP (Most Points in Season)
                 const sortedMvp = Object.entries(yearData).sort(([,a], [,b]) => b.points - a.points);
                 sortedMvp.slice(0, 3).forEach(([pid, s], idx) => {
@@ -336,7 +338,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 });
 
                 // Elite Shooter (Most 3PM in Season)
-                // CORRIGIDO: Mão de Prata em vez de Mão de Ouro
                 const sortedShooter = Object.entries(yearData).sort(([,a], [,b]) => b.threePoints - a.threePoints);
                 sortedShooter.slice(0, 3).forEach(([pid, s], idx) => {
                     if (playersMap[pid] && s.threePoints > 0) {
@@ -352,6 +353,54 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                             raridade: rarity,
                             data: `${year}-12-31`,
                             descricao: `${s.threePoints} bolas longas em ${year}`
+                        });
+                    }
+                });
+
+                // --- CATEGORY: JUVENIL (Under 17) ---
+                const juvenilCandidates = Object.entries(yearData).filter(([pid]) => {
+                    const p = playersMap[pid];
+                    if (!p || !p.nascimento) return false;
+                    const birthYear = parseInt(p.nascimento.split('-')[0]);
+                    return (yearNum - birthYear) <= 17;
+                });
+
+                // MVP Juvenil
+                const sortedMvpJuv = juvenilCandidates.sort(([,a], [,b]) => b.points - a.points);
+                sortedMvpJuv.slice(0, 3).forEach(([pid, s], idx) => {
+                     if (playersMap[pid] && s.points > 0) {
+                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'epica' : 'rara';
+                        const emojis = ['🏆', '🥈', '🥉'];
+                        const titles = [`MVP Juvenil ${year}`, `Vice-MVP Juvenil ${year}`, `Bronze Juvenil ${year}`];
+                        
+                        playersMap[pid].badges!.push({
+                            id: `season_${year}_juv_mvp_${idx}`,
+                            nome: titles[idx],
+                            emoji: emojis[idx],
+                            categoria: 'temporada',
+                            raridade: rarity,
+                            data: `${year}-12-31`,
+                            descricao: `${s.points} pontos na categoria Juvenil em ${year}`
+                        });
+                    }
+                });
+
+                // Shooter Juvenil
+                const sortedShooterJuv = juvenilCandidates.sort(([,a], [,b]) => b.threePoints - a.threePoints);
+                sortedShooterJuv.slice(0, 3).forEach(([pid, s], idx) => {
+                     if (playersMap[pid] && s.threePoints > 0) {
+                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'epica' : 'rara';
+                        const emojis = ['🎯', '🏹', '☄️'];
+                        const titles = [`Atirador Juvenil ${year}`, `Mão de Prata Juv. ${year}`, `Sniper Juvenil ${year}`];
+                        
+                        playersMap[pid].badges!.push({
+                            id: `season_${year}_juv_shoot_${idx}`,
+                            nome: titles[idx],
+                            emoji: emojis[idx],
+                            categoria: 'temporada',
+                            raridade: rarity,
+                            data: `${year}-12-31`,
+                            descricao: `${s.threePoints} bolas longas na categoria Juvenil em ${year}`
                         });
                     }
                 });
@@ -385,7 +434,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
 
             await Promise.all(batchArray.map(b => b.commit()));
 
-            alert("Histórico recalculado com sucesso! Conquistas retroativas atribuídas.");
+            alert("Histórico recalculado com sucesso! Conquistas retroativas atribuídas (Aberta e Juvenil).");
 
         } catch (error) {
             console.error(error);

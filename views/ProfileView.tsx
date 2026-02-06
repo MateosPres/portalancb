@@ -502,14 +502,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 </div>
             )}
 
-            {/* HERO SECTION (PROFILE HEADER) */}
-            <div className="relative bg-gradient-to-br from-[#062553] to-blue-900 rounded-3xl mx-4 p-6 text-white shadow-xl overflow-hidden mb-6">
-                <div className="absolute top-0 right-0 opacity-10">
-                    <LucideTrophy size={180} className="transform rotate-12 translate-x-10 -translate-y-10" />
+            {/* HERO SECTION (GRID REDESIGN) */}
+            <div className="relative bg-gradient-to-br from-[#062553] to-blue-900 rounded-3xl mx-4 p-5 text-white shadow-xl overflow-hidden mb-6 grid grid-cols-1 md:grid-cols-12 gap-6 border border-blue-800 items-center">
+                <div className="absolute top-0 right-0 opacity-5 pointer-events-none">
+                    <LucideTrophy size={200} className="transform rotate-12 translate-x-10 -translate-y-10" />
                 </div>
                 
-                <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6">
-                    <div className="relative">
+                {/* Left Side: Avatar & Info (Expanded Width) */}
+                <div className="relative z-10 md:col-span-5 flex flex-col items-center md:items-start text-center md:text-left">
+                    <div className="relative mb-3">
                         <div className="w-28 h-28 rounded-full border-4 border-white/20 bg-white/10 shadow-2xl overflow-hidden flex items-center justify-center">
                             {formData.foto ? (
                                 <img src={formData.foto} className="w-full h-full object-cover" />
@@ -522,33 +523,56 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                         </div>
                     </div>
                     
-                    <div className="flex-1 text-center md:text-left">
-                        <h1 className="text-2xl font-bold mb-1">{formData.apelido || formData.nome}</h1>
-                        <p className="text-blue-200 text-sm mb-4 font-medium flex items-center justify-center md:justify-start gap-2">
-                            <LucideMapPin size={14} /> {normalizePosition(formData.posicao)}
-                        </p>
-                        
-                        <div className="flex justify-center md:justify-start gap-3">
-                            <button 
-                                onClick={() => setShowEditModal(true)}
-                                className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors"
-                            >
-                                <LucideEdit2 size={14} /> Editar Perfil
-                            </button>
+                    <h1 className="text-2xl font-bold mb-1 leading-tight w-full truncate">{formData.apelido || formData.nome}</h1>
+                    <p className="text-blue-200 text-sm mb-4 font-medium flex items-center justify-center md:justify-start gap-1">
+                        <LucideMapPin size={14} /> {normalizePosition(formData.posicao)}
+                    </p>
+
+                    {/* Stats Row (Redesigned with Bubbles) */}
+                    <div className="flex gap-2 mb-4 w-full justify-center md:justify-start">
+                        <div className="bg-blue-950/40 px-4 py-2 rounded-lg backdrop-blur-sm border border-white/10 flex-1 max-w-[100px]">
+                            <span className="block text-xl font-bold">{formData.nascimento ? calculateAge(formData.nascimento) : '-'}</span>
+                            <span className="text-[9px] text-blue-300 uppercase font-bold tracking-wide">Idade</span>
                         </div>
+                        <div className="bg-blue-950/40 px-4 py-2 rounded-lg backdrop-blur-sm border border-white/10 flex-1 max-w-[100px]">
+                            <span className="block text-xl font-bold">{matches.length}</span>
+                            <span className="text-[9px] text-blue-300 uppercase font-bold tracking-wide">Jogos</span>
+                        </div>
+                    </div>
+                    
+                    <button 
+                        onClick={() => setShowEditModal(true)}
+                        className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors w-full justify-center md:w-auto"
+                    >
+                        <LucideEdit2 size={14} /> Editar Perfil
+                    </button>
+                </div>
+
+                {/* Right Side: Radar Chart (Polygon Style) */}
+                <div className="relative z-10 md:col-span-7 w-full flex flex-col items-center justify-center pt-2 md:pt-0">
+                    <h4 className="text-xs font-bold text-blue-200 uppercase mb-4 flex items-center gap-1">
+                        <LucideTrendingUp size={14} /> Atributos (Peer Review)
+                    </h4>
+                    
+                    {/* No background circle - Clean Polygon style */}
+                    <div className="mb-4">
+                        <RadarChart stats={radarStats} size={180} />
                     </div>
 
-                    {/* Quick Stats Mini-Grid */}
-                    <div className="grid grid-cols-2 gap-2 text-center">
-                        <div className="bg-black/20 p-2 rounded-lg min-w-[80px]">
-                            <span className="block text-xl font-bold">{formData.nascimento ? calculateAge(formData.nascimento) : '-'}</span>
-                            <span className="text-[10px] text-blue-200 uppercase font-bold">Idade</span>
+                    {/* Top Tags - Compact */}
+                    {topTags.filter(t => t.count > 0).length > 0 ? (
+                        <div className="flex flex-wrap justify-center gap-2">
+                            {topTags.filter(t => t.count > 0).map(tag => (
+                                <div key={tag.key} className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-md border border-white/10">
+                                    <span className="text-base">{tag.emoji}</span>
+                                    <span className="text-[10px] font-bold text-blue-100 uppercase">{tag.label}</span>
+                                    <span className="text-[9px] font-bold text-ancb-orange bg-black/20 px-1.5 rounded-full ml-1">{tag.count}</span>
+                                </div>
+                            ))}
                         </div>
-                        <div className="bg-black/20 p-2 rounded-lg min-w-[80px]">
-                            <span className="block text-xl font-bold">{matches.length}</span>
-                            <span className="text-[10px] text-blue-200 uppercase font-bold">Jogos</span>
-                        </div>
-                    </div>
+                    ) : (
+                        <p className="text-[10px] text-blue-300 italic">Sem avaliações suficientes.</p>
+                    )}
                 </div>
             </div>
 
@@ -579,44 +603,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 </div>
             )}
 
-            {/* ATTRIBUTES SECTION (RADAR) */}
-            <div className="mx-4 mb-6">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 relative overflow-hidden">
-                    <div className="flex items-center gap-2 mb-6 border-b border-gray-100 dark:border-gray-700 pb-3">
-                        <LucideTrendingUp className="text-ancb-orange" size={20} />
-                        <h3 className="font-bold text-gray-800 dark:text-white uppercase tracking-wider text-sm">Atributos & Estilo</h3>
-                    </div>
-
-                    <div className="flex flex-col md:flex-row items-center gap-8">
-                        <div className="flex-shrink-0">
-                            <RadarChart stats={radarStats} size={200} />
-                        </div>
-                        
-                        <div className="flex-1 w-full">
-                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 text-center md:text-left">Tags Mais Recebidas</h4>
-                            {topTags.filter(t => t.count > 0).length > 0 ? (
-                                <div className="grid grid-cols-1 gap-3">
-                                    {topTags.filter(t => t.count > 0).map(tag => (
-                                        <div key={tag.key} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-600">
-                                            <span className="text-2xl">{tag.emoji}</span>
-                                            <div className="flex-1">
-                                                <span className="block text-sm font-bold text-gray-700 dark:text-gray-200">{tag.label}</span>
-                                                <div className="w-full bg-gray-200 dark:bg-gray-600 h-1.5 rounded-full mt-1 overflow-hidden">
-                                                    <div className="bg-ancb-blue h-full" style={{ width: `${Math.min(tag.count * 10, 100)}%` }}></div>
-                                                </div>
-                                            </div>
-                                            <span className="text-xs font-bold text-ancb-blue bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded-lg">x{tag.count}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-center text-gray-400 text-xs italic py-4">Sem avaliações suficientes ainda.</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {/* MATCH HISTORY SECTION */}
             <div className="mx-4">
                 <div className="flex items-center gap-2 mb-4">
@@ -633,8 +619,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                         {matches.map((match) => {
                             const isWin = match.scoreMyTeam > match.scoreOpponent;
                             const isLoss = match.scoreMyTeam < match.scoreOpponent;
-                            // const statusColor = isWin ? 'bg-green-500' : isLoss ? 'bg-red-500' : 'bg-gray-400';
-                            const borderClass = isWin ? 'border-l-4 border-l-green-500' : isLoss ? 'border-l-4 border-l-red-500' : 'border-l-4 border-l-gray-400';
+                            // CORREÇÃO: Adicionado dark:border-l-* para garantir que a cor da borda lateral persista no modo escuro
+                            const borderClass = isWin 
+                                ? 'border-l-4 border-l-green-500 dark:border-l-green-500' 
+                                : isLoss 
+                                ? 'border-l-4 border-l-red-500 dark:border-l-red-500' 
+                                : 'border-l-4 border-l-gray-400 dark:border-l-gray-400';
 
                             return (
                                 <div key={match.gameId} className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 ${borderClass} relative overflow-hidden group`}>

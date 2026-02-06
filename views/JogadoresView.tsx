@@ -116,8 +116,8 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
     const [activeFilter, setActiveFilter] = useState('Todos');
     
-    // Tab State for Modal
-    const [activeTab, setActiveTab] = useState<'matches' | 'info'>('matches');
+    // Tab State for Modal - Changed default to 'info' (Scouting)
+    const [activeTab, setActiveTab] = useState<'matches' | 'info'>('info');
     const [matches, setMatches] = useState<MatchHistoryItem[]>([]);
     const [loadingMatches, setLoadingMatches] = useState(false);
     
@@ -351,7 +351,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     
     const handlePlayerClick = (player: Player) => {
         setSelectedPlayer(player);
-        setActiveTab('matches'); 
+        setActiveTab('info');  // DEFAULT TO SCOUTING TAB
         setIsEditing(false);
         setEditFormData({});
     };
@@ -487,17 +487,17 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
 
                         {/* TABS - SIMPLIFIED */}
                         <div className="flex border-b border-gray-100 dark:border-gray-700 mb-4 w-full">
-                            <button 
-                                onClick={() => setActiveTab('matches')}
-                                className={`flex-1 pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'matches' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                            >
-                                Partidas
-                            </button>
                              <button 
                                 onClick={() => setActiveTab('info')}
                                 className={`flex-1 pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'info' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
                             >
                                 Scouting
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('matches')}
+                                className={`flex-1 pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'matches' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                            >
+                                Partidas
                             </button>
                         </div>
 
