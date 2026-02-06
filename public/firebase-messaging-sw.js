@@ -21,11 +21,13 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
-  // Customize notification here if needed
+  
+  // Customize notification here
   const notificationTitle = payload.notification.title;
   const notificationOptions = {
     body: payload.notification.body,
-    icon: 'https://i.imgur.com/SE2jHsz.png' // ANCB Icon
+    icon: 'https://i.imgur.com/SE2jHsz.png', // ANCB Icon
+    badge: 'https://i.imgur.com/SE2jHsz.png' // Small icon for notification bar
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
