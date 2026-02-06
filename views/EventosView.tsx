@@ -531,7 +531,11 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                                         </div>
                                                         {userProfile?.role === 'admin' && (
                                                             <div className="flex justify-center gap-2 mt-2 pt-2 border-t dark:border-gray-700">
-                                                                <Button size="sm" className="!py-0.5 !px-2 text-[10px]" onClick={(e) => { e.stopPropagation(); onOpenGamePanel && onOpenGamePanel(game, selectedEvent.id); }}>Painel</Button>
+                                                                {/* CORREÇÃO: Removido botão Painel para Admin no modo calendário normal */}
+                                                                {/* O admin deve usar o painel administrativo para editar jogos finalizados */}
+                                                                {game.status !== 'finalizado' && (
+                                                                    <Button size="sm" className="!py-0.5 !px-2 text-[10px]" onClick={(e) => { e.stopPropagation(); onOpenGamePanel && onOpenGamePanel(game, selectedEvent.id); }}>Painel</Button>
+                                                                )}
                                                                 <button onClick={(e) => { e.stopPropagation(); handleDeleteGame(game.id); }} className="text-red-400 hover:text-red-600 text-[10px]">Excluir</button>
                                                             </div>
                                                         )}

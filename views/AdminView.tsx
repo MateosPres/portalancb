@@ -5,12 +5,12 @@ import { db, auth } from '../services/firebase';
 import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player, Time, Cesta } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone } from 'lucide-react';
+import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 interface AdminViewProps {
     onBack: () => void;
-    onOpenGamePanel: (game: Jogo, eventId: string) => void;
+    onOpenGamePanel: (game: Jogo, eventId: string, isEditable: boolean) => void;
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel }) => {
@@ -327,14 +327,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                                     const { sA, sB } = getScores(game);
                                     const isInternal = !!game.timeA_nome && game.timeA_nome !== 'ANCB';
                                     return (
-                                        <div key={game.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border border-gray-200 dark:border-gray-600">
+                                        <div key={game.id} className={`flex items-center justify-between p-3 rounded-lg border ${game.status === 'finalizado' ? 'bg-gray-100 dark:bg-gray-900/30 border-gray-300 dark:border-gray-800 opacity-80' : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600'}`}>
                                             <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
                                                 <div className="font-bold text-gray-700 dark:text-gray-200 w-32 truncate">{isInternal ? game.timeA_nome : 'ANCB'}</div>
                                                 <div className="font-mono font-bold bg-white dark:bg-gray-800 px-2 py-1 rounded border dark:border-gray-600 text-center dark:text-white">{sA} x {sB}</div>
                                                 <div className="font-bold text-gray-700 dark:text-gray-200 w-32 truncate">{isInternal ? game.timeB_nome : (game.adversario || 'Adversário')}</div>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <Button size="sm" variant="success" onClick={() => onOpenGamePanel(game, selectedEvent.id)}><LucidePlayCircle size={16} /> <span className="hidden sm:inline">Painel</span></Button>
+                                                {game.status === 'finalizado' ? (
+                                                    <Button size="sm" variant="secondary" onClick={() => onOpenGamePanel(game, selectedEvent.id, true)} className="!text-orange-500 !border-orange-200 dark:!border-orange-900/50 hover:!bg-orange-50">
+                                                        <LucideEdit size={16} /> <span className="hidden sm:inline">Editar Súmula</span>
+                                                    </Button>
+                                                ) : (
+                                                    <Button size="sm" variant="success" onClick={() => onOpenGamePanel(game, selectedEvent.id, false)}>
+                                                        <LucidePlayCircle size={16} /> <span className="hidden sm:inline">Painel</span>
+                                                    </Button>
+                                                )}
                                                 <button onClick={() => handleDeleteGame(game.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"><LucideTrash2 size={18} /></button>
                                             </div>
                                         </div>

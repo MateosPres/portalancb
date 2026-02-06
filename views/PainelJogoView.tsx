@@ -1,21 +1,23 @@
 
 import React, { useState, useEffect } from 'react';
-import { collection, doc, onSnapshot, updateDoc, addDoc, serverTimestamp, getDocs, query, orderBy, getDoc, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, addDoc, serverTimestamp, getDocs, query, orderBy, getDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Jogo, Player, Evento, PlayerReview, UserProfile, Time } from '../types';
 import { Button } from '../components/Button';
-import { LucideArrowLeft, LucideSearch, LucideCheckCircle2, LucideUsers, LucideShield } from 'lucide-react';
+import { LucideArrowLeft, LucideSearch, LucideCheckCircle2, LucideUsers, LucideShield, LucideLock, LucideEdit, LucideSend } from 'lucide-react';
 
 interface PainelJogoViewProps {
     game: Jogo;
     eventId: string;
     onBack: () => void;
     userProfile?: UserProfile | null;
+    isEditable?: boolean; // Prop para forçar modo de edição
 }
 
-export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, onBack, userProfile }) => {
+export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, onBack, userProfile, isEditable = false }) => {
     const [liveGame, setLiveGame] = useState<Jogo>(game);
     const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+    const [finishing, setFinishing] = useState(false);
     
     // Internal Tournament State
     const [isInternal, setIsInternal] = useState(false);
@@ -126,14 +128,66 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
 
     const handleFinishGame = async () => {
         if (!isAdmin) return;
-        if (!window.confirm("Finalizar partida?")) return;
+        if (!window.confirm("ATENÇÃO: Finalizar a partida disparará notificações para todos os jogadores envolvidos. Continuar?")) return;
+        
+        setFinishing(true);
         try {
-            await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), { status: 'finalizado' });
-            alert("Partida finalizada!");
+            // 1. Identificar lista completa de jogadores neste jogo
+            let gameRosterIds: string[] = [];
+            
+            if (isInternal) {
+                // Combina jogadores dos dois times
+                const teamAIds = teamAPlayers.map(p => p.id);
+                const teamBIds = teamBPlayers.map(p => p.id);
+                gameRosterIds = [...teamAIds, ...teamBIds];
+            } else {
+                // Usa elenco ANCB
+                gameRosterIds = ancbPlayers.map(p => p.id);
+            }
+
+            // Remove duplicatas
+            gameRosterIds = Array.from(new Set(gameRosterIds));
+
+            // 2. Atualizar documento do Jogo (Status e Roster final completo)
+            await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), { 
+                status: 'finalizado',
+                jogadoresEscalados: gameRosterIds // Garante que todos que deveriam estar, estão marcados
+            });
+
+            // 3. Enviar Notificações Ativas (Push in-app)
+            const batch = writeBatch(db);
+            let notificationCount = 0;
+
+            gameRosterIds.forEach(playerId => {
+                const player = allPlayers.find(p => p.id === playerId);
+                // Verifica se o jogador tem um Usuário vinculado (userId)
+                if (player && player.userId) {
+                    const notifRef = doc(collection(db, "notifications"));
+                    batch.set(notifRef, {
+                        targetUserId: player.userId,
+                        type: 'pending_review',
+                        title: 'Partida Finalizada!',
+                        message: `Avalie seus companheiros no jogo ${liveGame.timeA_nome || 'ANCB'} vs ${liveGame.timeB_nome || liveGame.adversario || 'ADV'}.`,
+                        gameId: game.id,
+                        eventId: eventId,
+                        read: false,
+                        timestamp: serverTimestamp()
+                    });
+                    notificationCount++;
+                }
+            });
+
+            if (notificationCount > 0) {
+                await batch.commit();
+                alert(`${notificationCount} notificações enviadas para os atletas.`);
+            }
+
             onBack();
         } catch (e) {
             console.error(e);
             alert("Erro ao finalizar partida.");
+        } finally {
+            setFinishing(false);
         }
     };
 
@@ -169,12 +223,36 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
         );
     };
 
+    // LOCK SCREEN IF FINALIZED AND NOT IN EDIT MODE
+    if (liveGame.status === 'finalizado' && !isEditable) {
+        return (
+            <div className="fixed inset-0 bg-slate-900 z-[200] flex flex-col items-center justify-center text-white font-sans p-6 text-center animate-fadeIn">
+                <LucideLock className="text-gray-500 mb-4" size={64} />
+                <h2 className="text-2xl font-bold mb-2">Partida Finalizada</h2>
+                <p className="text-gray-400 mb-6">Esta partida já foi encerrada e contabilizada. O painel de pontuação está bloqueado.</p>
+                <div className="flex gap-3">
+                    <Button variant="secondary" onClick={onBack} className="!border-gray-600 !text-gray-300 hover:!bg-gray-800">
+                        Voltar
+                    </Button>
+                </div>
+                <p className="mt-8 text-xs text-gray-600">Administradores podem corrigir a súmula através do botão "Editar" no Painel Administrativo.</p>
+            </div>
+        );
+    }
+
     return (
         <div className="fixed inset-0 bg-slate-900 z-[200] flex flex-col text-white font-sans">
             {/* 1. HEADER */}
-            <div className="h-14 px-4 flex items-center justify-between border-b border-slate-800 bg-slate-900 z-20">
+            <div className={`h-14 px-4 flex items-center justify-between border-b border-slate-800 z-20 ${isEditable ? 'bg-orange-900/20 border-orange-800' : 'bg-slate-900'}`}>
                 <Button variant="secondary" size="sm" onClick={onBack} className="!text-gray-400 !border-gray-700 hover:!bg-slate-800 hover:!text-white"><LucideArrowLeft size={18} /></Button>
-                {isAdmin && <Button size="sm" onClick={handleFinishGame} className="bg-green-600 hover:bg-green-500 text-white border-none shadow-green-900/20 shadow-lg"><LucideCheckCircle2 size={16} /> Fim</Button>}
+                
+                {isEditable && <span className="text-xs font-bold text-orange-500 uppercase flex items-center gap-1"><LucideEdit size={14}/> Modo de Edição</span>}
+                
+                {isAdmin && !isEditable && (
+                    <Button size="sm" onClick={handleFinishGame} disabled={finishing} className="bg-green-600 hover:bg-green-500 text-white border-none shadow-green-900/20 shadow-lg">
+                        {finishing ? <LucideSend className="animate-spin" size={16} /> : <><LucideCheckCircle2 size={16} /> Fim</>}
+                    </Button>
+                )}
             </div>
 
             {/* 2. SCOREBOARD */}

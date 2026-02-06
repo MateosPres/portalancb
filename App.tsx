@@ -54,6 +54,7 @@ const App: React.FC = () => {
     // Game Panel State
     const [panelGame, setPanelGame] = useState<Jogo | null>(null);
     const [panelEventId, setPanelEventId] = useState<string | null>(null);
+    const [panelIsEditable, setPanelIsEditable] = useState(false); // New state to control edit mode
 
     // --- NOTIFICATIONS STATE ---
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -110,113 +111,115 @@ const App: React.FC = () => {
         });
     }, [userProfile?.linkedPlayerId]);
 
-    // 2. Monitoramento de Fim de Jogo (Avaliações)
+    // 2. Monitoramento de Notificações Diretas (Nova Coleção 'notifications')
+    // Substitui a lógica complexa de inferência por uma escuta direta
     useEffect(() => {
-        if (!userProfile?.linkedPlayerId) return;
-        const myPlayerId = userProfile.linkedPlayerId;
+        if (!user) return;
         
-        // Listener em Tempo Real para QUALQUER jogo que mude para 'finalizado'
-        const q = query(collectionGroup(db, "jogos"), where("status", "==", "finalizado"));
+        const q = query(
+            collection(db, "notifications"), 
+            where("targetUserId", "==", user.uid),
+            orderBy("timestamp", "desc") // Requer índice, mas funciona melhor
+        );
 
-        // Added type cast for snapshot to fix Property 'docChanges' error
-        return onSnapshot(q, (snapshot: any) => {
-            const notifiedFinishes = JSON.parse(localStorage.getItem('ancb_notified_finishes') || '[]');
-            
-            snapshot.docChanges().forEach(async (change: any) => {
-                // Modified capta quando o Admin clica em "Finalizar"
-                if (change.type === "modified" || change.type === "added") {
-                    const gameData = change.doc.data() as Jogo;
-                    const gameId = change.doc.id;
+        // Se der erro de índice no console, a query sem orderBy funciona, mas a ordenação deve ser feita no cliente
+        // const qFallback = query(collection(db, "notifications"), where("targetUserId", "==", user.uid));
 
-                    // Só processa se ainda não foi notificado nesta sessão/dispositivo
-                    if (!notifiedFinishes.includes(gameId)) {
-                        
-                        let shouldNotify = false;
-                        let eventId = "";
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const newNotifs: NotificationItem[] = [];
+            const notifiedIds = JSON.parse(localStorage.getItem('ancb_notified_ids') || '[]');
 
-                        // Verifica se o jogador estava no jogo diretamente
-                        if (gameData.jogadoresEscalados?.includes(myPlayerId)) {
-                            shouldNotify = true;
-                        } 
-                        
-                        // Se não achou no jogo, verifica no evento pai (fallback importante para torneios internos)
-                        if (!shouldNotify) {
-                            try {
-                                if (change.doc.ref.parent.parent) {
-                                    eventId = change.doc.ref.parent.parent.id;
-                                    const eventDoc = await getDoc(change.doc.ref.parent.parent);
-                                    if (eventDoc.exists()) {
-                                        const eventData = eventDoc.data() as Evento;
-                                        if (eventData.jogadoresEscalados?.includes(myPlayerId)) {
-                                            shouldNotify = true;
-                                        }
-                                    }
-                                }
-                            } catch (e) {
-                                console.error("Erro ao buscar evento pai para notificação:", e);
-                            }
-                        } else {
-                            // Se achou no jogo, tenta pegar o eventId mesmo assim
-                            eventId = change.doc.ref.parent.parent?.id;
-                        }
-
-                        if (shouldNotify) {
-                            setForegroundNotification({
-                                title: "Partida Finalizada!",
-                                body: "Participe do Quiz de Scouting e avalie os atributos dos seus companheiros.",
-                                eventId: eventId,
-                                type: 'review'
-                            });
-                            
-                            setTimeout(() => setForegroundNotification(null), 12000);
-                            notifiedFinishes.push(gameId);
-                            localStorage.setItem('ancb_notified_finishes', JSON.stringify(notifiedFinishes));
-                            checkStaticNotifications();
-                        }
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === "added") {
+                    const data = change.doc.data();
+                    const notifId = change.doc.id;
+                    
+                    // Show Toast for fresh notifications (not in local storage)
+                    if (!notifiedIds.includes(notifId)) {
+                        setForegroundNotification({
+                            title: data.title || "Nova Notificação",
+                            body: data.message || "Você tem um novo alerta.",
+                            eventId: data.eventId,
+                            type: data.type === 'pending_review' ? 'review' : 'alert'
+                        });
+                        setTimeout(() => setForegroundNotification(null), 12000);
+                        notifiedIds.push(notifId);
+                        localStorage.setItem('ancb_notified_ids', JSON.stringify(notifiedIds));
                     }
                 }
             });
+
+            // Rebuild notification list
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                newNotifs.push({
+                    id: doc.id,
+                    type: data.type,
+                    title: data.title,
+                    message: data.message,
+                    data: { gameId: data.gameId, eventId: data.eventId },
+                    read: data.read || false,
+                    timestamp: data.timestamp
+                });
+            });
+
+            // Combine with inference-based notifications (Roster Alerts)
+            // Note: Roster alerts are generated by `checkStaticNotifications` and stored in state.
+            // Here we merge, prioritizing direct notifications.
+            setNotifications(prev => {
+                const rosterNotifs = prev.filter(n => n.type === 'roster_alert');
+                return [...newNotifs, ...rosterNotifs];
+            });
+
+        }, (error) => {
+            console.warn("Notification listener error (likely missing index):", error);
+            // Fallback: Just reload static notifications if real-time fails
+            checkStaticNotifications();
         });
-    }, [userProfile?.linkedPlayerId]);
+
+        return () => unsubscribe();
+    }, [user]);
 
     const checkStaticNotifications = async () => {
         if (!userProfile?.linkedPlayerId) return;
         const myPlayerId = userProfile.linkedPlayerId!;
-        const newNotifications: NotificationItem[] = [];
+        const inferredNotifications: NotificationItem[] = [];
 
         try {
+            // 1. Roster Alerts (Inferência Local)
             const rosterQ = query(collection(db, "eventos"), where("status", "in", ["proximo", "andamento"]));
             const rosterSnap = await getDocs(rosterQ);
             rosterSnap.forEach(doc => {
                 const eventData = doc.data() as Evento;
                 if (eventData.jogadoresEscalados?.includes(myPlayerId)) {
-                    newNotifications.push({ id: `roster-${doc.id}`, type: 'roster_alert', title: 'Convocação!', message: `Você está escalado para o evento: ${eventData.nome}`, data: { eventId: doc.id }, read: false, timestamp: new Date() });
+                    inferredNotifications.push({ 
+                        id: `roster-${doc.id}`, 
+                        type: 'roster_alert', 
+                        title: 'Convocação!', 
+                        message: `Você está escalado para o evento: ${eventData.nome}`, 
+                        data: { eventId: doc.id }, 
+                        read: false, 
+                        timestamp: new Date() 
+                    });
                 }
             });
 
-            const eventsQ = query(collection(db, "eventos"), where("status", "==", "finalizado")); 
-            const eventsSnap = await getDocs(eventsQ);
-            for (const eventDoc of eventsSnap.docs) {
-                const eventData = eventDoc.data() as Evento;
-                const gamesSnap = await getDocs(collection(db, "eventos", eventDoc.id, "jogos"));
-                for (const gameDoc of gamesSnap.docs) {
-                    const gameData = gameDoc.data() as Jogo;
-                    
-                    // Verifica elegibilidade: Está no jogo OU está no evento
-                    const inGame = gameData.jogadoresEscalados?.includes(myPlayerId);
-                    const inEvent = eventData.jogadoresEscalados?.includes(myPlayerId);
+            // Note: We removed the complex "Game Finished" inference here because
+            // PainelJogoView now creates explicit notification documents which are handled 
+            // by the useEffect listener above. This prevents duplicates and logic errors.
 
-                    if (gameData.status === 'finalizado' && (inGame || inEvent)) {
-                        const reviewQ = query(collection(db, "avaliacoes_gamified"), where("gameId", "==", gameDoc.id), where("reviewerId", "==", myPlayerId));
-                        const reviewSnap = await getDocs(reviewQ);
-                        if (reviewSnap.empty) {
-                            newNotifications.push({ id: `review-${gameDoc.id}`, type: 'pending_review', title: 'Scouting Pendente', message: `Vote nos atributos dos seus companheiros no Quiz.`, data: { gameId: gameDoc.id, eventId: eventDoc.id }, read: false, timestamp: new Date() });
-                        }
-                    }
-                }
-            }
             const readIds = JSON.parse(localStorage.getItem('ancb_read_notifications') || '[]');
-            setNotifications(newNotifications.map(n => ({ ...n, read: readIds.includes(n.id) })).reverse());
+            
+            setNotifications(prev => {
+                // Keep explicit notifications (from DB), replace inferred ones
+                const dbNotifs = prev.filter(n => n.type !== 'roster_alert');
+                const uniqueInferred = inferredNotifications.map(n => ({
+                    ...n,
+                    read: readIds.includes(n.id)
+                }));
+                return [...dbNotifs, ...uniqueInferred];
+            });
+
         } catch (error) { console.error(error); }
     };
 
@@ -261,17 +264,37 @@ const App: React.FC = () => {
 
     const handleNotificationClick = async (notif: NotificationItem) => {
         setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+        
+        // Mark as read in DB if it's a DB notification
+        if (!notif.id.startsWith('roster-') && !notif.id.startsWith('review-')) {
+             try {
+                 await updateDoc(doc(db, "notifications", notif.id), { read: true });
+             } catch(e) { console.warn("Could not mark read in DB"); }
+        }
+
         const readIds = JSON.parse(localStorage.getItem('ancb_read_notifications') || '[]');
         if (!readIds.includes(notif.id)) { readIds.push(notif.id); localStorage.setItem('ancb_read_notifications', JSON.stringify(readIds)); }
+        
         if (notif.type === 'pending_review') { await handleOpenReviewQuiz(notif.data.gameId, notif.data.eventId); setShowNotifications(false); }
         else if (notif.type === 'roster_alert') { setCurrentView('eventos'); setShowNotifications(false); }
+    };
+
+    // Helper for opening panel (used by EventosView and AdminView)
+    const handleOpenGamePanel = (game: Jogo, eventId: string, isEditable: boolean = false) => {
+        setPanelGame(game);
+        setPanelEventId(eventId);
+        setPanelIsEditable(isEditable);
+        setCurrentView('painel-jogo');
     };
 
     const renderHeader = () => (
         <header className="sticky top-0 z-50 bg-[#062553] text-white py-3 border-b border-white/10 shadow-lg">
             <div className="container mx-auto px-4 flex justify-between items-center">
                 <div className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setCurrentView('home')}>
-                    <img src="https://i.imgur.com/4TxBrHs.png" alt="ANCB Logo" className="h-10 md:h-12 w-auto" />
+                    <div className="relative">
+                        <div className="absolute inset-0 bg-blue-400 rounded-full blur-xl opacity-20 animate-pulse"></div>
+                        <img src="https://i.imgur.com/4TxBrHs.png" alt="ANCB Logo" className="h-10 md:h-12 w-auto relative z-10" />
+                    </div>
                     <h1 className="text-lg md:text-2xl font-bold tracking-wide">Portal ANCB-MT</h1>
                 </div>
                 <div className="flex items-center gap-2 md:gap-3">
@@ -359,11 +382,11 @@ const App: React.FC = () => {
                     <Feed />
                 </div>
             );
-            case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onOpenGamePanel={(g, eid) => { setPanelGame(g); setPanelEventId(eid); setCurrentView('painel-jogo'); }} onOpenReview={handleOpenReviewQuiz} />;
+            case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onOpenGamePanel={(g, eid) => handleOpenGamePanel(g, eid, false)} onOpenReview={handleOpenReviewQuiz} />;
             case 'jogadores': return <JogadoresView onBack={() => setCurrentView('home')} userProfile={userProfile} />;
             case 'ranking': return <RankingView onBack={() => setCurrentView('home')} />;
-            case 'admin': return <AdminView onBack={() => setCurrentView('home')} onOpenGamePanel={(g, eid) => { setPanelGame(g); setPanelEventId(eid); setCurrentView('painel-jogo'); }} />;
-            case 'painel-jogo': return panelGame && panelEventId ? <PainelJogoView game={panelGame} eventId={panelEventId} onBack={() => setCurrentView('eventos')} userProfile={userProfile} /> : null;
+            case 'admin': return <AdminView onBack={() => setCurrentView('home')} onOpenGamePanel={(g, eid, isEditable) => handleOpenGamePanel(g, eid, isEditable)} />;
+            case 'painel-jogo': return panelGame && panelEventId ? <PainelJogoView game={panelGame} eventId={panelEventId} onBack={() => setCurrentView('eventos')} userProfile={userProfile} isEditable={panelIsEditable} /> : null;
             case 'profile': return userProfile ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} onOpenReview={handleOpenReviewQuiz} /> : null;
             default: return <div>404</div>;
         }
