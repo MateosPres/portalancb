@@ -4,7 +4,7 @@ import { db, auth } from '../services/firebase';
 import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player, Time, Cesta, UserProfile, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy } from 'lucide-react';
+import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 interface AdminViewProps {
@@ -13,13 +13,13 @@ interface AdminViewProps {
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel }) => {
-    // Existing State
+    // --- STATE COMPLETO RESTAURADO ---
     const [adminTab, setAdminTab] = useState<'general' | 'users'>('general');
     const [events, setEvents] = useState<Evento[]>([]);
     const [selectedEvent, setSelectedEvent] = useState<Evento | null>(null);
     const [eventGames, setEventGames] = useState<Jogo[]>([]);
     
-    // Existing Modals
+    // Forms
     const [showAddEvent, setShowAddEvent] = useState(false);
     const [showAddGame, setShowAddGame] = useState(false);
     const [newEventName, setNewEventName] = useState('');
@@ -29,7 +29,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     const [newGameTimeA, setNewGameTimeA] = useState('');
     const [newGameTimeB, setNewGameTimeB] = useState('');
 
-    // Feed Post State
+    // Feed
     const [showAddPost, setShowAddPost] = useState(false);
     const [postType, setPostType] = useState<'noticia' | 'placar' | 'aviso'>('noticia');
     const [postTitle, setPostTitle] = useState('');
@@ -42,6 +42,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
 
+    // Lists
     const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
     const [claimRequests, setClaimRequests] = useState<ClaimRequest[]>([]);
     const [photoRequests, setPhotoRequests] = useState<PhotoRequest[]>([]);
@@ -53,14 +54,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     const [showReviewsModal, setShowReviewsModal] = useState(false);
     const [isRecovering, setIsRecovering] = useState(false);
     const [recoveringStatus, setRecoveringStatus] = useState('');
+    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
 
-    // User Management State
+    // Users
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [userSearch, setUserSearch] = useState('');
     const [showUserEditModal, setShowUserEditModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
     const [linkPlayerId, setLinkPlayerId] = useState('');
 
+    // --- EFFECTS ---
     useEffect(() => {
         const qEvents = query(collection(db, "eventos"), orderBy("data", "desc"));
         const unsubEvents = onSnapshot(qEvents, (snapshot: any) => {
@@ -115,6 +118,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
         });
         return () => unsubscribe();
     }, [selectedEvent]);
+
+    // --- ACTIONS ---
 
     const loadReviews = async () => {
         setLoadingReviews(true);
@@ -197,7 +202,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
 
     // --- RECALCULAR HISTORICO DE BADGES (Gamification Retroativo) ---
     const handleRecalculateHistory = async () => {
-        if (!window.confirm("Isso irá analisar TODO o histórico de jogos finalizados, calcular estatísticas e re-atribuir medalhas (Evento e Temporada) para todos os jogadores. Isso pode levar alguns segundos. Continuar?")) return;
+        const year = selectedYear;
+        const yearNum = parseInt(year);
+
+        if (!window.confirm(`Isso irá analisar TODO o histórico de jogos finalizados de ${year}, calcular estatísticas e re-atribuir medalhas (Evento e Temporada) para todos os jogadores. Continuar?`)) return;
         
         setIsRecovering(true);
         setRecoveringStatus("Iniciando varredura...");
@@ -207,14 +215,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
             const playersSnapshot = await getDocs(collection(db, "jogadores"));
             const playersMap: Record<string, Player & { badges: Badge[] }> = {};
             playersSnapshot.forEach(doc => {
-                const p = { id: doc.id, ...doc.data(), badges: [] } as Player; // Reset local badges for clean calc
+                const p = { id: doc.id, ...doc.data(), badges: [] } as Player; // Reset local badges for clean calc (or filter existing ones)
+                // Filter out existing badges from THIS year to avoid duplicates if we append
+                // But generally resetting and recalculating is cleaner if we assume this function is the source of truth for computed badges
+                if (p.badges) {
+                    p.badges = p.badges.filter(b => !b.data.includes(year)); 
+                }
                 playersMap[doc.id] = p as any;
             });
 
             const eventsSnapshot = await getDocs(query(collection(db, "eventos"), where("status", "==", "finalizado")));
             
             // Stats Containers
-            // Season stats: seasonStats[year][playerId] = { points, threePoints, games }
             const seasonStats: Record<string, Record<string, { points: number, threePoints: number }>> = {};
 
             // 2. Iterate Events
@@ -222,7 +234,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 const event = evDoc.data() as Evento;
                 const eventId = evDoc.id;
                 const eventDate = event.data || new Date().toISOString();
-                const eventYear = eventDate.split('-')[0];
+                
+                // Only process events from selected year
+                if (!eventDate.includes(year)) continue;
 
                 setRecoveringStatus(`Processando: ${event.nome}`);
 
@@ -247,25 +261,26 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                             if (!eventPlayerStats[pid]) eventPlayerStats[pid] = { points: 0, threePoints: 0 };
                             
                             // Initialize season stats
-                            if (!seasonStats[eventYear]) seasonStats[eventYear] = {};
-                            if (!seasonStats[eventYear][pid]) seasonStats[eventYear][pid] = { points: 0, threePoints: 0 };
+                            if (!seasonStats[year]) seasonStats[year] = {};
+                            if (!seasonStats[year][pid]) seasonStats[year][pid] = { points: 0, threePoints: 0 };
 
                             // Add to Event Total
                             eventPlayerStats[pid].points += pts;
-                            if (pts === 3 || (event.modalidade === '3x3' && pts === 2)) {
+                            const isLong = (event.modalidade === '3x3' && pts === 2) || (event.modalidade !== '3x3' && pts === 3);
+                            if (isLong) {
                                 eventPlayerStats[pid].threePoints += 1;
                             }
 
                             // Add to Season Total
-                            seasonStats[eventYear][pid].points += pts;
-                            if (pts === 3 || (event.modalidade === '3x3' && pts === 2)) {
-                                seasonStats[eventYear][pid].threePoints += 1;
+                            seasonStats[year][pid].points += pts;
+                            if (isLong) {
+                                seasonStats[year][pid].threePoints += 1;
                             }
                         }
                     });
                 }
 
-                // 3. Award Event Badges (Agora com o nome do evento)
+                // 3. Award Event Badges
                 // Top Scorers
                 const sortedByPoints = Object.entries(eventPlayerStats).sort(([,a], [,b]) => b.points - a.points).filter(([,s]) => s.points > 0);
                 sortedByPoints.slice(0, 3).forEach(([pid, s], idx) => {
@@ -311,17 +326,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
 
             setRecoveringStatus("Calculando Temporadas...");
 
-            // 4. Award Season Badges
-            Object.keys(seasonStats).forEach(year => {
+            // 4. Award Season Badges (CORRECTED LOGIC: 2nd = Silver/Rara, 3rd = Bronze/Comum)
+            if (seasonStats[year]) {
                 const yearData = seasonStats[year];
-                const yearNum = parseInt(year);
                 
                 // --- CATEGORY: ABERTA (Open) ---
                 // MVP (Most Points in Season)
                 const sortedMvp = Object.entries(yearData).sort(([,a], [,b]) => b.points - a.points);
                 sortedMvp.slice(0, 3).forEach(([pid, s], idx) => {
                     if (playersMap[pid] && s.points > 0) {
-                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'epica' : 'rara';
+                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; // CORRECTION HERE
                         const emojis = ['🏆', '⚔️', '🛡️'];
                         const titles = [`MVP da Temporada ${year}`, `Vice-MVP ${year}`, `3º Melhor ${year}`];
                         
@@ -341,7 +355,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 const sortedShooter = Object.entries(yearData).sort(([,a], [,b]) => b.threePoints - a.threePoints);
                 sortedShooter.slice(0, 3).forEach(([pid, s], idx) => {
                     if (playersMap[pid] && s.threePoints > 0) {
-                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'epica' : 'rara';
+                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; // CORRECTION HERE
                         const emojis = ['🎯', '🏹', '☄️'];
                         const titles = [`Atirador de Elite ${year}`, `Mão de Prata ${year}`, `Sniper ${year}`];
                         
@@ -369,7 +383,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 const sortedMvpJuv = juvenilCandidates.sort(([,a], [,b]) => b.points - a.points);
                 sortedMvpJuv.slice(0, 3).forEach(([pid, s], idx) => {
                      if (playersMap[pid] && s.points > 0) {
-                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'epica' : 'rara';
+                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; // CORRECTION HERE
                         const emojis = ['🏆', '🥈', '🥉'];
                         const titles = [`MVP Juvenil ${year}`, `Vice-MVP Juvenil ${year}`, `Bronze Juvenil ${year}`];
                         
@@ -389,7 +403,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 const sortedShooterJuv = juvenilCandidates.sort(([,a], [,b]) => b.threePoints - a.threePoints);
                 sortedShooterJuv.slice(0, 3).forEach(([pid, s], idx) => {
                      if (playersMap[pid] && s.threePoints > 0) {
-                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'epica' : 'rara';
+                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; // CORRECTION HERE
                         const emojis = ['🎯', '🏹', '☄️'];
                         const titles = [`Atirador Juvenil ${year}`, `Mão de Prata Juv. ${year}`, `Sniper Juvenil ${year}`];
                         
@@ -404,7 +418,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                         });
                     }
                 });
-            });
+            }
 
             setRecoveringStatus("Salvando dados...");
 
@@ -414,27 +428,24 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
             let opCount = 0;
 
             Object.values(playersMap).forEach(player => {
-                // Only update if badges were added
-                if (player.badges && player.badges.length > 0) {
-                    const ref = doc(db, "jogadores", player.id);
-                    // Use a strategy to merge existing badges that are NOT from our deterministic logic?
-                    // Ideally, we overwrite 'badges' with this clean calculated list to remove duplicates/old bad logic
-                    // But we must preserve 'stats_tags' and other fields.
-                    currentBatch.update(ref, { badges: player.badges });
-                    opCount++;
+                // Only update if badges were added (which they always are in this logic, even if empty array init)
+                // But strictly we only want to write if there are changes. 
+                // For simplicity, we write all affected players.
+                const ref = doc(db, "jogadores", player.id);
+                currentBatch.update(ref, { badges: player.badges });
+                opCount++;
 
-                    if (opCount >= 450) {
-                        batchArray.push(currentBatch);
-                        currentBatch = writeBatch(db);
-                        opCount = 0;
-                    }
+                if (opCount >= 450) {
+                    batchArray.push(currentBatch);
+                    currentBatch = writeBatch(db);
+                    opCount = 0;
                 }
             });
             if (opCount > 0) batchArray.push(currentBatch);
 
             await Promise.all(batchArray.map(b => b.commit()));
 
-            alert("Histórico recalculado com sucesso! Conquistas retroativas atribuídas (Aberta e Juvenil).");
+            alert("Histórico recalculado com sucesso! Conquistas retroativas atribuídas.");
 
         } catch (error) {
             console.error(error);
@@ -448,19 +459,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     // --- USER MANAGEMENT LOGIC ---
     const filteredUsers = users.filter(u => u.nome.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()));
 
-    // Helper to find matching player
     const findMatchingPlayer = (user: UserProfile) => {
-        // Normalize strings for comparison (remove accents, lowercase)
         const normalize = (str: string) => str ? str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
         const cleanCpf = (str: string) => str ? str.replace(/\D/g, "") : "";
 
         return activePlayers.find(player => {
-            // 1. CPF Match (Strongest)
             // @ts-ignore
             if (user.cpf && player.cpf && cleanCpf(user.cpf) === cleanCpf(player.cpf) && cleanCpf(user.cpf).length > 5) {
                 return true;
             }
-            // 2. Name Match (Medium)
             if (normalize(user.nome) === normalize(player.nome)) {
                 return true;
             }
@@ -473,8 +480,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
         
         try {
             const batch = writeBatch(db);
-            
-            // 1. Create Player Document
             const newPlayerRef = doc(collection(db, "jogadores"));
             const playerData: any = {
                 nome: user.nome,
@@ -494,33 +499,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 status: 'active'
             };
             batch.set(newPlayerRef, playerData);
-
-            // 2. Update User Document
             const userRef = doc(db, "usuarios", user.uid);
-            batch.update(userRef, { 
-                status: 'active',
-                linkedPlayerId: newPlayerRef.id
-            });
-
+            batch.update(userRef, { status: 'active', linkedPlayerId: newPlayerRef.id });
             await batch.commit();
             alert("Usuário aprovado e perfil de jogador criado com sucesso!");
         } catch (error) {
-            console.error("Error approving user:", error);
             alert("Erro ao aprovar usuário.");
         }
     };
 
     const handleAutoLinkUser = async (user: UserProfile, targetPlayerId: string) => {
         if (!window.confirm(`Vincular ${user.nome} ao atleta existente?`)) return;
-        
         try {
             const batch = writeBatch(db);
             const userRef = doc(db, "usuarios", user.uid);
             const playerRef = doc(db, "jogadores", targetPlayerId);
-
             batch.update(userRef, { linkedPlayerId: targetPlayerId, status: 'active' });
             batch.update(playerRef, { userId: user.uid, status: 'active' });
-
             await batch.commit();
             alert("Vínculo automático realizado com sucesso!");
         } catch (error) {
@@ -534,10 +529,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
             const batch = writeBatch(db);
             const userRef = doc(db, "usuarios", selectedUser.uid);
             const playerRef = doc(db, "jogadores", linkPlayerId);
-
             batch.update(userRef, { linkedPlayerId: linkPlayerId, status: 'active' });
             batch.update(playerRef, { userId: selectedUser.uid, status: 'active' });
-
             await batch.commit();
             setShowUserEditModal(false);
             alert("Vínculo realizado!");
@@ -548,27 +541,20 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
 
     const handleDeleteUser = async (user: UserProfile) => {
         if (!window.confirm(`ATENÇÃO: Você está prestes a excluir o usuário ${user.nome}.\nEsta ação não pode ser desfeita.`)) return;
-
         try {
             const batch = writeBatch(db);
-            
-            // 1. Delete User Document
             const userRef = doc(db, "usuarios", user.uid);
             batch.delete(userRef);
-
-            // 2. Unlink Player Document (if exists)
             if (user.linkedPlayerId) {
                 const playerRef = doc(db, "jogadores", user.linkedPlayerId);
-                const playerSnap = await getDoc(playerRef); // Check if document exists before adding to batch
+                const playerSnap = await getDoc(playerRef);
                 if (playerSnap.exists()) {
                     batch.update(playerRef, { userId: null });
                 }
             }
-
             await batch.commit();
             alert("Usuário excluído com sucesso.");
         } catch (error) {
-            console.error("Error deleting user:", error);
             alert("Erro ao excluir usuário.");
         }
     };
@@ -662,7 +648,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                                                     {user.status !== 'active' && !user.linkedPlayerId && (
                                                         suggestedPlayer ? (
                                                             <Button size="sm" onClick={() => handleAutoLinkUser(user, suggestedPlayer.id)} className="!py-1 !px-2 !bg-orange-500 hover:!bg-orange-600 text-xs" title={`Vincular a ${suggestedPlayer.nome}`}>
-                                                                <LucideLink size={14} /> Vincular a {suggestedPlayer.apelido || suggestedPlayer.nome.split(' ')[0]}
+                                                                <LucideLink size={14} /> Vincular
                                                             </Button>
                                                         ) : (
                                                             <Button size="sm" onClick={() => handleApproveUser(user)} className="!py-1 !px-2 !bg-green-600 hover:!bg-green-700 text-xs" title="Aprovar e Criar Atleta">
@@ -699,7 +685,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                     <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-orange-200 dark:border-orange-900/50 flex flex-col gap-3">
                         <div className="flex items-center gap-2 border-b pb-2 border-orange-100 dark:border-orange-900/30">
                             <LucideTrophy size={18} className="text-orange-600 dark:text-orange-400" />
-                            <h3 className="font-bold text-gray-700 dark:text-gray-300">Gamification & Badges</h3>
+                            <h3 className="font-bold text-gray-700 dark:text-gray-300">Gestão de Temporada</h3>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <LucideCalendar size={16} className="text-gray-400"/>
+                            <select 
+                                value={selectedYear} 
+                                onChange={(e) => setSelectedYear(e.target.value)}
+                                className="bg-transparent text-sm font-bold text-gray-700 dark:text-white focus:outline-none cursor-pointer flex-1"
+                            >
+                                <option value="2024" className="text-black">2024</option>
+                                <option value="2025" className="text-black">2025</option>
+                                <option value="2026" className="text-black">2026</option>
+                            </select>
                         </div>
                         <p className="text-xs text-gray-500">Recalcular medalhas retroativas por Evento e Temporada.</p>
                         <Button size="sm" onClick={handleRecalculateHistory} className="w-full !bg-gradient-to-r from-orange-500 to-red-500 text-white">
@@ -867,6 +865,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 </div>
             </div>
             )}
+
+            {/* --- MODALS --- */}
 
             <Modal isOpen={showUserEditModal} onClose={() => setShowUserEditModal(false)} title="Editar Usuário">
                 <div className="space-y-4">
