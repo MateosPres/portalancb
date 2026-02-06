@@ -1,10 +1,11 @@
 
+
 import React, { useState, useEffect } from 'react';
 import firebase, { db, auth } from '../services/firebase';
 import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player, Time, Cesta, UserProfile, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing } from 'lucide-react';
+import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing, LucideBellOff, LucideSend } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 interface AdminViewProps {
@@ -131,6 +132,30 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
             }
         } else {
             alert("Permissão negada. Verifique as configurações do navegador/sistema.");
+        }
+    };
+
+    const handleSendTestPush = async (targetUser: UserProfile) => {
+        if (!targetUser.fcmToken) {
+            alert("Este usuário não ativou notificações (Sem Token FCM).");
+            return;
+        }
+        
+        if (!window.confirm(`Enviar notificação push de teste para ${targetUser.nome}?`)) return;
+
+        try {
+            await db.collection("notifications").add({
+                targetUserId: targetUser.uid,
+                title: "🔔 Teste do Admin",
+                message: `Olá ${targetUser.nome}, esta é uma notificação de teste enviada pelo painel administrativo.`,
+                type: "alert",
+                read: false,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            alert("Comando de notificação enviado! Se o app estiver fechado no Android, ele deve despertar em breve.");
+        } catch (error) {
+            console.error("Erro ao enviar push:", error);
+            alert("Erro ao criar notificação.");
         }
     };
 
@@ -544,7 +569,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
 
     return (
         <div className="animate-fadeIn">
-            {/* The render logic remains mostly the same, skipping details for brevity but keeping structure */}
             <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
                 <div className="flex items-center gap-3 self-start md:self-center">
                     <Button variant="secondary" size="sm" onClick={onBack} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
@@ -577,7 +601,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                     </div>
                 </div>
                 <Button size="sm" onClick={handleTestNotification} variant="secondary" className="!text-ancb-orange !border-ancb-orange hover:!bg-orange-100 w-full md:w-auto">
-                    <LucideBellRing size={16} /> Testar Notificação
+                    <LucideBellRing size={16} /> Testar Navegador
                 </Button>
             </div>
 
@@ -602,6 +626,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                                         <th className="px-4 py-3">Nome</th>
                                         <th className="px-4 py-3">Email</th>
                                         <th className="px-4 py-3">Status</th>
+                                        <th className="px-4 py-3">Push</th>
                                         <th className="px-4 py-3">Atleta Vinculado</th>
                                         <th className="px-4 py-3 text-right">Ações</th>
                                     </tr>
@@ -618,6 +643,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                                                         {user.status === 'active' ? 'Ativo' : 'Pendente'}
                                                     </span>
                                                 </td>
+                                                <td className="px-4 py-3">
+                                                    {user.fcmToken ? (
+                                                        <div title="Notificações Ativas">
+                                                            <LucideBellRing size={16} className="text-green-500" />
+                                                        </div>
+                                                    ) : (
+                                                        <div title="Sem Token Push">
+                                                            <LucideBellOff size={16} className="text-gray-300" />
+                                                        </div>
+                                                    )}
+                                                </td>
                                                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
                                                     {user.linkedPlayerId ? (
                                                         <span className="text-green-600 flex items-center gap-1"><LucideCheck size={12}/> {activePlayers.find(p => p.id === user.linkedPlayerId)?.nome || 'ID: ' + user.linkedPlayerId}</span>
@@ -632,6 +668,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-3 text-right flex justify-end gap-2">
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="secondary" 
+                                                        onClick={() => handleSendTestPush(user)}
+                                                        className="!py-1 !px-2 text-xs !border-ancb-blue !text-ancb-blue hover:!bg-blue-50"
+                                                        title="Enviar Push de Teste"
+                                                    >
+                                                        <LucideSend size={14} />
+                                                    </Button>
                                                     {user.status !== 'active' && !user.linkedPlayerId && (
                                                         suggestedPlayer ? (
                                                             <Button size="sm" onClick={() => handleAutoLinkUser(user, suggestedPlayer.id)} className="!py-1 !px-2 !bg-orange-500 hover:!bg-orange-600 text-xs" title={`Vincular a ${suggestedPlayer.nome}`}>
@@ -699,8 +744,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                             </Button>
                         </div>
                     </div>
-                    {/* ... Rest of existing general view ... */}
-                    {/* Kept existing structure, just ensuring db calls are updated */}
+                    
                     <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                         <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 border-b pb-2 dark:border-gray-600">Eventos</h3>
                         <div className="space-y-2 max-h-[400px] overflow-y-auto">
@@ -723,7 +767,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 </div>
 
                 <div className="lg:col-span-2">
-                    {/* ... Games list ... */}
                     {selectedEvent ? (
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                             <div className="flex justify-between items-center mb-6 border-b border-gray-100 dark:border-gray-700 pb-4">
