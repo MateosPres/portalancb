@@ -15,6 +15,9 @@ exports.sendRosterNotification = functions.firestore
         const newData = change.after.data();
         const oldData = change.before.data();
 
+        // Segurança contra exclusão de documentos
+        if (!newData || !oldData) return null;
+
         const newRoster = newData.jogadoresEscalados || [];
         const oldRoster = oldData.jogadoresEscalados || [];
 
@@ -117,7 +120,7 @@ async function dbSearchUserByPlayerId(playerId, eventName, eventId) {
             data: {
                 type: "roster_alert",
                 eventId: eventId,
-                click_action: "FLUTTER_NOTIFICATION_CLICK" // Padrão para web/pwa
+                click_action: "FLUTTER_NOTIFICATION_CLICK" 
             },
             token: fcmToken
         };
