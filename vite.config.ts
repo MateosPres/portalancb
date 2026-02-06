@@ -1,3 +1,4 @@
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -9,6 +10,12 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate', // Força a atualização do Service Worker
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      filename: 'manifest.json', // Garante que o arquivo gerado tenha o nome que o index.html espera
+      workbox: {
+          // Importa o script do Firebase dentro do Service Worker principal do PWA
+          // Isso permite que o PWA gerencie o cache E as notificações background
+          importScripts: ['firebase-messaging-sw.js']
+      },
       manifest: {
         name: 'Portal ANCB-MT',
         short_name: 'ANCB',

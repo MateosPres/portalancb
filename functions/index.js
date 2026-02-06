@@ -1,32 +1,131 @@
+
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+
+admin.initializeApp();
+
 /**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
+ * 1. MONITOR DE CONVOCAÇÕES
+ * Dispara quando um documento na coleção 'eventos' é atualizado.
+ * Verifica se novos jogadores foram adicionados ao array 'jogadoresEscalados'.
  */
+exports.sendRosterNotification = functions.firestore
+    .document('eventos/{eventId}')
+    .onUpdate(async (change, context) => {
+        const newData = change.after.data();
+        const oldData = change.before.data();
 
-const {setGlobalOptions} = require("firebase-functions");
-const {onRequest} = require("firebase-functions/https");
-const logger = require("firebase-functions/logger");
+        const newRoster = newData.jogadoresEscalados || [];
+        const oldRoster = oldData.jogadoresEscalados || [];
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+        // Filtra apenas os IDs que não estavam na lista anterior
+        const addedPlayers = newRoster.filter(playerId => !oldRoster.includes(playerId));
 
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
+        if (addedPlayers.length === 0) return null;
 
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+        console.log(`Novos jogadores escalados no evento ${newData.nome}:`, addedPlayers);
+
+        const promises = [];
+
+        // Para cada jogador adicionado, buscamos o usuário vinculado para pegar o Token FCM
+        for (const playerId of addedPlayers) {
+            const p = dbSearchUserByPlayerId(playerId, newData.nome, context.params.eventId);
+            promises.push(p);
+        }
+
+        return Promise.all(promises);
+    });
+
+/**
+ * 2. MONITOR DE NOTIFICAÇÕES DIRETAS
+ * Dispara quando um documento é criado na coleção 'notifications'.
+ * Usado para avisos de fim de jogo, avaliações pendentes, etc.
+ */
+exports.sendDirectNotification = functions.firestore
+    .document('notifications/{notificationId}')
+    .onCreate(async (snap, context) => {
+        const data = snap.data();
+        const targetUserId = data.targetUserId;
+
+        if (!targetUserId) return null;
+
+        try {
+            // Busca o token do usuário alvo
+            const userDoc = await admin.firestore().collection('usuarios').doc(targetUserId).get();
+            
+            if (!userDoc.exists) return null;
+            
+            const userData = userDoc.data();
+            const fcmToken = userData.fcmToken;
+
+            if (!fcmToken) {
+                console.log(`Usuário ${targetUserId} não tem token FCM cadastrado.`);
+                return null;
+            }
+
+            // Payload da notificação
+            const payload = {
+                notification: {
+                    title: data.title || "Portal ANCB",
+                    body: data.message || "Você tem uma nova notificação.",
+                    // O ícone deve ser uma URL pública (HTTPS)
+                    icon: 'https://i.imgur.com/SE2jHsz.png' 
+                },
+                data: {
+                    type: data.type || "general",
+                    eventId: data.eventId || "",
+                    gameId: data.gameId || "",
+                    url: "/" // PWA abre na home e o frontend trata o resto
+                },
+                token: fcmToken
+            };
+
+            return admin.messaging().send(payload);
+
+        } catch (error) {
+            console.error("Erro ao enviar notificação direta:", error);
+            return null;
+        }
+    });
+
+// --- FUNÇÕES AUXILIARES ---
+
+async function dbSearchUserByPlayerId(playerId, eventName, eventId) {
+    try {
+        // Procura na coleção 'usuarios' quem tem o linkedPlayerId igual ao playerId escalado
+        const usersRef = admin.firestore().collection('usuarios');
+        const querySnapshot = await usersRef.where('linkedPlayerId', '==', playerId).get();
+
+        if (querySnapshot.empty) {
+            console.log(`Nenhum usuário vinculado ao jogador ${playerId}`);
+            return;
+        }
+
+        // Pode haver inconsistência de dados, mas assumimos 1 usuário por player
+        const userDoc = querySnapshot.docs[0];
+        const userData = userDoc.data();
+        const fcmToken = userData.fcmToken;
+
+        if (!fcmToken) return;
+
+        const payload = {
+            notification: {
+                title: "Você foi convocado! 🏀",
+                body: `Sua presença é aguardada no evento: ${eventName}`,
+                icon: 'https://i.imgur.com/SE2jHsz.png'
+            },
+            data: {
+                type: "roster_alert",
+                eventId: eventId,
+                click_action: "FLUTTER_NOTIFICATION_CLICK" // Padrão para web/pwa
+            },
+            token: fcmToken
+        };
+
+        await admin.messaging().send(payload);
+        console.log(`Notificação enviada para ${userData.nome}`);
+
+    } catch (error) {
+        console.error("Erro no processamento do player:", playerId, error);
+    }
+}
