@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, getDocs, doc, updateDoc, where, collectionGroup } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Player, UserProfile, Evento, Jogo, PlayerReview, Cesta, Badge } from '../types';
 import { PlayerCard } from '../components/PlayerCard';
@@ -44,31 +43,25 @@ interface MatchHistoryItem {
     scoreMyTeam: number;
     scoreOpponent: number;
     reviewed: boolean;
-    // Stats Individuais
     individualPoints: number;
     cesta1: number;
     cesta2: number;
     cesta3: number;
 }
 
-// Updated Helper to calculate Stats from Tags (5 Attributes) with New Weights
 const calculateStatsFromTags = (tags?: Record<string, number>) => {
-    // Base stats
     let stats = { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
-    
     if (!tags) return stats;
 
     const WEIGHTS: Record<string, any> = {
-        // Positivas
         'sniper': { ataque: 3 },
         'muralha': { defesa: 3 },
         'lider': { visao: 2 },
         'garcom': { visao: 2 },
         'flash': { velocidade: 1 },
         'guerreiro': { forca: 1 },
-        // Negativas
         'fominha': { visao: -1 },
-        'tijoleiro': { ataque: -2 }, // Pedreiro
+        'tijoleiro': { ataque: -2 },
         'avenida': { defesa: -2 },
         'cone': { velocidade: -3 }
     };
@@ -84,7 +77,6 @@ const calculateStatsFromTags = (tags?: Record<string, number>) => {
         }
     });
 
-    // Clamp between 20 and 99
     const clamp = (n: number) => Math.max(20, Math.min(n, 99));
     
     return {
@@ -96,7 +88,6 @@ const calculateStatsFromTags = (tags?: Record<string, number>) => {
     };
 };
 
-// Tag Metadata for UI display
 const TAG_META: Record<string, {label: string, emoji: string}> = {
     'muralha': { label: 'Muralha', emoji: '🧱' },
     'sniper': { label: 'Sniper', emoji: '🎯' },
@@ -117,15 +108,12 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
     const [activeFilter, setActiveFilter] = useState('Todos');
     
-    // Tab State for Modal - Changed default to 'info' (Scouting)
     const [activeTab, setActiveTab] = useState<'matches' | 'info'>('info');
     const [matches, setMatches] = useState<MatchHistoryItem[]>([]);
     const [loadingMatches, setLoadingMatches] = useState(false);
     
-    // Badge Details Modal State
     const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
 
-    // Admin Edit State
     const [isEditing, setIsEditing] = useState(false);
     const [editFormData, setEditFormData] = useState<Partial<Player>>({});
 
@@ -143,10 +131,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     useEffect(() => {
         const fetchPlayers = async () => {
             try {
-                const q = query(collection(db, "jogadores"), orderBy("nome"));
-                const snapshot = await getDocs(q);
-                // Filter: show active or if undefined (legacy). 
-                // Cast doc.data() as any for spreading
+                const snapshot = await db.collection("jogadores").orderBy("nome").get();
                 const allPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Player));
                 const visiblePlayers = allPlayers.filter(p => p.status === 'active' || !p.status);
                 setPlayers(visiblePlayers);
@@ -156,27 +141,20 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                 setLoading(false);
             }
         };
-
         fetchPlayers();
     }, []);
 
-    // Fetch details when tab changes
     useEffect(() => {
         if (!selectedPlayer) return;
 
         if (activeTab === 'matches') {
-            // Fetch Matches
             const fetchMatches = async () => {
                 setLoadingMatches(true);
                 const historyList: MatchHistoryItem[] = [];
-                
-                // PRE-FETCH: Get all games where player scored (Definitive Proof of Participation)
                 const scoredGamesMap = new Map<string, string | undefined>(); 
                 try {
-                    const qCestas = query(collectionGroup(db, 'cestas'), where('jogadorId', '==', selectedPlayer.id));
-                    const snapCestas = await getDocs(qCestas);
+                    const snapCestas = await db.collectionGroup('cestas').where('jogadorId', '==', selectedPlayer.id).get();
                     snapCestas.forEach(d => {
-                        // Cast d.data() as any to access custom properties
                         const data = d.data() as any;
                         let gId = data.jogoId;
                         if (!gId && d.ref.parent && d.ref.parent.parent) {
@@ -191,12 +169,11 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                 } catch (e) {}
 
                 try {
-                    const eventsQ = query(collection(db, "eventos"), where("status", "==", "finalizado"));
-                    const eventsSnap = await getDocs(eventsQ);
+                    const eventsSnap = await db.collection("eventos").where("status", "==", "finalizado").get();
                     
                     for (const eventDoc of eventsSnap.docs) {
                         const eventData = eventDoc.data() as Evento;
-                        const gamesSnap = await getDocs(collection(db, "eventos", eventDoc.id, "jogos"));
+                        const gamesSnap = await db.collection("eventos").doc(eventDoc.id).collection("jogos").get();
                         
                         for (const gameDoc of gamesSnap.docs) {
                             const gameData = gameDoc.data() as Jogo;
@@ -261,12 +238,11 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                     }
                                 };
                                 try {
-                                    const subCestas = await getDocs(collection(db, "eventos", eventDoc.id, "jogos", gameDoc.id, "cestas"));
+                                    const subCestas = await db.collection("eventos").doc(eventDoc.id).collection("jogos").doc(gameDoc.id).collection("cestas").get();
                                     subCestas.forEach(d => countCesta({id: d.id, ...(d.data() as any)} as Cesta));
                                 } catch(e) {}
                                 try {
-                                    const rootCestasQuery = query(collection(db, "cestas"), where("jogoId", "==", gameDoc.id), where("jogadorId", "==", selectedPlayer.id));
-                                    const rootCestas = await getDocs(rootCestasQuery);
+                                    const rootCestas = await db.collection("cestas").where("jogoId", "==", gameDoc.id).where("jogadorId", "==", selectedPlayer.id).get();
                                     rootCestas.forEach(d => countCesta({id: d.id, ...(d.data() as any)} as Cesta));
                                 } catch (e) {}
 
@@ -352,7 +328,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     
     const handlePlayerClick = (player: Player) => {
         setSelectedPlayer(player);
-        setActiveTab('info');  // DEFAULT TO SCOUTING TAB
+        setActiveTab('info'); 
         setIsEditing(false);
         setEditFormData({});
     };
@@ -376,7 +352,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const handleSavePlayer = async () => {
         if (!selectedPlayer) return;
         try {
-            await updateDoc(doc(db, "jogadores", selectedPlayer.id), editFormData);
+            await db.collection("jogadores").doc(selectedPlayer.id).update(editFormData);
             const updatedPlayer = { ...selectedPlayer, ...editFormData };
             setPlayers(prev => prev.map(p => p.id === updatedPlayer.id ? updatedPlayer : p));
             setSelectedPlayer(updatedPlayer);
@@ -392,7 +368,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
             case 'lendaria': return 'bg-gradient-to-r from-purple-500 to-pink-600 text-white border-purple-300';
             case 'epica': return 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white border-yellow-300';
             case 'rara': return 'bg-gradient-to-r from-gray-300 to-gray-400 text-white border-gray-200';
-            default: return 'bg-gradient-to-r from-orange-700 to-orange-800 text-white border-orange-900'; // Bronze
+            default: return 'bg-gradient-to-r from-orange-700 to-orange-800 text-white border-orange-900'; 
         }
     };
 
@@ -409,6 +385,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
 
     return (
         <div className="animate-fadeIn pb-20">
+            {/* Same JSX structure, functionality relies on the updated fetch logic above */}
             <div className="flex items-center justify-between mb-6">
                  <div className="flex items-center gap-3">
                     <Button variant="secondary" size="sm" onClick={onBack} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
@@ -429,7 +406,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                 </div>
             </div>
 
-            {/* Position Filters */}
             <div className="flex gap-2 overflow-x-auto pb-4 mb-2 custom-scrollbar">
                 {FILTERS.map(filter => (
                     <button
@@ -471,7 +447,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
             <Modal isOpen={!!selectedPlayer} onClose={() => setSelectedPlayer(null)} title="Ficha do Atleta">
                 {selectedPlayer && (
                     <div className="flex flex-col h-full">
-                        {/* HEADER - Always visible */}
                         <div className="flex flex-col items-center mb-4">
                             <div className="w-24 h-24 rounded-full border-4 border-gray-100 dark:border-gray-700 mb-2 overflow-hidden shadow-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                                 {selectedPlayer.foto ? (
@@ -486,7 +461,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                             </span>
                         </div>
 
-                        {/* TABS - SIMPLIFIED */}
                         <div className="flex border-b border-gray-100 dark:border-gray-700 mb-4 w-full">
                              <button 
                                 onClick={() => setActiveTab('info')}
@@ -502,12 +476,9 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                             </button>
                         </div>
 
-                        {/* TAB CONTENT */}
                         <div className="w-full">
                             {activeTab === 'info' && (
                                 <div className="space-y-4 animate-fadeIn">
-                                    
-                                    {/* TROPHY GALLERY (Copied from ProfileView) */}
                                     {selectedPlayer.badges && selectedPlayer.badges.length > 0 && (
                                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
                                             <div className="flex items-center justify-between mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
@@ -531,7 +502,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                         </div>
                                     )}
 
-                                    {/* RADAR CHART & BADGES (New Scouting Section) */}
                                     <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                                         <div className="flex items-center gap-2 mb-4">
                                             <LucideTrendingUp className="text-ancb-orange" size={18} />
@@ -558,7 +528,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                         )}
                                     </div>
 
-                                    {/* Basic Info (Collapsed) */}
                                     <div className="grid grid-cols-2 gap-3 w-full">
                                         <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center">
                                             <LucideCalendarDays className="text-ancb-blue dark:text-blue-400 mb-1" size={20} />
@@ -575,7 +544,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                         </div>
                                     </div>
 
-                                    {/* ADMIN ONLY: Sensitive Data & Actions */}
                                     {isAdmin && (
                                         <div className="w-full mt-2 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-xl p-4">
                                             <div className="flex justify-between items-center mb-3">
@@ -664,7 +632,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
 
                             {activeTab === 'matches' && (
                                 <div className="animate-fadeIn space-y-6">
-                                    {/* Matches List */}
                                     <div>
                                         <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 flex items-center gap-1">
                                             <LucideHistory size={14} /> Histórico de Jogos
@@ -698,7 +665,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                                                 <span className="font-bold text-xs text-gray-800 dark:text-gray-200 truncate w-1/3 text-right">{match.opponent}</span>
                                                             </div>
 
-                                                            {/* INDIVIDUAL STATS BADGE */}
                                                             <div className="flex flex-wrap gap-2 items-center justify-center border-t border-gray-100 dark:border-gray-700 pt-2">
                                                                 <div className="flex items-center gap-1 bg-ancb-blue/10 dark:bg-blue-900/30 px-2 py-1 rounded text-ancb-blue dark:text-blue-300 font-bold text-xs">
                                                                     <span>{match.individualPoints} Pts</span>
@@ -727,14 +693,11 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                     </div>
                 )}
             </Modal>
-
-            {/* BADGE DETAILS MODAL */}
             <Modal isOpen={!!selectedBadge} onClose={() => setSelectedBadge(null)} title="Detalhes da Conquista">
                 {selectedBadge && (
                     <div className="text-center p-4">
                         <div className="text-8xl mb-4 animate-bounce-slow drop-shadow-xl">{selectedBadge.emoji}</div>
                         <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 uppercase tracking-wide">{selectedBadge.nome}</h3>
-                        
                         <div className="mb-6 flex justify-center">
                             <span className={`px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
                                 selectedBadge.raridade === 'lendaria' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
@@ -747,13 +710,11 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                  selectedBadge.raridade === 'epica' ? 'Ouro' : 'Lendária'}
                             </span>
                         </div>
-
                         <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-600 mb-4">
                             <p className="text-gray-600 dark:text-gray-300 text-sm font-medium leading-relaxed">
                                 {selectedBadge.descricao}
                             </p>
                         </div>
-
                         <p className="text-xs text-gray-400 uppercase font-bold tracking-widest">
                             Conquistado em: {formatDate(selectedBadge.data)}
                         </p>

@@ -1,5 +1,5 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, orderBy, onSnapshot, getDocs, where, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Evento, Jogo, Cesta, Player, UserProfile, Time } from '../types';
 import { Card } from '../components/Card';
@@ -41,25 +41,20 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [tab, setTab] = useState<'proximos' | 'finalizados'>('proximos');
     const [allPlayers, setAllPlayers] = useState<Player[]>([]);
     
-    // Event Detail State
     const [selectedEvent, setSelectedEvent] = useState<Evento | null>(null);
-    const [eventDetailTab, setEventDetailTab] = useState<'jogos' | 'times'>('jogos'); // Internal Tournament Tabs
+    const [eventDetailTab, setEventDetailTab] = useState<'jogos' | 'times'>('jogos'); 
     
-    // Games State
     const [eventGames, setEventGames] = useState<Jogo[]>([]);
     const [loadingGames, setLoadingGames] = useState(false);
 
-    // Specific Game Details (Súmula)
     const [selectedGame, setSelectedGame] = useState<Jogo | null>(null);
     const [gameStats, setGameStats] = useState<GameStats[]>([]);
     const [loadingStats, setLoadingStats] = useState(false);
     
-    // Admin: Add Game State
     const [showAddGame, setShowAddGame] = useState(false);
-    const [newGameTimeA, setNewGameTimeA] = useState(''); // Stores Name OR TeamID
-    const [newGameTimeB, setNewGameTimeB] = useState(''); // Stores Name OR TeamID
+    const [newGameTimeA, setNewGameTimeA] = useState(''); 
+    const [newGameTimeB, setNewGameTimeB] = useState(''); 
 
-    // Admin: Create/Edit Event State
     const [showEventForm, setShowEventForm] = useState(false);
     const [isEditingEvent, setIsEditingEvent] = useState(false);
     const [formEventId, setFormEventId] = useState<string | null>(null);
@@ -70,7 +65,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [formStatus, setFormStatus] = useState<'proximo'|'andamento'|'finalizado'>('proximo');
     const [formRoster, setFormRoster] = useState<string[]>([]); 
 
-    // Admin: Create Team State (Internal Tournament)
     const [showTeamForm, setShowTeamForm] = useState(false);
     const [newTeamName, setNewTeamName] = useState('');
     const [newTeamLogo, setNewTeamLogo] = useState<string>('');
@@ -79,9 +73,8 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        const q = query(collection(db, "eventos"), orderBy("data", "desc"));
-        const unsubscribe = onSnapshot(q, (snapshot: any) => {
-            const data = snapshot.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as any) } as Evento));
+        const unsubscribe = db.collection("eventos").orderBy("data", "desc").onSnapshot((snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Evento));
             setEvents(data);
             setLoading(false);
         });
@@ -90,8 +83,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
     useEffect(() => {
         const fetchPlayers = async () => {
-            const q = query(collection(db, "jogadores"), orderBy("nome"));
-            const snapshot = await getDocs(q);
+            const snapshot = await db.collection("jogadores").orderBy("nome").get();
             setAllPlayers(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Player)));
         };
         fetchPlayers();
@@ -103,9 +95,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             setLoadingGames(true);
             setEventGames([]);
             try {
-                const gamesRef = collection(db, "eventos", selectedEvent.id, "jogos");
-                const q = query(gamesRef, orderBy("dataJogo", "asc"));
-                const snapshot = await getDocs(q);
+                const snapshot = await db.collection("eventos").doc(selectedEvent.id).collection("jogos").orderBy("dataJogo", "asc").get();
                 setEventGames(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Jogo)));
             } catch (error) {
                 console.error("Error fetching games:", error);
@@ -116,16 +106,12 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         fetchGames();
     }, [selectedEvent]);
 
-    // --- INTERNAL TOURNAMENT: STANDINGS CALCULATION ---
     const calculateStandings = (): TeamStanding[] => {
         if (!selectedEvent || !selectedEvent.times) return [];
 
         const standings: Record<string, TeamStanding> = {};
-
-        // Helper for normalization
         const normalize = (s: string) => s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-        // Initialize with Map for quick ID access
         selectedEvent.times.forEach(t => {
             standings[t.id] = {
                 teamId: t.id,
@@ -140,15 +126,12 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             };
         });
 
-        // Create Name -> ID Map for Fallback Matching
         const nameToIdMap: Record<string, string> = {};
         selectedEvent.times.forEach(t => {
             if (t.nomeTime) nameToIdMap[normalize(t.nomeTime)] = t.id;
         });
 
-        // Process Games
         eventGames.forEach(game => {
-            // Count game if finished OR if it has a score (Legacy/Recovery support)
             const hasScore = (game.placarTimeA_final || 0) + (game.placarTimeB_final || 0) > 0;
             const isValidGame = game.status === 'finalizado' || hasScore;
 
@@ -156,11 +139,9 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 const scoreA = game.placarTimeA_final || 0;
                 const scoreB = game.placarTimeB_final || 0;
                 
-                // 1. Try match by ID
                 let teamA = standings[game.timeA_id || ''];
                 let teamB = standings[game.timeB_id || ''];
 
-                // 2. Fallback: Match by Name (Fuzzy)
                 if (!teamA && game.timeA_nome) {
                     const id = nameToIdMap[normalize(game.timeA_nome)];
                     if (id) teamA = standings[id];
@@ -189,7 +170,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             }
         });
 
-        // Calculate Diff & Sort
         return Object.values(standings).map(s => ({
             ...s,
             diff: s.pointsFor - s.pointsAgainst
@@ -200,7 +180,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         });
     };
 
-    // --- TEAM CREATION LOGIC ---
     const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
@@ -234,16 +213,14 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
             const updatedTeams = selectedEvent.times ? [...selectedEvent.times, newTeam] : [newTeam];
             
-            // Also add these players to the event roster if not already there
             const currentEventRoster = selectedEvent.jogadoresEscalados || [];
             const updatedEventRoster = Array.from(new Set([...currentEventRoster, ...newTeamRoster]));
 
-            await updateDoc(doc(db, "eventos", selectedEvent.id), {
+            await db.collection("eventos").doc(selectedEvent.id).update({
                 times: updatedTeams,
                 jogadoresEscalados: updatedEventRoster
             });
 
-            // Update local state
             setSelectedEvent({
                 ...selectedEvent,
                 times: updatedTeams,
@@ -266,14 +243,13 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         if (!selectedEvent || !window.confirm("Excluir time?")) return;
         try {
             const updatedTeams = selectedEvent.times?.filter(t => t.id !== teamId) || [];
-            await updateDoc(doc(db, "eventos", selectedEvent.id), { times: updatedTeams });
+            await db.collection("eventos").doc(selectedEvent.id).update({ times: updatedTeams });
             setSelectedEvent({ ...selectedEvent, times: updatedTeams });
         } catch (e) {
             console.error(e);
         }
     };
 
-    // --- GAME CREATION LOGIC ---
     const handleCreateGame = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedEvent) return;
@@ -281,13 +257,12 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         try {
             const isInternal = selectedEvent.type === 'torneio_interno';
             let teamA_Name = 'ANCB';
-            let teamB_Name = newGameTimeB; // Default for External (Adversary Name)
+            let teamB_Name = newGameTimeB; 
             let teamA_Id = '';
             let teamB_Id = '';
             let gameRoster: string[] = [];
 
             if (isInternal) {
-                // In Internal, values are Team IDs
                 const teamA = selectedEvent.times?.find(t => t.id === newGameTimeA);
                 const teamB = selectedEvent.times?.find(t => t.id === newGameTimeB);
                 
@@ -296,12 +271,11 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     teamB_Name = teamB.nomeTime;
                     teamA_Id = teamA.id;
                     teamB_Id = teamB.id;
-                    // Merge rosters
                     gameRoster = Array.from(new Set([...teamA.jogadores, ...teamB.jogadores]));
                 }
             }
 
-            await addDoc(collection(db, "eventos", selectedEvent.id, "jogos"), {
+            await db.collection("eventos").doc(selectedEvent.id).collection("jogos").add({
                 dataJogo: selectedEvent.data,
                 timeA_nome: teamA_Name,
                 timeA_id: teamA_Id,
@@ -318,10 +292,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             setNewGameTimeA('');
             setNewGameTimeB('');
             
-            // Refresh games
-            const gamesRef = collection(db, "eventos", selectedEvent.id, "jogos");
-            const q = query(gamesRef, orderBy("dataJogo", "asc"));
-            const snap = await getDocs(q);
+            const snap = await db.collection("eventos").doc(selectedEvent.id).collection("jogos").orderBy("dataJogo", "asc").get();
             setEventGames(snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Jogo)));
 
         } catch (error) {
@@ -330,7 +301,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         }
     };
 
-    // --- FETCH STATS (SÚMULA) ---
     useEffect(() => {
         const fetchGameData = async () => {
             if (!selectedGame || !selectedEvent) return;
@@ -338,7 +308,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             setGameStats([]);
 
             try {
-                // Priority: Game specific roster > Event roster > Empty
                 const rosterIds = selectedGame.jogadoresEscalados?.length 
                     ? selectedGame.jogadoresEscalados 
                     : (selectedEvent.jogadoresEscalados || []);
@@ -350,7 +319,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     statsMap[p.id] = { player: p, points: 0, cesta1: 0, cesta2: 0, cesta3: 0 };
                 });
 
-                // Fetch Points
                 const processedCestaIds = new Set<string>();
                 const processCesta = (cesta: Cesta) => {
                     if (processedCestaIds.has(cesta.id)) return;
@@ -369,18 +337,13 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     }
                 };
 
-                // Subcollection
                 try {
-                    const subColRef = collection(db, "eventos", selectedEvent.id, "jogos", selectedGame.id, "cestas");
-                    const subSnap = await getDocs(subColRef);
+                    const subSnap = await db.collection("eventos").doc(selectedEvent.id).collection("jogos").doc(selectedGame.id).collection("cestas").get();
                     subSnap.forEach(doc => processCesta({ id: doc.id, ...(doc.data() as any) } as Cesta));
                 } catch (e) {}
 
-                // Root collection
                 try {
-                    const cestasRef = collection(db, "cestas");
-                    const qGame = query(cestasRef, where("jogoId", "==", selectedGame.id));
-                    const snapGame = await getDocs(qGame);
+                    const snapGame = await db.collection("cestas").where("jogoId", "==", selectedGame.id).get();
                     snapGame.forEach(doc => processCesta({ id: doc.id, ...(doc.data() as any) } as Cesta));
                 } catch (e) {}
 
@@ -394,15 +357,13 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         fetchGameData();
     }, [selectedGame, selectedEvent, allPlayers]);
 
-    // Helpers
-    const handleDeleteEvent = async () => { if (!selectedEvent || !window.confirm("Excluir evento e jogos?")) return; try { await deleteDoc(doc(db, "eventos", selectedEvent.id)); setSelectedEvent(null); } catch (e) { alert("Erro ao excluir"); } };
-    const handleDeleteGame = async (gameId: string) => { if (!selectedEvent || !window.confirm("Excluir jogo?")) return; try { await deleteDoc(doc(db, "eventos", selectedEvent.id, "jogos", gameId)); setEventGames(prev => prev.filter(g => g.id !== gameId)); } catch (e) { alert("Erro ao excluir"); } };
+    const handleDeleteEvent = async () => { if (!selectedEvent || !window.confirm("Excluir evento e jogos?")) return; try { await db.collection("eventos").doc(selectedEvent.id).delete(); setSelectedEvent(null); } catch (e) { alert("Erro ao excluir"); } };
+    const handleDeleteGame = async (gameId: string) => { if (!selectedEvent || !window.confirm("Excluir jogo?")) return; try { await db.collection("eventos").doc(selectedEvent.id).collection("jogos").doc(gameId).delete(); setEventGames(prev => prev.filter(g => g.id !== gameId)); } catch (e) { alert("Erro ao excluir"); } };
     const openNewEventForm = () => { setIsEditingEvent(false); setFormEventId(null); setFormName(''); setFormDate(new Date().toISOString().split('T')[0]); setFormMode('5x5'); setFormType('amistoso'); setFormStatus('proximo'); setFormRoster([]); setShowEventForm(true); };
     const openEditEventForm = (event: Evento) => { setIsEditingEvent(true); setFormEventId(event.id); setFormName(event.nome); setFormDate(event.data); setFormMode(event.modalidade); setFormType(event.type); setFormStatus(event.status); setFormRoster(event.jogadoresEscalados || []); setShowEventForm(true); };
-    const handleSaveEvent = async (e: React.FormEvent) => { e.preventDefault(); try { const eventData = { nome: formName, data: formDate, modalidade: formMode, type: formType, status: formStatus, jogadoresEscalados: formRoster }; if (isEditingEvent && formEventId) { await updateDoc(doc(db, "eventos", formEventId), eventData); if (selectedEvent?.id === formEventId) setSelectedEvent({ ...selectedEvent, ...eventData, id: formEventId }); } else { await addDoc(collection(db, "eventos"), eventData); } setShowEventForm(false); } catch (e) { alert("Erro ao salvar"); } };
+    const handleSaveEvent = async (e: React.FormEvent) => { e.preventDefault(); try { const eventData = { nome: formName, data: formDate, modalidade: formMode, type: formType, status: formStatus, jogadoresEscalados: formRoster }; if (isEditingEvent && formEventId) { await db.collection("eventos").doc(formEventId).update(eventData); if (selectedEvent?.id === formEventId) setSelectedEvent({ ...selectedEvent, ...eventData, id: formEventId }); } else { await db.collection("eventos").add(eventData); } setShowEventForm(false); } catch (e) { alert("Erro ao salvar"); } };
     const togglePlayerInRoster = (playerId: string) => { setFormRoster(prev => prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]); };
     
-    // NEW: Check if current user can review (is rostered)
     const canReview = () => { if (!userProfile?.linkedPlayerId || !selectedGame) return false; const roster = selectedGame.jogadoresEscalados || selectedEvent?.jogadoresEscalados || []; return roster.includes(userProfile.linkedPlayerId); };
 
     const formatDate = (dateStr?: string) => dateStr ? dateStr.split('-').reverse().join('/') : 'N/A';
@@ -414,7 +375,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
     return (
         <div className="animate-fadeIn pb-10">
-            {/* Header */}
             <div className="flex items-center justify-between mb-6">
                  <div className="flex items-center gap-3">
                     <Button variant="secondary" size="sm" onClick={onBack} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
@@ -428,8 +388,8 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     </Button>
                 )}
             </div>
-
-            {/* Tabs */}
+            {/* ... Rest of JSX ... */}
+            {/* Same structure but ensuring any logic inside render remains valid. */}
             <div className="bg-white dark:bg-gray-800 p-1.5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 inline-flex gap-1 mb-8 w-full md:w-auto">
                 <button onClick={() => setTab('proximos')} className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'proximos' ? 'bg-ancb-blue text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
                     <div className="flex items-center justify-center gap-2"><LucideCalendarClock size={16} /> Próximos</div>
@@ -439,7 +399,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 </button>
             </div>
 
-            {/* List */}
             {loading ? (
                 <div className="flex justify-center py-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ancb-blue"></div></div>
             ) : (
@@ -470,17 +429,14 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 </div>
             )}
 
-            {/* EVENT DETAILS MODAL */}
             <Modal isOpen={!!selectedEvent} onClose={() => setSelectedEvent(null)} title="Detalhes do Evento">
                 {selectedEvent && (
                     <div>
-                        {/* Header Info */}
                         <div className="mb-4 border-b border-gray-100 dark:border-gray-700 pb-4 flex flex-col gap-3">
                             <div><h2 className="text-xl font-bold text-ancb-blue dark:text-blue-400 mb-1">{selectedEvent.nome}</h2><p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{selectedEvent.type.replace('_', ' ')} • {formatDate(selectedEvent.data)}</p></div>
                             {userProfile?.role === 'admin' && (<div className="flex gap-2"><Button size="sm" variant="secondary" onClick={() => { setSelectedEvent(null); openEditEventForm(selectedEvent); }} className="flex-1 dark:text-white dark:border-gray-600"><LucideEdit size={16} /> Editar</Button><Button size="sm" variant="secondary" onClick={handleDeleteEvent} className="flex-1 !text-red-500 !border-red-200 hover:!bg-red-50 dark:hover:!bg-red-900/20"><LucideTrash2 size={16} /> Excluir Evento</Button></div>)}
                         </div>
 
-                        {/* SUB-TABS for Internal Tournament */}
                         {selectedEvent.type === 'torneio_interno' && (
                             <div className="flex border-b border-gray-100 dark:border-gray-700 mb-4">
                                 <button onClick={() => setEventDetailTab('jogos')} className={`flex-1 pb-2 text-sm font-bold border-b-2 ${eventDetailTab === 'jogos' ? 'border-ancb-blue text-ancb-blue' : 'border-transparent text-gray-400'}`}>Jogos</button>
@@ -488,10 +444,8 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                             </div>
                         )}
 
-                        {/* TAB: JOGOS */}
                         {(eventDetailTab === 'jogos' || selectedEvent.type !== 'torneio_interno') && (
                             <div className="space-y-6">
-                                {/* Games List Container */}
                                 <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">
                                     <div className="flex justify-between items-center mb-4">
                                         <h4 className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
@@ -530,8 +484,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                                         </div>
                                                         {userProfile?.role === 'admin' && (
                                                             <div className="flex justify-center gap-2 mt-2 pt-2 border-t dark:border-gray-700">
-                                                                {/* CORREÇÃO: Removido botão Painel para Admin no modo calendário normal */}
-                                                                {/* O admin deve usar o painel administrativo para editar jogos finalizados */}
                                                                 {game.status !== 'finalizado' && (
                                                                     <Button size="sm" className="!py-0.5 !px-2 text-[10px]" onClick={(e) => { e.stopPropagation(); onOpenGamePanel && onOpenGamePanel(game, selectedEvent.id); }}>Painel</Button>
                                                                 )}
@@ -548,8 +500,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                         </div>
                                     )}
                                 </div>
-                                
-                                {/* General Roster Section */}
                                 {selectedEvent.type !== 'torneio_interno' && (
                                     <div>
                                         <h4 className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2 mb-3">
@@ -575,10 +525,8 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                             </div>
                         )}
 
-                        {/* TAB: TIMES & CLASSIFICAÇÃO (Internal Only) */}
                         {selectedEvent.type === 'torneio_interno' && eventDetailTab === 'times' && (
                             <div className="space-y-6">
-                                {/* Standings */}
                                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
                                     <table className="w-full text-xs md:text-sm">
                                         <thead className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
@@ -611,7 +559,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                     </table>
                                 </div>
 
-                                {/* Teams List */}
                                 <div>
                                     <div className="flex justify-between items-center mb-3">
                                         <h4 className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
@@ -654,7 +601,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 )}
             </Modal>
             
-            {/* GAME DETAILS MODAL (SÚMULA) */}
             <Modal isOpen={!!selectedGame} onClose={() => setSelectedGame(null)} title="Súmula da Partida">
                 {selectedGame && (
                     <div className="animate-fadeIn">
@@ -666,7 +612,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                             </div>
                         </div>
                         
-                        {/* New Gamified Scouting Trigger */}
                         {canReview() && onOpenReview && (
                             <div className="mb-4">
                                 <Button 
@@ -684,7 +629,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 )}
             </Modal>
 
-            {/* ADMIN MODALS */}
             <Modal isOpen={showAddGame} onClose={() => setShowAddGame(false)} title="Adicionar Jogo">
                 <form onSubmit={handleCreateGame} className="space-y-4">
                     {selectedEvent && selectedEvent.type === 'torneio_interno' ? (
@@ -714,11 +658,9 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     <Button type="submit" className="w-full">Criar Jogo</Button>
                 </form>
             </Modal>
-
-            {/* Create Team Modal */}
+            
             <Modal isOpen={showTeamForm} onClose={() => setShowTeamForm(false)} title="Cadastrar Time">
                 <form onSubmit={handleCreateTeam} className="space-y-4 max-h-[80vh] overflow-y-auto p-1">
-                    {/* Logo Upload */}
                     <div className="flex flex-col items-center">
                         <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleLogoSelect} />
                         <div 
@@ -772,7 +714,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                         <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Modalidade</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formMode} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormMode(e.target.value as any)}><option value="5x5">5x5</option><option value="3x3">3x3</option></select></div>
                         <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Tipo</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormType(e.target.value as any)}><option value="amistoso">Amistoso</option><option value="torneio_interno">Torneio Interno</option><option value="torneio_externo">Torneio Externo</option></select></div>
                     </div>
-                    {/* Only show Roster Selection for External/Friendly. Internal uses Teams. */}
                     {formType !== 'torneio_interno' && (
                         <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-2 flex justify-between"><span>Escalar Jogadores</span><span className="text-xs font-normal bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">{formRoster.length} selecionados</span></label>

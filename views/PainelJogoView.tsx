@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { collection, doc, onSnapshot, updateDoc, addDoc, serverTimestamp, getDocs, query, orderBy, getDoc, where, writeBatch } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import firebase, { db } from '../services/firebase';
 import { Jogo, Player, Evento, UserProfile, Cesta } from '../types';
 import { Button } from '../components/Button';
 import { LucideArrowLeft, LucideSearch, LucideCheckCircle2, LucideLock, LucideEdit, LucideSend } from 'lucide-react';
@@ -11,7 +10,7 @@ interface PainelJogoViewProps {
     eventId: string;
     onBack: () => void;
     userProfile?: UserProfile | null;
-    isEditable?: boolean; // Prop para forçar modo de edição
+    isEditable?: boolean; 
 }
 
 export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, onBack, userProfile, isEditable = false }) => {
@@ -19,52 +18,40 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
     const [allPlayers, setAllPlayers] = useState<Player[]>([]);
     const [finishing, setFinishing] = useState(false);
     
-    // Internal Tournament State
     const [isInternal, setIsInternal] = useState(false);
     const [teamAPlayers, setTeamAPlayers] = useState<Player[]>([]);
     const [teamBPlayers, setTeamBPlayers] = useState<Player[]>([]);
     
-    // External Tournament State
     const [ancbPlayers, setAncbPlayers] = useState<Player[]>([]);
-
     const [searchPlayer, setSearchPlayer] = useState('');
-    
-    // UI State for Mobile Toggle
     const [mobileTab, setMobileTab] = useState<'left' | 'right'>('left');
 
     const isAdmin = userProfile?.role === 'admin';
 
     useEffect(() => {
-        // 1. Real-time game updates
-        const unsubGame = onSnapshot(doc(db, "eventos", eventId, "jogos", game.id), (docSnap: any) => {
-            if (docSnap.exists()) {
+        const unsubGame = db.collection("eventos").doc(eventId).collection("jogos").doc(game.id).onSnapshot((docSnap) => {
+            if (docSnap.exists) {
                 const updatedGame = { id: docSnap.id, ...(docSnap.data() as any) } as Jogo;
                 setLiveGame(updatedGame);
-                
-                // Check internal status
                 const _isInternal = !!updatedGame.timeA_id && !!updatedGame.timeB_id;
                 setIsInternal(_isInternal);
             }
         });
 
-        // 2. Fetch Players & Event Teams
         const initData = async () => {
             try {
-                // Fetch All Players
-                const pSnap = await getDocs(query(collection(db, "jogadores"), orderBy("nome")));
+                const pSnap = await db.collection("jogadores").orderBy("nome").get();
                 const players = pSnap.docs.map(d => {
                     const data = d.data() as any;
                     return { id: d.id, ...data, nome: data.nome || 'Unknown' } as Player;
                 });
                 setAllPlayers(players);
 
-                // Fetch Event Data to get Teams
-                const eventDoc = await getDoc(doc(db, "eventos", eventId));
-                if (eventDoc.exists()) {
+                const eventDoc = await db.collection("eventos").doc(eventId).get();
+                if (eventDoc.exists) {
                     const eventData = eventDoc.data() as Evento;
                     
                     if (game.timeA_id && game.timeB_id && eventData.times) {
-                        // Internal Tournament Logic
                         const teamA = eventData.times.find(t => t.id === game.timeA_id);
                         const teamB = eventData.times.find(t => t.id === game.timeB_id);
 
@@ -75,7 +62,6 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                             setTeamBPlayers(players.filter(p => teamB.jogadores.includes(p.id)));
                         }
                     } else {
-                        // External Logic (Default ANCB Roster)
                         const rosterIds = eventData.jogadoresEscalados || [];
                         setAncbPlayers(players.filter(p => rosterIds.includes(p.id)));
                     }
@@ -93,34 +79,23 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
     const handleAddPoint = async (player: Player, points: 1 | 2 | 3, teamSide: 'A' | 'B') => {
         if (!isAdmin) return;
         
-        // 1. Add Cesta Document
-        await addDoc(collection(db, "eventos", eventId, "jogos", game.id, "cestas"), {
+        await db.collection("eventos").doc(eventId).collection("jogos").doc(game.id).collection("cestas").add({
             pontos: points,
             jogadorId: player.id,
             nomeJogador: player.nome || 'Unknown',
-            timestamp: serverTimestamp(),
-            timeId: teamSide // 'A' or 'B'
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            timeId: teamSide
         });
 
-        // 2. Update Game Score
         const fieldToUpdate = teamSide === 'A' ? 'placarTimeA_final' : 'placarTimeB_final';
         const currentScore = teamSide === 'A' ? (liveGame.placarTimeA_final || 0) : (liveGame.placarTimeB_final || 0);
         
-        // 3. Update Game Roster History (ensure player is marked as played)
         const currentGameRoster = liveGame.jogadoresEscalados || [];
         const newGameRoster = currentGameRoster.includes(player.id) ? currentGameRoster : [...currentGameRoster, player.id];
 
-        await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), {
+        await db.collection("eventos").doc(eventId).collection("jogos").doc(game.id).update({
             [fieldToUpdate]: currentScore + points,
             jogadoresEscalados: newGameRoster
-        });
-    };
-
-    const handleAddGeneralPoint = async (points: 1 | 2 | 3) => {
-        if (!isAdmin) return;
-        const currentScore = liveGame.placarTimeB_final || 0;
-        await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), {
-            placarTimeB_final: currentScore + points
         });
     };
 
@@ -130,7 +105,6 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
         
         setFinishing(true);
         try {
-            // 1. Identificar lista completa de jogadores neste jogo
             let gameRosterIds: string[] = [];
             
             if (isInternal) {
@@ -142,20 +116,18 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
             }
             gameRosterIds = Array.from(new Set(gameRosterIds));
 
-            // 2. Atualizar documento do Jogo
-            await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), { 
+            await db.collection("eventos").doc(eventId).collection("jogos").doc(game.id).update({ 
                 status: 'finalizado',
                 jogadoresEscalados: gameRosterIds
             });
 
-            const batch = writeBatch(db);
+            const batch = db.batch();
             let notificationCount = 0;
 
-            // 3. Enviar Notificações (Badges agora são calculadas no Admin -> Recalcular Histórico)
             gameRosterIds.forEach(playerId => {
                 const player = allPlayers.find(p => p.id === playerId);
                 if (player && player.userId) {
-                    const notifRef = doc(collection(db, "notifications"));
+                    const notifRef = db.collection("notifications").doc();
                     batch.set(notifRef, {
                         targetUserId: player.userId,
                         type: 'pending_review',
@@ -164,7 +136,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                         gameId: game.id,
                         eventId: eventId,
                         read: false,
-                        timestamp: serverTimestamp()
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
                     });
                     notificationCount++;
                 }
@@ -213,7 +185,6 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
         );
     };
 
-    // LOCK SCREEN IF FINALIZED AND NOT IN EDIT MODE
     if (liveGame.status === 'finalizado' && !isEditable) {
         return (
             <div className="fixed inset-0 bg-slate-900 z-[200] flex flex-col items-center justify-center text-white font-sans p-6 text-center animate-fadeIn">
@@ -232,20 +203,15 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
 
     return (
         <div className="fixed inset-0 bg-slate-900 z-[200] flex flex-col text-white font-sans">
-            {/* 1. HEADER */}
             <div className={`h-14 px-4 flex items-center justify-between border-b border-slate-800 z-20 ${isEditable ? 'bg-orange-900/20 border-orange-800' : 'bg-slate-900'}`}>
                 <Button variant="secondary" size="sm" onClick={onBack} className="!text-gray-400 !border-gray-700 hover:!bg-slate-800 hover:!text-white"><LucideArrowLeft size={18} /></Button>
-                
                 {isEditable && <span className="text-xs font-bold text-orange-500 uppercase flex items-center gap-1"><LucideEdit size={14}/> Modo de Edição</span>}
-                
                 {isAdmin && !isEditable && (
                     <Button size="sm" onClick={handleFinishGame} disabled={finishing} className="bg-green-600 hover:bg-green-500 text-white border-none shadow-green-900/20 shadow-lg">
                         {finishing ? <LucideSend className="animate-spin" size={16} /> : <><LucideCheckCircle2 size={16} /> Fim</>}
                     </Button>
                 )}
             </div>
-
-            {/* 2. SCOREBOARD */}
             <div className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-10 shadow-2xl">
                 <div className="flex justify-between items-center max-w-4xl mx-auto">
                     <div className="flex-1 text-center">
@@ -259,8 +225,6 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                     </div>
                 </div>
             </div>
-
-            {/* 3. SEARCH BAR (Common) */}
             <div className="px-4 pt-2">
                 <div className="relative">
                     <LucideSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
@@ -271,57 +235,37 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                     />
                 </div>
             </div>
-
-            {/* 4. CONTENT AREA */}
             <div className="flex-1 overflow-hidden relative flex flex-col">
-                {/* MOBILE TABS */}
-                <div className="md:hidden flex border-b border-slate-800 mt-2">
-                    <button 
-                        onClick={() => setMobileTab('left')}
-                        className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${mobileTab === 'left' ? 'text-ancb-blue border-b-2 border-ancb-blue bg-slate-800/50' : 'text-gray-500'}`}
-                    >
-                        {liveGame.timeA_nome || 'ANCB'}
-                    </button>
-                    <button 
-                        onClick={() => setMobileTab('right')}
-                        className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${mobileTab === 'right' ? 'text-white border-b-2 border-white bg-slate-800/50' : 'text-gray-500'}`}
-                    >
-                        {liveGame.timeB_nome || liveGame.adversario || 'ADV'}
-                    </button>
-                </div>
-
-                <div className="flex-1 flex overflow-hidden">
-                    {/* LEFT COLUMN (Team A / ANCB) */}
-                    <div className={`flex-1 border-r border-slate-800 flex flex-col ${mobileTab === 'right' ? 'hidden md:flex' : ''}`}>
-                        {isInternal ? (
-                            <PlayerList players={teamAPlayers} teamSide="A" />
-                        ) : (
-                            <PlayerList players={ancbPlayers} teamSide="A" />
-                        )}
-                    </div>
-
-                    {/* RIGHT COLUMN (Team B / Opponent) */}
-                    <div className={`flex-1 flex flex-col ${mobileTab === 'left' ? 'hidden md:flex' : ''}`}>
-                        {isInternal ? (
-                            <PlayerList players={teamBPlayers} teamSide="B" />
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center p-6 bg-slate-900/50">
-                                <h3 className="text-gray-400 font-bold uppercase tracking-widest mb-8 text-sm">Pontuar Adversário</h3>
-                                <div className="flex flex-col gap-3 w-full max-w-xs">
-                                    {isAdmin ? (
-                                        <>
-                                            <button onClick={() => handleAddGeneralPoint(1)} className="py-4 rounded-xl bg-slate-800 border border-slate-700 text-white hover:border-red-500 active:scale-95 flex items-center justify-center gap-3 shadow-lg"><span className="text-2xl font-bold">+1</span><span className="text-xs uppercase text-gray-500">Livre</span></button>
-                                            <button onClick={() => handleAddGeneralPoint(2)} className="py-4 rounded-xl bg-slate-800 border border-slate-700 text-white hover:border-red-500 active:scale-95 flex items-center justify-center gap-3 shadow-lg"><span className="text-2xl font-bold">+2</span><span className="text-xs uppercase text-gray-500">Pontos</span></button>
-                                            <button onClick={() => handleAddGeneralPoint(3)} className="py-4 rounded-xl bg-slate-800 border border-slate-700 text-white hover:border-red-500 active:scale-95 flex items-center justify-center gap-3 shadow-lg"><span className="text-2xl font-bold">+3</span><span className="text-xs uppercase text-gray-500">Longa</span></button>
-                                        </>
-                                    ) : (
-                                        <p className="text-center text-gray-500 text-xs">Apenas admins.</p>
-                                    )}
-                                </div>
+                {isInternal ? (
+                    <>
+                        <div className="md:hidden flex border-b border-slate-800 mt-2">
+                            <button 
+                                onClick={() => setMobileTab('left')}
+                                className={`flex-1 py-2 text-sm font-bold uppercase transition-colors ${mobileTab === 'left' ? 'text-ancb-blue border-b-2 border-ancb-blue bg-slate-800/50' : 'text-gray-500'}`}
+                            >
+                                {liveGame.timeA_nome}
+                            </button>
+                            <button 
+                                onClick={() => setMobileTab('right')}
+                                className={`flex-1 py-2 text-sm font-bold uppercase transition-colors ${mobileTab === 'right' ? 'text-ancb-blue border-b-2 border-ancb-blue bg-slate-800/50' : 'text-gray-500'}`}
+                            >
+                                {liveGame.timeB_nome}
+                            </button>
+                        </div>
+                        <div className="flex-1 flex overflow-hidden">
+                            <div className={`flex-1 flex flex-col ${mobileTab === 'left' ? 'block' : 'hidden md:flex'} border-r border-slate-800`}>
+                                <PlayerList players={teamAPlayers} teamSide="A" />
                             </div>
-                        )}
+                            <div className={`flex-1 flex flex-col ${mobileTab === 'right' ? 'block' : 'hidden md:flex'}`}>
+                                <PlayerList players={teamBPlayers} teamSide="B" />
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <div className="flex-1 flex flex-col">
+                        <PlayerList players={ancbPlayers} teamSide="A" />
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );

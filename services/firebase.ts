@@ -1,9 +1,9 @@
 
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
-import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
+import "firebase/compat/firestore";
+import "firebase/compat/storage";
+import "firebase/compat/messaging";
 
 const firebaseConfig = { 
     apiKey: "AIzaSyCZ2yeJJ34VwYAmQnFCEv72Q1uDFFGKKjQ", 
@@ -16,16 +16,16 @@ const firebaseConfig = {
 };
 
 const app = firebase.initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db = app.firestore();
 export const auth = app.auth();
-export const storage = getStorage(app);
+export const storage = app.storage();
 
 // --- MESSAGING SETUP ---
-let messaging: Messaging | null = null;
+let messaging: firebase.messaging.Messaging | null = null;
 
 try {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-        messaging = getMessaging(app);
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && firebase.messaging.isSupported()) {
+        messaging = app.messaging();
     }
 } catch (error) {
     console.warn("Firebase Messaging not supported in this environment", error);
@@ -34,41 +34,33 @@ try {
 export const requestFCMToken = async (vapidKey: string): Promise<string | null> => {
     if (!messaging) return null;
     try {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-            // Tenta obter o registro do Service Worker ativo (gerado pelo Vite PWA)
-            // Isso evita o erro 404 ao tentar buscar 'firebase-messaging-sw.js' se ele não estiver na pasta public/dist
-            const serviceWorkerRegistration = await navigator.serviceWorker.ready;
-            
-            const token = await getToken(messaging, { 
-                vapidKey,
-                serviceWorkerRegistration
-            });
-            return token;
-        } else {
-            console.log("Notification permission denied");
+        if (Notification.permission === 'default') {
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                console.log("Permissão de notificação negada pelo usuário.");
+                return null;
+            }
+        } else if (Notification.permission !== 'granted') {
             return null;
         }
+
+        const token = await messaging.getToken({ vapidKey });
+        return token;
+
     } catch (error: any) {
-        // Se falhar o Push nativo, o app ainda funcionará com notificações internas
-        if (error.name === 'AbortError' || error.message?.includes('push service error')) {
-            console.warn("Navegador bloqueou o serviço de push nativo. Usando notificações in-app apenas.");
+        if (error.name === 'AbortError' || error.message?.includes('push service') || error.message?.includes('block')) {
+            console.warn("Aviso: Notificações push bloqueadas ou canceladas. Usando apenas in-app.");
         } else {
-            console.error("Erro CRÍTICO ao recuperar token FCM:", error);
+            console.error("Erro ao recuperar token FCM:", error);
         }
         return null;
     }
 };
 
-/**
- * Listener para mensagens em primeiro plano (App aberto)
- * @param callback Função executada ao receber uma mensagem
- */
 export const onMessageListener = (callback: (payload: any) => void) => {
     if (!messaging) return () => {};
-    return onMessage(messaging, (payload) => {
-        callback(payload);
-    });
+    return messaging.onMessage(callback);
 };
 
+export default firebase;
 export { messaging };

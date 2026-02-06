@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player } from './types';
-import { auth, db, requestFCMToken, onMessageListener } from './services/firebase';
-import { doc, setDoc, collection, query, where, onSnapshot, orderBy, getDocs, addDoc, serverTimestamp, getDoc, updateDoc, collectionGroup } from 'firebase/firestore';
+import firebase, { auth, db, requestFCMToken, onMessageListener } from './services/firebase';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
 import { Modal } from './components/Modal';
@@ -78,30 +77,21 @@ const App: React.FC = () => {
         const updateSW = async () => {
             if ('serviceWorker' in navigator) {
                 try {
-                    // Tenta obter o registro do Service Worker
                     const registration = await navigator.serviceWorker.getRegistration();
                     if (registration) {
-                        // Força a verificação de update no servidor
                         await registration.update();
                     }
                 } catch (error) {
-                    // Ignora erro de origem cruzada (comum em previews/iframes)
                     console.log('SW update check skipped (preview environment)');
                 }
             }
         };
-
-        // Verifica ao carregar
         updateSW();
-
-        // Verifica sempre que o app volta a ficar visível (ex: usuário minimizou e voltou)
-        // Isso é crucial para o iOS atualizar sem precisar fechar o app completamente
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
                 updateSW();
             }
         };
-
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, []);
@@ -121,7 +111,6 @@ const App: React.FC = () => {
         return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     }, []);
 
-    // --- REGISTER PUSH TOKEN ---
     const handleEnableNotifications = async () => {
         if (!userProfile?.uid) return;
         try {
@@ -129,7 +118,7 @@ const App: React.FC = () => {
             if (token) {
                 setNotificationPermissionStatus('granted');
                 if (userProfile.fcmToken !== token) {
-                    await updateDoc(doc(db, "usuarios", userProfile.uid), { fcmToken: token });
+                    await db.collection("usuarios").doc(userProfile.uid).update({ fcmToken: token });
                     console.log("Token FCM salvo com sucesso.");
                 }
             } else {
@@ -140,7 +129,6 @@ const App: React.FC = () => {
         }
     };
 
-    // Solicita o token AUTOMATICAMENTE APENAS se a permissão já foi concedida anteriormente
     useEffect(() => {
         if (userProfile?.uid && Notification.permission === 'granted') {
             handleEnableNotifications();
@@ -148,15 +136,10 @@ const App: React.FC = () => {
         setNotificationPermissionStatus(Notification.permission);
     }, [userProfile?.uid]);
 
-    // --- NOTIFICATION WATCHERS ---
-    
-    // Função auxiliar para disparar notificação NATIVA do sistema
     const triggerSystemNotification = (title: string, body: string) => {
         if (!("Notification" in window)) return;
-        
         if (Notification.permission === "granted") {
             try {
-                // Tenta usar o Service Worker para mostrar a notificação (melhor para Android/PWA)
                 navigator.serviceWorker.ready.then(registration => {
                     registration.showNotification(title, {
                         body: body,
@@ -166,57 +149,35 @@ const App: React.FC = () => {
                     } as any);
                 }).catch((e) => {
                     console.warn("SW notification failed, falling back", e);
-                    // Fallback para notificação simples
-                    new Notification(title, {
-                        body: body,
-                        icon: 'https://i.imgur.com/SE2jHsz.png'
-                    });
+                    new Notification(title, { body: body, icon: 'https://i.imgur.com/SE2jHsz.png' });
                 });
             } catch (e) {
                 console.error("Erro ao disparar notificação de sistema:", e);
-                // Fallback final
-                new Notification(title, {
-                    body: body,
-                    icon: 'https://i.imgur.com/SE2jHsz.png'
-                });
+                new Notification(title, { body: body, icon: 'https://i.imgur.com/SE2jHsz.png' });
             }
         }
     };
 
-    // 1. Monitoramento de Convocações (Eventos Ativos)
+    // 1. Monitoramento de Convocações
     useEffect(() => {
         if (!userProfile?.linkedPlayerId) return;
         const myPlayerId = userProfile.linkedPlayerId;
-        const q = query(collection(db, "eventos"), where("status", "in", ["proximo", "andamento"]));
+        const q = db.collection("eventos").where("status", "in", ["proximo", "andamento"]);
 
-        return onSnapshot(q, (snapshot: any) => {
-            // Carrega eventos já notificados do localStorage
+        return q.onSnapshot((snapshot) => {
             const notifiedEvents = JSON.parse(localStorage.getItem('ancb_notified_rosters') || '[]');
-            
-            snapshot.docChanges().forEach((change: any) => {
-                // Verifica adição ou modificação (ex: jogador adicionado depois)
+            snapshot.docChanges().forEach((change) => {
                 if (change.type === "added" || change.type === "modified") {
                     const eventData = change.doc.data() as Evento;
                     const eventId = change.doc.id;
-                    
-                    // Verifica se o jogador está na lista E se já não foi notificado para este evento
                     if (eventData.jogadoresEscalados?.includes(myPlayerId) && !notifiedEvents.includes(eventId)) {
                         const title = "Convocação!";
                         const body = `Você foi escalado para: ${eventData.nome}`;
-                        
-                        // 1. Mostra Toast no App
                         setForegroundNotification({ title, body, eventId, type: 'roster' });
-                        
-                        // 2. Dispara Notificação de Sistema (Push Simulado)
                         triggerSystemNotification(title, body);
-
                         setTimeout(() => setForegroundNotification(null), 10000);
-                        
-                        // Marca como notificado
                         notifiedEvents.push(eventId);
                         localStorage.setItem('ancb_notified_rosters', JSON.stringify(notifiedEvents));
-                        
-                        // Atualiza a lista interna
                         checkStaticNotifications();
                     }
                 }
@@ -224,21 +185,12 @@ const App: React.FC = () => {
         });
     }, [userProfile?.linkedPlayerId]);
 
-    // 2. Monitoramento de Notificações Diretas (Nova Coleção 'notifications')
-    // Substitui a lógica complexa de inferência por uma escuta direta
+    // 2. Monitoramento de Notificações Diretas
     useEffect(() => {
         if (!user) return;
+        const q = db.collection("notifications").where("targetUserId", "==", user.uid).orderBy("timestamp", "desc");
         
-        const q = query(
-            collection(db, "notifications"), 
-            where("targetUserId", "==", user.uid),
-            orderBy("timestamp", "desc") // Requer índice, mas funciona melhor
-        );
-
-        // Se der erro de índice no console, a query sem orderBy funciona, mas a ordenação deve ser feita no cliente
-        // const qFallback = query(collection(db, "notifications"), where("targetUserId", "==", user.uid));
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribe = q.onSnapshot((snapshot) => {
             const newNotifs: NotificationItem[] = [];
             const notifiedIds = JSON.parse(localStorage.getItem('ancb_notified_ids') || '[]');
 
@@ -246,23 +198,16 @@ const App: React.FC = () => {
                 if (change.type === "added") {
                     const data = change.doc.data();
                     const notifId = change.doc.id;
-                    
-                    // Show Toast for fresh notifications (not in local storage)
                     if (!notifiedIds.includes(notifId)) {
                         const title = data.title || "Nova Notificação";
                         const body = data.message || "Você tem um novo alerta.";
-                        
-                        // 1. Mostra Toast no App
                         setForegroundNotification({
                             title,
                             body,
                             eventId: data.eventId,
                             type: data.type === 'pending_review' ? 'review' : 'alert'
                         });
-
-                        // 2. Dispara Notificação de Sistema (Push Simulado)
                         triggerSystemNotification(title, body);
-
                         setTimeout(() => setForegroundNotification(null), 12000);
                         notifiedIds.push(notifId);
                         localStorage.setItem('ancb_notified_ids', JSON.stringify(notifiedIds));
@@ -270,7 +215,6 @@ const App: React.FC = () => {
                 }
             });
 
-            // Rebuild notification list
             snapshot.forEach(doc => {
                 const data = doc.data();
                 newNotifs.push({
@@ -284,9 +228,6 @@ const App: React.FC = () => {
                 });
             });
 
-            // Combine with inference-based notifications (Roster Alerts)
-            // Note: Roster alerts are generated by `checkStaticNotifications` and stored in state.
-            // Here we merge, prioritizing direct notifications.
             setNotifications(prev => {
                 const rosterNotifs = prev.filter(n => n.type === 'roster_alert');
                 return [...newNotifs, ...rosterNotifs];
@@ -294,7 +235,6 @@ const App: React.FC = () => {
 
         }, (error) => {
             console.warn("Notification listener error (likely missing index):", error);
-            // Fallback: Just reload static notifications if real-time fails
             checkStaticNotifications();
         });
 
@@ -307,9 +247,8 @@ const App: React.FC = () => {
         const inferredNotifications: NotificationItem[] = [];
 
         try {
-            // 1. Roster Alerts (Inferência Local)
-            const rosterQ = query(collection(db, "eventos"), where("status", "in", ["proximo", "andamento"]));
-            const rosterSnap = await getDocs(rosterQ);
+            const rosterQ = db.collection("eventos").where("status", "in", ["proximo", "andamento"]);
+            const rosterSnap = await rosterQ.get();
             rosterSnap.forEach(doc => {
                 const eventData = doc.data() as Evento;
                 if (eventData.jogadoresEscalados?.includes(myPlayerId)) {
@@ -325,14 +264,8 @@ const App: React.FC = () => {
                 }
             });
 
-            // Note: We removed the complex "Game Finished" inference here because
-            // PainelJogoView now creates explicit notification documents which are handled 
-            // by the useEffect listener above. This prevents duplicates and logic errors.
-
             const readIds = JSON.parse(localStorage.getItem('ancb_read_notifications') || '[]');
-            
             setNotifications(prev => {
-                // Keep explicit notifications (from DB), replace inferred ones
                 const dbNotifs = prev.filter(n => n.type !== 'roster_alert');
                 const uniqueInferred = inferredNotifications.map(n => ({
                     ...n,
@@ -356,9 +289,8 @@ const App: React.FC = () => {
             setUser(currentUser);
             if (unsubProfile) unsubProfile();
             if (currentUser) {
-                unsubProfile = onSnapshot(doc(db, "usuarios", currentUser.uid), (docSnap) => {
-                    if (docSnap.exists()) {
-                        // Cast docSnap.data() to any for spreading
+                unsubProfile = db.collection("usuarios").doc(currentUser.uid).onSnapshot((docSnap) => {
+                    if (docSnap.exists) {
                         const profile = { ...(docSnap.data() as any), uid: docSnap.id } as UserProfile;
                         if (profile.status === 'banned') { auth.signOut(); alert("Conta suspensa."); return; }
                         setUserProfile(profile);
@@ -372,11 +304,10 @@ const App: React.FC = () => {
 
     const handleOpenReviewQuiz = async (gameId: string, eventId: string) => {
         try {
-            const playersSnap = await getDocs(collection(db, "jogadores"));
-            // Cast d.data() as any for spreading
+            const playersSnap = await db.collection("jogadores").get();
             const allPlayers = playersSnap.docs.map(d => ({id: d.id, ...(d.data() as any)} as Player));
-            const eventDoc = await getDoc(doc(db, "eventos", eventId));
-            const eventRoster = eventDoc.exists() ? (eventDoc.data() as Evento).jogadoresEscalados || [] : [];
+            const eventDoc = await db.collection("eventos").doc(eventId).get();
+            const eventRoster = eventDoc.exists ? (eventDoc.data() as Evento).jogadoresEscalados || [] : [];
             const playersToReview = allPlayers.filter(p => eventRoster.includes(p.id) && p.id !== userProfile?.linkedPlayerId);
             if (playersToReview.length > 0) { setReviewTargetGame({ gameId, eventId, playersToReview }); setShowQuiz(true); }
             else { alert("Não há outros jogadores para avaliar nesta partida."); }
@@ -385,14 +316,11 @@ const App: React.FC = () => {
 
     const handleNotificationClick = async (notif: NotificationItem) => {
         setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
-        
-        // Mark as read in DB if it's a DB notification
         if (!notif.id.startsWith('roster-') && !notif.id.startsWith('review-')) {
              try {
-                 await updateDoc(doc(db, "notifications", notif.id), { read: true });
+                 await db.collection("notifications").doc(notif.id).update({ read: true });
              } catch(e) { console.warn("Could not mark read in DB"); }
         }
-
         const readIds = JSON.parse(localStorage.getItem('ancb_read_notifications') || '[]');
         if (!readIds.includes(notif.id)) { readIds.push(notif.id); localStorage.setItem('ancb_read_notifications', JSON.stringify(readIds)); }
         
@@ -400,7 +328,6 @@ const App: React.FC = () => {
         else if (notif.type === 'roster_alert') { setCurrentView('eventos'); setShowNotifications(false); }
     };
 
-    // Helper for opening panel (used by EventosView and AdminView)
     const handleOpenGamePanel = (game: Jogo, eventId: string, isEditable: boolean = false) => {
         setPanelGame(game);
         setPanelEventId(eventId);
@@ -408,21 +335,15 @@ const App: React.FC = () => {
         setCurrentView('painel-jogo');
     };
 
-    // --- MANUAL UPDATE HANDLER ---
     const handleManualUpdate = async () => {
         setIsUpdating(true);
         if ('serviceWorker' in navigator) {
             try {
-                // Força o navegador a checar se há uma versão nova do sw.js no servidor
                 const registration = await navigator.serviceWorker.getRegistration();
                 if (registration) {
                     await registration.update();
-                    
-                    // Dá um tempinho para ver se o estado muda, embora 'autoUpdate' no vite.config
-                    // deva lidar com isso, o feedback visual é importante
                     setTimeout(() => {
                         setIsUpdating(false);
-                        // Se não recarregou a página, avisa o usuário
                         alert("Verificação concluída. Se houver novidades, o aplicativo irá reiniciar.");
                     }, 2000);
                 } else {
@@ -440,7 +361,6 @@ const App: React.FC = () => {
         }
     };
 
-    // REGISTRATION LOGIC
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         if (regPassword.length < 6) {
@@ -454,33 +374,29 @@ const App: React.FC = () => {
 
         setIsRegistering(true);
         try {
-            // 1. Create Auth User
             const userCredential = await auth.createUserWithEmailAndPassword(regEmail, regPassword);
             const user = userCredential.user;
 
             if (user) {
-                // 2. Format WhatsApp (Force +55)
-                const cleanPhone = regPhone.replace(/\D/g, ''); // Remove non-digits
+                const cleanPhone = regPhone.replace(/\D/g, ''); 
                 const formattedPhone = `+55${cleanPhone}`;
 
-                // 3. Create User Profile in Firestore
-                await setDoc(doc(db, "usuarios", user.uid), {
+                await db.collection("usuarios").doc(user.uid).set({
                     nome: regName,
                     apelido: regNickname,
                     email: regEmail,
                     role: 'jogador',
-                    status: 'pending', // Waiting for admin approval to become active player
+                    status: 'pending',
                     dataNascimento: regBirthDate,
                     whatsapp: formattedPhone,
                     cpf: regCpf,
                     posicaoPreferida: regPosition,
                     numeroPreferido: regJerseyNumber,
-                    createdAt: serverTimestamp()
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
 
                 alert("Conta criada com sucesso! Aguarde a aprovação do administrador.");
                 setShowRegister(false);
-                // Clear Form
                 setRegName(''); setRegNickname(''); setRegEmail(''); setRegPhone(''); setRegPassword(''); 
                 setRegCpf(''); setRegBirthDate(''); setRegJerseyNumber('');
             }
@@ -528,7 +444,6 @@ const App: React.FC = () => {
                     ) : (
                         <div className="flex gap-2">
                             <Button variant="secondary" size="sm" onClick={() => setShowLogin(true)} className="!text-white !border-white/30 hover:!bg-white hover:!text-ancb-blue">Entrar</Button>
-                            {/* FIX: Removed 'hidden sm:flex' to make visible on mobile */}
                             <Button variant="primary" size="sm" onClick={() => setShowRegister(true)} className="flex items-center gap-1">
                                 <LucideUserPlus size={16} className="hidden xs:block" /> Registrar
                             </Button>
@@ -536,7 +451,6 @@ const App: React.FC = () => {
                     )}
                 </div>
             </div>
-            {/* NOTIFICATION PERMISSION BANNER */}
             {userProfile && notificationPermissionStatus === 'default' && (
                 <div className="bg-orange-600 text-white p-2 text-center text-xs flex justify-center items-center gap-2">
                     <LucideBellRing size={14} />
@@ -557,8 +471,6 @@ const App: React.FC = () => {
             case 'home': return (
                 <div className="space-y-8 animate-fadeIn">
                     {ongoingEvents.length > 0 && <LiveEventHero event={ongoingEvents[0]} onClick={() => setCurrentView('eventos')} />}
-                    
-                    {/* DESIGN RESTAURADO: CARDS DETALHADOS (Ícone Esquerda, Título, Descrição, Emoji Fundo) */}
                     <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <Card onClick={() => setCurrentView('eventos')} className="cursor-pointer group hover:border-blue-300 transition-colors" emoji="📅">
                             <div className="flex flex-col h-full">
@@ -573,7 +485,6 @@ const App: React.FC = () => {
                                 </p>
                             </div>
                         </Card>
-
                         <Card onClick={() => setCurrentView('jogadores')} className="cursor-pointer group hover:border-orange-300 transition-colors" emoji="🏀">
                             <div className="flex flex-col h-full">
                                 <div className="flex items-center gap-4 mb-4">
@@ -587,7 +498,6 @@ const App: React.FC = () => {
                                 </p>
                             </div>
                         </Card>
-
                         <Card onClick={() => setCurrentView('ranking')} className="cursor-pointer group hover:border-yellow-300 transition-colors" emoji="🏆">
                             <div className="flex flex-col h-full">
                                 <div className="flex items-center gap-4 mb-4">
@@ -602,7 +512,6 @@ const App: React.FC = () => {
                             </div>
                         </Card>
                     </section>
-                    
                     <Feed />
                 </div>
             );
@@ -619,7 +528,6 @@ const App: React.FC = () => {
     if (loading) return (
         <div className="fixed inset-0 bg-[#062553] flex flex-col items-center justify-center z-[9999]">
             <div className="relative mb-6">
-                {/* Efeito Glow Pulsante */}
                 <div className="absolute inset-0 bg-blue-400 rounded-full blur-3xl opacity-20 animate-pulse scale-150"></div>
                 <img src="https://i.imgur.com/sfO9ILj.png" alt="ANCB" className="h-32 md:h-40 w-auto relative z-10 drop-shadow-2xl animate-fade-in" />
             </div>
@@ -633,18 +541,11 @@ const App: React.FC = () => {
             <main className="flex-grow container mx-auto px-4 pt-6 md:pt-10 max-w-6xl">
                 {renderContent()}
             </main>
-
-            {/* TOAST DE NOTIFICAÇÃO - DEFINITIVAMENTE CLICÁVEL E ATUANTE */}
             {foregroundNotification && (
                 <div 
                     onClick={() => {
-                        console.log("Toast clicado! Redirecionando...");
-                        if (foregroundNotification.type === 'review') {
-                            // Se for review, tentamos abrir o quiz se os dados existirem, ou vamos pro perfil
-                            setCurrentView('profile'); 
-                        } else {
-                            setCurrentView('eventos');
-                        }
+                        if (foregroundNotification.type === 'review') setCurrentView('profile'); 
+                        else setCurrentView('eventos');
                         setForegroundNotification(null);
                     }}
                     className="fixed top-20 right-4 z-[200] bg-white dark:bg-gray-800 shadow-2xl rounded-2xl border-l-8 border-ancb-orange p-5 max-w-sm animate-slideDown flex items-start gap-4 ring-1 ring-black/5 cursor-pointer hover:bg-orange-50 dark:hover:bg-gray-700 transition-all active:scale-95 group"
@@ -666,18 +567,12 @@ const App: React.FC = () => {
             <footer className="bg-[#062553] text-white text-center py-8 mt-10">
                 <p className="font-bold mb-1">Associação Nova Canaã de Basquete - MT</p>
                 <p className="text-sm text-gray-400">&copy; 2025 Todos os direitos reservados.</p>
-                
                 <div className="mt-6 flex justify-center">
-                    <button 
-                        onClick={handleManualUpdate} 
-                        disabled={isUpdating}
-                        className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all disabled:opacity-50"
-                    >
+                    <button onClick={handleManualUpdate} disabled={isUpdating} className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all disabled:opacity-50">
                         <LucideRefreshCw size={14} className={isUpdating ? 'animate-spin' : ''} />
                         {isUpdating ? 'Verificando...' : 'Verificar Atualizações'}
                     </button>
                 </div>
-
                 {(!isStandalone && (deferredPrompt || isIos)) && (<button onClick={() => { if (isIos) setShowInstallModal(true); else if (deferredPrompt) deferredPrompt.prompt(); }} className="mt-4 inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all"><LucideDownload size={14} /> Instalar Portal</button>)}
             </footer>
 
@@ -699,30 +594,17 @@ const App: React.FC = () => {
                 ) : <div className="text-center py-10 text-gray-400"><LucideBell size={48} className="mx-auto mb-2 opacity-20" /><p>Nenhuma notificação nova.</p></div>}
             </Modal>
 
-            {/* Modal de Instalação iOS */}
             <Modal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} title="Instalar no iPhone">
                 <div className="flex flex-col items-center text-center space-y-6">
-                    <p className="text-gray-600 dark:text-gray-300">
-                        Para instalar o Portal ANCB no seu iPhone e receber notificações, siga os passos:
-                    </p>
+                    <p className="text-gray-600 dark:text-gray-300">Para instalar o Portal ANCB no seu iPhone e receber notificações, siga os passos:</p>
                     <div className="flex flex-col gap-4 w-full">
                         <div className="flex items-center gap-4 bg-gray-100 dark:bg-gray-700 p-3 rounded-xl text-left">
-                            <div className="bg-white dark:bg-gray-600 p-2 rounded-lg text-blue-500">
-                                <LucideShare size={24} />
-                            </div>
-                            <div>
-                                <span className="block font-bold text-gray-800 dark:text-white text-sm">1. Toque em Compartilhar</span>
-                                <span className="text-xs text-gray-500 dark:text-gray-400">Botão no centro inferior da tela.</span>
-                            </div>
+                            <div className="bg-white dark:bg-gray-600 p-2 rounded-lg text-blue-500"><LucideShare size={24} /></div>
+                            <div><span className="block font-bold text-gray-800 dark:text-white text-sm">1. Toque em Compartilhar</span><span className="text-xs text-gray-500 dark:text-gray-400">Botão no centro inferior da tela.</span></div>
                         </div>
                         <div className="flex items-center gap-4 bg-gray-100 dark:bg-gray-700 p-3 rounded-xl text-left">
-                            <div className="bg-white dark:bg-gray-600 p-2 rounded-lg text-gray-800 dark:text-white">
-                                <LucidePlusSquare size={24} />
-                            </div>
-                            <div>
-                                <span className="block font-bold text-gray-800 dark:text-white text-sm">2. Adicionar à Tela de Início</span>
-                                <span className="text-xs text-gray-500 dark:text-gray-400">Role para baixo até encontrar esta opção.</span>
-                            </div>
+                            <div className="bg-white dark:bg-gray-600 p-2 rounded-lg text-gray-800 dark:text-white"><LucidePlusSquare size={24} /></div>
+                            <div><span className="block font-bold text-gray-800 dark:text-white text-sm">2. Adicionar à Tela de Início</span><span className="text-xs text-gray-500 dark:text-gray-400">Role para baixo até encontrar esta opção.</span></div>
                         </div>
                     </div>
                     <Button onClick={() => setShowInstallModal(false)} className="w-full">Entendi</Button>
@@ -731,7 +613,6 @@ const App: React.FC = () => {
 
             {reviewTargetGame && userProfile?.linkedPlayerId && <PeerReviewQuiz isOpen={showQuiz} onClose={() => setShowQuiz(false)} gameId={reviewTargetGame.gameId} eventId={reviewTargetGame.eventId} reviewerId={userProfile.linkedPlayerId} playersToReview={reviewTargetGame.playersToReview} />}
             
-            {/* LOGIN MODAL */}
             <Modal isOpen={showLogin} onClose={() => setShowLogin(false)} title="Entrar">
                 <form onSubmit={async (e) => { e.preventDefault(); try { await auth.signInWithEmailAndPassword(authEmail, authPassword); setShowLogin(false); setAuthEmail(''); setAuthPassword(''); } catch (error) { setAuthError("Erro ao entrar. Verifique suas credenciais."); } }} className="space-y-4">
                     <input type="email" required placeholder="Email" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={authEmail} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAuthEmail(e.target.value)} />
@@ -741,57 +622,25 @@ const App: React.FC = () => {
                 </form>
             </Modal>
 
-            {/* REGISTER MODAL */}
             <Modal isOpen={showRegister} onClose={() => setShowRegister(false)} title="Criar Conta">
                 <form onSubmit={handleRegister} className="space-y-4 max-h-[80vh] overflow-y-auto p-1 custom-scrollbar">
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nome Completo</label>
-                        <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegName(e.target.value)} required />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Apelido (Para o Ranking)</label>
-                        <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regNickname} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegNickname(e.target.value)} required />
-                    </div>
+                    <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nome Completo</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegName(e.target.value)} required /></div>
+                    <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Apelido (Para o Ranking)</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regNickname} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegNickname(e.target.value)} required /></div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nascimento</label>
-                            <input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regBirthDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegBirthDate(e.target.value)} required />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label>
-                            <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regCpf} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegCpf(e.target.value)} placeholder="000.000.000-00" required />
-                        </div>
+                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nascimento</label><input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regBirthDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegBirthDate(e.target.value)} required /></div>
+                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regCpf} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegCpf(e.target.value)} placeholder="000.000.000-00" required /></div>
                     </div>
                     <div>
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400">WhatsApp</label>
                         <div className="flex items-center border rounded overflow-hidden dark:border-gray-600">
                             <span className="bg-gray-200 dark:bg-gray-600 px-3 py-2 text-gray-600 dark:text-gray-300 border-r dark:border-gray-500 text-sm font-bold">+55</span>
-                            <input 
-                                type="tel"
-                                className="flex-1 p-2 outline-none dark:bg-gray-700 dark:text-white" 
-                                placeholder="DDD + Número (Ex: 65999999999)" 
-                                value={regPhone} 
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPhone(e.target.value)} 
-                                required 
-                            />
+                            <input type="tel" className="flex-1 p-2 outline-none dark:bg-gray-700 dark:text-white" placeholder="DDD + Número (Ex: 65999999999)" value={regPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPhone(e.target.value)} required />
                         </div>
                         <p className="text-[10px] text-gray-400 mt-1">Insira apenas números com DDD.</p>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Número</label>
-                            <input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regJerseyNumber} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegJerseyNumber(e.target.value)} />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Posição</label>
-                            <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regPosition} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setRegPosition(e.target.value)}>
-                                <option value="Armador (1)">Armador (1)</option>
-                                <option value="Ala/Armador (2)">Ala/Armador (2)</option>
-                                <option value="Ala (3)">Ala (3)</option>
-                                <option value="Ala/Pivô (4)">Ala/Pivô (4)</option>
-                                <option value="Pivô (5)">Pivô (5)</option>
-                            </select>
-                        </div>
+                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Número</label><input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regJerseyNumber} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegJerseyNumber(e.target.value)} /></div>
+                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Posição</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regPosition} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setRegPosition(e.target.value)}><option value="Armador (1)">Armador (1)</option><option value="Ala/Armador (2)">Ala/Armador (2)</option><option value="Ala (3)">Ala (3)</option><option value="Ala/Pivô (4)">Ala/Pivô (4)</option><option value="Pivô (5)">Pivô (5)</option></select></div>
                     </div>
                     <div className="border-t pt-4 mt-2 dark:border-gray-700">
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Dados de Login</label>

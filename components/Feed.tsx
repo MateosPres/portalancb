@@ -1,6 +1,5 @@
 
 import React, { useEffect, useState } from 'react';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { FeedPost } from '../types';
 import { LucideAlertTriangle, LucideYoutube, LucideX, LucideCalendar, LucidePlay } from 'lucide-react';
@@ -12,13 +11,10 @@ export const Feed: React.FC = () => {
 
     const getPosts = async () => {
         try {
-            const q = query(
-                collection(db, "feed_posts"), 
-                orderBy("timestamp", "desc"), 
-                limit(6)
-            );
-            const snapshot = await getDocs(q);
-            // Cast doc.data() as any to allow spreading
+            const snapshot = await db.collection("feed_posts")
+                .orderBy("timestamp", "desc")
+                .limit(6)
+                .get();
             setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as FeedPost)));
         } catch (error) {
             console.error("Error fetching feed:", error);
@@ -37,7 +33,6 @@ export const Feed: React.FC = () => {
         return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' }).format(date);
     };
 
-    // Helper to extract ID
     const getYoutubeId = (url: string) => {
         try {
             return url.split('v=')[1]?.split('&')[0] || url.split('youtu.be/')[1];
@@ -57,20 +52,16 @@ export const Feed: React.FC = () => {
     const getYoutubeThumbnail = (url: string) => {
         const videoId = getYoutubeId(url);
         if (videoId) {
-            // Tenta pegar a imagem de alta resolução. 
-            // Se falhar visualmente em alguns vídeos antigos, pode-se usar hqdefault.jpg
             return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
         }
         return null;
     };
 
-    // Helper to render the modal content based on post type
     const renderModalContent = (post: FeedPost) => {
         const videoSrc = post.content.link_video ? getYoutubeEmbed(post.content.link_video) : null;
 
         return (
             <div className="flex flex-col h-full">
-                {/* Media Section */}
                 <div className="bg-black flex items-center justify-center relative w-full flex-shrink-0">
                     {post.type === 'placar' ? (
                         <div className="w-full bg-ancb-black text-white p-8 flex flex-col items-center justify-center min-h-[300px]">
@@ -95,7 +86,6 @@ export const Feed: React.FC = () => {
                             </div>
                         </div>
                     ) : videoSrc ? (
-                        // Optimized for Vertical Video: We give it height constraint, let width be auto/full
                         <div className="w-full h-[50vh] md:h-[70vh] relative">
                              <iframe 
                                 src={videoSrc} 
@@ -110,19 +100,15 @@ export const Feed: React.FC = () => {
                         </div>
                     ) : null}
                 </div>
-
-                {/* Content Section */}
                 <div className="p-6 bg-white dark:bg-gray-800 flex-grow overflow-y-auto">
                     <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-3">
                          <LucideCalendar size={14} />
                          <span className="uppercase font-bold text-xs">{formatTime(post.timestamp)}</span>
                          {post.type === 'aviso' && <span className="bg-yellow-100 text-yellow-800 text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">Aviso Oficial</span>}
                     </div>
-                    
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 leading-tight">
                         {post.content.titulo || (post.content.time_adv ? `Jogo contra ${post.content.time_adv}` : 'Sem título')}
                     </h2>
-                    
                     <div className="prose dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
                         {post.content.resumo}
                     </div>
@@ -139,13 +125,10 @@ export const Feed: React.FC = () => {
             <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 border-b-2 border-gray-200 dark:border-gray-700 pb-2 inline-block">
                 📰 Últimas Atualizações
             </h2>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {posts.map(post => {
                     const videoThumbnail = post.content.link_video ? getYoutubeThumbnail(post.content.link_video) : null;
-                    const dateStr = formatTime(post.timestamp).split(' às ')[0]; // Show only date on card
-
-                    // --- CARD: PLACAR ---
+                    const dateStr = formatTime(post.timestamp).split(' às ')[0];
                     if (post.type === 'placar') {
                         return (
                             <div 
@@ -157,14 +140,12 @@ export const Feed: React.FC = () => {
                                     <span>{post.content.titulo || 'Placar Final'}</span>
                                     <span>{dateStr}</span>
                                 </div>
-                                
                                 {post.image_url && (
                                     <div className="h-40 w-full relative">
                                         <img src={post.image_url} alt="Foto do Jogo" className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity" />
                                         <div className="absolute inset-0 bg-gradient-to-t from-ancb-black to-transparent"></div>
                                     </div>
                                 )}
-                                
                                 <div className="p-6 flex-grow flex flex-col justify-center">
                                     <div className="flex justify-between items-center mb-2">
                                         <span className="font-bold text-lg">ANCB</span>
@@ -181,8 +162,6 @@ export const Feed: React.FC = () => {
                             </div>
                         );
                     }
-
-                    // --- CARD: AVISO ---
                     if (post.type === 'aviso') {
                         return (
                             <div 
@@ -200,15 +179,12 @@ export const Feed: React.FC = () => {
                             </div>
                         );
                     }
-
-                    // --- CARD: NOTÍCIA ---
                     return (
                         <div 
                             key={post.id} 
                             onClick={() => setSelectedPost(post)}
                             className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group"
                         >
-                            {/* VIDEO THUMBNAIL (FACADE) */}
                             {videoThumbnail ? (
                                 <div className="aspect-video w-full bg-black relative flex items-center justify-center overflow-hidden">
                                     <img 
@@ -216,7 +192,6 @@ export const Feed: React.FC = () => {
                                         alt="Video Thumbnail" 
                                         className="w-full h-full object-cover opacity-80 group-hover:opacity-60 transition-opacity transform group-hover:scale-105 duration-500" 
                                     />
-                                    {/* Custom Play Button Overlay */}
                                     <div className="absolute inset-0 flex items-center justify-center">
                                         <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
                                             <LucidePlay className="text-white fill-white ml-1" size={20} />
@@ -228,7 +203,6 @@ export const Feed: React.FC = () => {
                                     <img src={post.image_url} alt={post.content.titulo} className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500" />
                                 </div>
                             ) : null}
-                            
                             <div className="p-5 flex flex-col flex-grow">
                                 <div className="text-xs text-ancb-blue dark:text-blue-400 font-bold mb-2 uppercase flex items-center gap-1">
                                     {post.content.link_video && <LucideYoutube size={14} />}
@@ -244,8 +218,6 @@ export const Feed: React.FC = () => {
                     );
                 })}
             </div>
-
-            {/* FULL SCREEN MODAL */}
             {selectedPost && (
                 <div 
                     className="fixed inset-0 z-[100] flex items-center justify-center p-0 md:p-4 bg-black/90 backdrop-blur-sm animate-fadeIn"
@@ -261,7 +233,6 @@ export const Feed: React.FC = () => {
                         >
                             <LucideX size={24} />
                         </button>
-
                         <div className="h-full overflow-y-auto custom-scrollbar">
                             {renderModalContent(selectedPost)}
                         </div>

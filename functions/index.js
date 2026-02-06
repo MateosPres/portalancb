@@ -15,13 +15,11 @@ exports.sendRosterNotification = functions.firestore
         const newData = change.after.data();
         const oldData = change.before.data();
 
-        // Segurança contra exclusão de documentos
         if (!newData || !oldData) return null;
 
         const newRoster = newData.jogadoresEscalados || [];
         const oldRoster = oldData.jogadoresEscalados || [];
 
-        // Filtra apenas os IDs que não estavam na lista anterior
         const addedPlayers = newRoster.filter(playerId => !oldRoster.includes(playerId));
 
         if (addedPlayers.length === 0) return null;
@@ -30,7 +28,6 @@ exports.sendRosterNotification = functions.firestore
 
         const promises = [];
 
-        // Para cada jogador adicionado, buscamos o usuário vinculado para pegar o Token FCM
         for (const playerId of addedPlayers) {
             const p = dbSearchUserByPlayerId(playerId, newData.nome, context.params.eventId);
             promises.push(p);
@@ -42,7 +39,6 @@ exports.sendRosterNotification = functions.firestore
 /**
  * 2. MONITOR DE NOTIFICAÇÕES DIRETAS
  * Dispara quando um documento é criado na coleção 'notifications'.
- * Usado para avisos de fim de jogo, avaliações pendentes, etc.
  */
 exports.sendDirectNotification = functions.firestore
     .document('notifications/{notificationId}')
@@ -53,7 +49,6 @@ exports.sendDirectNotification = functions.firestore
         if (!targetUserId) return null;
 
         try {
-            // Busca o token do usuário alvo
             const userDoc = await admin.firestore().collection('usuarios').doc(targetUserId).get();
             
             if (!userDoc.exists) return null;
@@ -66,21 +61,40 @@ exports.sendDirectNotification = functions.firestore
                 return null;
             }
 
-            // Payload da notificação
+            // --- CORREÇÃO PRINCIPAL ---
+            // Adicionando configurações de prioridade alta para Android e WebPush
             const payload = {
                 notification: {
                     title: data.title || "Portal ANCB",
                     body: data.message || "Você tem uma nova notificação.",
-                    // O ícone deve ser uma URL pública (HTTPS)
                     icon: 'https://i.imgur.com/SE2jHsz.png' 
                 },
                 data: {
                     type: data.type || "general",
                     eventId: data.eventId || "",
                     gameId: data.gameId || "",
-                    url: "/" // PWA abre na home e o frontend trata o resto
+                    url: "/"
                 },
-                token: fcmToken
+                token: fcmToken,
+                // Configuração específica para Android (Acorda o app)
+                android: {
+                    priority: "high",
+                    notification: {
+                        priority: "max",
+                        channelId: "ancb_alerts",
+                        defaultSound: true,
+                        defaultVibrateTimings: true
+                    }
+                },
+                // Configuração para WebPush (Prioridade na entrega)
+                webpush: {
+                    headers: {
+                        Urgency: "high"
+                    },
+                    fcmOptions: {
+                        link: "/"
+                    }
+                }
             };
 
             return admin.messaging().send(payload);
@@ -91,11 +105,8 @@ exports.sendDirectNotification = functions.firestore
         }
     });
 
-// --- FUNÇÕES AUXILIARES ---
-
 async function dbSearchUserByPlayerId(playerId, eventName, eventId) {
     try {
-        // Procura na coleção 'usuarios' quem tem o linkedPlayerId igual ao playerId escalado
         const usersRef = admin.firestore().collection('usuarios');
         const querySnapshot = await usersRef.where('linkedPlayerId', '==', playerId).get();
 
@@ -104,13 +115,13 @@ async function dbSearchUserByPlayerId(playerId, eventName, eventId) {
             return;
         }
 
-        // Pode haver inconsistência de dados, mas assumimos 1 usuário por player
         const userDoc = querySnapshot.docs[0];
         const userData = userDoc.data();
         const fcmToken = userData.fcmToken;
 
         if (!fcmToken) return;
 
+        // Mesma correção de prioridade para convocações
         const payload = {
             notification: {
                 title: "Você foi convocado! 🏀",
@@ -119,10 +130,21 @@ async function dbSearchUserByPlayerId(playerId, eventName, eventId) {
             },
             data: {
                 type: "roster_alert",
-                eventId: eventId,
-                click_action: "FLUTTER_NOTIFICATION_CLICK" 
+                eventId: eventId
             },
-            token: fcmToken
+            token: fcmToken,
+            android: {
+                priority: "high",
+                notification: {
+                    priority: "max",
+                    channelId: "ancb_alerts"
+                }
+            },
+            webpush: {
+                headers: {
+                    Urgency: "high"
+                }
+            }
         };
 
         await admin.messaging().send(payload);
