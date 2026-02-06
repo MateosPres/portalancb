@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -17,7 +18,8 @@ export const Feed: React.FC = () => {
                 limit(6)
             );
             const snapshot = await getDocs(q);
-            setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedPost)));
+            // Cast doc.data() as any to allow spreading
+            setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as FeedPost)));
         } catch (error) {
             console.error("Error fetching feed:", error);
         } finally {

@@ -138,7 +138,8 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                 const q = query(collection(db, "jogadores"), orderBy("nome"));
                 const snapshot = await getDocs(q);
                 // Filter: show active or if undefined (legacy). 
-                const allPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player));
+                // Cast doc.data() as any for spreading
+                const allPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Player));
                 const visiblePlayers = allPlayers.filter(p => p.status === 'active' || !p.status);
                 setPlayers(visiblePlayers);
             } catch (error) {
@@ -167,7 +168,8 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                     const qCestas = query(collectionGroup(db, 'cestas'), where('jogadorId', '==', selectedPlayer.id));
                     const snapCestas = await getDocs(qCestas);
                     snapCestas.forEach(d => {
-                        const data = d.data();
+                        // Cast d.data() as any to access custom properties
+                        const data = d.data() as any;
                         let gId = data.jogoId;
                         if (!gId && d.ref.parent && d.ref.parent.parent) {
                             gId = d.ref.parent.parent.id;
@@ -252,12 +254,12 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                 };
                                 try {
                                     const subCestas = await getDocs(collection(db, "eventos", eventDoc.id, "jogos", gameDoc.id, "cestas"));
-                                    subCestas.forEach(d => countCesta({id: d.id, ...d.data()} as Cesta));
+                                    subCestas.forEach(d => countCesta({id: d.id, ...(d.data() as any)} as Cesta));
                                 } catch(e) {}
                                 try {
                                     const rootCestasQuery = query(collection(db, "cestas"), where("jogoId", "==", gameDoc.id), where("jogadorId", "==", selectedPlayer.id));
                                     const rootCestas = await getDocs(rootCestasQuery);
-                                    rootCestas.forEach(d => countCesta({id: d.id, ...d.data()} as Cesta));
+                                    rootCestas.forEach(d => countCesta({id: d.id, ...(d.data() as any)} as Cesta));
                                 } catch (e) {}
 
                                 const sA = gameData.placarTimeA_final ?? gameData.placarANCB_final ?? 0;
@@ -495,11 +497,11 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                             <RadarChart stats={radarStats} size={220} />
                                         </div>
 
-                                        {topTags.length > 0 && (
+                                        {topTags.filter(t => t.count > 0).length > 0 && (
                                             <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
                                                 <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 text-center">Principais Características</h4>
                                                 <div className="flex justify-center gap-2">
-                                                    {topTags.map(tag => (
+                                                    {topTags.filter(t => t.count > 0).map(tag => (
                                                         <div key={tag.key} className="flex flex-col items-center bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm min-w-[70px]">
                                                             <span className="text-xl mb-1">{tag.emoji}</span>
                                                             <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase">{tag.label}</span>

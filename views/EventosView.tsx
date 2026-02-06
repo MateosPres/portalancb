@@ -1,11 +1,11 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, getDocs, where, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Evento, Jogo, Cesta, Player, UserProfile, PlayerReview, Time } from '../types';
+import { Evento, Jogo, Cesta, Player, UserProfile, Time } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { ReviewModal } from '../components/ReviewModal';
 import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucideTrash2, LucideStar, LucideMessageSquare, LucidePlayCircle, LucideShield, LucideCamera, LucideLoader2 } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
@@ -13,6 +13,7 @@ interface EventosViewProps {
     onBack: () => void;
     userProfile?: UserProfile | null;
     onOpenGamePanel?: (game: Jogo, eventId: string) => void;
+    onOpenReview?: (gameId: string, eventId: string) => void;
 }
 
 interface GameStats {
@@ -21,8 +22,6 @@ interface GameStats {
     cesta1: number;
     cesta2: number;
     cesta3: number;
-    emojis: Record<string, number>;
-    reviewCount: number;
 }
 
 interface TeamStanding {
@@ -37,7 +36,7 @@ interface TeamStanding {
     games: number;
 }
 
-export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, onOpenGamePanel }) => {
+export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, onOpenGamePanel, onOpenReview }) => {
     const [events, setEvents] = useState<Evento[]>([]);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<'proximos' | 'finalizados'>('proximos');
@@ -55,8 +54,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [selectedGame, setSelectedGame] = useState<Jogo | null>(null);
     const [gameStats, setGameStats] = useState<GameStats[]>([]);
     const [loadingStats, setLoadingStats] = useState(false);
-    const [showReviewModal, setShowReviewModal] = useState(false);
-
+    
     // Admin: Add Game State
     const [showAddGame, setShowAddGame] = useState(false);
     const [newGameTimeA, setNewGameTimeA] = useState(''); // Stores Name OR TeamID
@@ -83,8 +81,8 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
     useEffect(() => {
         const q = query(collection(db, "eventos"), orderBy("data", "desc"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evento));
+        const unsubscribe = onSnapshot(q, (snapshot: any) => {
+            const data = snapshot.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as any) } as Evento));
             setEvents(data);
             setLoading(false);
         });
@@ -95,7 +93,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         const fetchPlayers = async () => {
             const q = query(collection(db, "jogadores"), orderBy("nome"));
             const snapshot = await getDocs(q);
-            setAllPlayers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player)));
+            setAllPlayers(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Player)));
         };
         fetchPlayers();
     }, []);
@@ -109,7 +107,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 const gamesRef = collection(db, "eventos", selectedEvent.id, "jogos");
                 const q = query(gamesRef, orderBy("dataJogo", "asc"));
                 const snapshot = await getDocs(q);
-                setEventGames(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Jogo)));
+                setEventGames(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Jogo)));
             } catch (error) {
                 console.error("Error fetching games:", error);
             } finally {
@@ -325,7 +323,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             const gamesRef = collection(db, "eventos", selectedEvent.id, "jogos");
             const q = query(gamesRef, orderBy("dataJogo", "asc"));
             const snap = await getDocs(q);
-            setEventGames(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Jogo)));
+            setEventGames(snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Jogo)));
 
         } catch (error) {
             console.error(error);
@@ -350,7 +348,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 const statsMap: Record<string, GameStats> = {};
                 
                 rosterPlayers.forEach(p => {
-                    statsMap[p.id] = { player: p, points: 0, cesta1: 0, cesta2: 0, cesta3: 0, emojis: {}, reviewCount: 0 };
+                    statsMap[p.id] = { player: p, points: 0, cesta1: 0, cesta2: 0, cesta3: 0 };
                 });
 
                 // Fetch Points
@@ -359,7 +357,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     if (processedCestaIds.has(cesta.id)) return;
                     if (cesta.jogadorId && !statsMap[cesta.jogadorId]) {
                         const unknownPlayer = allPlayers.find(p => p.id === cesta.jogadorId) || { id: cesta.jogadorId, nome: 'Desconhecido', numero_uniforme: 0, posicao: '-' } as Player;
-                        statsMap[cesta.jogadorId] = { player: unknownPlayer, points: 0, cesta1: 0, cesta2: 0, cesta3: 0, emojis: {}, reviewCount: 0 };
+                        statsMap[cesta.jogadorId] = { player: unknownPlayer, points: 0, cesta1: 0, cesta2: 0, cesta3: 0 };
                     }
                     if (cesta.jogadorId && statsMap[cesta.jogadorId]) {
                         const current = statsMap[cesta.jogadorId];
@@ -376,7 +374,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 try {
                     const subColRef = collection(db, "eventos", selectedEvent.id, "jogos", selectedGame.id, "cestas");
                     const subSnap = await getDocs(subColRef);
-                    subSnap.forEach(doc => processCesta({ id: doc.id, ...doc.data() } as Cesta));
+                    subSnap.forEach(doc => processCesta({ id: doc.id, ...(doc.data() as any) } as Cesta));
                 } catch (e) {}
 
                 // Root collection
@@ -384,22 +382,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     const cestasRef = collection(db, "cestas");
                     const qGame = query(cestasRef, where("jogoId", "==", selectedGame.id));
                     const snapGame = await getDocs(qGame);
-                    snapGame.forEach(doc => processCesta({ id: doc.id, ...doc.data() } as Cesta));
-                } catch (e) {}
-
-                // Reviews
-                try {
-                    const reviewsRef = collection(db, "avaliacoes");
-                    const qReviews = query(reviewsRef, where("gameId", "==", selectedGame.id));
-                    const snapReviews = await getDocs(qReviews);
-                    snapReviews.forEach(doc => {
-                        const review = doc.data() as PlayerReview;
-                        if (review.revieweeId && statsMap[review.revieweeId]) {
-                            const target = statsMap[review.revieweeId];
-                            target.reviewCount++;
-                            target.emojis[review.emojiTag] = (target.emojis[review.emojiTag] || 0) + 1;
-                        }
-                    });
+                    snapGame.forEach(doc => processCesta({ id: doc.id, ...(doc.data() as any) } as Cesta));
                 } catch (e) {}
 
                 setGameStats(Object.values(statsMap).sort((a, b) => b.points - a.points));
@@ -410,7 +393,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             }
         };
         fetchGameData();
-    }, [selectedGame, selectedEvent, allPlayers, showReviewModal]);
+    }, [selectedGame, selectedEvent, allPlayers]);
 
     // Helpers
     const handleDeleteEvent = async () => { if (!selectedEvent || !window.confirm("Excluir evento e jogos?")) return; try { await deleteDoc(doc(db, "eventos", selectedEvent.id)); setSelectedEvent(null); } catch (e) { alert("Erro ao excluir"); } };
@@ -419,9 +402,10 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const openEditEventForm = (event: Evento) => { setIsEditingEvent(true); setFormEventId(event.id); setFormName(event.nome); setFormDate(event.data); setFormMode(event.modalidade); setFormType(event.type); setFormStatus(event.status); setFormRoster(event.jogadoresEscalados || []); setShowEventForm(true); };
     const handleSaveEvent = async (e: React.FormEvent) => { e.preventDefault(); try { const eventData = { nome: formName, data: formDate, modalidade: formMode, type: formType, status: formStatus, jogadoresEscalados: formRoster }; if (isEditingEvent && formEventId) { await updateDoc(doc(db, "eventos", formEventId), eventData); if (selectedEvent?.id === formEventId) setSelectedEvent({ ...selectedEvent, ...eventData, id: formEventId }); } else { await addDoc(collection(db, "eventos"), eventData); } setShowEventForm(false); } catch (e) { alert("Erro ao salvar"); } };
     const togglePlayerInRoster = (playerId: string) => { setFormRoster(prev => prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]); };
-    const handleSubmitReview = async (data: any) => { if(!userProfile?.linkedPlayerId || !selectedGame) return; try { await addDoc(collection(db, "avaliacoes"), { gameId: selectedGame.id, eventId: selectedEvent!.id, reviewerId: userProfile.linkedPlayerId, userId: userProfile.uid, reviewerName: userProfile.nome, revieweeId: data.revieweeId, rating: data.rating, emojiTag: data.emojiTag, comment: data.comment, timestamp: serverTimestamp() }); alert("Enviado!"); } catch(e){ alert("Erro"); } };
+    
+    // NEW: Check if current user can review (is rostered)
     const canReview = () => { if (!userProfile?.linkedPlayerId || !selectedGame) return false; const roster = selectedGame.jogadoresEscalados || selectedEvent?.jogadoresEscalados || []; return roster.includes(userProfile.linkedPlayerId); };
-    const getTeammatesForReview = () => gameStats.map(stat => stat.player).filter(p => p.id !== userProfile?.linkedPlayerId);
+
     const formatDate = (dateStr?: string) => dateStr ? dateStr.split('-').reverse().join('/') : 'N/A';
     const getStatusColor = (s: string) => s === 'andamento' ? 'bg-red-100 text-red-600 animate-pulse' : s === 'finalizado' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-600';
     const getModalityColor = (m: string) => m === '3x3' ? 'bg-orange-100 text-orange-700' : 'bg-indigo-100 text-indigo-700';
@@ -667,7 +651,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 )}
             </Modal>
             
-            {/* GAME DETAILS MODAL (SÚMULA) - SAME AS BEFORE */}
+            {/* GAME DETAILS MODAL (SÚMULA) */}
             <Modal isOpen={!!selectedGame} onClose={() => setSelectedGame(null)} title="Súmula da Partida">
                 {selectedGame && (
                     <div className="animate-fadeIn">
@@ -678,14 +662,24 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                 <div className="text-center w-1/3"><span className="block font-bold text-lg leading-tight">{selectedGame.timeB_nome || selectedGame.adversario || "ADV"}</span></div>
                             </div>
                         </div>
-                        {canReview() && <div className="mb-4"><Button className="w-full !bg-gradient-to-r from-ancb-orange to-red-500 shadow-lg" onClick={() => setShowReviewModal(true)}><LucideStar className="mr-2" size={18} fill="white" /> Avaliar Companheiros</Button></div>}
+                        
+                        {/* New Gamified Scouting Trigger */}
+                        {canReview() && onOpenReview && (
+                            <div className="mb-4">
+                                <Button 
+                                    className="w-full !bg-gradient-to-r from-ancb-blue to-blue-600 shadow-lg text-white" 
+                                    onClick={() => onOpenReview(selectedGame.id, selectedEvent!.id)}
+                                >
+                                    <LucideStar className="mr-2" size={18} fill="white" /> Avaliar companheiros
+                                </Button>
+                            </div>
+                        )}
+
                         <h4 className="font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2"><LucideBarChart3 size={18} className="text-ancb-blue dark:text-blue-400" /> Estatísticas & Destaques</h4>
-                        {loadingStats ? <div className="py-8 flex justify-center"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400"></div></div> : gameStats.length > 0 ? <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg overflow-hidden"><table className="w-full text-sm"><thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700"><tr><th className="px-4 py-3 text-left font-bold">Jogador</th><th className="px-2 py-3 text-center text-xs font-bold text-gray-400 dark:text-gray-500">1PT</th><th className="px-2 py-3 text-center text-xs font-bold text-gray-400 dark:text-gray-500">2PT</th><th className="px-2 py-3 text-center text-xs font-bold text-gray-400 dark:text-gray-500">3PT</th><th className="px-4 py-3 text-right font-bold text-gray-700 dark:text-gray-300">Total</th></tr></thead><tbody className="divide-y divide-gray-100 dark:divide-gray-700">{gameStats.map((stat) => (<tr key={stat.player.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"><td className="px-4 py-3 flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0 flex items-center justify-center">{stat.player.foto ? <img src={stat.player.foto} className="w-full h-full object-cover"/> : <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">{stat.player.nome.charAt(0)}</span>}</div><div className="flex flex-col"><span className="font-bold text-gray-800 dark:text-gray-200 text-sm leading-tight flex items-center gap-1">{stat.player.apelido || stat.player.nome}{Object.keys(stat.emojis).length > 0 && (<span className="text-base ml-1" title="Destaque da Torcida">{Object.entries(stat.emojis).sort((a,b) => (b[1] as number) - (a[1] as number))[0][0]}</span>)}</span></div></td><td className="px-2 py-3 text-center"><span className={`px-2 py-0.5 rounded text-xs font-bold ${stat.cesta1 > 0 ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' : 'text-gray-300 dark:text-gray-600'}`}>{stat.cesta1}</span></td><td className="px-2 py-3 text-center"><span className={`px-2 py-0.5 rounded text-xs font-bold ${stat.cesta2 > 0 ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' : 'text-gray-300 dark:text-gray-600'}`}>{stat.cesta2}</span></td><td className="px-2 py-3 text-center"><span className={`px-2 py-0.5 rounded text-xs font-bold ${stat.cesta3 > 0 ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' : 'text-gray-300 dark:text-gray-600'}`}>{stat.cesta3}</span></td><td className="px-4 py-3 text-right font-bold text-ancb-black dark:text-white text-base">{stat.points} Pts</td></tr>))}</tbody></table></div> : <div className="text-center py-10 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-dashed border-gray-200 dark:border-gray-600"><p className="text-gray-400 text-sm mb-1">Nenhum jogador escalado ou estatística encontrada.</p></div>}
+                        {loadingStats ? <div className="py-8 flex justify-center"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400"></div></div> : gameStats.length > 0 ? <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg overflow-hidden"><table className="w-full text-sm"><thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700"><tr><th className="px-4 py-3 text-left font-bold">Jogador</th><th className="px-2 py-3 text-center text-xs font-bold text-gray-400 dark:text-gray-500">1PT</th><th className="px-2 py-3 text-center text-xs font-bold text-gray-400 dark:text-gray-500">2PT</th><th className="px-2 py-3 text-center text-xs font-bold text-gray-400 dark:text-gray-500">3PT</th><th className="px-4 py-3 text-right font-bold text-gray-700 dark:text-gray-300">Total</th></tr></thead><tbody className="divide-y divide-gray-100 dark:divide-gray-700">{gameStats.map((stat) => (<tr key={stat.player.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"><td className="px-4 py-3 flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0 flex items-center justify-center">{stat.player.foto ? <img src={stat.player.foto} className="w-full h-full object-cover"/> : <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">{stat.player.nome.charAt(0)}</span>}</div><div className="flex flex-col"><span className="font-bold text-gray-800 dark:text-gray-200 text-sm leading-tight flex items-center gap-1">{stat.player.apelido || stat.player.nome}</span></div></td><td className="px-2 py-3 text-center"><span className={`px-2 py-0.5 rounded text-xs font-bold ${stat.cesta1 > 0 ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' : 'text-gray-300 dark:text-gray-600'}`}>{stat.cesta1}</span></td><td className="px-2 py-3 text-center"><span className={`px-2 py-0.5 rounded text-xs font-bold ${stat.cesta2 > 0 ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' : 'text-gray-300 dark:text-gray-600'}`}>{stat.cesta2}</span></td><td className="px-2 py-3 text-center"><span className={`px-2 py-0.5 rounded text-xs font-bold ${stat.cesta3 > 0 ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' : 'text-gray-300 dark:text-gray-600'}`}>{stat.cesta3}</span></td><td className="px-4 py-3 text-right font-bold text-ancb-black dark:text-white text-base">{stat.points} Pts</td></tr>))}</tbody></table></div> : <div className="text-center py-10 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-dashed border-gray-200 dark:border-gray-600"><p className="text-gray-400 text-sm mb-1">Nenhum jogador escalado ou estatística encontrada.</p></div>}
                     </div>
                 )}
             </Modal>
-
-            <ReviewModal isOpen={showReviewModal} onClose={() => setShowReviewModal(false)} teammates={getTeammatesForReview()} onSubmit={handleSubmitReview} />
 
             {/* ADMIN MODALS */}
             <Modal isOpen={showAddGame} onClose={() => setShowAddGame(false)} title="Adicionar Jogo">

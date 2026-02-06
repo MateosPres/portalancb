@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player } from './types';
 import { auth, db, requestFCMToken, onMessageListener } from './services/firebase';
-import { doc, setDoc, collection, query, where, onSnapshot, orderBy, getDocs, addDoc, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, onSnapshot, orderBy, getDocs, addDoc, serverTimestamp, getDoc, updateDoc, collectionGroup } from 'firebase/firestore';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
 import { Modal } from './components/Modal';
@@ -16,7 +16,7 @@ import { RankingView } from './views/RankingView';
 import { AdminView } from './views/AdminView';
 import { PainelJogoView } from './views/PainelJogoView';
 import { ProfileView } from './views/ProfileView';
-import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink } from 'lucide-react';
+import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 // Chave VAPID fornecida para autenticação do Push Notification
@@ -28,19 +28,16 @@ const App: React.FC = () => {
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [ongoingEvents, setOngoingEvents] = useState<Evento[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showLoadingTimeout, setShowLoadingTimeout] = useState(false);
     const [isDarkMode, setIsDarkMode] = useState(false);
 
     // Auth Modals State
     const [showLogin, setShowLogin] = useState(false);
     const [showRegister, setShowRegister] = useState(false);
     
-    // Login State
+    // Login/Register State
     const [authEmail, setAuthEmail] = useState('');
     const [authPassword, setAuthPassword] = useState('');
     const [authError, setAuthError] = useState('');
-
-    // Register Form State
     const [regName, setRegName] = useState('');
     const [regNickname, setRegNickname] = useState('');
     const [regEmail, setRegEmail] = useState('');
@@ -63,117 +60,123 @@ const App: React.FC = () => {
     const [showNotifications, setShowNotifications] = useState(false);
     const [showQuiz, setShowQuiz] = useState(false);
     const [reviewTargetGame, setReviewTargetGame] = useState<{ gameId: string, eventId: string, playersToReview: Player[] } | null>(null);
-    const [foregroundNotification, setForegroundNotification] = useState<{title: string, body: string, eventId?: string} | null>(null);
+    const [foregroundNotification, setForegroundNotification] = useState<{title: string, body: string, eventId?: string, type?: string} | null>(null);
 
-    // --- PWA INSTALL STATE ---
+    // PWA & Theme
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     const [showInstallModal, setShowInstallModal] = useState(false);
     const [isIos, setIsIos] = useState(false);
     const [isStandalone, setIsStandalone] = useState(false);
 
-    // Theme Initialization
     useEffect(() => {
         const savedTheme = localStorage.getItem('theme');
         const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
-            setIsDarkMode(true);
-            document.documentElement.classList.add('dark');
-        } else {
-            setIsDarkMode(false);
-            document.documentElement.classList.remove('dark');
-        }
-    }, []);
+        setIsDarkMode(savedTheme === 'dark' || (!savedTheme && systemPrefersDark));
+        document.documentElement.classList.toggle('dark', savedTheme === 'dark' || (!savedTheme && systemPrefersDark));
 
-    // PWA Install Logic
-    useEffect(() => {
         const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
         setIsStandalone(isStandaloneMode);
-        const userAgent = window.navigator.userAgent.toLowerCase();
-        setIsIos(/iphone|ipad|ipod/.test(userAgent));
-        const handleBeforeInstallPrompt = (e: any) => {
-            e.preventDefault();
-            setDeferredPrompt(e);
-        };
+        setIsIos(/iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase()));
+        
+        const handleBeforeInstallPrompt = (e: any) => { e.preventDefault(); setDeferredPrompt(e); };
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
         return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     }, []);
 
-    // --- FCM SETUP ---
+    // --- NOTIFICATION WATCHERS ---
+    
+    // 1. Monitoramento de Convocações (Eventos Ativos)
     useEffect(() => {
-        let unsubscribeMsg: (() => void) | undefined;
-        if (user && userProfile) {
-            const initFCM = async () => {
-                try {
-                    const token = await requestFCMToken(VAPID_KEY);
-                    if (token && userProfile.fcmToken !== token) {
-                        await updateDoc(doc(db, "usuarios", user.uid), { fcmToken: token });
-                    }
-                } catch (e) { console.warn("FCM Not available:", e); }
-            };
-            initFCM();
-            unsubscribeMsg = onMessageListener((payload: any) => {
-                if (payload && payload.notification) {
-                    setForegroundNotification({
-                        title: payload.notification.title,
-                        body: payload.notification.body
-                    });
-                    setTimeout(() => setForegroundNotification(null), 8000);
-                }
-            });
-        }
-        return () => { if (unsubscribeMsg) unsubscribeMsg(); };
-    }, [user, userProfile]);
-
-    // --- REAL-TIME ROSTER WATCHER (PORTAL NOTIFIER) ---
-    useEffect(() => {
-        if (!userProfile?.linkedPlayerId) {
-            console.log("Watcher: Aguardando vínculo de jogador para monitorar convocações.");
-            return;
-        }
-
+        if (!userProfile?.linkedPlayerId) return;
         const myPlayerId = userProfile.linkedPlayerId;
-        console.log(`Watcher iniciado para o jogador: ${myPlayerId}`);
-
         const q = query(collection(db, "eventos"), where("status", "in", ["proximo", "andamento"]));
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        // Added type cast for snapshot to fix Property 'docChanges' error
+        return onSnapshot(q, (snapshot: any) => {
             const notifiedEvents = JSON.parse(localStorage.getItem('ancb_notified_rosters') || '[]');
-            let hasChanges = false;
-
-            snapshot.docChanges().forEach((change) => {
+            snapshot.docChanges().forEach((change: any) => {
                 if (change.type === "added" || change.type === "modified") {
                     const eventData = change.doc.data() as Evento;
                     const eventId = change.doc.id;
-
-                    // Se o meu ID está na lista de escalados e eu ainda não vi este alerta nesta sessão
                     if (eventData.jogadoresEscalados?.includes(myPlayerId) && !notifiedEvents.includes(eventId)) {
-                        console.log(`Nova convocação detectada para o evento: ${eventData.nome}`);
-                        
-                        const title = "Convocação ANCB!";
-                        const body = `Você foi escalado para: ${eventData.nome}. Confira os detalhes!`;
-
-                        // 1. Mostrar Toast no Portal (Interno)
-                        setForegroundNotification({ title, body, eventId });
-                        
-                        // 2. Tentar disparar notificação de sistema (Push local)
-                        if (Notification.permission === 'granted') {
-                            try { new Notification(title, { body, icon: 'https://i.imgur.com/SE2jHsz.png' }); } catch (e) {}
-                        }
-
-                        // 3. Registrar como notificado
+                        setForegroundNotification({ title: "Convocação!", body: `Você foi escalado para: ${eventData.nome}`, eventId, type: 'roster' });
+                        setTimeout(() => setForegroundNotification(null), 10000);
                         notifiedEvents.push(eventId);
-                        hasChanges = true;
+                        localStorage.setItem('ancb_notified_rosters', JSON.stringify(notifiedEvents));
+                        checkStaticNotifications();
                     }
                 }
             });
-
-            if (hasChanges) {
-                localStorage.setItem('ancb_notified_rosters', JSON.stringify(notifiedEvents));
-                checkStaticNotifications();
-            }
         });
+    }, [userProfile?.linkedPlayerId]);
 
-        return () => unsubscribe();
+    // 2. Monitoramento de Fim de Jogo (Avaliações)
+    useEffect(() => {
+        if (!userProfile?.linkedPlayerId) return;
+        const myPlayerId = userProfile.linkedPlayerId;
+        
+        // Listener em Tempo Real para QUALQUER jogo que mude para 'finalizado'
+        const q = query(collectionGroup(db, "jogos"), where("status", "==", "finalizado"));
+
+        // Added type cast for snapshot to fix Property 'docChanges' error
+        return onSnapshot(q, (snapshot: any) => {
+            const notifiedFinishes = JSON.parse(localStorage.getItem('ancb_notified_finishes') || '[]');
+            
+            snapshot.docChanges().forEach(async (change: any) => {
+                // Modified capta quando o Admin clica em "Finalizar"
+                if (change.type === "modified" || change.type === "added") {
+                    const gameData = change.doc.data() as Jogo;
+                    const gameId = change.doc.id;
+
+                    // Só processa se ainda não foi notificado nesta sessão/dispositivo
+                    if (!notifiedFinishes.includes(gameId)) {
+                        
+                        let shouldNotify = false;
+                        let eventId = "";
+
+                        // Verifica se o jogador estava no jogo diretamente
+                        if (gameData.jogadoresEscalados?.includes(myPlayerId)) {
+                            shouldNotify = true;
+                        } 
+                        
+                        // Se não achou no jogo, verifica no evento pai (fallback importante para torneios internos)
+                        if (!shouldNotify) {
+                            try {
+                                if (change.doc.ref.parent.parent) {
+                                    eventId = change.doc.ref.parent.parent.id;
+                                    const eventDoc = await getDoc(change.doc.ref.parent.parent);
+                                    if (eventDoc.exists()) {
+                                        const eventData = eventDoc.data() as Evento;
+                                        if (eventData.jogadoresEscalados?.includes(myPlayerId)) {
+                                            shouldNotify = true;
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                console.error("Erro ao buscar evento pai para notificação:", e);
+                            }
+                        } else {
+                            // Se achou no jogo, tenta pegar o eventId mesmo assim
+                            eventId = change.doc.ref.parent.parent?.id;
+                        }
+
+                        if (shouldNotify) {
+                            setForegroundNotification({
+                                title: "Partida Finalizada!",
+                                body: "Participe do Quiz de Scouting e avalie os atributos dos seus companheiros.",
+                                eventId: eventId,
+                                type: 'review'
+                            });
+                            
+                            setTimeout(() => setForegroundNotification(null), 12000);
+                            notifiedFinishes.push(gameId);
+                            localStorage.setItem('ancb_notified_finishes', JSON.stringify(notifiedFinishes));
+                            checkStaticNotifications();
+                        }
+                    }
+                }
+            });
+        });
     }, [userProfile?.linkedPlayerId]);
 
     const checkStaticNotifications = async () => {
@@ -194,22 +197,27 @@ const App: React.FC = () => {
             const eventsQ = query(collection(db, "eventos"), where("status", "==", "finalizado")); 
             const eventsSnap = await getDocs(eventsQ);
             for (const eventDoc of eventsSnap.docs) {
+                const eventData = eventDoc.data() as Evento;
                 const gamesSnap = await getDocs(collection(db, "eventos", eventDoc.id, "jogos"));
                 for (const gameDoc of gamesSnap.docs) {
                     const gameData = gameDoc.data() as Jogo;
-                    if (gameData.status === 'finalizado' && gameData.jogadoresEscalados?.includes(myPlayerId)) {
+                    
+                    // Verifica elegibilidade: Está no jogo OU está no evento
+                    const inGame = gameData.jogadoresEscalados?.includes(myPlayerId);
+                    const inEvent = eventData.jogadoresEscalados?.includes(myPlayerId);
+
+                    if (gameData.status === 'finalizado' && (inGame || inEvent)) {
                         const reviewQ = query(collection(db, "avaliacoes_gamified"), where("gameId", "==", gameDoc.id), where("reviewerId", "==", myPlayerId));
                         const reviewSnap = await getDocs(reviewQ);
                         if (reviewSnap.empty) {
-                            newNotifications.push({ id: `review-${gameDoc.id}`, type: 'pending_review', title: 'Avaliação Pós-Jogo', message: `Partida finalizada! Vote nas tags de destaque dos atletas.`, data: { gameId: gameDoc.id, eventId: eventDoc.id }, read: false, timestamp: new Date() });
+                            newNotifications.push({ id: `review-${gameDoc.id}`, type: 'pending_review', title: 'Scouting Pendente', message: `Vote nos atributos dos seus companheiros no Quiz.`, data: { gameId: gameDoc.id, eventId: eventDoc.id }, read: false, timestamp: new Date() });
                         }
                     }
                 }
             }
-
             const readIds = JSON.parse(localStorage.getItem('ancb_read_notifications') || '[]');
             setNotifications(newNotifications.map(n => ({ ...n, read: readIds.includes(n.id) })).reverse());
-        } catch (error) { console.error("Error checking notifications:", error); }
+        } catch (error) { console.error(error); }
     };
 
     useEffect(() => {
@@ -218,23 +226,6 @@ const App: React.FC = () => {
         return () => clearInterval(interval);
     }, [userProfile]);
 
-    const handleInstallClick = async () => {
-        if (isIos) setShowInstallModal(true);
-        else if (deferredPrompt) {
-            deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            if (outcome === 'accepted') setDeferredPrompt(null);
-        }
-    };
-
-    const toggleTheme = () => {
-        const newMode = !isDarkMode;
-        setIsDarkMode(newMode);
-        document.documentElement.classList.toggle('dark', newMode);
-        localStorage.setItem('theme', newMode ? 'dark' : 'light');
-    };
-
-    // --- AUTH LISTENER ---
     useEffect(() => {
         let unsubProfile: (() => void) | undefined;
         const unsubscribeAuth = auth.onAuthStateChanged(async (currentUser) => {
@@ -243,7 +234,8 @@ const App: React.FC = () => {
             if (currentUser) {
                 unsubProfile = onSnapshot(doc(db, "usuarios", currentUser.uid), (docSnap) => {
                     if (docSnap.exists()) {
-                        const profile = { ...docSnap.data(), uid: docSnap.id } as UserProfile;
+                        // Cast docSnap.data() to any for spreading
+                        const profile = { ...(docSnap.data() as any), uid: docSnap.id } as UserProfile;
                         if (profile.status === 'banned') { auth.signOut(); alert("Conta suspensa."); return; }
                         setUserProfile(profile);
                     }
@@ -257,14 +249,13 @@ const App: React.FC = () => {
     const handleOpenReviewQuiz = async (gameId: string, eventId: string) => {
         try {
             const playersSnap = await getDocs(collection(db, "jogadores"));
-            const allPlayers = playersSnap.docs.map(d => ({id: d.id, ...d.data()} as Player));
+            // Cast d.data() as any for spreading
+            const allPlayers = playersSnap.docs.map(d => ({id: d.id, ...(d.data() as any)} as Player));
             const eventDoc = await getDoc(doc(db, "eventos", eventId));
             const eventRoster = eventDoc.exists() ? (eventDoc.data() as Evento).jogadoresEscalados || [] : [];
             const playersToReview = allPlayers.filter(p => eventRoster.includes(p.id) && p.id !== userProfile?.linkedPlayerId);
-            if (playersToReview.length > 0) {
-                setReviewTargetGame({ gameId, eventId, playersToReview });
-                setShowQuiz(true);
-            }
+            if (playersToReview.length > 0) { setReviewTargetGame({ gameId, eventId, playersToReview }); setShowQuiz(true); }
+            else { alert("Não há outros jogadores para avaliar nesta partida."); }
         } catch (e) { alert("Erro ao carregar dados."); }
     };
 
@@ -276,28 +267,6 @@ const App: React.FC = () => {
         else if (notif.type === 'roster_alert') { setCurrentView('eventos'); setShowNotifications(false); }
     };
 
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try { await auth.signInWithEmailAndPassword(authEmail, authPassword); setShowLogin(false); setAuthEmail(''); setAuthPassword(''); }
-        catch (error) { setAuthError("Erro ao entrar. Verifique suas credenciais."); }
-    };
-
-    const handleRegister = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsRegistering(true);
-        try {
-            const userCredential = await auth.createUserWithEmailAndPassword(regEmail, regPassword);
-            const uid = userCredential.user.uid;
-            const cleanPhone = regPhone.replace(/\D/g, '');
-            const safeNickname = regNickname || regName.split(' ')[0];
-            const newProfile = { uid, nome: regName, apelido: safeNickname, email: regEmail, role: 'jogador', status: 'active', linkedPlayerId: uid };
-            const newPlayer: Player = { id: uid, userId: uid, nome: regName, apelido: safeNickname, cpf: regCpf, nascimento: regBirthDate, numero_uniforme: Number(regJerseyNumber) || 0, posicao: regPosition, foto: regPhotoPreview || '', status: 'pending', emailContato: regEmail, telefone: cleanPhone };
-            await setDoc(doc(db, "usuarios", uid), newProfile);
-            await setDoc(doc(db, "jogadores", uid), newPlayer);
-            setShowRegister(false); alert("Cadastro realizado! Aguarde aprovação.");
-        } catch (error: any) { setAuthError(error.message); } finally { setIsRegistering(false); }
-    };
-
     const renderHeader = () => (
         <header className="sticky top-0 z-50 bg-[#062553] text-white py-3 border-b border-white/10 shadow-lg">
             <div className="container mx-auto px-4 flex justify-between items-center">
@@ -306,7 +275,7 @@ const App: React.FC = () => {
                     <h1 className="text-lg md:text-2xl font-bold tracking-wide">Portal ANCB-MT</h1>
                 </div>
                 <div className="flex items-center gap-2 md:gap-3">
-                    <button onClick={toggleTheme} className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+                    <button onClick={() => { const newMode = !isDarkMode; setIsDarkMode(newMode); document.documentElement.classList.toggle('dark', newMode); localStorage.setItem('theme', newMode ? 'dark' : 'light'); }} className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors">
                         {isDarkMode ? <LucideSun size={20} /> : <LucideMoon size={20} />}
                     </button>
                     {userProfile ? (
@@ -342,37 +311,55 @@ const App: React.FC = () => {
                 <div className="space-y-8 animate-fadeIn">
                     {ongoingEvents.length > 0 && <LiveEventHero event={ongoingEvents[0]} onClick={() => setCurrentView('eventos')} />}
                     
-                    {/* RESTAURAÇÃO DOS CARDS ORIGINAIS DA HOME */}
-                    <section className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition-colors">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <Card onClick={() => setCurrentView('eventos')} emoji="📅">
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className="p-3 bg-blue-100 dark:bg-blue-900/30 text-ancb-blue dark:text-blue-400 rounded-full"><LucideCalendar size={24} /></div>
-                                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">Agenda</h3>
+                    {/* DESIGN RESTAURADO: CARDS DETALHADOS (Ícone Esquerda, Título, Descrição, Emoji Fundo) */}
+                    <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <Card onClick={() => setCurrentView('eventos')} className="cursor-pointer group hover:border-blue-300 transition-colors" emoji="📅">
+                            <div className="flex flex-col h-full">
+                                <div className="flex items-center gap-4 mb-4">
+                                    <div className="w-12 h-12 rounded-full bg-blue-100 text-ancb-blue flex items-center justify-center shrink-0">
+                                        <LucideCalendar size={24} />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Eventos</h3>
                                 </div>
-                                <p className="text-gray-600 dark:text-gray-300 text-sm">Calendário de jogos, torneios e treinos da associação.</p>
-                            </Card>
-                            <Card onClick={() => setCurrentView('jogadores')} emoji="🏀">
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className="p-3 bg-orange-100 dark:bg-orange-900/30 text-ancb-orange rounded-full"><LucideUsers size={24} /></div>
-                                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">Elenco</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    Veja o calendário completo de jogos, torneios e partidas amistosas.
+                                </p>
+                            </div>
+                        </Card>
+
+                        <Card onClick={() => setCurrentView('jogadores')} className="cursor-pointer group hover:border-orange-300 transition-colors" emoji="🏀">
+                            <div className="flex flex-col h-full">
+                                <div className="flex items-center gap-4 mb-4">
+                                    <div className="w-12 h-12 rounded-full bg-orange-100 text-ancb-orange flex items-center justify-center shrink-0">
+                                        <LucideUsers size={24} />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Jogadores</h3>
                                 </div>
-                                <p className="text-gray-600 dark:text-gray-300 text-sm">Conheça os atletas, fichas técnicas e estatísticas individuais.</p>
-                            </Card>
-                            <Card onClick={() => setCurrentView('ranking')} emoji="🏆">
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded-full"><LucideTrophy size={24} /></div>
-                                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">Ranking</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    Conheça os atletas, estatísticas individuais e fichas técnicas.
+                                </p>
+                            </div>
+                        </Card>
+
+                        <Card onClick={() => setCurrentView('ranking')} className="cursor-pointer group hover:border-yellow-300 transition-colors" emoji="🏆">
+                            <div className="flex flex-col h-full">
+                                <div className="flex items-center gap-4 mb-4">
+                                    <div className="w-12 h-12 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center shrink-0">
+                                        <LucideTrophy size={24} />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Ranking Global</h3>
                                 </div>
-                                <p className="text-gray-600 dark:text-gray-300 text-sm">Classificação geral, cestinhas e evolução da temporada.</p>
-                            </Card>
-                        </div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    Acompanhe a classificação geral, cestinhas e estatísticas da temporada.
+                                </p>
+                            </div>
+                        </Card>
                     </section>
                     
                     <Feed />
                 </div>
             );
-            case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onOpenGamePanel={(g, eid) => { setPanelGame(g); setPanelEventId(eid); setCurrentView('painel-jogo'); }} />;
+            case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onOpenGamePanel={(g, eid) => { setPanelGame(g); setPanelEventId(eid); setCurrentView('painel-jogo'); }} onOpenReview={handleOpenReviewQuiz} />;
             case 'jogadores': return <JogadoresView onBack={() => setCurrentView('home')} userProfile={userProfile} />;
             case 'ranking': return <RankingView onBack={() => setCurrentView('home')} />;
             case 'admin': return <AdminView onBack={() => setCurrentView('home')} onOpenGamePanel={(g, eid) => { setPanelGame(g); setPanelEventId(eid); setCurrentView('painel-jogo'); }} />;
@@ -382,7 +369,16 @@ const App: React.FC = () => {
         }
     };
 
-    if (loading) return <div className="fixed inset-0 bg-[#062553] flex items-center justify-center z-[9999]"><div className="w-12 h-12 border-4 border-white/20 border-t-ancb-orange rounded-full animate-spin"></div></div>;
+    if (loading) return (
+        <div className="fixed inset-0 bg-[#062553] flex flex-col items-center justify-center z-[9999]">
+            <div className="relative mb-6">
+                {/* Efeito Glow Pulsante */}
+                <div className="absolute inset-0 bg-blue-400 rounded-full blur-3xl opacity-20 animate-pulse scale-150"></div>
+                <img src="https://i.imgur.com/4TxBrHs.png" alt="ANCB" className="h-32 md:h-40 w-auto relative z-10 drop-shadow-2xl animate-fade-in" />
+            </div>
+            <div className="w-12 h-12 border-4 border-white/10 border-t-ancb-orange rounded-full animate-spin"></div>
+        </div>
+    );
 
     return (
         <div className="min-h-screen flex flex-col font-sans text-ancb-black dark:text-gray-100 bg-gray-50 dark:bg-gray-900 transition-colors">
@@ -391,23 +387,29 @@ const App: React.FC = () => {
                 {renderContent()}
             </main>
 
-            {/* TOAST DE NOTIFICAÇÃO CLICÁVEL E EFICIENTE */}
+            {/* TOAST DE NOTIFICAÇÃO - DEFINITIVAMENTE CLICÁVEL E ATUANTE */}
             {foregroundNotification && (
                 <div 
                     onClick={() => {
-                        setCurrentView('eventos');
+                        console.log("Toast clicado! Redirecionando...");
+                        if (foregroundNotification.type === 'review') {
+                            // Se for review, tentamos abrir o quiz se os dados existirem, ou vamos pro perfil
+                            setCurrentView('profile'); 
+                        } else {
+                            setCurrentView('eventos');
+                        }
                         setForegroundNotification(null);
                     }}
                     className="fixed top-20 right-4 z-[200] bg-white dark:bg-gray-800 shadow-2xl rounded-2xl border-l-8 border-ancb-orange p-5 max-w-sm animate-slideDown flex items-start gap-4 ring-1 ring-black/5 cursor-pointer hover:bg-orange-50 dark:hover:bg-gray-700 transition-all active:scale-95 group"
                 >
                     <div className="bg-orange-100 dark:bg-orange-900/30 p-3 rounded-full text-ancb-orange shrink-0 group-hover:rotate-12 transition-transform">
-                        <LucideMegaphone size={24} />
+                        {foregroundNotification.type === 'review' ? <LucideStar size={24} fill="currentColor" /> : <LucideMegaphone size={24} />}
                     </div>
                     <div className="flex-1 min-w-0">
                         <h4 className="font-bold text-gray-900 dark:text-white text-sm leading-tight mb-1">{foregroundNotification.title}</h4>
                         <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">{foregroundNotification.body}</p>
                         <div className="mt-3 flex items-center gap-1.5 text-ancb-blue dark:text-blue-400 text-[10px] font-black uppercase tracking-tighter">
-                            <LucideExternalLink size={12} /> Clique para ver detalhes
+                            <LucideExternalLink size={12} /> Clique para participar
                         </div>
                     </div>
                     <button onClick={(e) => { e.stopPropagation(); setForegroundNotification(null); }} className="text-gray-400 hover:text-red-500 p-1 rounded-full"><LucideX size={20} /></button>
@@ -417,7 +419,7 @@ const App: React.FC = () => {
             <footer className="bg-[#062553] text-white text-center py-8 mt-10">
                 <p className="font-bold mb-1">Associação Nova Canaã de Basquete - MT</p>
                 <p className="text-sm text-gray-400">&copy; 2025 Todos os direitos reservados.</p>
-                {(!isStandalone && (deferredPrompt || isIos)) && (<button onClick={handleInstallClick} className="mt-4 inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all"><LucideDownload size={14} /> Instalar Portal</button>)}
+                {(!isStandalone && (deferredPrompt || isIos)) && (<button onClick={() => { if (isIos) setShowInstallModal(true); else if (deferredPrompt) deferredPrompt.prompt(); }} className="mt-4 inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all"><LucideDownload size={14} /> Instalar Portal</button>)}
             </footer>
 
             <NotificationFab notifications={notifications} onClick={() => setShowNotifications(true)} />
@@ -441,7 +443,7 @@ const App: React.FC = () => {
             {reviewTargetGame && userProfile?.linkedPlayerId && <PeerReviewQuiz isOpen={showQuiz} onClose={() => setShowQuiz(false)} gameId={reviewTargetGame.gameId} eventId={reviewTargetGame.eventId} reviewerId={userProfile.linkedPlayerId} playersToReview={reviewTargetGame.playersToReview} />}
             
             <Modal isOpen={showLogin} onClose={() => setShowLogin(false)} title="Entrar">
-                <form onSubmit={handleLogin} className="space-y-4">
+                <form onSubmit={async (e) => { e.preventDefault(); try { await auth.signInWithEmailAndPassword(authEmail, authPassword); setShowLogin(false); setAuthEmail(''); setAuthPassword(''); } catch (error) { setAuthError("Erro ao entrar."); } }} className="space-y-4">
                     <input type="email" required placeholder="Email" className="w-full p-2 border rounded dark:bg-gray-700" value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
                     <input type="password" required placeholder="Senha" className="w-full p-2 border rounded dark:bg-gray-700" value={authPassword} onChange={e => setAuthPassword(e.target.value)} />
                     {authError && <p className="text-red-500 text-xs">{authError}</p>}

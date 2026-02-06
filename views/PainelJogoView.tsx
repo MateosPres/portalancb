@@ -34,9 +34,10 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
 
     useEffect(() => {
         // 1. Real-time game updates
-        const unsubGame = onSnapshot(doc(db, "eventos", eventId, "jogos", game.id), (doc) => {
-            if (doc.exists()) {
-                const updatedGame = { id: doc.id, ...doc.data() } as Jogo;
+        // Cast docSnap to any to avoid Property errors on DocumentSnapshot
+        const unsubGame = onSnapshot(doc(db, "eventos", eventId, "jogos", game.id), (docSnap: any) => {
+            if (docSnap.exists()) {
+                const updatedGame = { id: docSnap.id, ...(docSnap.data() as any) } as Jogo;
                 setLiveGame(updatedGame);
                 
                 // Check internal status
@@ -50,7 +51,11 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
             try {
                 // Fetch All Players
                 const pSnap = await getDocs(query(collection(db, "jogadores"), orderBy("nome")));
-                const players = pSnap.docs.map(d => ({ id: d.id, ...d.data(), nome: d.data().nome || 'Unknown' } as Player));
+                // Cast d.data() as any for spreading and property access
+                const players = pSnap.docs.map(d => {
+                    const data = d.data() as any;
+                    return { id: d.id, ...data, nome: data.nome || 'Unknown' } as Player;
+                });
                 setAllPlayers(players);
 
                 // Fetch Event Data to get Teams

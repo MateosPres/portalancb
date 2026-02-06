@@ -55,37 +55,37 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
 
     useEffect(() => {
         const qEvents = query(collection(db, "eventos"), orderBy("data", "desc"));
-        const unsubEvents = onSnapshot(qEvents, (snapshot) => {
-            setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evento)));
+        const unsubEvents = onSnapshot(qEvents, (snapshot: any) => {
+            setEvents(snapshot.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as any) } as Evento)));
         });
 
         const qPosts = query(collection(db, "feed_posts"), orderBy("timestamp", "desc"));
-        const unsubPosts = onSnapshot(qPosts, (snapshot) => {
-            setFeedPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedPost)));
+        const unsubPosts = onSnapshot(qPosts, (snapshot: any) => {
+            setFeedPosts(snapshot.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as any) } as FeedPost)));
         });
 
         const qClaims = query(collection(db, "solicitacoes_vinculo"), where("status", "==", "pending"));
-        const unsubClaims = onSnapshot(qClaims, (snapshot) => {
-            setClaimRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ClaimRequest)));
+        const unsubClaims = onSnapshot(qClaims, (snapshot: any) => {
+            setClaimRequests(snapshot.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as any) } as ClaimRequest)));
         });
 
         const qPhotos = query(collection(db, "solicitacoes_foto"), where("status", "==", "pending"));
-        const unsubPhotos = onSnapshot(qPhotos, (snapshot) => {
-            setPhotoRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PhotoRequest)));
+        const unsubPhotos = onSnapshot(qPhotos, (snapshot: any) => {
+            setPhotoRequests(snapshot.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as any) } as PhotoRequest)));
         });
 
         const qPendingPlayers = query(collection(db, "jogadores"), where("status", "==", "pending"));
-        const unsubPendingPlayers = onSnapshot(qPendingPlayers, (snapshot) => {
-            setPendingPlayers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player)));
+        const unsubPendingPlayers = onSnapshot(qPendingPlayers, (snapshot: any) => {
+            setPendingPlayers(snapshot.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as any) } as Player)));
         });
 
         const qActivePlayers = query(collection(db, "jogadores"), orderBy("nome"));
-        const unsubActivePlayers = onSnapshot(qActivePlayers, (snapshot) => {
-            const allPlayers = snapshot.docs.map(doc => {
+        const unsubActivePlayers = onSnapshot(qActivePlayers, (snapshot: any) => {
+            const allPlayers = snapshot.docs.map((doc: any) => {
                 const d = doc.data();
                 return { id: doc.id, ...d, nome: d.nome || 'Desconhecido' } as Player;
             });
-            const visible = allPlayers.filter(p => p.status === 'active' || !p.status);
+            const visible = allPlayers.filter((p: any) => p.status === 'active' || !p.status);
             setActivePlayers(visible);
         });
 
@@ -97,8 +97,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     useEffect(() => {
         if (!selectedEvent) return;
         const q = query(collection(db, "eventos", selectedEvent.id, "jogos"), orderBy("dataJogo", "desc"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            setEventGames(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Jogo)));
+        const unsubscribe = onSnapshot(q, (snapshot: any) => {
+            setEventGames(snapshot.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as any) } as Jogo)));
         });
         return () => unsubscribe();
     }, [selectedEvent]);
@@ -109,7 +109,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
             const q = query(collection(db, "avaliacoes_gamified"), orderBy("timestamp", "desc"), limit(50));
             const snap = await getDocs(q);
             const enriched = snap.docs.map(doc => {
-                const data = doc.data();
+                const data = doc.data() as any;
                 const reviewer = activePlayers.find(p => p.id === data.reviewerId);
                 const target = activePlayers.find(p => p.id === data.targetId);
                 return { id: doc.id, ...data, reviewerName: reviewer?.nome || 'Desconhecido', targetName: target?.nome || 'Desconhecido' };

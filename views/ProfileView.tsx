@@ -1,10 +1,12 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, deleteDoc, limit } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { UserProfile, Player, PlayerReview, Jogo, Evento, Cesta } from '../types';
 import { Button } from '../components/Button';
-import { LucideArrowLeft, LucideSave, LucideCamera, LucideLink, LucideSearch, LucideCheckCircle2, LucideAlertCircle, LucideLoader2, LucideClock, LucideMessageSquare, LucideStar, LucideHistory, LucideTrash2, LucidePlayCircle } from 'lucide-react';
+import { LucideArrowLeft, LucideSave, LucideCamera, LucideLink, LucideSearch, LucideCheckCircle2, LucideAlertCircle, LucideLoader2, LucideClock, LucideMessageSquare, LucideStar, LucideHistory, LucideTrash2, LucidePlayCircle, LucideCalendarDays } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
+import { RadarChart } from '../components/RadarChart';
 
 interface ProfileViewProps {
     userProfile: UserProfile;
@@ -29,14 +31,55 @@ interface MatchHistoryItem {
     cesta3: number;
 }
 
+// Helper functions copied for Profile Scouting View
+const calculateStatsFromTags = (tags?: Record<string, number>) => {
+    let stats = { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
+    if (!tags) return stats;
+    const WEIGHTS: Record<string, any> = {
+        'muralha': { defesa: 5, forca: 2 },
+        'sniper': { ataque: 5 },
+        'garcom': { visao: 5 },
+        'flash': { velocidade: 4, ataque: 2 },
+        'lider': { visao: 4, defesa: 2 },
+        'guerreiro': { forca: 5, defesa: 2 },
+        'avenida': { defesa: -5 },
+        'fominha': { visao: -5 },
+        'tijoleiro': { ataque: -3 },
+        'cone': { velocidade: -5, defesa: -2 }
+    };
+    Object.entries(tags).forEach(([tag, count]) => {
+        const impact = WEIGHTS[tag];
+        if (impact) {
+            if (impact.ataque) stats.ataque += (impact.ataque * count);
+            if (impact.defesa) stats.defesa += (impact.defesa * count);
+            if (impact.forca) stats.forca += (impact.forca * count);
+            if (impact.velocidade) stats.velocidade += (impact.velocidade * count);
+            if (impact.visao) stats.visao += (impact.visao * count);
+        }
+    });
+    const clamp = (n: number) => Math.max(20, Math.min(n, 99));
+    return { ataque: clamp(stats.ataque), defesa: clamp(stats.defesa), forca: clamp(stats.forca), velocidade: clamp(stats.velocidade), visao: clamp(stats.visao) };
+};
+
+const TAG_META: Record<string, {label: string, emoji: string}> = {
+    'muralha': { label: 'Muralha', emoji: '🧱' },
+    'sniper': { label: 'Sniper', emoji: '🎯' },
+    'garcom': { label: 'Garçom', emoji: '🤝' },
+    'flash': { label: 'Flash', emoji: '⚡' },
+    'lider': { label: 'Líder', emoji: '🧠' },
+    'guerreiro': { label: 'Guerreiro', emoji: '🛡️' },
+    'avenida': { label: 'Avenida', emoji: '🛣️' },
+    'fominha': { label: 'Fominha', emoji: '🍽️' },
+    'tijoleiro': { label: 'Pedreiro', emoji: '🏗️' },
+    'cone': { label: 'Cone', emoji: '⚠️' }
+};
+
 export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, onOpenReview }) => {
     const [loading, setLoading] = useState(true);
     const [formData, setFormData] = useState<Partial<Player>>({});
     
-    // Tab State
-    const [activeTab, setActiveTab] = useState<'info' | 'testimonials' | 'matches'>('matches'); // Default matches to see content immediately
-    const [testimonials, setTestimonials] = useState<PlayerReview[]>([]);
-    const [loadingTestimonials, setLoadingTestimonials] = useState(false);
+    // Tab State - REMOVED TESTIMONIALS, ADDED SCOUTING
+    const [activeTab, setActiveTab] = useState<'matches' | 'scouting' | 'data'>('matches'); 
     
     // Matches History State
     const [matches, setMatches] = useState<MatchHistoryItem[]>([]);
@@ -135,31 +178,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         return () => { isMounted = false; };
     }, [playerDocId, userProfile.uid, userProfile.linkedPlayerId, userProfile.nome]);
 
-    // FETCH TESTIMONIALS
-    useEffect(() => {
-        if (activeTab === 'testimonials') {
-            const fetchTestimonials = async () => {
-                setLoadingTestimonials(true);
-                try {
-                    const q = query(
-                        collection(db, "avaliacoes"), 
-                        where("revieweeId", "==", playerDocId),
-                        orderBy("timestamp", "desc")
-                    );
-                    const snap = await getDocs(q);
-                    const data = snap.docs.map(d => ({id: d.id, ...d.data()} as PlayerReview));
-                    setTestimonials(data);
-                } catch (e) {
-                    console.error("Error fetching testimonials", e);
-                } finally {
-                    setLoadingTestimonials(false);
-                }
-            };
-            fetchTestimonials();
-        }
-    }, [activeTab, playerDocId]);
-
-    // FETCH MATCH HISTORY - IMPROVED LOGIC
+    // FETCH MATCH HISTORY
     useEffect(() => {
         if (activeTab === 'matches') {
             const fetchMatches = async () => {
@@ -178,36 +197,24 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                         for (const gameDoc of gamesSnap.docs) {
                             const gameData = gameDoc.data() as Jogo;
                             let played = false;
-                            let isTeamA = true; // Default assumption
+                            let isTeamA = true; 
 
-                            // 1. Determine Participation and Team Side
                             if (gameData.jogadoresEscalados?.includes(playerDocId)) {
                                 played = true;
-                                // Can't easily determine team side from simple roster array without extra data, 
-                                // so we check internal tournament teams logic below.
                             }
                             
-                            // 2. Internal Tournament Team Check (More accurate for Team assignment)
                             if (eventData.type === 'torneio_interno' && eventData.times) {
                                 const teamA = eventData.times.find(t => t.id === gameData.timeA_id);
                                 const teamB = eventData.times.find(t => t.id === gameData.timeB_id);
-                                
-                                if (teamA?.jogadores?.includes(playerDocId)) {
-                                    played = true;
-                                    isTeamA = true;
-                                } else if (teamB?.jogadores?.includes(playerDocId)) {
-                                    played = true;
-                                    isTeamA = false;
-                                }
+                                if (teamA?.jogadores?.includes(playerDocId)) { played = true; isTeamA = true; } 
+                                else if (teamB?.jogadores?.includes(playerDocId)) { played = true; isTeamA = false; }
                             }
-                            // 3. Fallback for External/Amistoso (Legacy)
                             else if ((!gameData.jogadoresEscalados || gameData.jogadoresEscalados.length === 0) && eventData.jogadoresEscalados?.includes(playerDocId)) {
                                 played = true;
-                                isTeamA = true; // Usually ANCB is Team A in external games
+                                isTeamA = true; 
                             }
 
                             if (played) {
-                                // --- FETCH INDIVIDUAL STATS FOR THIS GAME ---
                                 let points = 0;
                                 let c1 = 0;
                                 let c2 = 0;
@@ -226,29 +233,20 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                                     }
                                 };
 
-                                // 1. Try Subcollection first (Newer structure)
                                 try {
                                     const subCestas = await getDocs(collection(db, "eventos", eventDoc.id, "jogos", gameDoc.id, "cestas"));
-                                    subCestas.forEach(d => countCesta({id: d.id, ...d.data()} as Cesta));
+                                    subCestas.forEach(d => countCesta({id: d.id, ...(d.data() as any)} as Cesta));
                                 } catch(e) {}
 
-                                // 2. Try Root Collection (Legacy/Fallback)
                                 try {
                                     const rootCestasQuery = query(collection(db, "cestas"), where("jogoId", "==", gameDoc.id), where("jogadorId", "==", playerDocId));
                                     const rootCestas = await getDocs(rootCestasQuery);
-                                    rootCestas.forEach(d => countCesta({id: d.id, ...d.data()} as Cesta));
+                                    rootCestas.forEach(d => countCesta({id: d.id, ...(d.data() as any)} as Cesta));
                                 } catch (e) {}
-                                // ---------------------------------------------
 
-                                // Check review status
-                                const reviewQ = query(
-                                    collection(db, "avaliacoes"), 
-                                    where("gameId", "==", gameDoc.id),
-                                    where("reviewerId", "==", playerDocId)
-                                );
+                                const reviewQ = query(collection(db, "avaliacoes_gamified"), where("gameId", "==", gameDoc.id), where("reviewerId", "==", playerDocId));
                                 const reviewSnap = await getDocs(reviewQ);
                                 
-                                // Score Logic with Legacy Fallback
                                 const sA = gameData.placarTimeA_final ?? gameData.placarANCB_final ?? 0;
                                 const sB = gameData.placarTimeB_final ?? gameData.placarAdversario_final ?? 0;
 
@@ -296,7 +294,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 const snap = await getDocs(q);
                 
                 const matches = snap.docs
-                    .map(d => ({id: d.id, ...d.data()} as Player))
+                    .map(d => ({id: d.id, ...(d.data() as any)} as Player))
                     .filter(p => {
                         const pName = p.nome ? p.nome.toLowerCase() : '';
                         const pNick = p.apelido ? p.apelido.toLowerCase() : '';
@@ -389,27 +387,30 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         }
     };
 
-    const handleDeleteReview = async (reviewId: string) => {
-        if (!window.confirm("Excluir este comentário permanentemente?")) return;
-        try {
-            await deleteDoc(doc(db, "avaliacoes", reviewId));
-            setTestimonials(prev => prev.filter(t => t.id !== reviewId));
-        } catch (e) {
-            console.error(e);
-            alert("Erro ao excluir.");
+    const calculateAge = (dateString?: string) => {
+        if (!dateString) return '-';
+        const today = new Date();
+        const birthDate = new Date(dateString);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
         }
-    };
-
-    const formatReviewDate = (timestamp: any) => {
-        if (!timestamp) return '';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(date);
+        return age;
     };
 
     const formatDate = (dateStr?: string) => {
         if (!dateStr) return '';
         return dateStr.split('-').reverse().join('/');
     };
+
+    const radarStats = calculateStatsFromTags(formData.stats_tags);
+    const topTags = formData.stats_tags 
+        ? Object.entries(formData.stats_tags)
+            .sort((a, b) => (b[1] as number) - (a[1] as number))
+            .slice(0, 3)
+            .map(([key, count]) => ({ key, count, ...TAG_META[key] }))
+        : [];
 
     if (loading) {
         return (
@@ -440,21 +441,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     Partidas
                 </button>
                 <button 
-                    onClick={() => setActiveTab('info')}
-                    className={`pb-3 px-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'info' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                    onClick={() => setActiveTab('data')}
+                    className={`pb-3 px-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'data' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
                 >
                     Dados
                 </button>
                 <button 
-                    onClick={() => setActiveTab('testimonials')}
-                    className={`pb-3 px-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'testimonials' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                    onClick={() => setActiveTab('scouting')}
+                    className={`pb-3 px-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'scouting' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
                 >
-                    Depoimentos
+                    Scouting
                 </button>
             </div>
 
             <div className="p-6">
-                {activeTab === 'info' && (
+                {activeTab === 'data' && (
                     <>
                         {/* Profile Association Status */}
                         {!userProfile.linkedPlayerId && claimStatus === 'none' && (
@@ -507,16 +508,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                                             <p className="text-xs text-center text-gray-400 mt-2">Nenhum atleta disponível encontrado com este nome.</p>
                                         )}
                                     </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {claimStatus === 'pending' && (
-                            <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800 flex items-center gap-3">
-                                <LucideAlertCircle className="text-yellow-600 dark:text-yellow-400" size={20} />
-                                <div>
-                                    <p className="text-sm font-bold text-gray-800 dark:text-white">Solicitação em Análise</p>
-                                    <p className="text-xs text-gray-600 dark:text-gray-400">Aguardando aprovação do administrador para vincular seu perfil.</p>
                                 </div>
                             </div>
                         )}
@@ -687,69 +678,48 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     </div>
                 )}
 
-                {activeTab === 'testimonials' && (
-                    <div className="animate-fadeIn">
-                        {loadingTestimonials ? (
-                            <div className="flex justify-center py-10">
-                                <LucideLoader2 className="animate-spin text-ancb-blue" />
+                {activeTab === 'scouting' && (
+                    <div className="space-y-4 animate-fadeIn">
+                        {/* RADAR CHART & BADGES (New Scouting Section) */}
+                        <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-4 text-center">Atributos (Peer Review)</h3>
+                            
+                            <div className="mb-6">
+                                <RadarChart stats={radarStats} size={220} />
                             </div>
-                        ) : testimonials.length > 0 ? (
-                            <div className="space-y-4">
-                                {testimonials.map(review => {
-                                    // Logic for deleting self-review
-                                    const isAuthor = userProfile.linkedPlayerId === review.reviewerId;
-                                    const canDelete = userProfile.role === 'admin' || isAuthor;
 
-                                    return (
-                                        <div key={review.id} className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-xl border border-gray-100 dark:border-gray-700 relative group">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden">
-                                                        {review.reviewerPhoto ? (
-                                                            <img src={review.reviewerPhoto} className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            <div className="w-full h-full flex items-center justify-center font-bold text-xs text-gray-500">{review.reviewerName.charAt(0)}</div>
-                                                        )}
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-gray-800 dark:text-white">{review.reviewerName}</p>
-                                                        <p className="text-[10px] text-gray-400 uppercase">{formatReviewDate(review.timestamp)}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="flex text-yellow-400">
-                                                        {[...Array(review.rating)].map((_, i) => <LucideStar key={i} size={12} fill="currentColor" />)}
-                                                    </div>
-                                                    <span className="text-xl" title="Tag">{review.emojiTag}</span>
-                                                </div>
+                            {topTags.filter(t => t.count > 0).length > 0 && (
+                                <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                                    <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 text-center">Principais Características</h4>
+                                    <div className="flex justify-center gap-2">
+                                        {topTags.filter(t => t.count > 0).map(tag => (
+                                            <div key={tag.key} className="flex flex-col items-center bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm min-w-[70px]">
+                                                <span className="text-xl mb-1">{tag.emoji}</span>
+                                                <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase">{tag.label}</span>
+                                                <span className="text-[9px] text-ancb-blue font-bold">x{tag.count}</span>
                                             </div>
-                                            {review.comment && (
-                                                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg text-sm text-gray-600 dark:text-gray-300 italic relative">
-                                                    <LucideMessageSquare size={12} className="absolute -top-1.5 -left-1 text-gray-300" />
-                                                    "{review.comment}"
-                                                </div>
-                                            )}
-                                            
-                                            {/* DELETE BUTTON */}
-                                            {canDelete && (
-                                                <button 
-                                                    onClick={() => handleDeleteReview(review.id)}
-                                                    className="absolute top-2 right-2 p-1.5 text-red-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                                                    title="Excluir Comentário"
-                                                >
-                                                    <LucideTrash2 size={14} />
-                                                </button>
-                                            )}
-                                        </div>
-                                    );
-                                })}
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Basic Info (Collapsed) */}
+                        <div className="grid grid-cols-2 gap-3 w-full">
+                            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center">
+                                <LucideCalendarDays className="text-ancb-blue dark:text-blue-400 mb-1" size={20} />
+                                <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">Idade</span>
+                                <span className="text-lg font-bold text-gray-800 dark:text-gray-200">
+                                    {formData.nascimento ? calculateAge(formData.nascimento) : '-'}
+                                </span>
                             </div>
-                        ) : (
-                            <div className="text-center py-12 bg-gray-50 dark:bg-gray-700/20 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
-                                <LucideMessageSquare className="mx-auto text-gray-300 mb-2" size={32} />
-                                <p className="text-gray-500 text-sm">Nenhum depoimento recebido ainda.</p>
+                            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center justify-center">
+                                <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Nome</span>
+                                <span className="text-xs font-bold text-gray-800 dark:text-gray-200 leading-tight">
+                                    {formData.nome}
+                                </span>
                             </div>
-                        )}
+                        </div>
                     </div>
                 )}
             </div>
