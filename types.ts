@@ -11,6 +11,17 @@ export interface UserProfile {
     fcmToken?: string; // Token para Notificações Push
 }
 
+export interface Badge {
+    id: string;
+    nome: string;
+    emoji: string;
+    categoria: 'partida' | 'temporada' | 'atributo';
+    raridade: 'comum' | 'rara' | 'epica' | 'lendaria'; // Comum (Bronze), Rara (Prata), Epica (Ouro), Lendaria (MVP Season)
+    data: string;
+    descricao: string;
+    gameId?: string;
+}
+
 export interface Player {
     id: string;
     nome: string;
@@ -26,6 +37,8 @@ export interface Player {
     emailContato?: string;
     // New Gamification Stats
     stats_tags?: Record<string, number>; // e.g. { 'muralha': 10, 'sniper': 5 }
+    badges?: Badge[]; // Conquistas acumuladas
+    reputation?: number; // Score de Fair Play/Reputação
 }
 
 export interface ClaimRequest {

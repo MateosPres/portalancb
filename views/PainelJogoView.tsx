@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { collection, doc, onSnapshot, updateDoc, addDoc, serverTimestamp, getDocs, query, orderBy, getDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Jogo, Player, Evento, PlayerReview, UserProfile, Time } from '../types';
+import { Jogo, Player, Evento, UserProfile, Cesta } from '../types';
 import { Button } from '../components/Button';
-import { LucideArrowLeft, LucideSearch, LucideCheckCircle2, LucideUsers, LucideShield, LucideLock, LucideEdit, LucideSend } from 'lucide-react';
+import { LucideArrowLeft, LucideSearch, LucideCheckCircle2, LucideLock, LucideEdit, LucideSend } from 'lucide-react';
 
 interface PainelJogoViewProps {
     game: Jogo;
@@ -36,7 +35,6 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
 
     useEffect(() => {
         // 1. Real-time game updates
-        // Cast docSnap to any to avoid Property errors on DocumentSnapshot
         const unsubGame = onSnapshot(doc(db, "eventos", eventId, "jogos", game.id), (docSnap: any) => {
             if (docSnap.exists()) {
                 const updatedGame = { id: docSnap.id, ...(docSnap.data() as any) } as Jogo;
@@ -53,7 +51,6 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
             try {
                 // Fetch All Players
                 const pSnap = await getDocs(query(collection(db, "jogadores"), orderBy("nome")));
-                // Cast d.data() as any for spreading and property access
                 const players = pSnap.docs.map(d => {
                     const data = d.data() as any;
                     return { id: d.id, ...data, nome: data.nome || 'Unknown' } as Player;
@@ -128,7 +125,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
 
     const handleFinishGame = async () => {
         if (!isAdmin) return;
-        if (!window.confirm("ATENÇÃO: Finalizar a partida disparará notificações para todos os jogadores envolvidos. Continuar?")) return;
+        if (!window.confirm("ATENÇÃO: Finalizar a partida notificará os jogadores para avaliação. Continuar?")) return;
         
         setFinishing(true);
         try {
@@ -136,38 +133,33 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
             let gameRosterIds: string[] = [];
             
             if (isInternal) {
-                // Combina jogadores dos dois times
                 const teamAIds = teamAPlayers.map(p => p.id);
                 const teamBIds = teamBPlayers.map(p => p.id);
                 gameRosterIds = [...teamAIds, ...teamBIds];
             } else {
-                // Usa elenco ANCB
                 gameRosterIds = ancbPlayers.map(p => p.id);
             }
-
-            // Remove duplicatas
             gameRosterIds = Array.from(new Set(gameRosterIds));
 
-            // 2. Atualizar documento do Jogo (Status e Roster final completo)
+            // 2. Atualizar documento do Jogo
             await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), { 
                 status: 'finalizado',
-                jogadoresEscalados: gameRosterIds // Garante que todos que deveriam estar, estão marcados
+                jogadoresEscalados: gameRosterIds
             });
 
-            // 3. Enviar Notificações Ativas (Push in-app)
             const batch = writeBatch(db);
             let notificationCount = 0;
 
+            // 3. Enviar Notificações (Badges agora são calculadas no Admin -> Recalcular Histórico)
             gameRosterIds.forEach(playerId => {
                 const player = allPlayers.find(p => p.id === playerId);
-                // Verifica se o jogador tem um Usuário vinculado (userId)
                 if (player && player.userId) {
                     const notifRef = doc(collection(db, "notifications"));
                     batch.set(notifRef, {
                         targetUserId: player.userId,
                         type: 'pending_review',
                         title: 'Partida Finalizada!',
-                        message: `Avalie seus companheiros no jogo ${liveGame.timeA_nome || 'ANCB'} vs ${liveGame.timeB_nome || liveGame.adversario || 'ADV'}.`,
+                        message: `Avalie seus companheiros do jogo ${liveGame.timeA_nome || 'ANCB'} vs ${liveGame.timeB_nome || liveGame.adversario || 'ADV'}.`,
                         gameId: game.id,
                         eventId: eventId,
                         read: false,
@@ -177,11 +169,8 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                 }
             });
 
-            if (notificationCount > 0) {
-                await batch.commit();
-                alert(`${notificationCount} notificações enviadas para os atletas.`);
-            }
-
+            await batch.commit();
+            alert(`Partida finalizada! ${notificationCount} notificações enviadas.`);
             onBack();
         } catch (e) {
             console.error(e);

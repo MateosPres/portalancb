@@ -42,6 +42,9 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, onClick }) => {
         return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     };
 
+    // Get 3 recent badges
+    const recentBadges = player.badges ? [...player.badges].reverse().slice(0, 3) : [];
+
     return (
         <div 
             onClick={onClick}
@@ -72,7 +75,18 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, onClick }) => {
 
             {/* Full Name (small) */}
             {player.apelido && (
-                <p className="text-xs text-gray-400 dark:text-gray-500 text-center line-clamp-1">{player.nome}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 text-center line-clamp-1 mb-2">{player.nome}</p>
+            )}
+
+            {/* Badges Footer */}
+            {recentBadges.length > 0 && (
+                <div className="flex justify-center gap-1 mt-auto pt-2 border-t border-gray-100 dark:border-gray-700 w-full">
+                    {recentBadges.map((badge, idx) => (
+                        <div key={idx} className="text-sm" title={badge.nome}>
+                            {badge.emoji}
+                        </div>
+                    ))}
+                </div>
             )}
         </div>
     );

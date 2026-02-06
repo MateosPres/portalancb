@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, getDocs, doc, updateDoc, where, collectionGroup } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Player, UserProfile, Evento, Jogo, PlayerReview, Cesta } from '../types';
+import { Player, UserProfile, Evento, Jogo, PlayerReview, Cesta, Badge } from '../types';
 import { PlayerCard } from '../components/PlayerCard';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
@@ -22,7 +21,10 @@ import {
     LucideCheckCircle2,
     LucideCrosshair,
     LucideUsers,
-    LucideHexagon
+    LucideHexagon,
+    LucideMedal,
+    LucideInfo,
+    LucideTrendingUp
 } from 'lucide-react';
 
 interface JogadoresViewProps {
@@ -48,7 +50,7 @@ interface MatchHistoryItem {
     cesta3: number;
 }
 
-// Helper to calculate Stats from Tags (5 Attributes)
+// Updated Helper to calculate Stats from Tags (5 Attributes) with New Weights
 const calculateStatsFromTags = (tags?: Record<string, number>) => {
     // Base stats
     let stats = { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
@@ -56,16 +58,18 @@ const calculateStatsFromTags = (tags?: Record<string, number>) => {
     if (!tags) return stats;
 
     const WEIGHTS: Record<string, any> = {
-        'muralha': { defesa: 5, forca: 2 },
-        'sniper': { ataque: 5 },
-        'garcom': { visao: 5 },
-        'flash': { velocidade: 4, ataque: 2 },
-        'lider': { visao: 4, defesa: 2 },
-        'guerreiro': { forca: 5, defesa: 2 },
-        'avenida': { defesa: -5 },
-        'fominha': { visao: -5 },
-        'tijoleiro': { ataque: -3 },
-        'cone': { velocidade: -5, defesa: -2 }
+        // Positivas
+        'sniper': { ataque: 3 },
+        'muralha': { defesa: 3 },
+        'lider': { visao: 2 },
+        'garcom': { visao: 2 },
+        'flash': { velocidade: 1 },
+        'guerreiro': { forca: 1 },
+        // Negativas
+        'fominha': { visao: -1 },
+        'tijoleiro': { ataque: -2 }, // Pedreiro
+        'avenida': { defesa: -2 },
+        'cone': { velocidade: -3 }
     };
 
     Object.entries(tags).forEach(([tag, count]) => {
@@ -117,6 +121,9 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const [matches, setMatches] = useState<MatchHistoryItem[]>([]);
     const [loadingMatches, setLoadingMatches] = useState(false);
     
+    // Badge Details Modal State
+    const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
+
     // Admin Edit State
     const [isEditing, setIsEditing] = useState(false);
     const [editFormData, setEditFormData] = useState<Partial<Player>>({});
@@ -379,6 +386,15 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         }
     };
 
+    const getRarityColor = (rarity: Badge['raridade']) => {
+        switch(rarity) {
+            case 'lendaria': return 'bg-gradient-to-r from-purple-500 to-pink-600 text-white border-purple-300';
+            case 'epica': return 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white border-yellow-300';
+            case 'rara': return 'bg-gradient-to-r from-gray-300 to-gray-400 text-white border-gray-200';
+            default: return 'bg-gradient-to-r from-orange-700 to-orange-800 text-white border-orange-900'; // Bronze
+        }
+    };
+
     const radarStats = selectedPlayer 
         ? calculateStatsFromTags(selectedPlayer.stats_tags) 
         : { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
@@ -387,7 +403,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         ? Object.entries(selectedPlayer.stats_tags)
             .sort((a, b) => (b[1] as number) - (a[1] as number))
             .slice(0, 3)
-            .map(([key, count]) => ({ key, count, ...TAG_META[key] }))
+            .map(([key, count]) => ({ key, count: Number(count), ...TAG_META[key] }))
         : [];
 
     return (
@@ -489,9 +505,37 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                         <div className="w-full">
                             {activeTab === 'info' && (
                                 <div className="space-y-4 animate-fadeIn">
+                                    
+                                    {/* TROPHY GALLERY (Copied from ProfileView) */}
+                                    {selectedPlayer.badges && selectedPlayer.badges.length > 0 && (
+                                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
+                                            <div className="flex items-center justify-between mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <LucideMedal className="text-yellow-500" size={18} />
+                                                    <h3 className="font-bold text-gray-800 dark:text-white uppercase tracking-wider text-xs">Galeria de Troféus</h3>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                                                {selectedPlayer.badges.map((badge, idx) => (
+                                                    <div 
+                                                        key={idx} 
+                                                        onClick={() => setSelectedBadge(badge)}
+                                                        className={`p-2 rounded-lg border flex flex-col items-center text-center shadow-sm cursor-pointer hover:scale-105 transition-transform active:scale-95 ${getRarityColor(badge.raridade)}`}
+                                                    >
+                                                        <span className="text-xl mb-1 drop-shadow-md">{badge.emoji}</span>
+                                                        <span className="text-[8px] font-bold leading-tight uppercase line-clamp-2">{badge.nome}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* RADAR CHART & BADGES (New Scouting Section) */}
                                     <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                                        <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-4 text-center">Atributos (Peer Review)</h3>
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <LucideTrendingUp className="text-ancb-orange" size={18} />
+                                            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Atributos (Peer Review)</h3>
+                                        </div>
                                         
                                         <div className="mb-6">
                                             <RadarChart stats={radarStats} size={220} />
@@ -679,6 +723,39 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                 </div>
                             )}
                         </div>
+                    </div>
+                )}
+            </Modal>
+
+            {/* BADGE DETAILS MODAL */}
+            <Modal isOpen={!!selectedBadge} onClose={() => setSelectedBadge(null)} title="Detalhes da Conquista">
+                {selectedBadge && (
+                    <div className="text-center p-4">
+                        <div className="text-8xl mb-4 animate-bounce-slow drop-shadow-xl">{selectedBadge.emoji}</div>
+                        <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 uppercase tracking-wide">{selectedBadge.nome}</h3>
+                        
+                        <div className="mb-6 flex justify-center">
+                            <span className={`px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                                selectedBadge.raridade === 'lendaria' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
+                                selectedBadge.raridade === 'epica' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
+                                selectedBadge.raridade === 'rara' ? 'bg-gray-200 text-gray-700 border border-gray-300' :
+                                'bg-orange-100 text-orange-800 border border-orange-300'
+                            }`}>
+                                {selectedBadge.raridade === 'comum' ? 'Bronze' : 
+                                 selectedBadge.raridade === 'rara' ? 'Prata' : 
+                                 selectedBadge.raridade === 'epica' ? 'Ouro' : 'Lendária'}
+                            </span>
+                        </div>
+
+                        <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-600 mb-4">
+                            <p className="text-gray-600 dark:text-gray-300 text-sm font-medium leading-relaxed">
+                                {selectedBadge.descricao}
+                            </p>
+                        </div>
+
+                        <p className="text-xs text-gray-400 uppercase font-bold tracking-widest">
+                            Conquistado em: {formatDate(selectedBadge.data)}
+                        </p>
                     </div>
                 )}
             </Modal>

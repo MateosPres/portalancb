@@ -15,7 +15,7 @@ import { RankingView } from './views/RankingView';
 import { AdminView } from './views/AdminView';
 import { PainelJogoView } from './views/PainelJogoView';
 import { ProfileView } from './views/ProfileView';
-import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare } from 'lucide-react';
+import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare, LucideUserPlus } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 // Chave VAPID fornecida para autenticação do Push Notification
@@ -37,10 +37,12 @@ const App: React.FC = () => {
     const [authEmail, setAuthEmail] = useState('');
     const [authPassword, setAuthPassword] = useState('');
     const [authError, setAuthError] = useState('');
+    
+    // Registration Form State
     const [regName, setRegName] = useState('');
     const [regNickname, setRegNickname] = useState('');
     const [regEmail, setRegEmail] = useState('');
-    const [regPhone, setRegPhone] = useState('');
+    const [regPhone, setRegPhone] = useState(''); // Only DDD + Number
     const [regPassword, setRegPassword] = useState('');
     const [regCpf, setRegCpf] = useState('');
     const [regBirthDate, setRegBirthDate] = useState('');
@@ -286,13 +288,68 @@ const App: React.FC = () => {
         setCurrentView('painel-jogo');
     };
 
+    // REGISTRATION LOGIC
+    const handleRegister = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (regPassword.length < 6) {
+            alert("A senha deve ter pelo menos 6 caracteres.");
+            return;
+        }
+        if (!regName || !regEmail || !regPhone) {
+            alert("Preencha todos os campos obrigatórios.");
+            return;
+        }
+
+        setIsRegistering(true);
+        try {
+            // 1. Create Auth User
+            const userCredential = await auth.createUserWithEmailAndPassword(regEmail, regPassword);
+            const user = userCredential.user;
+
+            if (user) {
+                // 2. Format WhatsApp (Force +55)
+                const cleanPhone = regPhone.replace(/\D/g, ''); // Remove non-digits
+                const formattedPhone = `+55${cleanPhone}`;
+
+                // 3. Create User Profile in Firestore
+                await setDoc(doc(db, "usuarios", user.uid), {
+                    nome: regName,
+                    apelido: regNickname,
+                    email: regEmail,
+                    role: 'jogador',
+                    status: 'pending', // Waiting for admin approval to become active player
+                    dataNascimento: regBirthDate,
+                    whatsapp: formattedPhone,
+                    cpf: regCpf,
+                    posicaoPreferida: regPosition,
+                    numeroPreferido: regJerseyNumber,
+                    createdAt: serverTimestamp()
+                });
+
+                alert("Conta criada com sucesso! Aguarde a aprovação do administrador.");
+                setShowRegister(false);
+                // Clear Form
+                setRegName(''); setRegNickname(''); setRegEmail(''); setRegPhone(''); setRegPassword(''); 
+                setRegCpf(''); setRegBirthDate(''); setRegJerseyNumber('');
+            }
+        } catch (error: any) {
+            console.error("Registration Error:", error);
+            if (error.code === 'auth/email-already-in-use') {
+                alert("Este email já está cadastrado.");
+            } else {
+                alert("Erro ao criar conta: " + error.message);
+            }
+        } finally {
+            setIsRegistering(false);
+        }
+    };
+
     const renderHeader = () => (
         <header className="sticky top-0 z-50 bg-[#062553] text-white py-3 border-b border-white/10 shadow-lg">
             <div className="container mx-auto px-4 flex justify-between items-center">
                 <div className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setCurrentView('home')}>
                     <div className="relative">
-                        <div className="absolute inset-0 bg-blue-400 rounded-full blur-xl opacity-20 animate-pulse"></div>
-                        <img src="https://i.imgur.com/4TxBrHs.png" alt="ANCB Logo" className="h-10 md:h-12 w-auto relative z-10" />
+                        <img src="https://i.imgur.com/sfO9ILj.png" alt="ANCB Logo" className="h-10 md:h-12 w-auto relative z-10" />
                     </div>
                     <h1 className="text-lg md:text-2xl font-bold tracking-wide">Portal ANCB-MT</h1>
                 </div>
@@ -318,8 +375,11 @@ const App: React.FC = () => {
                         </div>
                     ) : (
                         <div className="flex gap-2">
-                            <Button variant="secondary" size="sm" onClick={() => setShowLogin(true)} className="!text-white !border-white/30">Entrar</Button>
-                            <Button variant="primary" size="sm" onClick={() => setShowRegister(true)} className="hidden sm:flex">Registrar</Button>
+                            <Button variant="secondary" size="sm" onClick={() => setShowLogin(true)} className="!text-white !border-white/30 hover:!bg-white hover:!text-ancb-blue">Entrar</Button>
+                            {/* FIX: Removed 'hidden sm:flex' to make visible on mobile */}
+                            <Button variant="primary" size="sm" onClick={() => setShowRegister(true)} className="flex items-center gap-1">
+                                <LucideUserPlus size={16} className="hidden xs:block" /> Registrar
+                            </Button>
                         </div>
                     )}
                 </div>
@@ -396,7 +456,7 @@ const App: React.FC = () => {
             <div className="relative mb-6">
                 {/* Efeito Glow Pulsante */}
                 <div className="absolute inset-0 bg-blue-400 rounded-full blur-3xl opacity-20 animate-pulse scale-150"></div>
-                <img src="https://i.imgur.com/4TxBrHs.png" alt="ANCB" className="h-32 md:h-40 w-auto relative z-10 drop-shadow-2xl animate-fade-in" />
+                <img src="https://i.imgur.com/sfO9ILj.png" alt="ANCB" className="h-32 md:h-40 w-auto relative z-10 drop-shadow-2xl animate-fade-in" />
             </div>
             <div className="w-12 h-12 border-4 border-white/10 border-t-ancb-orange rounded-full animate-spin"></div>
         </div>
@@ -494,12 +554,76 @@ const App: React.FC = () => {
 
             {reviewTargetGame && userProfile?.linkedPlayerId && <PeerReviewQuiz isOpen={showQuiz} onClose={() => setShowQuiz(false)} gameId={reviewTargetGame.gameId} eventId={reviewTargetGame.eventId} reviewerId={userProfile.linkedPlayerId} playersToReview={reviewTargetGame.playersToReview} />}
             
+            {/* LOGIN MODAL */}
             <Modal isOpen={showLogin} onClose={() => setShowLogin(false)} title="Entrar">
-                <form onSubmit={async (e) => { e.preventDefault(); try { await auth.signInWithEmailAndPassword(authEmail, authPassword); setShowLogin(false); setAuthEmail(''); setAuthPassword(''); } catch (error) { setAuthError("Erro ao entrar."); } }} className="space-y-4">
-                    <input type="email" required placeholder="Email" className="w-full p-2 border rounded dark:bg-gray-700" value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
-                    <input type="password" required placeholder="Senha" className="w-full p-2 border rounded dark:bg-gray-700" value={authPassword} onChange={e => setAuthPassword(e.target.value)} />
+                <form onSubmit={async (e) => { e.preventDefault(); try { await auth.signInWithEmailAndPassword(authEmail, authPassword); setShowLogin(false); setAuthEmail(''); setAuthPassword(''); } catch (error) { setAuthError("Erro ao entrar. Verifique suas credenciais."); } }} className="space-y-4">
+                    <input type="email" required placeholder="Email" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
+                    <input type="password" required placeholder="Senha" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={authPassword} onChange={e => setAuthPassword(e.target.value)} />
                     {authError && <p className="text-red-500 text-xs">{authError}</p>}
                     <Button type="submit" className="w-full">Entrar</Button>
+                </form>
+            </Modal>
+
+            {/* REGISTER MODAL */}
+            <Modal isOpen={showRegister} onClose={() => setShowRegister(false)} title="Criar Conta">
+                <form onSubmit={handleRegister} className="space-y-4 max-h-[80vh] overflow-y-auto p-1 custom-scrollbar">
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nome Completo</label>
+                        <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regName} onChange={e => setRegName(e.target.value)} required />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Apelido (Para o Ranking)</label>
+                        <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regNickname} onChange={e => setRegNickname(e.target.value)} required />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nascimento</label>
+                            <input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regBirthDate} onChange={e => setRegBirthDate(e.target.value)} required />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label>
+                            <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regCpf} onChange={e => setRegCpf(e.target.value)} placeholder="000.000.000-00" required />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">WhatsApp</label>
+                        <div className="flex items-center border rounded overflow-hidden dark:border-gray-600">
+                            <span className="bg-gray-200 dark:bg-gray-600 px-3 py-2 text-gray-600 dark:text-gray-300 border-r dark:border-gray-500 text-sm font-bold">+55</span>
+                            <input 
+                                type="tel"
+                                className="flex-1 p-2 outline-none dark:bg-gray-700 dark:text-white" 
+                                placeholder="DDD + Número (Ex: 65999999999)" 
+                                value={regPhone} 
+                                onChange={e => setRegPhone(e.target.value)} 
+                                required 
+                            />
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">Insira apenas números com DDD.</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Número</label>
+                            <input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regJerseyNumber} onChange={e => setRegJerseyNumber(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Posição</label>
+                            <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regPosition} onChange={e => setRegPosition(e.target.value)}>
+                                <option value="Armador (1)">Armador (1)</option>
+                                <option value="Ala/Armador (2)">Ala/Armador (2)</option>
+                                <option value="Ala (3)">Ala (3)</option>
+                                <option value="Ala/Pivô (4)">Ala/Pivô (4)</option>
+                                <option value="Pivô (5)">Pivô (5)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="border-t pt-4 mt-2 dark:border-gray-700">
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Dados de Login</label>
+                        <input type="email" className="w-full p-2 border rounded mt-1 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Email" value={regEmail} onChange={e => setRegEmail(e.target.value)} required />
+                        <input type="password" className="w-full p-2 border rounded mt-2 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Senha (Min 6 caracteres)" value={regPassword} onChange={e => setRegPassword(e.target.value)} required />
+                    </div>
+                    <Button type="submit" className="w-full mt-4" disabled={isRegistering}>
+                        {isRegistering ? <LucideLoader2 className="animate-spin" /> : "Criar Conta"}
+                    </Button>
                 </form>
             </Modal>
         </div>

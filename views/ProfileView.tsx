@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, deleteDoc, limit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, deleteDoc, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { UserProfile, Player, PlayerReview, Jogo, Evento, Cesta } from '../types';
+import { UserProfile, Player, PlayerReview, Jogo, Evento, Cesta, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucideArrowLeft, LucideSave, LucideCamera, LucideLink, LucideSearch, LucideCheckCircle2, LucideAlertCircle, LucideLoader2, LucideClock, LucideMessageSquare, LucideStar, LucideHistory, LucideTrash2, LucidePlayCircle, LucideCalendarDays, LucideEdit2, LucideTrendingUp, LucideShield, LucideZap, LucideTrophy, LucideMapPin } from 'lucide-react';
+import { LucideArrowLeft, LucideSave, LucideCamera, LucideLink, LucideSearch, LucideCheckCircle2, LucideAlertCircle, LucideLoader2, LucideClock, LucideMessageSquare, LucideStar, LucideHistory, LucideTrash2, LucidePlayCircle, LucideCalendarDays, LucideEdit2, LucideTrendingUp, LucideShield, LucideZap, LucideTrophy, LucideMapPin, LucideMedal, LucideInfo } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { RadarChart } from '../components/RadarChart';
 
@@ -30,22 +30,27 @@ interface MatchHistoryItem {
     cesta3: number;
 }
 
-// Helper functions
+// Updated Helper functions with New Weights
 const calculateStatsFromTags = (tags?: Record<string, number>) => {
     let stats = { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
     if (!tags) return stats;
+    
+    // Matriz de Pesos Atualizada
     const WEIGHTS: Record<string, any> = {
-        'muralha': { defesa: 5, forca: 2 },
-        'sniper': { ataque: 5 },
-        'garcom': { visao: 5 },
-        'flash': { velocidade: 4, ataque: 2 },
-        'lider': { visao: 4, defesa: 2 },
-        'guerreiro': { forca: 5, defesa: 2 },
-        'avenida': { defesa: -5 },
-        'fominha': { visao: -5 },
-        'tijoleiro': { ataque: -3 },
-        'cone': { velocidade: -5, defesa: -2 }
+        // Positivas
+        'sniper': { ataque: 3 },
+        'muralha': { defesa: 3 },
+        'lider': { visao: 2 },
+        'garcom': { visao: 2 },
+        'flash': { velocidade: 1 },
+        'guerreiro': { forca: 1 },
+        // Negativas
+        'fominha': { visao: -1 },
+        'tijoleiro': { ataque: -2 }, // Pedreiro
+        'avenida': { defesa: -2 },
+        'cone': { velocidade: -3 }
     };
+
     Object.entries(tags).forEach(([tag, count]) => {
         const impact = WEIGHTS[tag];
         if (impact) {
@@ -81,6 +86,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const [showEditModal, setShowEditModal] = useState(false);
     const [matches, setMatches] = useState<MatchHistoryItem[]>([]);
     const [loadingMatches, setLoadingMatches] = useState(false);
+    const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
 
     // Upload State
     const [isUploading, setIsUploading] = useState(false);
@@ -105,31 +111,35 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         "Pivô (5)"
     ];
 
-    // FETCH PLAYER DATA
+    // FETCH PLAYER DATA (REAL-TIME SNAPSHOT)
     useEffect(() => {
         let isMounted = true;
+        let unsubPlayer: () => void;
 
-        const fetchPlayer = async () => {
+        const init = async () => {
             try {
-                // 1. Fetch Player Data
+                // 1. Setup Real-time Listener for Player Data
                 const docRef = doc(db, "jogadores", playerDocId);
-                const snap = await getDoc(docRef);
                 
-                if (!isMounted) return;
-
-                if (snap.exists()) {
-                    setFormData(snap.data() as Player);
-                } else {
-                    setFormData({
-                        id: playerDocId,
-                        nome: userProfile.nome,
-                        numero_uniforme: 0,
-                        posicao: 'Ala (3)',
-                        foto: ''
-                    });
-                }
+                unsubPlayer = onSnapshot(docRef, (docSnap) => {
+                    if (!isMounted) return;
+                    
+                    if (docSnap.exists()) {
+                        setFormData(docSnap.data() as Player);
+                    } else {
+                        // Fallback if no player doc exists yet
+                        setFormData({
+                            id: playerDocId,
+                            nome: userProfile.nome,
+                            numero_uniforme: 0,
+                            posicao: 'Ala (3)',
+                            foto: ''
+                        });
+                    }
+                    setLoading(false);
+                });
                 
-                // 2. Check for Pending Profile Claims
+                // 2. Check for Pending Profile Claims (One-time fetch is fine here)
                 try {
                     const qClaim = query(
                         collection(db, "solicitacoes_vinculo"), 
@@ -138,12 +148,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     );
                     const claimSnap = await getDocs(qClaim);
                     
-                    if (!isMounted) return;
-
-                    if (!claimSnap.empty) {
-                        setClaimStatus('pending');
-                    } else if (!userProfile.linkedPlayerId) {
-                        setShowClaimSection(true);
+                    if (isMounted) {
+                        if (!claimSnap.empty) {
+                            setClaimStatus('pending');
+                        } else if (!userProfile.linkedPlayerId) {
+                            setShowClaimSection(true);
+                        }
                     }
                 } catch (claimErr) {
                     console.warn("Error fetching claims:", claimErr);
@@ -157,24 +167,24 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                         where("status", "==", "pending")
                     );
                     const photoSnap = await getDocs(qPhoto);
-                    if (!photoSnap.empty) {
+                    if (isMounted && !photoSnap.empty) {
                         setPendingPhotoRequest(true);
                     }
-                } catch (e) {
-                    console.error("Error checking photo requests", e);
-                }
+                } catch (e) { console.error(e); }
 
             } catch (error) {
-                console.error("Error loading profile:", error);
-            } finally {
+                console.error("Error initializing profile:", error);
                 if (isMounted) setLoading(false);
             }
         };
 
-        fetchPlayer();
+        init();
 
-        return () => { isMounted = false; };
-    }, [playerDocId, userProfile.uid, userProfile.linkedPlayerId, userProfile.nome]);
+        return () => { 
+            isMounted = false; 
+            if (unsubPlayer) unsubPlayer();
+        };
+    }, [playerDocId, userProfile.uid, userProfile.linkedPlayerId]);
 
     // FETCH MATCH HISTORY
     useEffect(() => {
@@ -415,8 +425,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         ? Object.entries(formData.stats_tags)
             .sort((a, b) => (b[1] as number) - (a[1] as number))
             .slice(0, 3)
-            .map(([key, count]) => ({ key, count, ...TAG_META[key] }))
+            .map(([key, count]) => ({ key, count: Number(count), ...TAG_META[key] }))
         : [];
+
+    const getRarityColor = (rarity: Badge['raridade']) => {
+        switch(rarity) {
+            case 'lendaria': return 'bg-gradient-to-r from-purple-500 to-pink-600 text-white border-purple-300';
+            case 'epica': return 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white border-yellow-300';
+            case 'rara': return 'bg-gradient-to-r from-gray-300 to-gray-400 text-white border-gray-200';
+            default: return 'bg-gradient-to-r from-orange-700 to-orange-800 text-white border-orange-900'; // Bronze
+        }
+    };
 
     if (loading) {
         return (
@@ -532,6 +551,33 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     </div>
                 </div>
             </div>
+
+            {/* TROPHY GALLERY */}
+            {formData.badges && formData.badges.length > 0 && (
+                <div className="mx-4 mb-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                        <div className="flex items-center justify-between mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
+                            <div className="flex items-center gap-2">
+                                <LucideMedal className="text-yellow-500" size={20} />
+                                <h3 className="font-bold text-gray-800 dark:text-white uppercase tracking-wider text-sm">Galeria de Troféus</h3>
+                            </div>
+                            <span className="text-xs text-gray-400 font-normal italic flex items-center gap-1"><LucideInfo size={12}/> Toque para ver detalhes</span>
+                        </div>
+                        <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+                            {formData.badges.map((badge, idx) => (
+                                <div 
+                                    key={idx} 
+                                    onClick={() => setSelectedBadge(badge)}
+                                    className={`p-2 rounded-lg border flex flex-col items-center text-center shadow-sm cursor-pointer hover:scale-105 transition-transform active:scale-95 ${getRarityColor(badge.raridade)}`}
+                                >
+                                    <span className="text-2xl mb-1 drop-shadow-md">{badge.emoji}</span>
+                                    <span className="text-[9px] font-bold leading-tight uppercase line-clamp-2">{badge.nome}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ATTRIBUTES SECTION (RADAR) */}
             <div className="mx-4 mb-6">
@@ -659,6 +705,39 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     </div>
                 )}
             </div>
+
+            {/* BADGE DETAILS MODAL */}
+            <Modal isOpen={!!selectedBadge} onClose={() => setSelectedBadge(null)} title="Detalhes da Conquista">
+                {selectedBadge && (
+                    <div className="text-center p-4">
+                        <div className="text-8xl mb-4 animate-bounce-slow drop-shadow-xl">{selectedBadge.emoji}</div>
+                        <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 uppercase tracking-wide">{selectedBadge.nome}</h3>
+                        
+                        <div className="mb-6 flex justify-center">
+                            <span className={`px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                                selectedBadge.raridade === 'lendaria' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
+                                selectedBadge.raridade === 'epica' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
+                                selectedBadge.raridade === 'rara' ? 'bg-gray-200 text-gray-700 border border-gray-300' :
+                                'bg-orange-100 text-orange-800 border border-orange-300'
+                            }`}>
+                                {selectedBadge.raridade === 'comum' ? 'Bronze' : 
+                                 selectedBadge.raridade === 'rara' ? 'Prata' : 
+                                 selectedBadge.raridade === 'epica' ? 'Ouro' : 'Lendária'}
+                            </span>
+                        </div>
+
+                        <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-600 mb-4">
+                            <p className="text-gray-600 dark:text-gray-300 text-sm font-medium leading-relaxed">
+                                {selectedBadge.descricao}
+                            </p>
+                        </div>
+
+                        <p className="text-xs text-gray-400 uppercase font-bold tracking-widest">
+                            Conquistado em: {formatDate(selectedBadge.data)}
+                        </p>
+                    </div>
+                )}
+            </Modal>
 
             {/* EDIT PROFILE MODAL */}
             <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Editar Perfil">
