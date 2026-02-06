@@ -597,7 +597,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                                     {!match.reviewed && (
                                         <div className="absolute top-0 right-0">
                                             <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1">
-                                                <LucideAlertCircle size={10} /> Avaliar
+                                                <LucideAlertCircle size={10} /> Avaliação Pendente
                                             </span>
                                         </div>
                                     )}
