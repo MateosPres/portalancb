@@ -2,7 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './index.css'; // Adicionado para corrigir o carregamento de CSS
+// REMOVIDO: import './index.css'; (O arquivo não existe, usamos CDN no HTML)
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

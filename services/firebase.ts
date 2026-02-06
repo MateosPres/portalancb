@@ -54,7 +54,7 @@ export const requestFCMToken = async (vapidKey: string): Promise<string | null> 
         if (error.name === 'AbortError' || error.message?.includes('push service error')) {
             console.warn("Navegador bloqueou o serviço de push nativo. Usando notificações in-app apenas.");
         } else {
-            console.error("Erro ao recuperar token FCM:", error);
+            console.error("Erro CRÍTICO ao recuperar token FCM:", error);
         }
         return null;
     }

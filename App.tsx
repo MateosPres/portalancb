@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player } from './types';
 import { auth, db, requestFCMToken, onMessageListener } from './services/firebase';
@@ -15,7 +16,7 @@ import { RankingView } from './views/RankingView';
 import { AdminView } from './views/AdminView';
 import { PainelJogoView } from './views/PainelJogoView';
 import { ProfileView } from './views/ProfileView';
-import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare, LucideUserPlus, LucideRefreshCw } from 'lucide-react';
+import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare, LucideUserPlus, LucideRefreshCw, LucideBellRing } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 // Chave VAPID fornecida para autenticação do Push Notification
@@ -63,6 +64,7 @@ const App: React.FC = () => {
     const [showQuiz, setShowQuiz] = useState(false);
     const [reviewTargetGame, setReviewTargetGame] = useState<{ gameId: string, eventId: string, playersToReview: Player[] } | null>(null);
     const [foregroundNotification, setForegroundNotification] = useState<{title: string, body: string, eventId?: string, type?: string} | null>(null);
+    const [notificationPermissionStatus, setNotificationPermissionStatus] = useState<NotificationPermission>(Notification.permission);
 
     // PWA & Theme
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -120,28 +122,31 @@ const App: React.FC = () => {
     }, []);
 
     // --- REGISTER PUSH TOKEN ---
-    // Solicita permissão e salva o token no perfil do usuário para testes via Console Firebase
-    useEffect(() => {
-        const saveToken = async () => {
-            if (userProfile && userProfile.uid) {
-                try {
-                    const token = await requestFCMToken(VAPID_KEY);
-                    if (token) {
-                        // Só atualiza se o token for diferente ou novo
-                        if (userProfile.fcmToken !== token) {
-                            await updateDoc(doc(db, "usuarios", userProfile.uid), {
-                                fcmToken: token
-                            });
-                            console.log("Token FCM salvo/atualizado:", token);
-                        }
-                    }
-                } catch (e) {
-                    console.error("Erro ao salvar token FCM:", e);
+    const handleEnableNotifications = async () => {
+        if (!userProfile?.uid) return;
+        try {
+            const token = await requestFCMToken(VAPID_KEY);
+            if (token) {
+                setNotificationPermissionStatus('granted');
+                if (userProfile.fcmToken !== token) {
+                    await updateDoc(doc(db, "usuarios", userProfile.uid), { fcmToken: token });
+                    console.log("Token FCM salvo com sucesso.");
                 }
+            } else {
+                setNotificationPermissionStatus('denied');
             }
-        };
-        saveToken();
-    }, [userProfile?.uid]); // Depende do UID, não do perfil inteiro para evitar loop
+        } catch (e) {
+            console.error("Erro ao ativar notificações:", e);
+        }
+    };
+
+    // Solicita o token AUTOMATICAMENTE APENAS se a permissão já foi concedida anteriormente
+    useEffect(() => {
+        if (userProfile?.uid && Notification.permission === 'granted') {
+            handleEnableNotifications();
+        }
+        setNotificationPermissionStatus(Notification.permission);
+    }, [userProfile?.uid]);
 
     // --- NOTIFICATION WATCHERS ---
     
@@ -531,6 +536,19 @@ const App: React.FC = () => {
                     )}
                 </div>
             </div>
+            {/* NOTIFICATION PERMISSION BANNER */}
+            {userProfile && notificationPermissionStatus === 'default' && (
+                <div className="bg-orange-600 text-white p-2 text-center text-xs flex justify-center items-center gap-2">
+                    <LucideBellRing size={14} />
+                    <span>Para receber avisos de jogos, ative as notificações.</span>
+                    <button 
+                        onClick={handleEnableNotifications}
+                        className="bg-white text-orange-600 px-2 py-0.5 rounded font-bold uppercase hover:bg-gray-100"
+                    >
+                        Ativar
+                    </button>
+                </div>
+            )}
         </header>
     );
 
