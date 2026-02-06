@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player } from './types';
 import { auth, db, requestFCMToken, onMessageListener } from './services/firebase';
@@ -16,7 +15,7 @@ import { RankingView } from './views/RankingView';
 import { AdminView } from './views/AdminView';
 import { PainelJogoView } from './views/PainelJogoView';
 import { ProfileView } from './views/ProfileView';
-import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar } from 'lucide-react';
+import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 // Chave VAPID fornecida para autenticação do Push Notification
@@ -461,6 +460,36 @@ const App: React.FC = () => {
                         ))}
                     </div>
                 ) : <div className="text-center py-10 text-gray-400"><LucideBell size={48} className="mx-auto mb-2 opacity-20" /><p>Nenhuma notificação nova.</p></div>}
+            </Modal>
+
+            {/* Modal de Instalação iOS */}
+            <Modal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} title="Instalar no iPhone">
+                <div className="flex flex-col items-center text-center space-y-6">
+                    <p className="text-gray-600 dark:text-gray-300">
+                        Para instalar o Portal ANCB no seu iPhone e receber notificações, siga os passos:
+                    </p>
+                    <div className="flex flex-col gap-4 w-full">
+                        <div className="flex items-center gap-4 bg-gray-100 dark:bg-gray-700 p-3 rounded-xl text-left">
+                            <div className="bg-white dark:bg-gray-600 p-2 rounded-lg text-blue-500">
+                                <LucideShare size={24} />
+                            </div>
+                            <div>
+                                <span className="block font-bold text-gray-800 dark:text-white text-sm">1. Toque em Compartilhar</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">Botão no centro inferior da tela.</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4 bg-gray-100 dark:bg-gray-700 p-3 rounded-xl text-left">
+                            <div className="bg-white dark:bg-gray-600 p-2 rounded-lg text-gray-800 dark:text-white">
+                                <LucidePlusSquare size={24} />
+                            </div>
+                            <div>
+                                <span className="block font-bold text-gray-800 dark:text-white text-sm">2. Adicionar à Tela de Início</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">Role para baixo até encontrar esta opção.</span>
+                            </div>
+                        </div>
+                    </div>
+                    <Button onClick={() => setShowInstallModal(false)} className="w-full">Entendi</Button>
+                </div>
             </Modal>
 
             {reviewTargetGame && userProfile?.linkedPlayerId && <PeerReviewQuiz isOpen={showQuiz} onClose={() => setShowQuiz(false)} gameId={reviewTargetGame.gameId} eventId={reviewTargetGame.eventId} reviewerId={userProfile.linkedPlayerId} playersToReview={reviewTargetGame.playersToReview} />}

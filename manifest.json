@@ -2,8 +2,8 @@
 {
   "name": "Portal ANCB-MT",
   "short_name": "ANCB",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#062553",
   "theme_color": "#062553",
