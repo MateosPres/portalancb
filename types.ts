@@ -1,4 +1,30 @@
 
+import React from 'react';
+
+// Fix for missing attributes in local environment types
+declare module 'react' {
+    interface HTMLAttributes<T> extends AriaAttributes, DOMAttributes<T> {
+        className?: string;
+        class?: string;
+    }
+    interface SVGAttributes<T> extends AriaAttributes, DOMAttributes<T> {
+        className?: string;
+        class?: string;
+        strokeWidth?: number | string;
+        strokeOpacity?: number | string;
+        textAnchor?: string;
+    }
+    interface TdHTMLAttributes<T> extends HTMLAttributes<T> {
+        colSpan?: number;
+    }
+    interface ThHTMLAttributes<T> extends HTMLAttributes<T> {
+        colSpan?: number;
+    }
+    interface IframeHTMLAttributes<T> extends HTMLAttributes<T> {
+        allowFullScreen?: boolean;
+    }
+}
+
 export interface UserProfile {
     uid: string;
     nome: string;

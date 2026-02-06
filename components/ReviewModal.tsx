@@ -134,7 +134,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({ isOpen, onClose, teamm
                                 rows={3}
                                 placeholder="Dê um feedback construtivo..."
                                 value={comment}
-                                onChange={e => setComment(e.target.value)}
+                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setComment(e.target.value)}
                             />
                         </div>
 

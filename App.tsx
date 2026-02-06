@@ -15,7 +15,7 @@ import { RankingView } from './views/RankingView';
 import { AdminView } from './views/AdminView';
 import { PainelJogoView } from './views/PainelJogoView';
 import { ProfileView } from './views/ProfileView';
-import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare, LucideUserPlus } from 'lucide-react';
+import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare, LucideUserPlus, LucideRefreshCw } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 // Chave VAPID fornecida para autenticação do Push Notification
@@ -69,6 +69,40 @@ const App: React.FC = () => {
     const [showInstallModal, setShowInstallModal] = useState(false);
     const [isIos, setIsIos] = useState(false);
     const [isStandalone, setIsStandalone] = useState(false);
+    const [isUpdating, setIsUpdating] = useState(false);
+
+    // --- AUTO UPDATE PWA LOGIC ---
+    useEffect(() => {
+        const updateSW = async () => {
+            if ('serviceWorker' in navigator) {
+                try {
+                    // Tenta obter o registro do Service Worker
+                    const registration = await navigator.serviceWorker.getRegistration();
+                    if (registration) {
+                        // Força a verificação de update no servidor
+                        await registration.update();
+                    }
+                } catch (error) {
+                    // Ignora erro de origem cruzada (comum em previews/iframes)
+                    console.log('SW update check skipped (preview environment)');
+                }
+            }
+        };
+
+        // Verifica ao carregar
+        updateSW();
+
+        // Verifica sempre que o app volta a ficar visível (ex: usuário minimizou e voltou)
+        // Isso é crucial para o iOS atualizar sem precisar fechar o app completamente
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                updateSW();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
 
     useEffect(() => {
         const savedTheme = localStorage.getItem('theme');
@@ -85,8 +119,59 @@ const App: React.FC = () => {
         return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     }, []);
 
+    // --- REGISTER PUSH TOKEN ---
+    // Solicita permissão e salva o token no perfil do usuário para testes via Console Firebase
+    useEffect(() => {
+        const saveToken = async () => {
+            if (userProfile && userProfile.uid) {
+                try {
+                    const token = await requestFCMToken(VAPID_KEY);
+                    if (token) {
+                        // Só atualiza se o token for diferente ou novo
+                        if (userProfile.fcmToken !== token) {
+                            await updateDoc(doc(db, "usuarios", userProfile.uid), {
+                                fcmToken: token
+                            });
+                            console.log("Token FCM salvo/atualizado:", token);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Erro ao salvar token FCM:", e);
+                }
+            }
+        };
+        saveToken();
+    }, [userProfile?.uid]); // Depende do UID, não do perfil inteiro para evitar loop
+
     // --- NOTIFICATION WATCHERS ---
     
+    // Função auxiliar para disparar notificação NATIVA do sistema
+    const triggerSystemNotification = (title: string, body: string) => {
+        if (!("Notification" in window)) return;
+        
+        if (Notification.permission === "granted") {
+            try {
+                // Tenta usar o Service Worker para mostrar a notificação (melhor para Android/PWA)
+                navigator.serviceWorker.ready.then(registration => {
+                    registration.showNotification(title, {
+                        body: body,
+                        icon: 'https://i.imgur.com/SE2jHsz.png',
+                        badge: 'https://i.imgur.com/SE2jHsz.png',
+                        vibrate: [200, 100, 200]
+                    } as any);
+                }).catch(() => {
+                    // Fallback para notificação simples
+                    new Notification(title, {
+                        body: body,
+                        icon: 'https://i.imgur.com/SE2jHsz.png'
+                    });
+                });
+            } catch (e) {
+                console.error("Erro ao disparar notificação de sistema:", e);
+            }
+        }
+    };
+
     // 1. Monitoramento de Convocações (Eventos Ativos)
     useEffect(() => {
         if (!userProfile?.linkedPlayerId) return;
@@ -101,7 +186,15 @@ const App: React.FC = () => {
                     const eventData = change.doc.data() as Evento;
                     const eventId = change.doc.id;
                     if (eventData.jogadoresEscalados?.includes(myPlayerId) && !notifiedEvents.includes(eventId)) {
-                        setForegroundNotification({ title: "Convocação!", body: `Você foi escalado para: ${eventData.nome}`, eventId, type: 'roster' });
+                        const title = "Convocação!";
+                        const body = `Você foi escalado para: ${eventData.nome}`;
+                        
+                        // 1. Mostra Toast no App
+                        setForegroundNotification({ title, body, eventId, type: 'roster' });
+                        
+                        // 2. Dispara Notificação de Sistema (Push Simulado)
+                        triggerSystemNotification(title, body);
+
                         setTimeout(() => setForegroundNotification(null), 10000);
                         notifiedEvents.push(eventId);
                         localStorage.setItem('ancb_notified_rosters', JSON.stringify(notifiedEvents));
@@ -137,12 +230,20 @@ const App: React.FC = () => {
                     
                     // Show Toast for fresh notifications (not in local storage)
                     if (!notifiedIds.includes(notifId)) {
+                        const title = data.title || "Nova Notificação";
+                        const body = data.message || "Você tem um novo alerta.";
+                        
+                        // 1. Mostra Toast no App
                         setForegroundNotification({
-                            title: data.title || "Nova Notificação",
-                            body: data.message || "Você tem um novo alerta.",
+                            title,
+                            body,
                             eventId: data.eventId,
                             type: data.type === 'pending_review' ? 'review' : 'alert'
                         });
+
+                        // 2. Dispara Notificação de Sistema (Push Simulado)
+                        triggerSystemNotification(title, body);
+
                         setTimeout(() => setForegroundNotification(null), 12000);
                         notifiedIds.push(notifId);
                         localStorage.setItem('ancb_notified_ids', JSON.stringify(notifiedIds));
@@ -286,6 +387,38 @@ const App: React.FC = () => {
         setPanelEventId(eventId);
         setPanelIsEditable(isEditable);
         setCurrentView('painel-jogo');
+    };
+
+    // --- MANUAL UPDATE HANDLER ---
+    const handleManualUpdate = async () => {
+        setIsUpdating(true);
+        if ('serviceWorker' in navigator) {
+            try {
+                // Força o navegador a checar se há uma versão nova do sw.js no servidor
+                const registration = await navigator.serviceWorker.getRegistration();
+                if (registration) {
+                    await registration.update();
+                    
+                    // Dá um tempinho para ver se o estado muda, embora 'autoUpdate' no vite.config
+                    // deva lidar com isso, o feedback visual é importante
+                    setTimeout(() => {
+                        setIsUpdating(false);
+                        // Se não recarregou a página, avisa o usuário
+                        alert("Verificação concluída. Se houver novidades, o aplicativo irá reiniciar.");
+                    }, 2000);
+                } else {
+                    setIsUpdating(false);
+                    alert("Serviço de atualização não encontrado.");
+                }
+            } catch (error) {
+                console.error("Update error:", error);
+                setIsUpdating(false);
+                alert("Erro ao verificar atualizações.");
+            }
+        } else {
+            setIsUpdating(false);
+            alert("Seu navegador não suporta atualizações automáticas.");
+        }
     };
 
     // REGISTRATION LOGIC
@@ -501,6 +634,18 @@ const App: React.FC = () => {
             <footer className="bg-[#062553] text-white text-center py-8 mt-10">
                 <p className="font-bold mb-1">Associação Nova Canaã de Basquete - MT</p>
                 <p className="text-sm text-gray-400">&copy; 2025 Todos os direitos reservados.</p>
+                
+                <div className="mt-6 flex justify-center">
+                    <button 
+                        onClick={handleManualUpdate} 
+                        disabled={isUpdating}
+                        className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all disabled:opacity-50"
+                    >
+                        <LucideRefreshCw size={14} className={isUpdating ? 'animate-spin' : ''} />
+                        {isUpdating ? 'Verificando...' : 'Verificar Atualizações'}
+                    </button>
+                </div>
+
                 {(!isStandalone && (deferredPrompt || isIos)) && (<button onClick={() => { if (isIos) setShowInstallModal(true); else if (deferredPrompt) deferredPrompt.prompt(); }} className="mt-4 inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all"><LucideDownload size={14} /> Instalar Portal</button>)}
             </footer>
 
@@ -557,8 +702,8 @@ const App: React.FC = () => {
             {/* LOGIN MODAL */}
             <Modal isOpen={showLogin} onClose={() => setShowLogin(false)} title="Entrar">
                 <form onSubmit={async (e) => { e.preventDefault(); try { await auth.signInWithEmailAndPassword(authEmail, authPassword); setShowLogin(false); setAuthEmail(''); setAuthPassword(''); } catch (error) { setAuthError("Erro ao entrar. Verifique suas credenciais."); } }} className="space-y-4">
-                    <input type="email" required placeholder="Email" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
-                    <input type="password" required placeholder="Senha" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={authPassword} onChange={e => setAuthPassword(e.target.value)} />
+                    <input type="email" required placeholder="Email" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={authEmail} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAuthEmail(e.target.value)} />
+                    <input type="password" required placeholder="Senha" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={authPassword} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAuthPassword(e.target.value)} />
                     {authError && <p className="text-red-500 text-xs">{authError}</p>}
                     <Button type="submit" className="w-full">Entrar</Button>
                 </form>
@@ -569,20 +714,20 @@ const App: React.FC = () => {
                 <form onSubmit={handleRegister} className="space-y-4 max-h-[80vh] overflow-y-auto p-1 custom-scrollbar">
                     <div>
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nome Completo</label>
-                        <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regName} onChange={e => setRegName(e.target.value)} required />
+                        <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegName(e.target.value)} required />
                     </div>
                     <div>
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Apelido (Para o Ranking)</label>
-                        <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regNickname} onChange={e => setRegNickname(e.target.value)} required />
+                        <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regNickname} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegNickname(e.target.value)} required />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nascimento</label>
-                            <input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regBirthDate} onChange={e => setRegBirthDate(e.target.value)} required />
+                            <input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regBirthDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegBirthDate(e.target.value)} required />
                         </div>
                         <div>
                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label>
-                            <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regCpf} onChange={e => setRegCpf(e.target.value)} placeholder="000.000.000-00" required />
+                            <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regCpf} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegCpf(e.target.value)} placeholder="000.000.000-00" required />
                         </div>
                     </div>
                     <div>
@@ -594,7 +739,7 @@ const App: React.FC = () => {
                                 className="flex-1 p-2 outline-none dark:bg-gray-700 dark:text-white" 
                                 placeholder="DDD + Número (Ex: 65999999999)" 
                                 value={regPhone} 
-                                onChange={e => setRegPhone(e.target.value)} 
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPhone(e.target.value)} 
                                 required 
                             />
                         </div>
@@ -603,11 +748,11 @@ const App: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Número</label>
-                            <input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regJerseyNumber} onChange={e => setRegJerseyNumber(e.target.value)} />
+                            <input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regJerseyNumber} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegJerseyNumber(e.target.value)} />
                         </div>
                         <div>
                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Posição</label>
-                            <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regPosition} onChange={e => setRegPosition(e.target.value)}>
+                            <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regPosition} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setRegPosition(e.target.value)}>
                                 <option value="Armador (1)">Armador (1)</option>
                                 <option value="Ala/Armador (2)">Ala/Armador (2)</option>
                                 <option value="Ala (3)">Ala (3)</option>
@@ -618,8 +763,8 @@ const App: React.FC = () => {
                     </div>
                     <div className="border-t pt-4 mt-2 dark:border-gray-700">
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Dados de Login</label>
-                        <input type="email" className="w-full p-2 border rounded mt-1 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Email" value={regEmail} onChange={e => setRegEmail(e.target.value)} required />
-                        <input type="password" className="w-full p-2 border rounded mt-2 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Senha (Min 6 caracteres)" value={regPassword} onChange={e => setRegPassword(e.target.value)} required />
+                        <input type="email" className="w-full p-2 border rounded mt-1 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Email" value={regEmail} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegEmail(e.target.value)} required />
+                        <input type="password" className="w-full p-2 border rounded mt-2 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Senha (Min 6 caracteres)" value={regPassword} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPassword(e.target.value)} required />
                     </div>
                     <Button type="submit" className="w-full mt-4" disabled={isRegistering}>
                         {isRegistering ? <LucideLoader2 className="animate-spin" /> : "Criar Conta"}

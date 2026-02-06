@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, getDocs, updateDoc, where, increment, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
 import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player, Time, Cesta, UserProfile, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar } from 'lucide-react';
+import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 interface AdminViewProps {
@@ -121,6 +122,35 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
 
     // --- ACTIONS ---
 
+    const handleTestNotification = async () => {
+        if (!("Notification" in window)) {
+            alert("Este navegador não suporta notificações de sistema.");
+            return;
+        }
+
+        const permission = await Notification.requestPermission();
+        
+        if (permission === 'granted') {
+            try {
+                // Tenta usar o SW para ficar mais nativo
+                const reg = await navigator.serviceWorker.ready;
+                reg.showNotification('Teste de Push', {
+                    body: 'Se você está vendo isso, as notificações nativas estão ativas!',
+                    icon: 'https://i.imgur.com/SE2jHsz.png',
+                    vibrate: [200, 100, 200]
+                } as any);
+            } catch (e) {
+                // Fallback
+                new Notification('Teste de Push', {
+                    body: 'Se você está vendo isso, as notificações nativas estão ativas!',
+                    icon: 'https://i.imgur.com/SE2jHsz.png'
+                });
+            }
+        } else {
+            alert("Permissão negada. Verifique as configurações do navegador/sistema.");
+        }
+    };
+
     const loadReviews = async () => {
         setLoadingReviews(true);
         try {
@@ -202,6 +232,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
 
     // --- RECALCULAR HISTORICO DE BADGES (Gamification Retroativo) ---
     const handleRecalculateHistory = async () => {
+        // ... (Mesma lógica de antes, omitida para brevidade, mas deve ser mantida se o arquivo for substituído)
+        // Como o XML pede "Full content", você deve manter a lógica existente aqui.
+        // Vou reinserir o conteúdo completo da função abaixo para não quebrar.
         const year = selectedYear;
         const yearNum = parseInt(year);
 
@@ -215,9 +248,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
             const playersSnapshot = await getDocs(collection(db, "jogadores"));
             const playersMap: Record<string, Player & { badges: Badge[] }> = {};
             playersSnapshot.forEach(doc => {
-                const p = { id: doc.id, ...doc.data(), badges: [] } as Player; // Reset local badges for clean calc (or filter existing ones)
-                // Filter out existing badges from THIS year to avoid duplicates if we append
-                // But generally resetting and recalculating is cleaner if we assume this function is the source of truth for computed badges
+                const p = { id: doc.id, ...doc.data(), badges: [] } as Player; // Reset local badges for clean calc
                 if (p.badges) {
                     p.badges = p.badges.filter(b => !b.data.includes(year)); 
                 }
@@ -326,7 +357,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
 
             setRecoveringStatus("Calculando Temporadas...");
 
-            // 4. Award Season Badges (CORRECTED LOGIC: 2nd = Silver/Rara, 3rd = Bronze/Comum)
+            // 4. Award Season Badges
             if (seasonStats[year]) {
                 const yearData = seasonStats[year];
                 
@@ -335,7 +366,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 const sortedMvp = Object.entries(yearData).sort(([,a], [,b]) => b.points - a.points);
                 sortedMvp.slice(0, 3).forEach(([pid, s], idx) => {
                     if (playersMap[pid] && s.points > 0) {
-                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; // CORRECTION HERE
+                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum';
                         const emojis = ['🏆', '⚔️', '🛡️'];
                         const titles = [`MVP da Temporada ${year}`, `Vice-MVP ${year}`, `3º Melhor ${year}`];
                         
@@ -355,7 +386,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 const sortedShooter = Object.entries(yearData).sort(([,a], [,b]) => b.threePoints - a.threePoints);
                 sortedShooter.slice(0, 3).forEach(([pid, s], idx) => {
                     if (playersMap[pid] && s.threePoints > 0) {
-                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; // CORRECTION HERE
+                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum';
                         const emojis = ['🎯', '🏹', '☄️'];
                         const titles = [`Atirador de Elite ${year}`, `Mão de Prata ${year}`, `Sniper ${year}`];
                         
@@ -383,7 +414,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 const sortedMvpJuv = juvenilCandidates.sort(([,a], [,b]) => b.points - a.points);
                 sortedMvpJuv.slice(0, 3).forEach(([pid, s], idx) => {
                      if (playersMap[pid] && s.points > 0) {
-                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; // CORRECTION HERE
+                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum';
                         const emojis = ['🏆', '🥈', '🥉'];
                         const titles = [`MVP Juvenil ${year}`, `Vice-MVP Juvenil ${year}`, `Bronze Juvenil ${year}`];
                         
@@ -403,7 +434,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 const sortedShooterJuv = juvenilCandidates.sort(([,a], [,b]) => b.threePoints - a.threePoints);
                 sortedShooterJuv.slice(0, 3).forEach(([pid, s], idx) => {
                      if (playersMap[pid] && s.threePoints > 0) {
-                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; // CORRECTION HERE
+                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum';
                         const emojis = ['🎯', '🏹', '☄️'];
                         const titles = [`Atirador Juvenil ${year}`, `Mão de Prata Juv. ${year}`, `Sniper Juvenil ${year}`];
                         
@@ -428,9 +459,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
             let opCount = 0;
 
             Object.values(playersMap).forEach(player => {
-                // Only update if badges were added (which they always are in this logic, even if empty array init)
-                // But strictly we only want to write if there are changes. 
-                // For simplicity, we write all affected players.
                 const ref = doc(db, "jogadores", player.id);
                 currentBatch.update(ref, { badges: player.badges });
                 opCount++;
@@ -584,13 +612,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 </div>
             </div>
 
-            {/* NOTIFICATION INFO ALERT */}
-            <div className="bg-orange-50 dark:bg-orange-900/10 border-l-4 border-ancb-orange p-4 rounded-r-lg mb-6 flex items-start gap-3 shadow-sm">
-                <LucideMegaphone className="text-ancb-orange mt-1 shrink-0" size={20} />
-                <div>
-                    <h4 className="font-bold text-gray-800 dark:text-white text-sm">Sistema de Notificações Ativo</h4>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Ao escalar um atleta para um evento, ele receberá automaticamente uma notificação **Push** e um alerta em tempo real no portal.</p>
+            {/* NOTIFICATION INFO ALERT & TEST BUTTON */}
+            <div className="bg-orange-50 dark:bg-orange-900/10 border-l-4 border-ancb-orange p-4 rounded-r-lg mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+                <div className="flex items-start gap-3">
+                    <LucideMegaphone className="text-ancb-orange mt-1 shrink-0" size={20} />
+                    <div>
+                        <h4 className="font-bold text-gray-800 dark:text-white text-sm">Sistema de Notificações Ativo</h4>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">Notificações Push são enviadas automaticamente. Use o botão ao lado para testar permissões.</p>
+                    </div>
                 </div>
+                <Button size="sm" onClick={handleTestNotification} variant="secondary" className="!text-ancb-orange !border-ancb-orange hover:!bg-orange-100 w-full md:w-auto">
+                    <LucideBellRing size={16} /> Testar Notificação
+                </Button>
             </div>
 
             {/* TAB CONTENT: USERS */}
@@ -603,7 +636,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                             </h3>
                             <div className="relative w-64">
                                 <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                                <input type="text" placeholder="Buscar email ou nome..." className="w-full pl-9 p-2 text-sm border rounded bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
+                                <input type="text" placeholder="Buscar email ou nome..." className="w-full pl-9 p-2 text-sm border rounded bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" value={userSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUserSearch(e.target.value)} />
                             </div>
                         </div>
 
@@ -691,7 +724,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                             <LucideCalendar size={16} className="text-gray-400"/>
                             <select 
                                 value={selectedYear} 
-                                onChange={(e) => setSelectedYear(e.target.value)}
+                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedYear(e.target.value)}
                                 className="bg-transparent text-sm font-bold text-gray-700 dark:text-white focus:outline-none cursor-pointer flex-1"
                             >
                                 <option value="2024" className="text-black">2024</option>
@@ -749,14 +782,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                         </div>
                         <div className="relative mb-3">
                             <LucideSearch className="absolute left-2 top-2 text-gray-400" size={14} />
-                            <input type="text" placeholder="Buscar jogador..." className="w-full pl-8 py-1.5 text-xs border rounded bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" value={playerSearch} onChange={e => setPlayerSearch(e.target.value)} />
+                            <input type="text" placeholder="Buscar jogador..." className="w-full pl-8 py-1.5 text-xs border rounded bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" value={playerSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPlayerSearch(e.target.value)} />
                         </div>
                         <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
                             {filteredActivePlayers.map(player => (
                                 <div key={player.id} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-100 dark:border-gray-700">
                                     <span className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate max-w-[120px]" title={player.nome}>{player.apelido || player.nome}</span>
                                     <div className="flex gap-1">
-                                        <button onClick={() => handleBanPlayer(player)} className="p-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded text-gray-600 dark:text-gray-300"><LucideBan size={14} /></button>
+                                        <button onClick={() => handleBanPlayer(player)} className="p-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-50 rounded text-gray-600 dark:text-gray-300"><LucideBan size={14} /></button>
                                         <button onClick={() => handleDeleteActivePlayer(player)} className="p-1.5 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 rounded text-red-500"><LucideUserX size={14} /></button>
                                     </div>
                                 </div>
@@ -876,7 +909,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                     <select 
                         className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
                         value={linkPlayerId}
-                        onChange={e => setLinkPlayerId(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLinkPlayerId(e.target.value)}
                     >
                         <option value="">Selecione um Atleta</option>
                         {activePlayers.map(p => (
@@ -919,9 +952,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                             ))}
                         </div>
                     </div>
-                    {postType === 'noticia' && <><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Título" value={postTitle} onChange={e => setPostTitle(e.target.value)} required /><textarea className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Conteúdo" value={postBody} onChange={e => setPostBody(e.target.value)} required /></>}
-                    {postType === 'aviso' && <><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Assunto" value={postTitle} onChange={e => setPostTitle(e.target.value)} required /><textarea className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Mensagem" value={postBody} onChange={e => setPostBody(e.target.value)} required /></>}
-                    {postType === 'placar' && <div className="space-y-2"><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Título (ex: Amistoso)" value={postTitle} onChange={e => setPostTitle(e.target.value)} required /><input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Placar ANCB" value={postScoreAncb} onChange={e => setPostScoreAncb(e.target.value)} required /><input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Placar Adv" value={postScoreAdv} onChange={e => setPostScoreAdv(e.target.value)} required /><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Nome Adversário" value={postTeamAdv} onChange={e => setPostTeamAdv(e.target.value)} required /></div>}
+                    {postType === 'noticia' && <><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Título" value={postTitle} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostTitle(e.target.value)} required /><textarea className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Conteúdo" value={postBody} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPostBody(e.target.value)} required /></>}
+                    {postType === 'aviso' && <><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Assunto" value={postTitle} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostTitle(e.target.value)} required /><textarea className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Mensagem" value={postBody} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPostBody(e.target.value)} required /></>}
+                    {postType === 'placar' && <div className="space-y-2"><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Título (ex: Amistoso)" value={postTitle} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostTitle(e.target.value)} required /><input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Placar ANCB" value={postScoreAncb} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostScoreAncb(e.target.value)} required /><input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Placar Adv" value={postScoreAdv} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostScoreAdv(e.target.value)} required /><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Nome Adversário" value={postTeamAdv} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostTeamAdv(e.target.value)} required /></div>}
                     {postType !== 'aviso' && <input type="file" accept="image/*" onChange={handleImageSelect} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>}
                     <Button type="submit" className="w-full" disabled={isUploading}>{isUploading ? 'Enviando...' : 'Publicar'}</Button>
                 </form>
@@ -929,8 +962,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
             
             <Modal isOpen={showAddEvent} onClose={() => setShowAddEvent(false)} title="Criar Evento">
                 <form onSubmit={handleCreateEvent} className="space-y-4">
-                    <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Nome" value={newEventName} onChange={e => setNewEventName(e.target.value)} required />
-                    <input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={newEventDate} onChange={e => setNewEventDate(e.target.value)} required />
+                    <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Nome" value={newEventName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEventName(e.target.value)} required />
+                    <input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={newEventDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEventDate(e.target.value)} required />
                     <Button type="submit" className="w-full">Criar</Button>
                 </form>
             </Modal>
@@ -939,11 +972,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 <form onSubmit={handleCreateGame} className="space-y-4">
                     {selectedEvent && selectedEvent.type === 'torneio_interno' ? (
                         <>
-                            <div><label className="text-xs font-bold text-gray-500">Nome Time A</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Ex: Time Vermelho" value={newGameTimeA} onChange={e => setNewGameTimeA(e.target.value)} required /></div>
-                            <div><label className="text-xs font-bold text-gray-500">Nome Time B</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Ex: Time Azul" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required /></div>
+                            <div><label className="text-xs font-bold text-gray-500">Nome Time A</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Ex: Time Vermelho" value={newGameTimeA} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewGameTimeA(e.target.value)} required /></div>
+                            <div><label className="text-xs font-bold text-gray-500">Nome Time B</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Ex: Time Azul" value={newGameTimeB} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewGameTimeB(e.target.value)} required /></div>
                         </>
                     ) : (
-                        <div><label className="text-xs font-bold text-gray-500">Nome Adversário</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Nome do time rival" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required /><p className="text-xs text-gray-400 mt-1">O Time A será automaticamente definido como "ANCB".</p></div>
+                        <div><label className="text-xs font-bold text-gray-500">Nome Adversário</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Nome do time rival" value={newGameTimeB} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewGameTimeB(e.target.value)} required /><p className="text-xs text-gray-400 mt-1">O Time A será automaticamente definido como "ANCB".</p></div>
                     )}
                     <Button type="submit" className="w-full">Criar Jogo</Button>
                 </form>

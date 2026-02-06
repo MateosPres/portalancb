@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, getDocs, doc, updateDoc, where, collectionGroup } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -423,7 +424,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                         placeholder="Buscar atleta..." 
                         className="pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-ancb-blue outline-none w-40 md:w-auto"
                         value={search}
-                        onChange={e => setSearch(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
                     />
                 </div>
             </div>
@@ -596,7 +597,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                                             type="date"
                                                             className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
                                                             value={editFormData.nascimento || ''}
-                                                            onChange={e => setEditFormData({...editFormData, nascimento: e.target.value})}
+                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, nascimento: e.target.value})}
                                                         />
                                                     </div>
                                                     <div>
@@ -604,7 +605,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                                         <input 
                                                             className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
                                                             value={editFormData.cpf || ''}
-                                                            onChange={e => setEditFormData({...editFormData, cpf: e.target.value})}
+                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, cpf: e.target.value})}
                                                         />
                                                     </div>
                                                     <div>
@@ -612,7 +613,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                                         <input 
                                                             className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
                                                             value={editFormData.emailContato || ''}
-                                                            onChange={e => setEditFormData({...editFormData, emailContato: e.target.value})}
+                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, emailContato: e.target.value})}
                                                         />
                                                     </div>
                                                     <div>
@@ -621,7 +622,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                                             className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
                                                             placeholder="5566999999999"
                                                             value={editFormData.telefone || ''}
-                                                            onChange={e => setEditFormData({...editFormData, telefone: e.target.value})}
+                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, telefone: e.target.value})}
                                                         />
                                                     </div>
                                                     

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, getDocs, where, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -692,14 +691,14 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                         <>
                             <div>
                                 <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Time A (Mandante)</label>
-                                <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={newGameTimeA} onChange={e => setNewGameTimeA(e.target.value)} required>
+                                <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={newGameTimeA} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewGameTimeA(e.target.value)} required>
                                     <option value="">Selecione um time</option>
                                     {selectedEvent.times?.map(t => <option key={t.id} value={t.id}>{t.nomeTime}</option>)}
                                 </select>
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Time B (Visitante)</label>
-                                <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required>
+                                <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={newGameTimeB} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewGameTimeB(e.target.value)} required>
                                     <option value="">Selecione um time</option>
                                     {selectedEvent.times?.map(t => <option key={t.id} value={t.id}>{t.nomeTime}</option>)}
                                 </select>
@@ -708,7 +707,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     ) : (
                         <div>
                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nome Adversário</label>
-                            <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Nome do time rival" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required />
+                            <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Nome do time rival" value={newGameTimeB} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewGameTimeB(e.target.value)} required />
                             <p className="text-xs text-gray-400 mt-1">O Time A será automaticamente definido como "ANCB".</p>
                         </div>
                     )}
@@ -733,7 +732,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
                     <div>
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nome do Time</label>
-                        <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={newTeamName} onChange={e => setNewTeamName(e.target.value)} required placeholder="Ex: Bulls" />
+                        <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={newTeamName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTeamName(e.target.value)} required placeholder="Ex: Bulls" />
                     </div>
 
                     <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
@@ -767,11 +766,11 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             <Modal isOpen={showEventForm} onClose={() => setShowEventForm(false)} title={isEditingEvent ? "Editar Evento" : "Novo Evento"}>
                 <form onSubmit={handleSaveEvent} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="col-span-2"><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nome</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formName} onChange={e => setFormName(e.target.value)} required /></div>
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Data</label><input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formDate} onChange={e => setFormDate(e.target.value)} required /></div>
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Status</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formStatus} onChange={(e:any) => setFormStatus(e.target.value)}><option value="proximo">Próximo</option><option value="andamento">Em Andamento</option><option value="finalizado">Finalizado</option></select></div>
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Modalidade</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formMode} onChange={(e:any) => setFormMode(e.target.value)}><option value="5x5">5x5</option><option value="3x3">3x3</option></select></div>
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Tipo</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formType} onChange={(e:any) => setFormType(e.target.value)}><option value="amistoso">Amistoso</option><option value="torneio_interno">Torneio Interno</option><option value="torneio_externo">Torneio Externo</option></select></div>
+                        <div className="col-span-2"><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nome</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormName(e.target.value)} required /></div>
+                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Data</label><input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormDate(e.target.value)} required /></div>
+                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Status</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formStatus} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormStatus(e.target.value as any)}><option value="proximo">Próximo</option><option value="andamento">Em Andamento</option><option value="finalizado">Finalizado</option></select></div>
+                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Modalidade</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formMode} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormMode(e.target.value as any)}><option value="5x5">5x5</option><option value="3x3">3x3</option></select></div>
+                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Tipo</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormType(e.target.value as any)}><option value="amistoso">Amistoso</option><option value="torneio_interno">Torneio Interno</option><option value="torneio_externo">Torneio Externo</option></select></div>
                     </div>
                     {/* Only show Roster Selection for External/Friendly. Internal uses Teams. */}
                     {formType !== 'torneio_interno' && (

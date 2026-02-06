@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -278,7 +279,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                             <LucideCalendarRange size={16} className="text-gray-400 dark:text-gray-300"/>
                             <select 
                                 value={selectedYear} 
-                                onChange={(e) => setSelectedYear(e.target.value)}
+                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedYear(e.target.value)}
                                 className="bg-transparent text-sm font-bold text-gray-700 dark:text-white focus:outline-none cursor-pointer"
                             >
                                 <option value="2025" className="text-black">2025</option>
@@ -291,7 +292,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                             <LucideGraduationCap size={16} className="text-gray-400 dark:text-gray-300"/>
                             <select 
                                 value={selectedCategory} 
-                                onChange={(e) => setSelectedCategory(e.target.value as any)}
+                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedCategory(e.target.value as any)}
                                 className="bg-transparent text-sm font-bold text-gray-700 dark:text-white focus:outline-none cursor-pointer"
                             >
                                 <option value="aberta" className="text-black">Aberta (Todos)</option>

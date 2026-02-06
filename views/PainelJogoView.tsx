@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { collection, doc, onSnapshot, updateDoc, addDoc, serverTimestamp, getDocs, query, orderBy, getDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -266,7 +267,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                     <input 
                         type="text" placeholder="Filtrar..." 
                         className="w-full pl-9 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-ancb-blue text-sm"
-                        value={searchPlayer} onChange={(e) => setSearchPlayer(e.target.value)}
+                        value={searchPlayer} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchPlayer(e.target.value)}
                     />
                 </div>
             </div>
