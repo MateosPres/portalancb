@@ -61,43 +61,45 @@ exports.sendDirectNotification = functions.firestore
                 return null;
             }
 
-            // --- CORREÇÃO PRINCIPAL ---
-            // Adicionando configurações de prioridade alta para Android e WebPush
-            const payload = {
+            // Configuração para Alta Prioridade (Solução para Android Doze Mode/Battery Saver)
+            const message = {
+                token: fcmToken,
                 notification: {
                     title: data.title || "Portal ANCB",
                     body: data.message || "Você tem uma nova notificação.",
-                    icon: 'https://i.imgur.com/SE2jHsz.png' 
+                    // Nota: O ícone aqui serve para apps nativos ou fallback. 
+                    // No PWA, o Service Worker intercepta e usa o definido lá ou no manifest.
                 },
                 data: {
                     type: data.type || "general",
                     eventId: data.eventId || "",
                     gameId: data.gameId || "",
-                    url: "/"
+                    url: "/" // URL para redirecionamento
                 },
-                token: fcmToken,
-                // Configuração específica para Android (Acorda o app)
+                // Configuração específica para Android
                 android: {
                     priority: "high",
                     notification: {
                         priority: "max",
                         channelId: "ancb_alerts",
                         defaultSound: true,
-                        defaultVibrateTimings: true
+                        defaultVibrateTimings: true,
+                        icon: 'stock_ticker_update',
+                        color: '#F27405'
                     }
                 },
-                // Configuração para WebPush (Prioridade na entrega)
+                // O SEGREDO DO BACKGROUND NO PWA (CHROME ANDROID):
                 webpush: {
                     headers: {
-                        Urgency: "high"
+                        Urgency: "high" // Obriga a entrega imediata
                     },
-                    fcmOptions: {
-                        link: "/"
+                    fcm_options: {
+                        link: "/" // Garante que o clique abra o app
                     }
                 }
             };
 
-            return admin.messaging().send(payload);
+            return admin.messaging().send(message);
 
         } catch (error) {
             console.error("Erro ao enviar notificação direta:", error);
@@ -121,33 +123,37 @@ async function dbSearchUserByPlayerId(playerId, eventName, eventId) {
 
         if (!fcmToken) return;
 
-        // Mesma correção de prioridade para convocações
-        const payload = {
+        const message = {
+            token: fcmToken,
             notification: {
                 title: "Você foi convocado! 🏀",
-                body: `Sua presença é aguardada no evento: ${eventName}`,
-                icon: 'https://i.imgur.com/SE2jHsz.png'
+                body: `Sua presença é aguardada no evento: ${eventName}`
             },
             data: {
                 type: "roster_alert",
-                eventId: eventId
+                eventId: eventId,
+                url: "/"
             },
-            token: fcmToken,
             android: {
                 priority: "high",
                 notification: {
                     priority: "max",
-                    channelId: "ancb_alerts"
+                    channelId: "ancb_alerts",
+                    defaultSound: true,
+                    color: '#F27405'
                 }
             },
             webpush: {
                 headers: {
                     Urgency: "high"
+                },
+                fcm_options: {
+                    link: "/"
                 }
             }
         };
 
-        await admin.messaging().send(payload);
+        await admin.messaging().send(message);
         console.log(`Notificação enviada para ${userData.nome}`);
 
     } catch (error) {
