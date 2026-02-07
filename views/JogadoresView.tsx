@@ -363,12 +363,16 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         }
     };
 
-    const getRarityColor = (rarity: Badge['raridade']) => {
+    const getRarityStyles = (rarity: Badge['raridade']) => {
         switch(rarity) {
-            case 'lendaria': return 'bg-gradient-to-r from-purple-500 to-pink-600 text-white border-purple-300';
-            case 'epica': return 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white border-yellow-300';
-            case 'rara': return 'bg-gradient-to-r from-gray-300 to-gray-400 text-white border-gray-200';
-            default: return 'bg-gradient-to-r from-orange-700 to-orange-800 text-white border-orange-900'; 
+            case 'lendaria': 
+                return { label: 'Lendária', classes: 'bg-gradient-to-r from-purple-600 to-pink-600 text-white border-purple-400' };
+            case 'epica': 
+                return { label: 'Ouro', classes: 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white border-yellow-300' };
+            case 'rara': 
+                return { label: 'Prata', classes: 'bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800 border-gray-200' };
+            default: 
+                return { label: 'Bronze', classes: 'bg-gradient-to-r from-orange-700 to-orange-800 text-white border-orange-900' };
         }
     };
 
@@ -488,16 +492,19 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-                                                {selectedPlayer.badges.map((badge, idx) => (
-                                                    <div 
-                                                        key={idx} 
-                                                        onClick={() => setSelectedBadge(badge)}
-                                                        className={`p-2 rounded-lg border flex flex-col items-center text-center shadow-sm cursor-pointer hover:scale-105 transition-transform active:scale-95 ${getRarityColor(badge.raridade)}`}
-                                                    >
-                                                        <span className="text-xl mb-1 drop-shadow-md">{badge.emoji}</span>
-                                                        <span className="text-[8px] font-bold leading-tight uppercase line-clamp-2">{badge.nome}</span>
-                                                    </div>
-                                                ))}
+                                                {selectedPlayer.badges.map((badge, idx) => {
+                                                    const style = getRarityStyles(badge.raridade);
+                                                    return (
+                                                        <div 
+                                                            key={idx} 
+                                                            onClick={() => setSelectedBadge(badge)}
+                                                            className={`p-2 rounded-lg border flex flex-col items-center text-center shadow-sm cursor-pointer hover:scale-105 transition-transform active:scale-95 ${style.classes}`}
+                                                        >
+                                                            <span className="text-xl mb-1 drop-shadow-md">{badge.emoji}</span>
+                                                            <span className="text-[8px] font-bold leading-tight uppercase line-clamp-2">{badge.nome}</span>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}
@@ -693,22 +700,14 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                     </div>
                 )}
             </Modal>
+            
             <Modal isOpen={!!selectedBadge} onClose={() => setSelectedBadge(null)} title="Detalhes da Conquista">
                 {selectedBadge && (
                     <div className="text-center p-4">
                         <div className="text-8xl mb-4 animate-bounce-slow drop-shadow-xl">{selectedBadge.emoji}</div>
                         <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 uppercase tracking-wide">{selectedBadge.nome}</h3>
-                        <div className="mb-6 flex justify-center">
-                            <span className={`px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                                selectedBadge.raridade === 'lendaria' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
-                                selectedBadge.raridade === 'epica' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
-                                selectedBadge.raridade === 'rara' ? 'bg-gray-200 text-gray-700 border border-gray-300' :
-                                'bg-orange-100 text-orange-800 border border-orange-300'
-                            }`}>
-                                {selectedBadge.raridade === 'comum' ? 'Bronze' : 
-                                 selectedBadge.raridade === 'rara' ? 'Prata' : 
-                                 selectedBadge.raridade === 'epica' ? 'Ouro' : 'Lendária'}
-                            </span>
+                        <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 border ${getRarityStyles(selectedBadge.raridade).classes}`}>
+                            {getRarityStyles(selectedBadge.raridade).label}
                         </div>
                         <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-600 mb-4">
                             <p className="text-gray-600 dark:text-gray-300 text-sm font-medium leading-relaxed">

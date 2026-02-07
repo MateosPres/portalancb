@@ -4,6 +4,7 @@ import "firebase/compat/auth";
 import "firebase/compat/firestore";
 import "firebase/compat/storage";
 import "firebase/compat/messaging";
+import "firebase/compat/functions";
 
 const firebaseConfig = { 
     apiKey: "AIzaSyCZ2yeJJ34VwYAmQnFCEv72Q1uDFFGKKjQ", 
@@ -19,6 +20,7 @@ const app = firebase.initializeApp(firebaseConfig);
 export const db = app.firestore();
 export const auth = app.auth();
 export const storage = app.storage();
+export const functions = app.functions(); // Export functions capability
 
 // --- MESSAGING SETUP ---
 let messaging: firebase.messaging.Messaging | null = null;

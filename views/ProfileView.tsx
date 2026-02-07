@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot, setDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { db, auth } from '../services/firebase';
 import { UserProfile, Player, Jogo, Evento, Cesta, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucideArrowLeft, LucideCamera, LucideLink, LucideSearch, LucideLoader2, LucideClock, LucideStar, LucideHistory, LucideEdit2, LucideTrendingUp, LucideTrophy } from 'lucide-react';
+import { LucideArrowLeft, LucideCamera, LucideLink, LucideSearch, LucideLoader2, LucideClock, LucideStar, LucideHistory, LucideEdit2, LucideTrendingUp, LucideTrophy, LucideMapPin, LucideGrid, LucideUser } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { RadarChart } from '../components/RadarChart';
 
@@ -79,9 +79,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const [loading, setLoading] = useState(true);
     const [formData, setFormData] = useState<Partial<Player>>({});
     const [showEditModal, setShowEditModal] = useState(false);
+    const [newPassword, setNewPassword] = useState(''); 
     const [matches, setMatches] = useState<MatchHistoryItem[]>([]);
     const [loadingMatches, setLoadingMatches] = useState(false);
+    
+    // Badge Management
     const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
+    const [showAllBadges, setShowAllBadges] = useState(false);
+
     const [isUploading, setIsUploading] = useState(false);
     const [pendingPhotoRequest, setPendingPhotoRequest] = useState(false);
     const [showClaimSection, setShowClaimSection] = useState(false);
@@ -146,6 +151,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         return () => { isMounted = false; if (unsubPlayer) unsubPlayer(); };
     }, [playerDocId, userProfile.uid, userProfile.linkedPlayerId]);
 
+    // Load matches always to count games
     useEffect(() => {
         const fetchMatches = async () => {
             setLoadingMatches(true);
@@ -274,8 +280,28 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
             const dataToSave = { ...formData };
             if (!dataToSave.id) dataToSave.id = playerDocId;
             await setDoc(doc(db, "jogadores", playerDocId), dataToSave, { merge: true });
+            
+            // Password Update
+            if (newPassword && auth.currentUser) {
+                if (newPassword.length < 6) {
+                    alert("A senha deve ter no mínimo 6 caracteres.");
+                    return;
+                }
+                try {
+                    await auth.currentUser.updatePassword(newPassword);
+                    alert("Senha alterada com sucesso!");
+                } catch (passError: any) {
+                    if (passError.code === 'auth/requires-recent-login') {
+                        alert("Para mudar a senha, é necessário fazer login novamente por segurança. Saia e entre na sua conta.");
+                    } else {
+                        alert("Erro ao alterar senha: " + passError.message);
+                    }
+                }
+            }
+
             setShowEditModal(false);
-            alert("Dados atualizados com sucesso!");
+            setNewPassword('');
+            alert("Perfil atualizado!");
         } catch (error) { alert("Erro ao salvar."); }
     };
 
@@ -294,6 +320,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     };
 
     const formatDate = (dateStr?: string) => dateStr ? dateStr.split('-').reverse().join('/') : '';
+    
     const normalizePosition = (pos: string | undefined): string => {
         if (!pos) return '-';
         if (pos.includes('1') || pos.toLowerCase().includes('armador')) return 'Armador (1)';
@@ -304,15 +331,34 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         return pos;
     };
 
+    const calculateAge = (dateString?: string) => {
+        if (!dateString) return '-';
+        const today = new Date();
+        const birthDate = new Date(dateString);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return age;
+    };
+
     const radarStats = calculateStatsFromTags(formData.stats_tags);
     const topTags = formData.stats_tags ? Object.entries(formData.stats_tags).sort((a, b) => (b[1] as number) - (a[1] as number)).slice(0, 3).map(([key, count]) => ({ key, count: Number(count), ...TAG_META[key] })) : [];
 
-    const getRarityColor = (rarity: Badge['raridade']) => {
+    // Reverse achievements to show newest first
+    const displayBadges = formData.badges ? [...formData.badges].reverse().slice(0, 3) : [];
+
+    const getRarityStyles = (rarity: Badge['raridade']) => {
         switch(rarity) {
-            case 'lendaria': return 'bg-gradient-to-r from-purple-500 to-pink-600 text-white border-purple-300';
-            case 'epica': return 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white border-yellow-300';
-            case 'rara': return 'bg-gradient-to-r from-gray-300 to-gray-400 text-white border-gray-200';
-            default: return 'bg-gradient-to-r from-orange-700 to-orange-800 text-white border-orange-900';
+            case 'lendaria': 
+                return { label: 'Lendária', classes: 'bg-gradient-to-r from-purple-600 to-pink-600 text-white border-purple-400' };
+            case 'epica': 
+                return { label: 'Ouro', classes: 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white border-yellow-300' };
+            case 'rara': 
+                return { label: 'Prata', classes: 'bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800 border-gray-200' };
+            default: 
+                return { label: 'Bronze', classes: 'bg-gradient-to-r from-orange-700 to-orange-800 text-white border-orange-900' };
         }
     };
 
@@ -323,32 +369,106 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     <Button variant="secondary" size="sm" onClick={onBack} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"><LucideArrowLeft size={18} /></Button>
                     <h2 className="text-2xl font-bold text-ancb-black dark:text-white">Meu Perfil</h2>
                 </div>
-                <div className="flex gap-2">
-                    <Button size="sm" variant="secondary" onClick={() => setShowEditModal(true)} className="dark:text-white dark:border-gray-600">
-                        <LucideEdit2 size={16} /> <span className="hidden sm:inline">Editar</span>
-                    </Button>
-                </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-6 border border-gray-100 dark:border-gray-700 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-ancb-blue to-blue-600 opacity-90"></div>
-                <div className="relative z-10 flex flex-col items-center mt-4">
-                    <div className="relative group">
-                        <div className="w-32 h-32 rounded-full border-4 border-white dark:border-gray-800 shadow-xl overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                            {formData.foto ? <img src={formData.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-gray-400">{formData.nome?.charAt(0)}</span>}
+            {/* NEW HERO CARD LAYOUT */}
+            <div className="relative w-full rounded-3xl overflow-hidden shadow-xl mb-6 bg-[#062553] text-white border border-blue-900 p-6 md:p-8">
+                {/* Faded Background Icon */}
+                <div className="absolute right-0 bottom-0 opacity-5 pointer-events-none transform translate-x-1/4 translate-y-1/4">
+                    <LucideTrophy size={500} className="text-white" />
+                </div>
+
+                <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
+                    
+                    {/* COLUMN 1: PHOTO & BADGE NUMBER */}
+                    <div className="flex-shrink-0 relative">
+                        <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
+                            {formData.foto ? <img src={formData.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-5xl font-bold text-white/50">{formData.nome?.charAt(0)}</span>}
                         </div>
-                        <label className="absolute bottom-0 right-0 bg-ancb-orange text-white p-2 rounded-full shadow-lg cursor-pointer hover:bg-orange-600 transition-colors">
+                        <div className="absolute bottom-2 right-0 bg-ancb-orange text-white text-lg font-bold px-3 py-1 rounded-lg shadow-md border border-white/20">
+                            #{formData.numero_uniforme}
+                        </div>
+                        <label className="absolute top-0 right-0 bg-white/10 text-white p-2 rounded-full shadow-lg cursor-pointer hover:bg-white/20 transition-colors backdrop-blur-sm">
                             {isUploading ? <LucideLoader2 className="animate-spin" size={16}/> : <LucideCamera size={16} />}
                             <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} disabled={isUploading} />
                         </label>
                     </div>
-                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white mt-4">{formData.apelido || formData.nome}</h1>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full text-xs font-bold uppercase tracking-wider">{normalizePosition(formData.posicao)}</span>
-                        <span className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full text-xs font-bold">#{formData.numero_uniforme}</span>
+
+                    {/* COLUMN 2: INFO & STATS */}
+                    <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left w-full">
+                        <h1 className="text-3xl md:text-4xl font-bold text-white drop-shadow-md mb-2">{formData.apelido || formData.nome}</h1>
+                        
+                        <div className="flex items-center gap-2 text-gray-300 text-sm font-medium mb-4 justify-center md:justify-start">
+                            <LucideMapPin size={16} />
+                            <span>{normalizePosition(formData.posicao)}</span>
+                        </div>
+
+                        <button 
+                            onClick={() => setShowEditModal(true)}
+                            className="mb-6 flex items-center gap-2 px-6 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition-colors text-sm font-bold uppercase tracking-wider text-white"
+                        >
+                            <LucideEdit2 size={14} /> Editar Perfil
+                        </button>
+
+                        <div className="grid grid-cols-2 gap-4 w-full max-w-xs">
+                            <div className="bg-[#092b5e] rounded-xl p-3 md:p-4 text-center border border-white/5 shadow-inner">
+                                <span className="block text-xl md:text-2xl font-bold text-white">{calculateAge(formData.nascimento)}</span>
+                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Idade</span>
+                            </div>
+                            <div className="bg-[#092b5e] rounded-xl p-3 md:p-4 text-center border border-white/5 shadow-inner">
+                                <span className="block text-xl md:text-2xl font-bold text-white">{matches.length}</span>
+                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
+                            </div>
+                        </div>
                     </div>
-                    {pendingPhotoRequest && <div className="mt-3 flex items-center gap-2 text-xs text-orange-600 bg-orange-50 px-3 py-1 rounded-full"><LucideClock size={12} /> Foto em análise</div>}
+
+                    {/* COLUMN 3: RADAR & BADGES */}
+                    <div className="flex flex-col items-center justify-center w-full md:w-auto md:min-w-[250px]">
+                        <div className="mb-4">
+                            <div className="flex items-center justify-center gap-2 mb-2 text-blue-100">
+                                <LucideTrendingUp size={16} />
+                                <span className="text-xs font-bold uppercase tracking-wider">Atributos</span>
+                            </div>
+                            <RadarChart stats={radarStats} size={180} className="text-white/70" />
+                        </div>
+                    </div>
                 </div>
+
+                {/* INTEGRATED BADGES ROW (Bottom of Hero) */}
+                {formData.badges && formData.badges.length > 0 && (
+                    <div className="mt-8 pt-6 border-t border-white/10">
+                        <div className="flex items-center justify-between mb-3 px-1">
+                            <span className="text-xs font-bold text-blue-200 uppercase tracking-wider flex items-center gap-2">
+                                <LucideTrophy size={14} className="text-ancb-orange" /> Principais Conquistas
+                            </span>
+                            {formData.badges.length > 3 && (
+                                <button onClick={() => setShowAllBadges(true)} className="text-[10px] text-white/60 hover:text-white flex items-center gap-1 transition-colors">
+                                    Ver todas <LucideGrid size={10} />
+                                </button>
+                            )}
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-3 md:gap-4">
+                            {displayBadges.map((badge, idx) => {
+                                const style = getRarityStyles(badge.raridade);
+                                return (
+                                    <div 
+                                        key={idx} 
+                                        onClick={() => setSelectedBadge(badge)}
+                                        className={`rounded-lg p-2 md:p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-transform hover:scale-105 active:scale-95 shadow-lg border relative overflow-hidden ${style.classes}`}
+                                    >
+                                        <div className="text-2xl md:text-3xl mb-1 drop-shadow-md z-10">{badge.emoji}</div>
+                                        <div className="z-10 w-full">
+                                            <span className="block text-[8px] md:text-[9px] font-bold uppercase leading-tight line-clamp-2 min-h-[2em] flex items-center justify-center">
+                                                {badge.nome}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {showClaimSection && (
@@ -373,35 +493,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     )}
                 </div>
             )}
-
-            {formData.badges && formData.badges.length > 0 && (
-                <div className="mb-6">
-                    <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2"><LucideTrophy size={18} className="text-ancb-orange" /> Conquistas</h3>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                        {formData.badges.map((badge, idx) => (
-                            <div key={idx} onClick={() => setSelectedBadge(badge)} className={`aspect-square rounded-xl border flex flex-col items-center justify-center p-2 text-center cursor-pointer hover:scale-105 transition-transform shadow-sm ${getRarityColor(badge.raridade)}`}>
-                                <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>
-                                <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            <div className="mb-6 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2"><LucideTrendingUp size={18} className="text-ancb-blue" /> Atributos</h3>
-                    <span className="text-[10px] text-gray-400 uppercase bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">Baseado em avaliações</span>
-                </div>
-                <RadarChart stats={radarStats} size={220} />
-                {topTags.length > 0 && (
-                    <div className="mt-6 flex justify-center gap-4 border-t border-gray-100 dark:border-gray-700 pt-4">
-                        {topTags.map(tag => (
-                            <div key={tag.key} className="text-center"><div className="text-xl mb-1">{tag.emoji}</div><div className="text-[10px] font-bold text-gray-500 uppercase">{tag.label}</div><div className="text-xs font-bold text-ancb-blue">x{tag.count}</div></div>
-                        ))}
-                    </div>
-                )}
-            </div>
 
             <div>
                 <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2"><LucideHistory size={18} className="text-gray-500" /> Histórico de Partidas</h3>
@@ -430,20 +521,64 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     <div><label className="text-xs font-bold text-gray-500 uppercase">Posição</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={formData.posicao} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({...formData, posicao: e.target.value})}>{POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
                     <div><label className="text-xs font-bold text-gray-500 uppercase">Número</label><input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={formData.numero_uniforme} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, numero_uniforme: Number(e.target.value)})} /></div>
                     <div><label className="text-xs font-bold text-gray-500 uppercase">WhatsApp</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={formData.telefone || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, telefone: e.target.value})} placeholder="5511999999999" /></div>
+                    
+                    <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Alterar Senha</label>
+                        <input 
+                            type="password"
+                            className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" 
+                            value={newPassword} 
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)} 
+                            placeholder="Nova senha (deixe em branco para manter)" 
+                        />
+                        <p className="text-[10px] text-gray-400 mt-1">Mínimo 6 caracteres.</p>
+                    </div>
+
                     <Button type="submit" className="w-full">Salvar Alterações</Button>
                 </form>
             </Modal>
 
+            {/* DETAIL MODAL (Single Badge) */}
             <Modal isOpen={!!selectedBadge} onClose={() => setSelectedBadge(null)} title="Detalhes da Conquista">
                 {selectedBadge && (
                     <div className="text-center p-6">
                         <div className="text-8xl mb-6 animate-bounce-slow">{selectedBadge.emoji}</div>
                         <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">{selectedBadge.nome}</h3>
-                        <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 ${getRarityColor(selectedBadge.raridade)}`}>{selectedBadge.raridade}</div>
+                        
+                        {/* Unified Badge Label Logic */}
+                        <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 ${getRarityStyles(selectedBadge.raridade).classes} border`}>
+                            {getRarityStyles(selectedBadge.raridade).label}
+                        </div>
+                        
                         <p className="text-gray-600 dark:text-gray-300 mb-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">{selectedBadge.descricao}</p>
                         <p className="text-xs text-gray-400 font-bold uppercase">Conquistado em {formatDate(selectedBadge.data)}</p>
                     </div>
                 )}
+            </Modal>
+
+            {/* GALLERY MODAL (All Badges) */}
+            <Modal isOpen={showAllBadges} onClose={() => setShowAllBadges(false)} title="Galeria de Troféus">
+                <div className="p-2">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar p-1">
+                        {formData.badges && formData.badges.length > 0 ? (
+                            [...formData.badges].reverse().map((badge, idx) => {
+                                const style = getRarityStyles(badge.raridade);
+                                return (
+                                    <div 
+                                        key={idx} 
+                                        onClick={() => setSelectedBadge(badge)} 
+                                        className={`rounded-xl p-2 flex flex-col items-center justify-center text-center cursor-pointer hover:scale-105 transition-transform shadow-sm border ${style.classes}`}
+                                    >
+                                        <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>
+                                        <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <p className="col-span-full text-center text-gray-500 py-10">Nenhuma conquista ainda.</p>
+                        )}
+                    </div>
+                </div>
             </Modal>
         </div>
     );

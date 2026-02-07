@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface RadarChartProps {
@@ -9,9 +10,10 @@ interface RadarChartProps {
         visao: number;
     };
     size?: number;
+    className?: string; // Allow overriding text colors
 }
 
-export const RadarChart: React.FC<RadarChartProps> = ({ stats, size = 200 }) => {
+export const RadarChart: React.FC<RadarChartProps> = ({ stats, size = 200, className }) => {
     // Config
     const center = size / 2;
     const radius = (size / 2) - 35; // Padding for labels
@@ -53,7 +55,7 @@ export const RadarChart: React.FC<RadarChartProps> = ({ stats, size = 200 }) => 
 
     return (
         <div className="relative flex flex-col items-center">
-            <svg width={size} height={size} className="text-gray-400 dark:text-gray-600">
+            <svg width={size} height={size} className={className || "text-gray-400 dark:text-gray-600"}>
                 {/* Background Grid */}
                 {grids}
                 
@@ -95,7 +97,7 @@ export const RadarChart: React.FC<RadarChartProps> = ({ stats, size = 200 }) => 
                             y={y + 4} // Slight vertical adjustment 
                             textAnchor="middle" 
                             dominantBaseline="middle"
-                            className="text-[9px] font-bold fill-gray-500 dark:fill-gray-400 uppercase tracking-wider"
+                            className="text-[9px] font-bold fill-current uppercase tracking-wider"
                         >
                             {axis.label}
                         </text>

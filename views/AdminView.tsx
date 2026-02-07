@@ -1,11 +1,10 @@
 
-
 import React, { useState, useEffect } from 'react';
-import firebase, { db, auth } from '../services/firebase';
+import firebase, { db, auth, functions } from '../services/firebase';
 import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player, Time, Cesta, UserProfile, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing, LucideBellOff, LucideSend } from 'lucide-react';
+import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing, LucideBellOff, LucideSend, LucideKeyRound } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 interface AdminViewProps {
@@ -102,6 +101,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
         };
     }, []);
 
+    // ... (Existing Functions) ...
     useEffect(() => {
         if (!selectedEvent) return;
         const unsubscribe = db.collection("eventos").doc(selectedEvent.id).collection("jogos").orderBy("dataJogo", "desc").onSnapshot((snapshot) => {
@@ -140,9 +140,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
             alert("Este usuário não ativou notificações (Sem Token FCM).");
             return;
         }
-        
         if (!window.confirm(`Enviar notificação push de teste para ${targetUser.nome}?`)) return;
-
         try {
             await db.collection("notifications").add({
                 targetUserId: targetUser.uid,
@@ -152,10 +150,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 read: false,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
-            alert("Comando de notificação enviado! Se o app estiver fechado no Android, ele deve despertar em breve.");
+            alert("Comando enviado.");
         } catch (error) {
             console.error("Erro ao enviar push:", error);
             alert("Erro ao criar notificação.");
+        }
+    };
+
+    const handleResetPassword = async (user: UserProfile) => {
+        if (!window.confirm(`Tem certeza que deseja resetar a senha de ${user.nome} para "ancb1234"?`)) return;
+        
+        try {
+            const resetFn = functions.httpsCallable('adminResetPassword');
+            await resetFn({ targetUid: user.uid });
+            alert(`Senha de ${user.nome} resetada com sucesso para "ancb1234".`);
+        } catch (error: any) {
+            console.error("Erro ao resetar senha:", error);
+            alert("Erro ao resetar senha: " + error.message);
         }
     };
 
@@ -187,6 +198,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
         } catch (e) { alert("Erro ao excluir."); }
     };
 
+    // ... (Keep existing simple functions: sendWhatsappNotification, compressImage, fileToBase64, createPost, handleDeletePost, handleImageSelect, resetPostForm) ...
     const sendWhatsappNotification = (player: Player) => {
         if (!selectedEvent) return;
         if (!player.telefone) { alert("Este jogador não possui telefone cadastrado. Edite o perfil dele."); return; }
@@ -198,10 +210,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
         const phone = cleanPhone.length > 11 ? cleanPhone : `55${cleanPhone}`;
         window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
     };
-
     const compressImage = async (file: File): Promise<File> => { const options = { maxSizeMB: 0.1, maxWidthOrHeight: 800, useWebWorker: true, fileType: 'image/webp' }; try { return await imageCompression(file, options); } catch (error) { return file; } };
     const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
-    
     const createPost = async (e: React.FormEvent) => { 
         e.preventDefault(); if (!auth.currentUser) return; setIsUploading(true); 
         try { 
@@ -215,11 +225,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
             resetPostForm(); setShowAddPost(false); 
         } catch (error) { alert("Erro ao criar postagem."); } finally { setIsUploading(false); } 
     };
-
     const handleDeletePost = async (post: FeedPost) => { if (!window.confirm("Excluir esta postagem permanentemente?")) return; try { await db.collection("feed_posts").doc(post.id).delete(); } catch (error) { console.error("Erro ao excluir post:", error); } };
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; setPostImageFile(file); setImagePreview(URL.createObjectURL(file)); } };
     const resetPostForm = () => { setPostType('noticia'); setPostTitle(''); setPostBody(''); setPostScoreAncb(''); setPostScoreAdv(''); setPostTeamAdv(''); setPostVideoLink(''); setPostImageFile(null); setImagePreview(null); };
 
+    // ... (Keep existing simple functions: handleApprovePlayer, handleRejectPlayer, handleBanPlayer, handleDeleteActivePlayer, handleApproveClaim, handleRejectClaim, handleApprovePhoto, handleRejectPhoto, handleCreateEvent, handleDeleteEvent, handleRecoverEventData, handleCreateGame, handleDeleteGame, getScores, formatDate, handleRecalculateHistory) ...
     const handleApprovePlayer = async (player: Player) => { if (!window.confirm(`Aprovar cadastro de ${player.nome}?`)) return; try { await db.collection("jogadores").doc(player.id).update({ status: 'active' }); } catch (e) { console.error(e); } };
     const handleRejectPlayer = async (player: Player) => { if (!window.confirm(`Rejeitar e excluir cadastro de ${player.nome}?`)) return; try { await db.collection("jogadores").doc(player.id).delete(); } catch (e) { console.error(e); } };
     const handleBanPlayer = async (player: Player) => { if (!window.confirm(`Banir ${player.nome}?`)) return; try { if (player.userId) await db.collection("usuarios").doc(player.userId).update({ status: 'banned' }); await db.collection("jogadores").doc(player.id).update({ status: 'banned' }); alert("Banido."); } catch (e) { alert("Erro."); } };
@@ -236,373 +246,95 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     const handleDeleteGame = async (gameId: string) => { if (!selectedEvent) return; if (window.confirm("Excluir?")) { await db.collection("eventos").doc(selectedEvent.id).collection("jogos").doc(gameId).delete(); } };
     const getScores = (game: Jogo) => { const sA = game.placarTimeA_final ?? game.placarANCB_final ?? 0; const sB = game.placarTimeB_final ?? game.placarAdversario_final ?? 0; return { sA, sB }; };
     const formatDate = (dateStr?: string) => { if (!dateStr) return ''; return dateStr.split('-').reverse().join('/'); };
-
     const handleRecalculateHistory = async () => {
         const year = selectedYear;
         const yearNum = parseInt(year);
-
-        if (!window.confirm(`Isso irá analisar TODO o histórico de jogos finalizados de ${year}, calcular estatísticas e re-atribuir medalhas (Evento e Temporada) para todos os jogadores. Continuar?`)) return;
-        
+        if (!window.confirm(`Isso irá analisar TODO o histórico de jogos finalizados de ${year}, calcular estatísticas e re-atribuir medalhas. Continuar?`)) return;
         setIsRecovering(true);
         setRecoveringStatus("Iniciando varredura...");
-
         try {
             const playersSnapshot = await db.collection("jogadores").get();
             const playersMap: Record<string, Player & { badges: Badge[] }> = {};
-            playersSnapshot.forEach(doc => {
-                const p = { id: doc.id, ...doc.data(), badges: [] } as Player; 
-                if (p.badges) {
-                    p.badges = p.badges.filter(b => !b.data.includes(year)); 
-                }
-                playersMap[doc.id] = p as any;
-            });
-
+            playersSnapshot.forEach(doc => { const p = { id: doc.id, ...doc.data(), badges: [] } as Player; if (p.badges) { p.badges = p.badges.filter(b => !b.data.includes(year)); } playersMap[doc.id] = p as any; });
             const eventsSnapshot = await db.collection("eventos").where("status", "==", "finalizado").get();
             const seasonStats: Record<string, Record<string, { points: number, threePoints: number }>> = {};
-
             for (const evDoc of eventsSnapshot.docs) {
-                const event = evDoc.data() as Evento;
-                const eventId = evDoc.id;
-                const eventDate = event.data || new Date().toISOString();
-                
+                const event = evDoc.data() as Evento; const eventId = evDoc.id; const eventDate = event.data || new Date().toISOString();
                 if (!eventDate.includes(year)) continue;
-
                 setRecoveringStatus(`Processando: ${event.nome}`);
-
                 const gamesSnap = await db.collection("eventos").doc(eventId).collection("jogos").get();
-
                 const eventPlayerStats: Record<string, { points: number, threePoints: number }> = {};
-
                 for (const gDoc of gamesSnap.docs) {
-                    const gameId = gDoc.id;
-                    const cestasSnap = await gDoc.ref.collection("cestas").get();
-                    
-                    cestasSnap.forEach(cDoc => {
-                        const c = cDoc.data() as Cesta;
-                        if (c.jogadorId && c.pontos) {
-                            const pid = c.jogadorId;
-                            const pts = Number(c.pontos);
-                            
-                            if (!eventPlayerStats[pid]) eventPlayerStats[pid] = { points: 0, threePoints: 0 };
-                            if (!seasonStats[year]) seasonStats[year] = {};
-                            if (!seasonStats[year][pid]) seasonStats[year][pid] = { points: 0, threePoints: 0 };
-
-                            eventPlayerStats[pid].points += pts;
-                            const isLong = (event.modalidade === '3x3' && pts === 2) || (event.modalidade !== '3x3' && pts === 3);
-                            if (isLong) {
-                                eventPlayerStats[pid].threePoints += 1;
-                            }
-
-                            seasonStats[year][pid].points += pts;
-                            if (isLong) {
-                                seasonStats[year][pid].threePoints += 1;
-                            }
-                        }
-                    });
+                    const gameId = gDoc.id; const cestasSnap = await gDoc.ref.collection("cestas").get();
+                    cestasSnap.forEach(cDoc => { const c = cDoc.data() as Cesta; if (c.jogadorId && c.pontos) { const pid = c.jogadorId; const pts = Number(c.pontos); if (!eventPlayerStats[pid]) eventPlayerStats[pid] = { points: 0, threePoints: 0 }; if (!seasonStats[year]) seasonStats[year] = {}; if (!seasonStats[year][pid]) seasonStats[year][pid] = { points: 0, threePoints: 0 }; eventPlayerStats[pid].points += pts; const isLong = (event.modalidade === '3x3' && pts === 2) || (event.modalidade !== '3x3' && pts === 3); if (isLong) { eventPlayerStats[pid].threePoints += 1; } seasonStats[year][pid].points += pts; if (isLong) { seasonStats[year][pid].threePoints += 1; } } });
                 }
-
                 const sortedByPoints = Object.entries(eventPlayerStats).sort(([,a], [,b]) => b.points - a.points).filter(([,s]) => s.points > 0);
-                sortedByPoints.slice(0, 3).forEach(([pid, s], idx) => {
-                    if (playersMap[pid]) {
-                        const rarity = idx === 0 ? 'epica' : idx === 1 ? 'rara' : 'comum';
-                        const emojis = ['👑', '🥈', '🥉'];
-                        const titles = ['Cestinha', 'Vice-Cestinha', 'Bronze'];
-                        
-                        playersMap[pid].badges!.push({
-                            id: `evt_${eventId}_pts_${idx}`,
-                            nome: `${titles[idx]} (${event.nome})`,
-                            emoji: emojis[idx],
-                            categoria: 'partida',
-                            raridade: rarity,
-                            data: eventDate,
-                            descricao: `${s.points} pontos em ${event.nome}`,
-                            gameId: eventId
-                        });
-                    }
-                });
-
+                sortedByPoints.slice(0, 3).forEach(([pid, s], idx) => { if (playersMap[pid]) { const rarity = idx === 0 ? 'epica' : idx === 1 ? 'rara' : 'comum'; const emojis = ['👑', '🥈', '🥉']; const titles = ['Cestinha', 'Vice-Cestinha', 'Bronze']; playersMap[pid].badges!.push({ id: `evt_${eventId}_pts_${idx}`, nome: `${titles[idx]} (${event.nome})`, emoji: emojis[idx], categoria: 'partida', raridade: rarity, data: eventDate, descricao: `${s.points} pontos em ${event.nome}`, gameId: eventId }); } });
                 const sortedBy3Pt = Object.entries(eventPlayerStats).sort(([,a], [,b]) => b.threePoints - a.threePoints).filter(([,s]) => s.threePoints > 0);
-                sortedBy3Pt.slice(0, 3).forEach(([pid, s], idx) => {
-                    if (playersMap[pid]) {
-                        const rarity = idx === 0 ? 'epica' : idx === 1 ? 'rara' : 'comum';
-                        const emojis = ['🔥', '👌', '🏀'];
-                        const titles = ['Mestre 3pts', 'Gatilho', 'Mão Quente'];
-                        
-                        playersMap[pid].badges!.push({
-                            id: `evt_${eventId}_3pt_${idx}`,
-                            nome: `${titles[idx]} (${event.nome})`,
-                            emoji: emojis[idx],
-                            categoria: 'partida',
-                            raridade: rarity,
-                            data: eventDate,
-                            descricao: `${s.threePoints} bolas longas em ${event.nome}`,
-                            gameId: eventId
-                        });
-                    }
-                });
+                sortedBy3Pt.slice(0, 3).forEach(([pid, s], idx) => { if (playersMap[pid]) { const rarity = idx === 0 ? 'epica' : idx === 1 ? 'rara' : 'comum'; const emojis = ['🔥', '👌', '🏀']; const titles = ['Mestre 3pts', 'Gatilho', 'Mão Quente']; playersMap[pid].badges!.push({ id: `evt_${eventId}_3pt_${idx}`, nome: `${titles[idx]} (${event.nome})`, emoji: emojis[idx], categoria: 'partida', raridade: rarity, data: eventDate, descricao: `${s.threePoints} bolas longas em ${event.nome}`, gameId: eventId }); } });
             }
-
             setRecoveringStatus("Calculando Temporadas...");
-
             if (seasonStats[year]) {
                 const yearData = seasonStats[year];
                 const sortedMvp = Object.entries(yearData).sort(([,a], [,b]) => b.points - a.points);
-                sortedMvp.slice(0, 3).forEach(([pid, s], idx) => {
-                    if (playersMap[pid] && s.points > 0) {
-                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum';
-                        const emojis = ['🏆', '⚔️', '🛡️'];
-                        const titles = [`MVP da Temporada ${year}`, `Vice-MVP ${year}`, `3º Melhor ${year}`];
-                        
-                        playersMap[pid].badges!.push({
-                            id: `season_${year}_mvp_${idx}`,
-                            nome: titles[idx],
-                            emoji: emojis[idx],
-                            categoria: 'temporada',
-                            raridade: rarity,
-                            data: `${year}-12-31`,
-                            descricao: `${s.points} pontos totais em ${year}`
-                        });
-                    }
-                });
-
+                sortedMvp.slice(0, 3).forEach(([pid, s], idx) => { if (playersMap[pid] && s.points > 0) { const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; const emojis = ['🏆', '⚔️', '🛡️']; const titles = [`MVP da Temporada ${year}`, `Vice-MVP ${year}`, `3º Melhor ${year}`]; playersMap[pid].badges!.push({ id: `season_${year}_mvp_${idx}`, nome: titles[idx], emoji: emojis[idx], categoria: 'temporada', raridade: rarity, data: `${year}-12-31`, descricao: `${s.points} pontos totais em ${year}` }); } });
                 const sortedShooter = Object.entries(yearData).sort(([,a], [,b]) => b.threePoints - a.threePoints);
-                sortedShooter.slice(0, 3).forEach(([pid, s], idx) => {
-                    if (playersMap[pid] && s.threePoints > 0) {
-                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum';
-                        const emojis = ['🎯', '🏹', '☄️'];
-                        const titles = [`Atirador de Elite ${year}`, `Mão de Prata ${year}`, `Sniper ${year}`];
-                        
-                        playersMap[pid].badges!.push({
-                            id: `season_${year}_shoot_${idx}`,
-                            nome: titles[idx],
-                            emoji: emojis[idx],
-                            categoria: 'temporada',
-                            raridade: rarity,
-                            data: `${year}-12-31`,
-                            descricao: `${s.threePoints} bolas longas em ${year}`
-                        });
-                    }
-                });
-
-                const juvenilCandidates = Object.entries(yearData).filter(([pid]) => {
-                    const p = playersMap[pid];
-                    if (!p || !p.nascimento) return false;
-                    const birthYear = parseInt(p.nascimento.split('-')[0]);
-                    return (yearNum - birthYear) <= 17;
-                });
-
+                sortedShooter.slice(0, 3).forEach(([pid, s], idx) => { if (playersMap[pid] && s.threePoints > 0) { const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; const emojis = ['🎯', '🏹', '☄️']; const titles = [`Atirador de Elite ${year}`, `Mão de Prata ${year}`, `Sniper ${year}`]; playersMap[pid].badges!.push({ id: `season_${year}_shoot_${idx}`, nome: titles[idx], emoji: emojis[idx], categoria: 'temporada', raridade: rarity, data: `${year}-12-31`, descricao: `${s.threePoints} bolas longas em ${year}` }); } });
+                const juvenilCandidates = Object.entries(yearData).filter(([pid]) => { const p = playersMap[pid]; if (!p || !p.nascimento) return false; const birthYear = parseInt(p.nascimento.split('-')[0]); return (yearNum - birthYear) <= 17; });
                 const sortedMvpJuv = juvenilCandidates.sort(([,a], [,b]) => b.points - a.points);
-                sortedMvpJuv.slice(0, 3).forEach(([pid, s], idx) => {
-                     if (playersMap[pid] && s.points > 0) {
-                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum';
-                        const emojis = ['🏆', '🥈', '🥉'];
-                        const titles = [`MVP Juvenil ${year}`, `Vice-MVP Juvenil ${year}`, `Bronze Juvenil ${year}`];
-                        
-                        playersMap[pid].badges!.push({
-                            id: `season_${year}_juv_mvp_${idx}`,
-                            nome: titles[idx],
-                            emoji: emojis[idx],
-                            categoria: 'temporada',
-                            raridade: rarity,
-                            data: `${year}-12-31`,
-                            descricao: `${s.points} pontos na categoria Juvenil em ${year}`
-                        });
-                    }
-                });
-
+                sortedMvpJuv.slice(0, 3).forEach(([pid, s], idx) => { if (playersMap[pid] && s.points > 0) { const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; const emojis = ['🏆', '🥈', '🥉']; const titles = [`MVP Juvenil ${year}`, `Vice-MVP Juvenil ${year}`, `Bronze Juvenil ${year}`]; playersMap[pid].badges!.push({ id: `season_${year}_juv_mvp_${idx}`, nome: titles[idx], emoji: emojis[idx], categoria: 'temporada', raridade: rarity, data: `${year}-12-31`, descricao: `${s.points} pontos na categoria Juvenil em ${year}` }); } });
                 const sortedShooterJuv = juvenilCandidates.sort(([,a], [,b]) => b.threePoints - a.threePoints);
-                sortedShooterJuv.slice(0, 3).forEach(([pid, s], idx) => {
-                     if (playersMap[pid] && s.threePoints > 0) {
-                        const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum';
-                        const emojis = ['🎯', '🏹', '☄️'];
-                        const titles = [`Atirador Juvenil ${year}`, `Mão de Prata Juv. ${year}`, `Sniper Juvenil ${year}`];
-                        
-                        playersMap[pid].badges!.push({
-                            id: `season_${year}_juv_shoot_${idx}`,
-                            nome: titles[idx],
-                            emoji: emojis[idx],
-                            categoria: 'temporada',
-                            raridade: rarity,
-                            data: `${year}-12-31`,
-                            descricao: `${s.threePoints} bolas longas na categoria Juvenil em ${year}`
-                        });
-                    }
-                });
+                sortedShooterJuv.slice(0, 3).forEach(([pid, s], idx) => { if (playersMap[pid] && s.threePoints > 0) { const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; const emojis = ['🎯', '🏹', '☄️']; const titles = [`Atirador Juvenil ${year}`, `Mão de Prata Juv. ${year}`, `Sniper Juvenil ${year}`]; playersMap[pid].badges!.push({ id: `season_${year}_juv_shoot_${idx}`, nome: titles[idx], emoji: emojis[idx], categoria: 'temporada', raridade: rarity, data: `${year}-12-31`, descricao: `${s.threePoints} bolas longas na categoria Juvenil em ${year}` }); } });
             }
-
             setRecoveringStatus("Salvando dados...");
-
-            const batchArray: any[] = [];
-            let currentBatch = db.batch();
-            let opCount = 0;
-
-            Object.values(playersMap).forEach(player => {
-                const ref = db.collection("jogadores").doc(player.id);
-                currentBatch.update(ref, { badges: player.badges });
-                opCount++;
-
-                if (opCount >= 450) {
-                    batchArray.push(currentBatch);
-                    currentBatch = db.batch();
-                    opCount = 0;
-                }
-            });
+            const batchArray: any[] = []; let currentBatch = db.batch(); let opCount = 0;
+            Object.values(playersMap).forEach(player => { const ref = db.collection("jogadores").doc(player.id); currentBatch.update(ref, { badges: player.badges }); opCount++; if (opCount >= 450) { batchArray.push(currentBatch); currentBatch = db.batch(); opCount = 0; } });
             if (opCount > 0) batchArray.push(currentBatch);
-
             await Promise.all(batchArray.map(b => b.commit()));
-
-            alert("Histórico recalculado com sucesso! Conquistas retroativas atribuídas.");
-
-        } catch (error) {
-            console.error(error);
-            alert("Erro ao processar histórico.");
-        } finally {
-            setIsRecovering(false);
-            setRecoveringStatus("");
-        }
+            alert("Histórico recalculado com sucesso!");
+        } catch (error) { console.error(error); alert("Erro ao processar histórico."); } finally { setIsRecovering(false); setRecoveringStatus(""); }
     };
-
     const findMatchingPlayer = (user: UserProfile) => {
         const normalize = (str: string) => str ? str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
         const cleanCpf = (str: string) => str ? str.replace(/\D/g, "") : "";
-
         return activePlayers.find(player => {
             // @ts-ignore
-            if (user.cpf && player.cpf && cleanCpf(user.cpf) === cleanCpf(player.cpf) && cleanCpf(user.cpf).length > 5) {
-                return true;
-            }
-            if (normalize(user.nome) === normalize(player.nome)) {
-                return true;
-            }
+            if (user.cpf && player.cpf && cleanCpf(user.cpf) === cleanCpf(player.cpf) && cleanCpf(user.cpf).length > 5) return true;
+            if (normalize(user.nome) === normalize(player.nome)) return true;
             return false;
         });
     };
+    const handleApproveUser = async (user: UserProfile) => { if (!window.confirm(`Aprovar ${user.nome}?`)) return; try { const batch = db.batch(); const newPlayerRef = db.collection("jogadores").doc(); const playerData: any = { nome: user.nome, apelido: user.apelido || '', posicao: (user as any).posicaoPreferida || 'Ala (3)', numero_uniforme: (user as any).numeroPreferido || 0, telefone: (user as any).whatsapp || '', nascimento: (user as any).dataNascimento || '', cpf: (user as any).cpf || '', emailContato: user.email, userId: user.uid, status: 'active' }; batch.set(newPlayerRef, playerData); const userRef = db.collection("usuarios").doc(user.uid); batch.update(userRef, { status: 'active', linkedPlayerId: newPlayerRef.id }); await batch.commit(); alert("Usuário aprovado e perfil criado!"); } catch (error) { alert("Erro."); } };
+    const handleAutoLinkUser = async (user: UserProfile, targetPlayerId: string) => { if (!window.confirm(`Vincular?`)) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(user.uid); const playerRef = db.collection("jogadores").doc(targetPlayerId); batch.update(userRef, { linkedPlayerId: targetPlayerId, status: 'active' }); batch.update(playerRef, { userId: user.uid, status: 'active' }); await batch.commit(); alert("Vinculado!"); } catch (error) { alert("Erro."); } };
+    const handleLinkPlayerToUser = async () => { if (!selectedUser || !linkPlayerId) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(selectedUser.uid); const playerRef = db.collection("jogadores").doc(linkPlayerId); batch.update(userRef, { linkedPlayerId: linkPlayerId, status: 'active' }); batch.update(playerRef, { userId: selectedUser.uid, status: 'active' }); await batch.commit(); setShowUserEditModal(false); alert("Vínculo realizado!"); } catch (error) { alert("Erro."); } };
+    const handleDeleteUser = async (user: UserProfile) => { if (!window.confirm(`Excluir usuário ${user.nome}?`)) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(user.uid); batch.delete(userRef); if (user.linkedPlayerId) { const playerRef = db.collection("jogadores").doc(user.linkedPlayerId); const playerSnap = await playerRef.get(); if (playerSnap.exists) { batch.update(playerRef, { userId: null }); } } await batch.commit(); alert("Usuário excluído."); } catch (error) { alert("Erro."); } };
+    const filteredUsers = users.filter(u => (u.nome || '').toLowerCase().includes(userSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(userSearch.toLowerCase()));
 
-    const handleApproveUser = async (user: UserProfile) => {
-        if (!window.confirm(`Aprovar ${user.nome} e criar perfil de atleta automaticamente?`)) return;
-        
-        try {
-            const batch = db.batch();
-            const newPlayerRef = db.collection("jogadores").doc();
-            const playerData: any = {
-                nome: user.nome,
-                apelido: user.apelido || '',
-                // @ts-ignore
-                posicao: user.posicaoPreferida || 'Ala (3)',
-                // @ts-ignore
-                numero_uniforme: user.numeroPreferido || 0,
-                // @ts-ignore
-                telefone: user.whatsapp || '',
-                // @ts-ignore
-                nascimento: user.dataNascimento || '',
-                // @ts-ignore
-                cpf: user.cpf || '',
-                emailContato: user.email,
-                userId: user.uid,
-                status: 'active'
-            };
-            batch.set(newPlayerRef, playerData);
-            const userRef = db.collection("usuarios").doc(user.uid);
-            batch.update(userRef, { status: 'active', linkedPlayerId: newPlayerRef.id });
-            await batch.commit();
-            alert("Usuário aprovado e perfil de jogador criado com sucesso!");
-        } catch (error) {
-            alert("Erro ao aprovar usuário.");
-        }
-    };
-
-    const handleAutoLinkUser = async (user: UserProfile, targetPlayerId: string) => {
-        if (!window.confirm(`Vincular ${user.nome} ao atleta existente?`)) return;
-        try {
-            const batch = db.batch();
-            const userRef = db.collection("usuarios").doc(user.uid);
-            const playerRef = db.collection("jogadores").doc(targetPlayerId);
-            batch.update(userRef, { linkedPlayerId: targetPlayerId, status: 'active' });
-            batch.update(playerRef, { userId: user.uid, status: 'active' });
-            await batch.commit();
-            alert("Vínculo automático realizado com sucesso!");
-        } catch (error) {
-            alert("Erro ao vincular.");
-        }
-    };
-
-    const handleLinkPlayerToUser = async () => {
-        if (!selectedUser || !linkPlayerId) return;
-        try {
-            const batch = db.batch();
-            const userRef = db.collection("usuarios").doc(selectedUser.uid);
-            const playerRef = db.collection("jogadores").doc(linkPlayerId);
-            batch.update(userRef, { linkedPlayerId: linkPlayerId, status: 'active' });
-            batch.update(playerRef, { userId: selectedUser.uid, status: 'active' });
-            await batch.commit();
-            setShowUserEditModal(false);
-            alert("Vínculo realizado!");
-        } catch (error) {
-            alert("Erro ao vincular.");
-        }
-    };
-
-    const handleDeleteUser = async (user: UserProfile) => {
-        if (!window.confirm(`ATENÇÃO: Você está prestes a excluir o usuário ${user.nome}.\nEsta ação não pode ser desfeita.`)) return;
-        try {
-            const batch = db.batch();
-            const userRef = db.collection("usuarios").doc(user.uid);
-            batch.delete(userRef);
-            if (user.linkedPlayerId) {
-                const playerRef = db.collection("jogadores").doc(user.linkedPlayerId);
-                const playerSnap = await playerRef.get();
-                if (playerSnap.exists) {
-                    batch.update(playerRef, { userId: null });
-                }
-            }
-            await batch.commit();
-            alert("Usuário excluído com sucesso.");
-        } catch (error) {
-            alert("Erro ao excluir usuário.");
-        }
-    };
-
-    const filteredUsers = users.filter(u => 
-        (u.nome || '').toLowerCase().includes(userSearch.toLowerCase()) || 
-        (u.email || '').toLowerCase().includes(userSearch.toLowerCase())
-    );
-
+    // ... (Render Logic) ...
     return (
         <div className="animate-fadeIn">
+            {/* Header ... */}
             <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
                 <div className="flex items-center gap-3 self-start md:self-center">
-                    <Button variant="secondary" size="sm" onClick={onBack} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
-                        <LucideArrowLeft size={18} />
-                    </Button>
+                    <Button variant="secondary" size="sm" onClick={onBack} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"><LucideArrowLeft size={18} /></Button>
                     <h2 className="text-2xl font-bold text-ancb-blue dark:text-blue-400">Painel Administrativo</h2>
                 </div>
-                
                 <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg self-stretch md:self-auto">
                     <button onClick={() => setAdminTab('general')} className={`flex-1 px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${adminTab === 'general' ? 'bg-white dark:bg-gray-600 shadow text-ancb-blue dark:text-white' : 'text-gray-500'}`}>Geral</button>
                     <button onClick={() => setAdminTab('users')} className={`flex-1 px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${adminTab === 'users' ? 'bg-white dark:bg-gray-600 shadow text-ancb-blue dark:text-white' : 'text-gray-500'}`}>Usuários</button>
                 </div>
-
                 <div className="flex gap-2 self-end md:self-auto">
-                    <Button onClick={() => setShowAddPost(true)} variant="secondary" className="!bg-blue-600 !text-white border-none">
-                        <LucideNewspaper size={18} /> <span className="hidden sm:inline">Postar</span>
-                    </Button>
-                    <Button onClick={() => setShowAddEvent(true)}>
-                        <LucidePlus size={18} /> <span className="hidden sm:inline">Evento</span>
-                    </Button>
+                    <Button onClick={() => setShowAddPost(true)} variant="secondary" className="!bg-blue-600 !text-white border-none"><LucideNewspaper size={18} /> <span className="hidden sm:inline">Postar</span></Button>
+                    <Button onClick={() => setShowAddEvent(true)}><LucidePlus size={18} /> <span className="hidden sm:inline">Evento</span></Button>
                 </div>
             </div>
 
             <div className="bg-orange-50 dark:bg-orange-900/10 border-l-4 border-ancb-orange p-4 rounded-r-lg mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
                 <div className="flex items-start gap-3">
                     <LucideMegaphone className="text-ancb-orange mt-1 shrink-0" size={20} />
-                    <div>
-                        <h4 className="font-bold text-gray-800 dark:text-white text-sm">Sistema de Notificações Ativo</h4>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">Notificações Push são enviadas automaticamente. Use o botão ao lado para testar permissões.</p>
-                    </div>
+                    <div><h4 className="font-bold text-gray-800 dark:text-white text-sm">Sistema de Notificações Ativo</h4><p className="text-xs text-gray-600 dark:text-gray-400">Notificações Push são enviadas automaticamente.</p></div>
                 </div>
-                <Button size="sm" onClick={handleTestNotification} variant="secondary" className="!text-ancb-orange !border-ancb-orange hover:!bg-orange-100 w-full md:w-auto">
-                    <LucideBellRing size={16} /> Testar Navegador
-                </Button>
+                <Button size="sm" onClick={handleTestNotification} variant="secondary" className="!text-ancb-orange !border-ancb-orange hover:!bg-orange-100 w-full md:w-auto"><LucideBellRing size={16} /> Testar Navegador</Button>
             </div>
 
             {/* TAB CONTENT: USERS */}
@@ -610,26 +342,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 <div className="animate-fadeIn">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                                <LucideUserCheck size={20} /> Gerenciar Usuários
-                            </h3>
-                            <div className="relative w-64">
-                                <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                                <input type="text" placeholder="Buscar email ou nome..." className="w-full pl-9 p-2 text-sm border rounded bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" value={userSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUserSearch(e.target.value)} />
-                            </div>
+                            <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2"><LucideUserCheck size={20} /> Gerenciar Usuários</h3>
+                            <div className="relative w-64"><LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={16} /><input type="text" placeholder="Buscar email ou nome..." className="w-full pl-9 p-2 text-sm border rounded bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" value={userSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUserSearch(e.target.value)} /></div>
                         </div>
-
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 uppercase font-bold text-xs">
-                                    <tr>
-                                        <th className="px-4 py-3">Nome</th>
-                                        <th className="px-4 py-3">Email</th>
-                                        <th className="px-4 py-3">Status</th>
-                                        <th className="px-4 py-3">Push</th>
-                                        <th className="px-4 py-3">Atleta Vinculado</th>
-                                        <th className="px-4 py-3 text-right">Ações</th>
-                                    </tr>
+                                    <tr><th className="px-4 py-3">Nome</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Push</th><th className="px-4 py-3">Atleta Vinculado</th><th className="px-4 py-3 text-right">Ações</th></tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                     {filteredUsers.map(user => {
@@ -638,66 +357,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                                             <tr key={user.uid} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{user.nome}</td>
                                                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{user.email}</td>
-                                                <td className="px-4 py-3">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                                        {user.status === 'active' ? 'Ativo' : 'Pendente'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    {user.fcmToken ? (
-                                                        <div title="Notificações Ativas">
-                                                            <LucideBellRing size={16} className="text-green-500" />
-                                                        </div>
-                                                    ) : (
-                                                        <div title="Sem Token Push">
-                                                            <LucideBellOff size={16} className="text-gray-300" />
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                                                    {user.linkedPlayerId ? (
-                                                        <span className="text-green-600 flex items-center gap-1"><LucideCheck size={12}/> {activePlayers.find(p => p.id === user.linkedPlayerId)?.nome || 'ID: ' + user.linkedPlayerId}</span>
-                                                    ) : (
-                                                        suggestedPlayer ? (
-                                                            <span className="text-orange-500 text-xs font-bold flex items-center gap-1">
-                                                                <LucideRefreshCw size={12} /> Sugestão: {suggestedPlayer.nome}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-red-400">Não vinculado</span>
-                                                        )
-                                                    )}
-                                                </td>
+                                                <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{user.status === 'active' ? 'Ativo' : 'Pendente'}</span></td>
+                                                <td className="px-4 py-3">{user.fcmToken ? <div title="Notificações Ativas"><LucideBellRing size={16} className="text-green-500" /></div> : <div title="Sem Token Push"><LucideBellOff size={16} className="text-gray-300" /></div>}</td>
+                                                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{user.linkedPlayerId ? <span className="text-green-600 flex items-center gap-1"><LucideCheck size={12}/> {activePlayers.find(p => p.id === user.linkedPlayerId)?.nome || 'ID: ' + user.linkedPlayerId}</span> : (suggestedPlayer ? <span className="text-orange-500 text-xs font-bold flex items-center gap-1"><LucideRefreshCw size={12} /> Sugestão: {suggestedPlayer.nome}</span> : <span className="text-red-400">Não vinculado</span>)}</td>
                                                 <td className="px-4 py-3 text-right flex justify-end gap-2">
-                                                    <Button 
-                                                        size="sm" 
-                                                        variant="secondary" 
-                                                        onClick={() => handleSendTestPush(user)}
-                                                        className="!py-1 !px-2 text-xs !border-ancb-blue !text-ancb-blue hover:!bg-blue-50"
-                                                        title="Enviar Push de Teste"
-                                                    >
-                                                        <LucideSend size={14} />
-                                                    </Button>
-                                                    {user.status !== 'active' && !user.linkedPlayerId && (
-                                                        suggestedPlayer ? (
-                                                            <Button size="sm" onClick={() => handleAutoLinkUser(user, suggestedPlayer.id)} className="!py-1 !px-2 !bg-orange-500 hover:!bg-orange-600 text-xs" title={`Vincular a ${suggestedPlayer.nome}`}>
-                                                                <LucideLink size={14} /> Vincular
-                                                            </Button>
-                                                        ) : (
-                                                            <Button size="sm" onClick={() => handleApproveUser(user)} className="!py-1 !px-2 !bg-green-600 hover:!bg-green-700 text-xs" title="Aprovar e Criar Atleta">
-                                                                <LucideUserPlus size={14} /> Criar Atleta
-                                                            </Button>
-                                                        )
-                                                    )}
-                                                    <Button size="sm" variant="secondary" onClick={() => { setSelectedUser(user); setShowUserEditModal(true); }} className="!py-1 !px-2 text-xs">
-                                                        <LucideEdit size={14} />
-                                                    </Button>
-                                                    <button 
-                                                        onClick={() => handleDeleteUser(user)} 
-                                                        className="p-1.5 rounded bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50"
-                                                        title="Excluir Usuário"
-                                                    >
-                                                        <LucideTrash2 size={14} />
-                                                    </button>
+                                                    <Button size="sm" variant="secondary" onClick={() => handleSendTestPush(user)} className="!py-1 !px-2 text-xs !border-ancb-blue !text-ancb-blue hover:!bg-blue-50" title="Enviar Push de Teste"><LucideSend size={14} /></Button>
+                                                    <Button size="sm" variant="secondary" onClick={() => handleResetPassword(user)} className="!py-1 !px-2 text-xs !border-orange-500 !text-orange-600 hover:!bg-orange-50" title="Resetar Senha"><LucideKeyRound size={14} /></Button>
+                                                    {user.status !== 'active' && !user.linkedPlayerId && (suggestedPlayer ? <Button size="sm" onClick={() => handleAutoLinkUser(user, suggestedPlayer.id)} className="!py-1 !px-2 !bg-orange-500 hover:!bg-orange-600 text-xs" title={`Vincular a ${suggestedPlayer.nome}`}><LucideLink size={14} /> Vincular</Button> : <Button size="sm" onClick={() => handleApproveUser(user)} className="!py-1 !px-2 !bg-green-600 hover:!bg-green-700 text-xs" title="Aprovar e Criar Atleta"><LucideUserPlus size={14} /> Criar Atleta</Button>)}
+                                                    <Button size="sm" variant="secondary" onClick={() => { setSelectedUser(user); setShowUserEditModal(true); }} className="!py-1 !px-2 text-xs"><LucideEdit size={14} /></Button>
+                                                    <button onClick={() => handleDeleteUser(user)} className="p-1.5 rounded bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50" title="Excluir Usuário"><LucideTrash2 size={14} /></button>
                                                 </td>
                                             </tr>
                                         );
@@ -709,129 +377,129 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 </div>
             )}
 
-            {/* TAB CONTENT: GENERAL */}
+            {/* TAB CONTENT: GENERAL (Existing code...) */}
             {adminTab === 'general' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-1 space-y-6">
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-orange-200 dark:border-orange-900/50 flex flex-col gap-3">
-                        <div className="flex items-center gap-2 border-b pb-2 border-orange-100 dark:border-orange-900/30">
-                            <LucideTrophy size={18} className="text-orange-600 dark:text-orange-400" />
-                            <h3 className="font-bold text-gray-700 dark:text-gray-300">Gestão de Temporada</h3>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <LucideCalendar size={16} className="text-gray-400"/>
-                            <select 
-                                value={selectedYear} 
-                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedYear(e.target.value)}
-                                className="bg-transparent text-sm font-bold text-gray-700 dark:text-white focus:outline-none cursor-pointer flex-1"
-                            >
-                                <option value="2024" className="text-black">2024</option>
-                                <option value="2025" className="text-black">2025</option>
-                                <option value="2026" className="text-black">2026</option>
-                            </select>
-                        </div>
-                        <p className="text-xs text-gray-500">Recalcular medalhas retroativas por Evento e Temporada.</p>
-                        <Button size="sm" onClick={handleRecalculateHistory} className="w-full !bg-gradient-to-r from-orange-500 to-red-500 text-white">
-                            <LucideRefreshCw size={14} /> Processar Histórico
-                        </Button>
-                        <div className="border-t border-orange-100 dark:border-orange-900/30 pt-2 mt-1">
-                            <div className="flex items-center gap-2">
-                                <LucideStar size={16} className="text-yellow-500" />
-                                <h4 className="font-bold text-sm">Avaliações</h4>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-1 space-y-6">
+                        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-orange-200 dark:border-orange-900/50 flex flex-col gap-3">
+                            <div className="flex items-center gap-2 border-b pb-2 border-orange-100 dark:border-orange-900/30">
+                                <LucideTrophy size={18} className="text-orange-600 dark:text-orange-400" />
+                                <h3 className="font-bold text-gray-700 dark:text-gray-300">Gestão de Temporada</h3>
                             </div>
-                            <Button size="sm" variant="secondary" onClick={loadReviews} className="w-full mt-2 text-xs">
-                                Gerenciar Gamification Tags
+                            <div className="flex items-center gap-2">
+                                <LucideCalendar size={16} className="text-gray-400"/>
+                                <select 
+                                    value={selectedYear} 
+                                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedYear(e.target.value)}
+                                    className="bg-transparent text-sm font-bold text-gray-700 dark:text-white focus:outline-none cursor-pointer flex-1"
+                                >
+                                    <option value="2024" className="text-black">2024</option>
+                                    <option value="2025" className="text-black">2025</option>
+                                    <option value="2026" className="text-black">2026</option>
+                                </select>
+                            </div>
+                            <p className="text-xs text-gray-500">Recalcular medalhas retroativas por Evento e Temporada.</p>
+                            <Button size="sm" onClick={handleRecalculateHistory} className="w-full !bg-gradient-to-r from-orange-500 to-red-500 text-white">
+                                <LucideRefreshCw size={14} /> Processar Histórico
                             </Button>
-                        </div>
-                    </div>
-                    
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                        <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 border-b pb-2 dark:border-gray-600">Eventos</h3>
-                        <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                            {events.map(ev => (
-                                <div key={ev.id} onClick={() => setSelectedEvent(ev)} className={`p-3 rounded-lg border cursor-pointer transition-all ${selectedEvent?.id === ev.id ? 'bg-blue-50 dark:bg-blue-900/30 border-ancb-blue shadow-md' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-500'}`}>
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <h4 className="font-bold text-gray-800 dark:text-gray-200 text-sm">{ev.nome}</h4>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(ev.data)} • {ev.modalidade}</p>
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteEvent(ev.id); }} className="text-red-300 hover:text-red-600 p-1"><LucideTrash2 size={14} /></button>
-                                            {ev.type === 'torneio_interno' && (<button onClick={(e) => { e.stopPropagation(); handleRecoverEventData(ev); }} className="text-orange-300 hover:text-orange-600 p-1"><LucideWrench size={14} /></button>)}
-                                        </div>
-                                    </div>
+                            <div className="border-t border-orange-100 dark:border-orange-900/30 pt-2 mt-1">
+                                <div className="flex items-center gap-2">
+                                    <LucideStar size={16} className="text-yellow-500" />
+                                    <h4 className="font-bold text-sm">Avaliações</h4>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="lg:col-span-2">
-                    {selectedEvent ? (
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                            <div className="flex justify-between items-center mb-6 border-b border-gray-100 dark:border-gray-700 pb-4">
-                                <div>
-                                    <h3 className="text-xl font-bold text-ancb-blue dark:text-blue-400">{selectedEvent.nome}</h3>
-                                    <span className="text-xs uppercase font-bold text-gray-400">Gerenciar Jogos</span>
-                                </div>
-                                <Button size="sm" onClick={() => setShowAddGame(true)}>
-                                    <LucideGamepad2 size={16} /> Adicionar Jogo
+                                <Button size="sm" variant="secondary" onClick={loadReviews} className="w-full mt-2 text-xs">
+                                    Gerenciar Gamification Tags
                                 </Button>
                             </div>
-
-                            <div className="space-y-3 mb-8">
-                                {eventGames.length === 0 && <p className="text-gray-400 text-center py-8">Nenhum jogo criado.</p>}
-                                {eventGames.map(game => {
-                                    const { sA, sB } = getScores(game);
-                                    const isInternal = !!game.timeA_nome && game.timeA_nome !== 'ANCB';
-                                    return (
-                                        <div key={game.id} className={`flex items-center justify-between p-3 rounded-lg border ${game.status === 'finalizado' ? 'bg-gray-100 dark:bg-gray-900/30 border-gray-300 dark:border-gray-800 opacity-80' : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600'}`}>
-                                            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
-                                                <div className="font-bold text-gray-700 dark:text-gray-200 w-32 truncate">{isInternal ? game.timeA_nome : 'ANCB'}</div>
-                                                <div className="font-mono font-bold bg-white dark:bg-gray-800 px-2 py-1 rounded border dark:border-gray-600 text-center dark:text-white">{sA} x {sB}</div>
-                                                <div className="font-bold text-gray-700 dark:text-gray-200 w-32 truncate">{isInternal ? game.timeB_nome : (game.adversario || 'Adversário')}</div>
+                        </div>
+                        
+                        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                            <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 border-b pb-2 dark:border-gray-600">Eventos</h3>
+                            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                                {events.map(ev => (
+                                    <div key={ev.id} onClick={() => setSelectedEvent(ev)} className={`p-3 rounded-lg border cursor-pointer transition-all ${selectedEvent?.id === ev.id ? 'bg-blue-50 dark:bg-blue-900/30 border-ancb-blue shadow-md' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-500'}`}>
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h4 className="font-bold text-gray-800 dark:text-gray-200 text-sm">{ev.nome}</h4>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(ev.data)} • {ev.modalidade}</p>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                {game.status === 'finalizado' ? (
-                                                    <Button size="sm" variant="secondary" onClick={() => onOpenGamePanel(game, selectedEvent.id, true)} className="!text-orange-500 !border-orange-200 dark:!border-orange-900/50 hover:!bg-orange-50">
-                                                        <LucideEdit size={16} /> <span className="hidden sm:inline">Editar Súmula</span>
-                                                    </Button>
-                                                ) : (
-                                                    <Button size="sm" variant="success" onClick={() => onOpenGamePanel(game, selectedEvent.id, false)}>
-                                                        <LucidePlayCircle size={16} /> <span className="hidden sm:inline">Painel</span>
-                                                    </Button>
-                                                )}
-                                                <button onClick={() => handleDeleteGame(game.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"><LucideTrash2 size={18} /></button>
+                                            <div className="flex flex-col gap-1">
+                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteEvent(ev.id); }} className="text-red-300 hover:text-red-600 p-1"><LucideTrash2 size={14} /></button>
+                                                {ev.type === 'torneio_interno' && (<button onClick={(e) => { e.stopPropagation(); handleRecoverEventData(ev); }} className="text-orange-300 hover:text-orange-600 p-1"><LucideWrench size={14} /></button>)}
                                             </div>
                                         </div>
-                                    );
-                                })}
-                            </div>
-
-                            {selectedEvent.type !== 'torneio_interno' && (
-                                <div className="border-t border-gray-100 dark:border-gray-700 pt-6">
-                                    <h4 className="font-bold text-gray-700 dark:text-gray-200 mb-4 flex items-center gap-2">
-                                        <LucideMessageCircle className="text-green-500" size={18} /> Notificar Elenco (Opcional - WhatsApp)
-                                    </h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
-                                        {activePlayers
-                                            .filter(p => selectedEvent.jogadoresEscalados?.includes(p.id))
-                                            .map(p => (
-                                                <div key={p.id} className="flex justify-between items-center bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-100 dark:border-green-800/50">
-                                                    <span className="text-sm font-bold text-green-800 dark:text-green-200 truncate">{p.apelido || p.nome}</span>
-                                                    <button onClick={() => sendWhatsappNotification(p)} className="text-xs bg-white dark:bg-green-800 text-green-600 dark:text-green-100 px-2 py-1 rounded shadow-sm hover:bg-green-100 transition-colors font-bold flex items-center gap-1">Enviar <LucideArrowLeft className="rotate-180" size={10} /></button>
-                                                </div>
-                                            ))
-                                        }
                                     </div>
-                                </div>
-                            )}
+                                ))}
+                            </div>
                         </div>
-                    ) : (
-                        <div className="h-full flex items-center justify-center text-gray-400 bg-white/50 dark:bg-gray-800/50 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 min-h-[200px]">Selecione um evento para gerenciar jogos.</div>
-                    )}
+                    </div>
+
+                    <div className="lg:col-span-2">
+                        {selectedEvent ? (
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                                <div className="flex justify-between items-center mb-6 border-b border-gray-100 dark:border-gray-700 pb-4">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-ancb-blue dark:text-blue-400">{selectedEvent.nome}</h3>
+                                        <span className="text-xs uppercase font-bold text-gray-400">Gerenciar Jogos</span>
+                                    </div>
+                                    <Button size="sm" onClick={() => setShowAddGame(true)}>
+                                        <LucideGamepad2 size={16} /> Adicionar Jogo
+                                    </Button>
+                                </div>
+
+                                <div className="space-y-3 mb-8">
+                                    {eventGames.length === 0 && <p className="text-gray-400 text-center py-8">Nenhum jogo criado.</p>}
+                                    {eventGames.map(game => {
+                                        const { sA, sB } = getScores(game);
+                                        const isInternal = !!game.timeA_nome && game.timeA_nome !== 'ANCB';
+                                        return (
+                                            <div key={game.id} className={`flex items-center justify-between p-3 rounded-lg border ${game.status === 'finalizado' ? 'bg-gray-100 dark:bg-gray-900/30 border-gray-300 dark:border-gray-800 opacity-80' : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600'}`}>
+                                                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
+                                                    <div className="font-bold text-gray-700 dark:text-gray-200 w-32 truncate">{isInternal ? game.timeA_nome : 'ANCB'}</div>
+                                                    <div className="font-mono font-bold bg-white dark:bg-gray-800 px-2 py-1 rounded border dark:border-gray-600 text-center dark:text-white">{sA} x {sB}</div>
+                                                    <div className="font-bold text-gray-700 dark:text-gray-200 w-32 truncate">{isInternal ? game.timeB_nome : (game.adversario || 'Adversário')}</div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {game.status === 'finalizado' ? (
+                                                        <Button size="sm" variant="secondary" onClick={() => onOpenGamePanel(game, selectedEvent.id, true)} className="!text-orange-500 !border-orange-200 dark:!border-orange-900/50 hover:!bg-orange-50">
+                                                            <LucideEdit size={16} /> <span className="hidden sm:inline">Editar Súmula</span>
+                                                        </Button>
+                                                    ) : (
+                                                        <Button size="sm" variant="success" onClick={() => onOpenGamePanel(game, selectedEvent.id, false)}>
+                                                            <LucidePlayCircle size={16} /> <span className="hidden sm:inline">Painel</span>
+                                                        </Button>
+                                                    )}
+                                                    <button onClick={() => handleDeleteGame(game.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"><LucideTrash2 size={18} /></button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {selectedEvent.type !== 'torneio_interno' && (
+                                    <div className="border-t border-gray-100 dark:border-gray-700 pt-6">
+                                        <h4 className="font-bold text-gray-700 dark:text-gray-200 mb-4 flex items-center gap-2">
+                                            <LucideMessageCircle className="text-green-500" size={18} /> Notificar Elenco (Opcional - WhatsApp)
+                                        </h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
+                                            {activePlayers
+                                                .filter(p => selectedEvent.jogadoresEscalados?.includes(p.id))
+                                                .map(p => (
+                                                    <div key={p.id} className="flex justify-between items-center bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-100 dark:border-green-800/50">
+                                                        <span className="text-sm font-bold text-green-800 dark:text-green-200 truncate">{p.apelido || p.nome}</span>
+                                                        <button onClick={() => sendWhatsappNotification(p)} className="text-xs bg-white dark:bg-green-800 text-green-600 dark:text-green-100 px-2 py-1 rounded shadow-sm hover:bg-green-100 transition-colors font-bold flex items-center gap-1">Enviar <LucideArrowLeft className="rotate-180" size={10} /></button>
+                                                    </div>
+                                                ))
+                                            }
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="h-full flex items-center justify-center text-gray-400 bg-white/50 dark:bg-gray-800/50 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 min-h-[200px]">Selecione um evento para gerenciar jogos.</div>
+                        )}
+                    </div>
                 </div>
-            </div>
             )}
 
             {/* MODALS */}

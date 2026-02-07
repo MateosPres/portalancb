@@ -6,8 +6,6 @@ admin.initializeApp();
 
 /**
  * 1. MONITOR DE CONVOCAÇÕES
- * Dispara quando um documento na coleção 'eventos' é atualizado.
- * Verifica se novos jogadores foram adicionados ao array 'jogadoresEscalados'.
  */
 exports.sendRosterNotification = functions.firestore
     .document('eventos/{eventId}')
@@ -38,7 +36,6 @@ exports.sendRosterNotification = functions.firestore
 
 /**
  * 2. MONITOR DE NOTIFICAÇÕES DIRETAS
- * Dispara quando um documento é criado na coleção 'notifications'.
  */
 exports.sendDirectNotification = functions.firestore
     .document('notifications/{notificationId}')
@@ -61,22 +58,18 @@ exports.sendDirectNotification = functions.firestore
                 return null;
             }
 
-            // Configuração para Alta Prioridade (Solução para Android Doze Mode/Battery Saver)
             const message = {
                 token: fcmToken,
                 notification: {
                     title: data.title || "Portal ANCB",
                     body: data.message || "Você tem uma nova notificação.",
-                    // Nota: O ícone aqui serve para apps nativos ou fallback. 
-                    // No PWA, o Service Worker intercepta e usa o definido lá ou no manifest.
                 },
                 data: {
                     type: data.type || "general",
                     eventId: data.eventId || "",
                     gameId: data.gameId || "",
-                    url: "/" // URL para redirecionamento
+                    url: "/"
                 },
-                // Configuração específica para Android
                 android: {
                     priority: "high",
                     notification: {
@@ -88,13 +81,12 @@ exports.sendDirectNotification = functions.firestore
                         color: '#F27405'
                     }
                 },
-                // O SEGREDO DO BACKGROUND NO PWA (CHROME ANDROID):
                 webpush: {
                     headers: {
-                        Urgency: "high" // Obriga a entrega imediata
+                        Urgency: "high"
                     },
                     fcm_options: {
-                        link: "/" // Garante que o clique abra o app
+                        link: "/"
                     }
                 }
             };
@@ -106,6 +98,36 @@ exports.sendDirectNotification = functions.firestore
             return null;
         }
     });
+
+/**
+ * 3. ADMIN RESET PASSWORD (Callable)
+ * Permite que administradores resetem a senha de um usuário para 'ancb1234'
+ */
+exports.adminResetPassword = functions.https.onCall(async (data, context) => {
+    // Verificar autenticação
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'O usuário deve estar logado.');
+    }
+
+    const callerUid = context.auth.uid;
+    const targetUid = data.targetUid;
+
+    // Verificar se quem chama é admin
+    const callerDoc = await admin.firestore().collection('usuarios').doc(callerUid).get();
+    if (!callerDoc.exists || callerDoc.data().role !== 'admin') {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas administradores podem resetar senhas.');
+    }
+
+    try {
+        await admin.auth().updateUser(targetUid, {
+            password: 'ancb1234'
+        });
+        return { success: true, message: 'Senha resetada para "ancb1234"' };
+    } catch (error) {
+        console.error("Erro ao resetar senha:", error);
+        throw new functions.https.HttpsError('internal', 'Erro ao resetar senha.', error);
+    }
+});
 
 async function dbSearchUserByPlayerId(playerId, eventName, eventId) {
     try {
