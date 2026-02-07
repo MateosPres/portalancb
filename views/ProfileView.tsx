@@ -5,7 +5,7 @@ import { db, auth } from '../services/firebase';
 import { UserProfile, Player, Jogo, Evento, Cesta, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucideArrowLeft, LucideCamera, LucideLink, LucideSearch, LucideLoader2, LucideClock, LucideStar, LucideHistory, LucideEdit2, LucideTrendingUp, LucideTrophy, LucideMapPin, LucideGrid, LucideUser, LucideCheckCircle2 } from 'lucide-react';
+import { LucideArrowLeft, LucideCamera, LucideLink, LucideSearch, LucideLoader2, LucideClock, LucideStar, LucideHistory, LucideEdit2, LucideTrendingUp, LucideTrophy, LucideMapPin, LucideGrid, LucideUser, LucideCheckCircle2, LucidePin, LucidePinOff } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { RadarChart } from '../components/RadarChart';
 
@@ -19,6 +19,7 @@ interface MatchHistoryItem {
     eventId: string;
     gameId: string;
     eventName: string;
+    eventType: string; // Added to match styling
     date: string;
     opponent: string;
     myTeam: string;
@@ -60,19 +61,6 @@ const calculateStatsFromTags = (tags?: Record<string, number>) => {
     });
     const clamp = (n: number) => Math.max(20, Math.min(n, 99));
     return { ataque: clamp(stats.ataque), defesa: clamp(stats.defesa), forca: clamp(stats.forca), velocidade: clamp(stats.velocidade), visao: clamp(stats.visao) };
-};
-
-const TAG_META: Record<string, {label: string, emoji: string}> = {
-    'muralha': { label: 'Muralha', emoji: '🧱' },
-    'sniper': { label: 'Sniper', emoji: '🎯' },
-    'garcom': { label: 'Garçom', emoji: '🤝' },
-    'flash': { label: 'Flash', emoji: '⚡' },
-    'lider': { label: 'Líder', emoji: '🧠' },
-    'guerreiro': { label: 'Guerreiro', emoji: '🛡️' },
-    'avenida': { label: 'Avenida', emoji: '🛣️' },
-    'fominha': { label: 'Fominha', emoji: '🍽️' },
-    'tijoleiro': { label: 'Pedreiro', emoji: '🏗️' },
-    'cone': { label: 'Cone', emoji: '⚠️' }
 };
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, onOpenReview }) => {
@@ -210,6 +198,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
 
                             historyList.push({
                                 eventId: eventDoc.id, gameId: gameDoc.id, eventName: eventData.nome,
+                                eventType: eventData.modalidade || '5x5',
                                 date: gameData.dataJogo || eventData.data,
                                 opponent: isTeamA ? (gameData.adversario || gameData.timeB_nome || 'Adversário') : (gameData.timeA_nome || 'ANCB'),
                                 myTeam: isTeamA ? (gameData.timeA_nome || 'ANCB') : (gameData.timeB_nome || 'Meu Time'),
@@ -230,6 +219,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         fetchMatches();
     }, [playerDocId]);
 
+    // ... (UseEffects for search and helpers similar to previous version) ...
     useEffect(() => {
         if (!claimSearch || claimSearch.length < 3) { setFoundPlayers([]); return; }
         const search = async () => {
@@ -280,72 +270,32 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
             const dataToSave = { ...formData };
             if (!dataToSave.id) dataToSave.id = playerDocId;
             await setDoc(doc(db, "jogadores", playerDocId), dataToSave, { merge: true });
-            
-            // Password Update
             if (newPassword && auth.currentUser) {
-                if (newPassword.length < 6) {
-                    alert("A senha deve ter no mínimo 6 caracteres.");
-                    return;
-                }
-                try {
-                    await auth.currentUser.updatePassword(newPassword);
-                    alert("Senha alterada com sucesso!");
-                } catch (passError: any) {
-                    if (passError.code === 'auth/requires-recent-login') {
-                        alert("Para mudar a senha, é necessário fazer login novamente por segurança. Saia e entre na sua conta.");
-                    } else {
-                        alert("Erro ao alterar senha: " + passError.message);
-                    }
-                }
+                if (newPassword.length < 6) { alert("A senha deve ter no mínimo 6 caracteres."); return; }
+                try { await auth.currentUser.updatePassword(newPassword); alert("Senha alterada com sucesso!"); } 
+                catch (passError: any) { if (passError.code === 'auth/requires-recent-login') { alert("Para mudar a senha, é necessário fazer login novamente. Saia e entre na sua conta."); } else { alert("Erro ao alterar senha: " + passError.message); } }
             }
-
-            setShowEditModal(false);
-            setNewPassword('');
-            alert("Perfil atualizado!");
+            setShowEditModal(false); setNewPassword(''); alert("Perfil atualizado!");
         } catch (error) { alert("Erro ao salvar."); }
     };
 
     const handleTogglePin = async (badgeId: string) => {
         if (!playerDocId) return;
-        
         let currentPinned = formData.pinnedBadgeIds || [];
-        if (currentPinned.includes(badgeId)) {
-            currentPinned = currentPinned.filter(id => id !== badgeId);
-        } else {
-            if (currentPinned.length >= 3) {
-                alert("Você só pode selecionar até 3 conquistas para exibir no perfil.");
-                return;
-            }
-            currentPinned.push(badgeId);
-        }
-
-        // Optimistic update
+        if (currentPinned.includes(badgeId)) { currentPinned = currentPinned.filter(id => id !== badgeId); } 
+        else { if (currentPinned.length >= 3) { alert("Você só pode selecionar até 3 conquistas."); return; } currentPinned.push(badgeId); }
         setFormData({ ...formData, pinnedBadgeIds: currentPinned });
-        
-        try {
-            await setDoc(doc(db, "jogadores", playerDocId), { pinnedBadgeIds: currentPinned }, { merge: true });
-        } catch (e) {
-            console.error(e);
-            alert("Erro ao fixar conquista.");
-        }
+        try { await setDoc(doc(db, "jogadores", playerDocId), { pinnedBadgeIds: currentPinned }, { merge: true }); } catch (e) { console.error(e); alert("Erro ao fixar conquista."); }
     };
 
     const handleClaim = async (targetPlayer: Player) => {
         if (!userProfile || !userProfile.uid) return;
         setClaimingId(targetPlayer.id);
-        try {
-            await addDoc(collection(db, "solicitacoes_vinculo"), {
-                userId: userProfile.uid, userName: userProfile.nome || 'Usuário Sem Nome',
-                playerId: targetPlayer.id, playerName: targetPlayer.nome || 'Atleta Sem Nome',
-                status: 'pending', timestamp: serverTimestamp()
-            });
-            setClaimStatus('pending'); setShowClaimSection(false);
-            alert("Solicitação enviada! Aguarde a aprovação do administrador.");
-        } catch (e: any) { alert(`Erro: ${e.message}`); } finally { setClaimingId(null); }
+        try { await addDoc(collection(db, "solicitacoes_vinculo"), { userId: userProfile.uid, userName: userProfile.nome || 'Usuário Sem Nome', playerId: targetPlayer.id, playerName: targetPlayer.nome || 'Atleta Sem Nome', status: 'pending', timestamp: serverTimestamp() }); setClaimStatus('pending'); setShowClaimSection(false); alert("Solicitação enviada! Aguarde aprovação."); } 
+        catch (e: any) { alert(`Erro: ${e.message}`); } finally { setClaimingId(null); }
     };
 
     const formatDate = (dateStr?: string) => dateStr ? dateStr.split('-').reverse().join('/') : '';
-    
     const normalizePosition = (pos: string | undefined): string => {
         if (!pos) return '-';
         if (pos.includes('1') || pos.toLowerCase().includes('armador')) return 'Armador (1)';
@@ -355,63 +305,24 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         if (pos.includes('5') || pos.toLowerCase().includes('piv')) return 'Pivô (5)';
         return pos;
     };
-
     const calculateAge = (dateString?: string) => {
         if (!dateString) return '-';
         const today = new Date();
         const birthDate = new Date(dateString);
         let age = today.getFullYear() - birthDate.getFullYear();
         const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) { age--; }
         return age;
     };
 
     const radarStats = calculateStatsFromTags(formData.stats_tags);
-    
-    // BADGE DISPLAY LOGIC
-    // 1. If user has pinned badges, show them (up to 3).
-    // 2. If no pinned badges, sort by Rarity (Legendary > Epic > Rare > Common) and then Date.
-    const getBadgeWeight = (rarity: Badge['raridade']) => {
-        switch(rarity) {
-            case 'lendaria': return 4;
-            case 'epica': return 3;
-            case 'rara': return 2;
-            default: return 1;
-        }
-    };
-
+    const getBadgeWeight = (rarity: Badge['raridade']) => { switch(rarity) { case 'lendaria': return 4; case 'epica': return 3; case 'rara': return 2; default: return 1; } };
     const allBadges = formData.badges || [];
     const pinnedIds = formData.pinnedBadgeIds || [];
-    
     let displayBadges: Badge[] = [];
-
-    if (pinnedIds.length > 0) {
-        // Filter out pinned ones and preserve order if possible, or just grab them
-        displayBadges = allBadges.filter(b => pinnedIds.includes(b.id));
-    } else {
-        // Fallback: Sort by Weight DESC, then Date DESC
-        displayBadges = [...allBadges].sort((a, b) => {
-            const weightA = getBadgeWeight(a.raridade);
-            const weightB = getBadgeWeight(b.raridade);
-            if (weightA !== weightB) return weightB - weightA;
-            return b.data.localeCompare(a.data);
-        }).slice(0, 3);
-    }
-
-    const getRarityStyles = (rarity: Badge['raridade']) => {
-        switch(rarity) {
-            case 'lendaria': 
-                return { label: 'Lendária', classes: 'bg-gradient-to-r from-purple-600 to-pink-600 text-white border-purple-400' };
-            case 'epica': 
-                return { label: 'Ouro', classes: 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white border-yellow-300' };
-            case 'rara': 
-                return { label: 'Prata', classes: 'bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800 border-gray-200' };
-            default: 
-                return { label: 'Bronze', classes: 'bg-gradient-to-r from-orange-700 to-orange-800 text-white border-orange-900' };
-        }
-    };
+    if (pinnedIds.length > 0) { displayBadges = allBadges.filter(b => pinnedIds.includes(b.id)); } 
+    else { displayBadges = [...allBadges].sort((a, b) => { const weightA = getBadgeWeight(a.raridade); const weightB = getBadgeWeight(b.raridade); if (weightA !== weightB) return weightB - weightA; return b.data.localeCompare(a.data); }).slice(0, 3); }
+    const getRarityStyles = (rarity: Badge['raridade']) => { switch(rarity) { case 'lendaria': return { label: 'Lendária', classes: 'bg-gradient-to-r from-purple-600 to-pink-600 text-white border-purple-400' }; case 'epica': return { label: 'Ouro', classes: 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white border-yellow-300' }; case 'rara': return { label: 'Prata', classes: 'bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800 border-gray-200' }; default: return { label: 'Bronze', classes: 'bg-gradient-to-r from-orange-700 to-orange-800 text-white border-orange-900' }; } };
 
     return (
         <div className="animate-fadeIn pb-20">
@@ -422,70 +333,73 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 </div>
             </div>
 
-            {/* NEW HERO CARD LAYOUT */}
+            {/* UPDATED HERO CARD LAYOUT - MATCHING DRAFT */}
             <div className="relative w-full rounded-3xl overflow-hidden shadow-xl mb-6 bg-[#062553] text-white border border-blue-900 p-6 md:p-8">
-                {/* Faded Background Icon */}
-                <div className="absolute right-0 bottom-0 opacity-5 pointer-events-none transform translate-x-1/4 translate-y-1/4">
-                    <LucideTrophy size={500} className="text-white" />
+                {/* Background Watermark - Top Right Tilted */}
+                <div className="absolute top-0 right-0 opacity-5 pointer-events-none transform translate-x-1/4 -translate-y-1/4 rotate-12">
+                    <LucideTrophy size={450} className="text-white" />
                 </div>
 
-                <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
+                <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                     
-                    {/* COLUMN 1: PHOTO & BADGE NUMBER */}
-                    <div className="flex-shrink-0 relative">
-                        <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
-                            {formData.foto ? <img src={formData.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-5xl font-bold text-white/50">{formData.nome?.charAt(0)}</span>}
+                    {/* LEFT COLUMN: Avatar + Info */}
+                    {/* Added md:pl-8 lg:pl-12 for negative space/centering */}
+                    <div className="flex flex-col md:flex-row items-center gap-6 w-full md:pl-8 lg:pl-12">
+                        <div className="relative shrink-0">
+                            <div className="w-28 h-28 md:w-32 md:h-32 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
+                                {formData.foto ? <img src={formData.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-white/50">{formData.nome?.charAt(0)}</span>}
+                            </div>
+                            <div className="absolute bottom-1 right-0 bg-ancb-orange text-white text-sm font-bold px-3 py-1 rounded-lg shadow-md border border-white/20">
+                                #{formData.numero_uniforme}
+                            </div>
+                            <label className="absolute top-0 right-0 bg-white/10 text-white p-2 rounded-full shadow-lg cursor-pointer hover:bg-white/20 transition-colors backdrop-blur-sm">
+                                {isUploading ? <LucideLoader2 className="animate-spin" size={14}/> : <LucideCamera size={14} />}
+                                <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} disabled={isUploading} />
+                            </label>
                         </div>
-                        <div className="absolute bottom-2 right-0 bg-ancb-orange text-white text-lg font-bold px-3 py-1 rounded-lg shadow-md border border-white/20">
-                            #{formData.numero_uniforme}
+
+                        <div className="flex flex-col items-center md:items-start text-center md:text-left w-full">
+                            <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-1">{formData.apelido || formData.nome}</h1>
+                            <p className="text-xs text-blue-200 font-normal mb-3">{formData.nome}</p>
+                            
+                            <div className="flex items-center justify-center md:justify-start gap-2 text-gray-300 text-sm font-medium mb-4">
+                                <LucideMapPin size={16} className="text-ancb-orange" />
+                                <span>{normalizePosition(formData.posicao)}</span>
+                            </div>
+
+                            <button 
+                                onClick={() => setShowEditModal(true)}
+                                className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition-colors text-xs font-bold uppercase tracking-wider text-white mb-6"
+                            >
+                                <LucideEdit2 size={14} /> Editar Perfil
+                            </button>
+
+                            <div className="grid grid-cols-2 gap-4 w-full max-w-[240px] mx-auto md:mx-0">
+                                <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
+                                    <span className="block text-2xl font-bold text-white">{calculateAge(formData.nascimento)}</span>
+                                    <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Idade</span>
+                                </div>
+                                <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
+                                    <span className="block text-2xl font-bold text-white">{matches.length}</span>
+                                    <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
+                                </div>
+                            </div>
                         </div>
-                        <label className="absolute top-0 right-0 bg-white/10 text-white p-2 rounded-full shadow-lg cursor-pointer hover:bg-white/20 transition-colors backdrop-blur-sm">
-                            {isUploading ? <LucideLoader2 className="animate-spin" size={16}/> : <LucideCamera size={16} />}
-                            <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} disabled={isUploading} />
-                        </label>
                     </div>
 
-                    {/* COLUMN 2: INFO & STATS */}
-                    <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left w-full">
-                        <h1 className="text-3xl md:text-4xl font-bold text-white drop-shadow-md mb-2">{formData.apelido || formData.nome}</h1>
-                        
-                        <div className="flex items-center gap-2 text-gray-300 text-sm font-medium mb-4 justify-center md:justify-start">
-                            <LucideMapPin size={16} />
-                            <span>{normalizePosition(formData.posicao)}</span>
-                        </div>
-
-                        <button 
-                            onClick={() => setShowEditModal(true)}
-                            className="mb-6 flex items-center gap-2 px-6 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition-colors text-sm font-bold uppercase tracking-wider text-white"
-                        >
-                            <LucideEdit2 size={14} /> Editar Perfil
-                        </button>
-
-                        <div className="grid grid-cols-2 gap-4 w-full max-w-xs">
-                            <div className="bg-[#092b5e] rounded-xl p-3 md:p-4 text-center border border-white/5 shadow-inner">
-                                <span className="block text-xl md:text-2xl font-bold text-white">{calculateAge(formData.nascimento)}</span>
-                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Idade</span>
+                    {/* RIGHT COLUMN: Radar Chart */}
+                    <div className="flex flex-col items-center justify-center h-full">
+                        <div className="relative mb-2">
+                            <div className="flex items-center justify-center gap-2 mb-2 text-blue-100/50">
+                                <LucideTrendingUp size={14} />
+                                <span className="text-[10px] font-bold uppercase tracking-wider">Atributos</span>
                             </div>
-                            <div className="bg-[#092b5e] rounded-xl p-3 md:p-4 text-center border border-white/5 shadow-inner">
-                                <span className="block text-xl md:text-2xl font-bold text-white">{matches.length}</span>
-                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* COLUMN 3: RADAR & BADGES */}
-                    <div className="flex flex-col items-center justify-center w-full md:w-auto md:min-w-[250px]">
-                        <div className="mb-4">
-                            <div className="flex items-center justify-center gap-2 mb-2 text-blue-100">
-                                <LucideTrendingUp size={16} />
-                                <span className="text-xs font-bold uppercase tracking-wider">Atributos</span>
-                            </div>
-                            <RadarChart stats={radarStats} size={180} className="text-white/70" />
+                            <RadarChart stats={radarStats} size={240} className="text-white/70" />
                         </div>
                     </div>
                 </div>
 
-                {/* INTEGRATED BADGES ROW (Bottom of Hero) */}
+                {/* BOTTOM ROW: Badges */}
                 {formData.badges && formData.badges.length > 0 && (
                     <div className="mt-8 pt-6 border-t border-white/10">
                         <div className="flex items-center justify-between mb-3 px-1">
@@ -522,6 +436,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 )}
             </div>
 
+            {/* Claim Section ... */}
             {showClaimSection && (
                 <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-6 mb-6">
                     <h3 className="font-bold text-orange-800 dark:text-orange-200 mb-2 flex items-center gap-2"><LucideLink size={20} /> Vincular Perfil de Atleta</h3>
@@ -551,14 +466,28 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     <div className="space-y-3">
                         {matches.map((match) => {
                             const isWin = match.scoreMyTeam > match.scoreOpponent;
+                            const isLoss = match.scoreMyTeam < match.scoreOpponent;
+                            const borderClass = isWin ? 'border-green-500 dark:border-green-500' : isLoss ? 'border-red-500 dark:border-red-500' : 'border-gray-100 dark:border-gray-700';
                             return (
-                                <div key={match.gameId} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col gap-3">
-                                    <div className="flex justify-between items-start text-xs text-gray-500 uppercase font-bold"><span>{formatDate(match.date)}</span><span className="text-ancb-blue">{match.eventName}</span></div>
-                                    <div className="flex items-center justify-between"><div className="font-bold text-gray-800 dark:text-white truncate w-1/3">{match.myTeam}</div><div className={`px-3 py-1 rounded-lg font-mono font-bold text-sm ${isWin ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{match.scoreMyTeam} - {match.scoreOpponent}</div><div className="font-bold text-gray-800 dark:text-white truncate w-1/3 text-right">{match.opponent}</div></div>
-                                    <div className="flex items-center justify-between border-t border-gray-100 dark:border-gray-700 pt-3">
-                                        <div className="flex gap-2 text-xs"><span className="font-bold text-gray-700 dark:text-gray-300">{match.individualPoints} pts</span><span className="text-gray-400">|</span><span className="text-gray-500">{match.cesta3} de 3pts</span></div>
-                                        {onOpenReview && !match.reviewed && <button onClick={() => onOpenReview(match.gameId, match.eventId)} className="text-xs bg-ancb-orange/10 text-ancb-orange px-3 py-1 rounded-full font-bold hover:bg-ancb-orange hover:text-white transition-colors flex items-center gap-1"><LucideStar size={12} /> Avaliar</button>}
+                                <div key={match.gameId} className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${borderClass} p-3`}>
+                                    <div className="text-[10px] text-gray-400 mb-2 flex justify-between uppercase font-bold tracking-wider">
+                                        <span className="flex items-center gap-1">{formatDate(match.date)}<span className="bg-gray-100 dark:bg-gray-700 px-1.5 rounded text-[9px] text-gray-500">{match.eventType}</span></span>
+                                        <span className="text-ancb-blue truncate max-w-[120px]">{match.eventName}</span>
                                     </div>
+                                    <div className="flex justify-between items-center mb-2 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                                        <span className="font-bold text-xs text-gray-800 dark:text-gray-200 truncate w-1/3">{match.myTeam}</span>
+                                        <span className="font-mono font-bold bg-white dark:bg-gray-600 px-2 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-500">{match.scoreMyTeam} x {match.scoreOpponent}</span>
+                                        <span className="font-bold text-xs text-gray-800 dark:text-gray-200 truncate w-1/3 text-right">{match.opponent}</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 items-center justify-center border-t border-gray-100 dark:border-gray-700 pt-2">
+                                        <div className="flex items-center gap-1 bg-ancb-blue/10 dark:bg-blue-900/30 px-2 py-1 rounded text-ancb-blue dark:text-blue-300 font-bold text-xs"><span>{match.individualPoints} Pts</span></div>
+                                        <div className="text-[10px] text-gray-500 dark:text-gray-400 flex gap-2"><span title="Bolas de 3 Pontos">3PT: <b>{match.cesta3}</b></span><span className="text-gray-300 dark:text-gray-600">|</span><span title="Bolas de 2 Pontos">2PT: <b>{match.cesta2}</b></span><span className="text-gray-300 dark:text-gray-600">|</span><span title="Lances Livres">1PT: <b>{match.cesta1}</b></span></div>
+                                    </div>
+                                    {onOpenReview && !match.reviewed && (
+                                        <div className="mt-2 text-center">
+                                            <button onClick={() => onOpenReview(match.gameId, match.eventId)} className="text-xs bg-ancb-orange/10 text-ancb-orange px-3 py-1 rounded-full font-bold hover:bg-ancb-orange hover:text-white transition-colors inline-flex items-center gap-1"><LucideStar size={12} /> Avaliar</button>
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
@@ -566,6 +495,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 )}
             </div>
 
+            {/* Modals ... */}
             <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Editar Perfil">
                 <form onSubmit={handleSave} className="space-y-4">
                     <div><label className="text-xs font-bold text-gray-500 uppercase">Apelido</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={formData.apelido || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, apelido: e.target.value})} /></div>
@@ -589,7 +519,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 </form>
             </Modal>
 
-            {/* DETAIL MODAL (Single Badge) */}
             <Modal isOpen={!!selectedBadge} onClose={() => setSelectedBadge(null)} title="Detalhes da Conquista">
                 {selectedBadge && (
                     <div className="text-center p-6">
@@ -606,7 +535,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 )}
             </Modal>
 
-            {/* GALLERY MODAL (All Badges - With Direct Selection) */}
             <Modal isOpen={showAllBadges} onClose={() => setShowAllBadges(false)} title="Galeria de Troféus">
                 <div className="p-2">
                     <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-4">

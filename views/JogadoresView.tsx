@@ -27,7 +27,8 @@ import {
     LucideTrendingUp,
     LucideTrophy,
     LucideMapPin,
-    LucideGrid
+    LucideGrid,
+    LucideEdit2
 } from 'lucide-react';
 
 interface JogadoresViewProps {
@@ -91,19 +92,6 @@ const calculateStatsFromTags = (tags?: Record<string, number>) => {
     };
 };
 
-const TAG_META: Record<string, {label: string, emoji: string}> = {
-    'muralha': { label: 'Muralha', emoji: '🧱' },
-    'sniper': { label: 'Sniper', emoji: '🎯' },
-    'garcom': { label: 'Garçom', emoji: '🤝' },
-    'flash': { label: 'Flash', emoji: '⚡' },
-    'lider': { label: 'Líder', emoji: '🧠' },
-    'guerreiro': { label: 'Guerreiro', emoji: '🛡️' },
-    'avenida': { label: 'Avenida', emoji: '🛣️' },
-    'fominha': { label: 'Fominha', emoji: '🍽️' },
-    'tijoleiro': { label: 'Pedreiro', emoji: '🏗️' },
-    'cone': { label: 'Cone', emoji: '⚠️' }
-};
-
 export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfile }) => {
     const [players, setPlayers] = useState<Player[]>([]);
     const [loading, setLoading] = useState(true);
@@ -111,7 +99,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
     const [activeFilter, setActiveFilter] = useState('Todos');
     
-    const [activeTab, setActiveTab] = useState<'matches' | 'info'>('info');
     const [matches, setMatches] = useState<MatchHistoryItem[]>([]);
     const [loadingMatches, setLoadingMatches] = useState(false);
     
@@ -151,144 +138,142 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     useEffect(() => {
         if (!selectedPlayer) return;
 
-        if (activeTab === 'matches') {
-            const fetchMatches = async () => {
-                setLoadingMatches(true);
-                const historyList: MatchHistoryItem[] = [];
-                const scoredGamesMap = new Map<string, string | undefined>(); 
-                try {
-                    const snapCestas = await db.collectionGroup('cestas').where('jogadorId', '==', selectedPlayer.id).get();
-                    snapCestas.forEach(d => {
-                        const data = d.data() as any;
-                        let gId = data.jogoId;
-                        if (!gId && d.ref.parent && d.ref.parent.parent) {
-                            gId = d.ref.parent.parent.id;
+        const fetchMatches = async () => {
+            setLoadingMatches(true);
+            const historyList: MatchHistoryItem[] = [];
+            const scoredGamesMap = new Map<string, string | undefined>(); 
+            try {
+                const snapCestas = await db.collectionGroup('cestas').where('jogadorId', '==', selectedPlayer.id).get();
+                snapCestas.forEach(d => {
+                    const data = d.data() as any;
+                    let gId = data.jogoId;
+                    if (!gId && d.ref.parent && d.ref.parent.parent) {
+                        gId = d.ref.parent.parent.id;
+                    }
+                    if (gId) {
+                        if (!scoredGamesMap.has(gId) || data.timeId) {
+                            scoredGamesMap.set(gId, data.timeId);
                         }
-                        if (gId) {
-                            if (!scoredGamesMap.has(gId) || data.timeId) {
-                                scoredGamesMap.set(gId, data.timeId);
-                            }
-                        }
-                    });
-                } catch (e) {}
+                    }
+                });
+            } catch (e) {}
 
-                try {
-                    const eventsSnap = await db.collection("eventos").where("status", "==", "finalizado").get();
+            try {
+                const eventsSnap = await db.collection("eventos").where("status", "==", "finalizado").get();
+                
+                for (const eventDoc of eventsSnap.docs) {
+                    const eventData = eventDoc.data() as Evento;
+                    const gamesSnap = await db.collection("eventos").doc(eventDoc.id).collection("jogos").get();
                     
-                    for (const eventDoc of eventsSnap.docs) {
-                        const eventData = eventDoc.data() as Evento;
-                        const gamesSnap = await db.collection("eventos").doc(eventDoc.id).collection("jogos").get();
-                        
-                        for (const gameDoc of gamesSnap.docs) {
-                            const gameData = gameDoc.data() as Jogo;
-                            let played = false;
-                            let isTeamA = true;
+                    for (const gameDoc of gamesSnap.docs) {
+                        const gameData = gameDoc.data() as Jogo;
+                        let played = false;
+                        let isTeamA = true;
 
-                            const isExternal = eventData.type !== 'torneio_interno';
+                        const isExternal = eventData.type !== 'torneio_interno';
 
-                            if (isExternal) {
-                                if (scoredGamesMap.has(gameDoc.id) || 
-                                    gameData.jogadoresEscalados?.includes(selectedPlayer.id) || 
-                                    eventData.jogadoresEscalados?.includes(selectedPlayer.id)) {
+                        if (isExternal) {
+                            if (scoredGamesMap.has(gameDoc.id) || 
+                                gameData.jogadoresEscalados?.includes(selectedPlayer.id) || 
+                                eventData.jogadoresEscalados?.includes(selectedPlayer.id)) {
+                                played = true;
+                                isTeamA = true;
+                            }
+                        } else {
+                            const playerTeam = eventData.times?.find(t => t.jogadores?.includes(selectedPlayer.id));
+                            const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+
+                            if (playerTeam) {
+                                const pTeamId = playerTeam.id;
+                                const pTeamName = normalize(playerTeam.nomeTime);
+                                const gTeamAId = gameData.timeA_id;
+                                const gTeamAName = normalize(gameData.timeA_nome || '');
+                                const gTeamBId = gameData.timeB_id;
+                                const gTeamBName = normalize(gameData.timeB_nome || '');
+                                
+                                if ((gTeamAId && gTeamAId === pTeamId) || (gTeamAName === pTeamName)) {
                                     played = true;
                                     isTeamA = true;
                                 }
-                            } else {
-                                const playerTeam = eventData.times?.find(t => t.jogadores?.includes(selectedPlayer.id));
-                                const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
-
-                                if (playerTeam) {
-                                    const pTeamId = playerTeam.id;
-                                    const pTeamName = normalize(playerTeam.nomeTime);
-                                    const gTeamAId = gameData.timeA_id;
-                                    const gTeamAName = normalize(gameData.timeA_nome || '');
-                                    const gTeamBId = gameData.timeB_id;
-                                    const gTeamBName = normalize(gameData.timeB_nome || '');
-                                    
-                                    if ((gTeamAId && gTeamAId === pTeamId) || (gTeamAName === pTeamName)) {
-                                        played = true;
-                                        isTeamA = true;
-                                    }
-                                    else if ((gTeamBId && gTeamBId === pTeamId) || (gTeamBName === pTeamName)) {
-                                        played = true;
-                                        isTeamA = false;
-                                    }
-                                }
-
-                                if (!played && scoredGamesMap.has(gameDoc.id)) {
+                                else if ((gTeamBId && gTeamBId === pTeamId) || (gTeamBName === pTeamName)) {
                                     played = true;
-                                    const scoredSide = scoredGamesMap.get(gameDoc.id);
-                                    if (scoredSide === 'B') isTeamA = false;
-                                    else isTeamA = true;
+                                    isTeamA = false;
                                 }
                             }
 
-                            if (played) {
-                                let points = 0;
-                                let c1 = 0;
-                                let c2 = 0;
-                                let c3 = 0;
-                                const processedCestaIds = new Set<string>();
-
-                                const countCesta = (cesta: Cesta) => {
-                                    if (processedCestaIds.has(cesta.id)) return;
-                                    if (cesta.jogadorId === selectedPlayer.id) {
-                                        const p = Number(cesta.pontos);
-                                        points += p;
-                                        if (p === 1) c1++;
-                                        if (p === 2) c2++;
-                                        if (p === 3) c3++;
-                                        processedCestaIds.add(cesta.id);
-                                    }
-                                };
-                                try {
-                                    const subCestas = await db.collection("eventos").doc(eventDoc.id).collection("jogos").doc(gameDoc.id).collection("cestas").get();
-                                    subCestas.forEach(d => countCesta({id: d.id, ...(d.data() as any)} as Cesta));
-                                } catch(e) {}
-                                try {
-                                    const rootCestas = await db.collection("cestas").where("jogoId", "==", gameDoc.id).where("jogadorId", "==", selectedPlayer.id).get();
-                                    rootCestas.forEach(d => countCesta({id: d.id, ...(d.data() as any)} as Cesta));
-                                } catch (e) {}
-
-                                const sA = gameData.placarTimeA_final ?? gameData.placarANCB_final ?? 0;
-                                const sB = gameData.placarTimeB_final ?? gameData.placarAdversario_final ?? 0;
-
-                                if (!isExternal && points > 0) {
-                                    if (isTeamA && points > sA) isTeamA = false;
-                                    else if (!isTeamA && points > sB) isTeamA = true;
-                                }
-
-                                historyList.push({
-                                    eventId: eventDoc.id,
-                                    gameId: gameDoc.id,
-                                    eventName: eventData.nome,
-                                    eventType: eventData.modalidade || '5x5',
-                                    date: gameData.dataJogo || eventData.data,
-                                    opponent: isTeamA ? (gameData.adversario || gameData.timeB_nome || 'Adversário') : (gameData.timeA_nome || 'ANCB'),
-                                    myTeam: isTeamA ? (gameData.timeA_nome || 'ANCB') : (gameData.timeB_nome || 'Meu Time'),
-                                    scoreMyTeam: isTeamA ? sA : sB,
-                                    scoreOpponent: isTeamA ? sB : sA,
-                                    reviewed: false, 
-                                    individualPoints: points,
-                                    cesta1: c1,
-                                    cesta2: c2,
-                                    cesta3: c3
-                                });
+                            if (!played && scoredGamesMap.has(gameDoc.id)) {
+                                played = true;
+                                const scoredSide = scoredGamesMap.get(gameDoc.id);
+                                if (scoredSide === 'B') isTeamA = false;
+                                else isTeamA = true;
                             }
                         }
-                    }
-                    historyList.sort((a, b) => b.date.localeCompare(a.date));
-                    setMatches(historyList);
-                } catch (e) {
-                    console.error("Error fetching matches", e);
-                } finally {
-                    setLoadingMatches(false);
-                }
-            };
-            fetchMatches();
-        }
 
-    }, [activeTab, selectedPlayer]);
+                        if (played) {
+                            let points = 0;
+                            let c1 = 0;
+                            let c2 = 0;
+                            let c3 = 0;
+                            const processedCestaIds = new Set<string>();
+
+                            const countCesta = (cesta: Cesta) => {
+                                if (processedCestaIds.has(cesta.id)) return;
+                                if (cesta.jogadorId === selectedPlayer.id) {
+                                    const p = Number(cesta.pontos);
+                                    points += p;
+                                    if (p === 1) c1++;
+                                    if (p === 2) c2++;
+                                    if (p === 3) c3++;
+                                    processedCestaIds.add(cesta.id);
+                                }
+                            };
+                            try {
+                                const subCestas = await db.collection("eventos").doc(eventDoc.id).collection("jogos").doc(gameDoc.id).collection("cestas").get();
+                                subCestas.forEach(d => countCesta({id: d.id, ...(d.data() as any)} as Cesta));
+                            } catch(e) {}
+                            try {
+                                const rootCestas = await db.collection("cestas").where("jogoId", "==", gameDoc.id).where("jogadorId", "==", selectedPlayer.id).get();
+                                rootCestas.forEach(d => countCesta({id: d.id, ...(d.data() as any)} as Cesta));
+                            } catch (e) {}
+
+                            const sA = gameData.placarTimeA_final ?? gameData.placarANCB_final ?? 0;
+                            const sB = gameData.placarTimeB_final ?? gameData.placarAdversario_final ?? 0;
+
+                            if (!isExternal && points > 0) {
+                                if (isTeamA && points > sA) isTeamA = false;
+                                else if (!isTeamA && points > sB) isTeamA = true;
+                            }
+
+                            historyList.push({
+                                eventId: eventDoc.id,
+                                gameId: gameDoc.id,
+                                eventName: eventData.nome,
+                                eventType: eventData.modalidade || '5x5',
+                                date: gameData.dataJogo || eventData.data,
+                                opponent: isTeamA ? (gameData.adversario || gameData.timeB_nome || 'Adversário') : (gameData.timeA_nome || 'ANCB'),
+                                myTeam: isTeamA ? (gameData.timeA_nome || 'ANCB') : (gameData.timeB_nome || 'Meu Time'),
+                                scoreMyTeam: isTeamA ? sA : sB,
+                                scoreOpponent: isTeamA ? sB : sA,
+                                reviewed: false, 
+                                individualPoints: points,
+                                cesta1: c1,
+                                cesta2: c2,
+                                cesta3: c3
+                            });
+                        }
+                    }
+                }
+                historyList.sort((a, b) => b.date.localeCompare(a.date));
+                setMatches(historyList);
+            } catch (e) {
+                console.error("Error fetching matches", e);
+            } finally {
+                setLoadingMatches(false);
+            }
+        };
+        fetchMatches();
+
+    }, [selectedPlayer]);
 
     const normalizePosition = (pos: string | undefined): string => {
         if (!pos) return '-';
@@ -332,10 +317,9 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     
     const handlePlayerClick = (player: Player) => {
         setSelectedPlayer(player);
-        setActiveTab('info'); 
         setIsEditing(false);
         setEditFormData({});
-        window.scrollTo(0, 0); // Scroll to top when opening details
+        window.scrollTo(0, 0); 
     };
 
     const handleStartEdit = () => {
@@ -394,7 +378,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         ? calculateStatsFromTags(selectedPlayer.stats_tags) 
         : { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
     
-    // BADGE DISPLAY LOGIC (Consistent with ProfileView)
+    // BADGE DISPLAY LOGIC
     let displayBadges: Badge[] = [];
     if (selectedPlayer?.badges) {
         const allBadges = selectedPlayer.badges;
@@ -403,7 +387,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         if (pinnedIds.length > 0) {
             displayBadges = allBadges.filter(b => pinnedIds.includes(b.id));
         } else {
-            // Fallback: Highest rarity then newest
             displayBadges = [...allBadges].sort((a, b) => {
                 const weightA = getBadgeWeight(a.raridade);
                 const weightB = getBadgeWeight(b.raridade);
@@ -427,59 +410,71 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
 
                 <div className="flex flex-col h-full">
                     
-                    {/* HERO CARD STYLE (FULL SCREEN MODE) */}
+                    {/* UPDATED HERO CARD (SYNCED WITH PROFILE VIEW) */}
                     <div className="relative w-full rounded-3xl overflow-hidden shadow-xl mb-6 bg-[#062553] text-white border border-blue-900 p-6 md:p-8">
-                        {/* Faded Background Icon */}
-                        <div className="absolute right-0 bottom-0 opacity-5 pointer-events-none transform translate-x-1/4 translate-y-1/4">
-                            <LucideTrophy size={500} className="text-white" />
+                        {/* Background Watermark - Top Right Tilted */}
+                        <div className="absolute top-0 right-0 opacity-5 pointer-events-none transform translate-x-1/4 -translate-y-1/4 rotate-12">
+                            <LucideTrophy size={450} className="text-white" />
                         </div>
 
-                        <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
-                            
-                            {/* COLUMN 1: PHOTO & BADGE NUMBER */}
-                            <div className="flex-shrink-0 relative">
-                                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
-                                    {selectedPlayer.foto ? <img src={selectedPlayer.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-5xl font-bold text-white/50">{selectedPlayer.nome.charAt(0)}</span>}
+                        <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                            {/* LEFT COLUMN: Avatar + Info */}
+                            {/* Added md:pl-8 lg:pl-12 for negative space/centering */}
+                            <div className="flex flex-col md:flex-row items-center gap-6 w-full md:pl-8 lg:pl-12">
+                                <div className="relative shrink-0">
+                                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
+                                        {selectedPlayer.foto ? <img src={selectedPlayer.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-white/50">{selectedPlayer.nome.charAt(0)}</span>}
+                                    </div>
+                                    <div className="absolute bottom-1 right-0 bg-ancb-orange text-white text-sm md:text-base font-bold px-3 py-1 rounded-lg shadow-md border border-white/20">
+                                        #{selectedPlayer.numero_uniforme}
+                                    </div>
                                 </div>
-                                <div className="absolute bottom-2 right-0 bg-ancb-orange text-white text-lg font-bold px-3 py-1 rounded-lg shadow-md border border-white/20">
-                                    #{selectedPlayer.numero_uniforme}
-                                </div>
-                            </div>
-
-                            {/* COLUMN 2: INFO & STATS */}
-                            <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left w-full">
-                                <h1 className="text-3xl md:text-4xl font-bold text-white drop-shadow-md mb-2">{selectedPlayer.apelido || selectedPlayer.nome}</h1>
                                 
-                                <div className="flex items-center gap-2 text-gray-300 text-sm font-medium mb-4 justify-center md:justify-start">
-                                    <LucideMapPin size={16} />
-                                    <span>{normalizePosition(selectedPlayer.posicao)}</span>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4 w-full max-w-xs">
-                                    <div className="bg-[#092b5e] rounded-xl p-3 md:p-4 text-center border border-white/5 shadow-inner">
-                                        <span className="block text-xl md:text-2xl font-bold text-white">{selectedPlayer.nascimento ? calculateAge(selectedPlayer.nascimento) : '-'}</span>
-                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Idade</span>
+                                <div className="flex flex-col items-center md:items-start text-center md:text-left w-full">
+                                    <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-1">{selectedPlayer.apelido || selectedPlayer.nome}</h1>
+                                    <span className="text-xs text-blue-200 font-normal mb-3 block">{selectedPlayer.nome}</span>
+                                    
+                                    <div className="flex items-center justify-center md:justify-start gap-2 text-gray-300 text-sm font-medium mb-4">
+                                        <LucideMapPin size={16} className="text-ancb-orange" />
+                                        <span>{normalizePosition(selectedPlayer.posicao)}</span>
                                     </div>
-                                    <div className="bg-[#092b5e] rounded-xl p-3 md:p-4 text-center border border-white/5 shadow-inner">
-                                        <span className="block text-xl md:text-2xl font-bold text-white">-</span>
-                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
+
+                                    {/* ADMIN EDIT BUTTON (IF ADMIN) */}
+                                    {isAdmin && (
+                                        <button 
+                                            onClick={handleStartEdit}
+                                            className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition-colors text-xs font-bold uppercase tracking-wider text-white mb-6"
+                                        >
+                                            <LucideEdit2 size={14} /> Editar Dados
+                                        </button>
+                                    )}
+
+                                    <div className="grid grid-cols-2 gap-4 w-full max-w-[240px] mx-auto md:mx-0">
+                                        <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
+                                            <span className="block text-2xl font-bold text-white">{selectedPlayer.nascimento ? calculateAge(selectedPlayer.nascimento) : '-'}</span>
+                                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Idade</span>
+                                        </div>
+                                        <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
+                                            <span className="block text-2xl font-bold text-white">{matches.length}</span>
+                                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* COLUMN 3: RADAR & BADGES */}
-                            <div className="flex flex-col items-center justify-center w-full md:w-auto md:min-w-[250px]">
-                                <div className="mb-4">
-                                    <div className="flex items-center justify-center gap-2 mb-2 text-blue-100">
-                                        <LucideTrendingUp size={16} />
-                                        <span className="text-xs font-bold uppercase tracking-wider">Atributos</span>
+                            {/* RIGHT COLUMN: Radar Chart */}
+                            <div className="flex flex-col items-center justify-center h-full">
+                                <div className="relative mb-2">
+                                    <div className="flex items-center justify-center gap-2 mb-2 text-blue-100/50">
+                                        <LucideTrendingUp size={14} />
+                                        <span className="text-[10px] font-bold uppercase tracking-wider">Atributos</span>
                                     </div>
-                                    <RadarChart stats={radarStats} size={180} className="text-white/70" />
+                                    <RadarChart stats={radarStats} size={240} className="text-white/70" />
                                 </div>
                             </div>
                         </div>
 
-                        {/* INTEGRATED BADGES ROW (Bottom of Hero) */}
+                        {/* INTEGRATED BADGES ROW */}
                         {displayBadges.length > 0 && (
                             <div className="mt-8 pt-6 border-t border-white/10">
                                 <div className="flex items-center justify-between mb-3 px-1">
@@ -492,7 +487,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                         </button>
                                     )}
                                 </div>
-                                
                                 <div className="grid grid-cols-3 gap-3 md:gap-4">
                                     {displayBadges.map((badge, idx) => {
                                         const style = getRarityStyles(badge.raridade);
@@ -516,94 +510,57 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                         )}
                     </div>
 
-                    <div className="flex border-b border-gray-100 dark:border-gray-700 mb-4 w-full">
-                            <button onClick={() => setActiveTab('info')} className={`flex-1 pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'info' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Dados & Admin</button>
-                        <button onClick={() => setActiveTab('matches')} className={`flex-1 pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'matches' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Histórico de Partidas</button>
-                    </div>
+                    {/* MATCH HISTORY (DIRECTLY BELOW, NO TABS, CONTINUOUS SCROLL) */}
+                    <div className="w-full animate-fadeIn">
+                        <div className="mb-4 flex items-center gap-2">
+                            <LucideHistory size={20} className="text-gray-500 dark:text-gray-400" />
+                            <h3 className="font-bold text-gray-700 dark:text-gray-200 uppercase text-sm">Histórico de Partidas</h3>
+                        </div>
 
-                    <div className="w-full">
-                        {activeTab === 'info' && (
-                            <div className="space-y-4 animate-fadeIn">
-                                <div className="grid grid-cols-2 gap-3 w-full">
-                                    <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center">
-                                        <LucideCalendarDays className="text-ancb-blue dark:text-blue-400 mb-1" size={20} />
-                                        <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">Idade</span>
-                                        <span className="text-lg font-bold text-gray-800 dark:text-gray-200">{selectedPlayer.nascimento ? calculateAge(selectedPlayer.nascimento) : '-'}</span>
-                                    </div>
-                                    <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center justify-center">
-                                        <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Nome Completo</span>
-                                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200 leading-tight">{selectedPlayer.nome}</span>
-                                    </div>
-                                </div>
-
-                                {isAdmin && (
-                                    <div className="w-full mt-2 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-xl p-4">
-                                        <div className="flex justify-between items-center mb-3">
-                                            <h3 className="text-xs font-bold text-red-600 dark:text-red-400 uppercase flex items-center gap-2"><LucideAlertCircle size={14} /> Dados Administrativos</h3>
-                                            {!isEditing && <button onClick={handleStartEdit} className="text-xs flex items-center gap-1 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"><LucideEdit size={12} /> Editar</button>}
-                                        </div>
-                                        
-                                        {isEditing ? (
-                                            <div className="space-y-3">
-                                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Data Nascimento</label><input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.nascimento || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, nascimento: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.cpf || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, cpf: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Email Contato</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.emailContato || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, emailContato: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">WhatsApp (Sem formato)</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="5566999999999" value={editFormData.telefone || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, telefone: e.target.value})} /></div>
-                                                <div className="flex gap-2 mt-4 pt-2 border-t border-red-200 dark:border-red-900/30"><Button size="sm" onClick={handleSavePlayer} className="flex-1 !bg-green-600"><LucideSave size={14} /> Salvar</Button><Button size="sm" onClick={handleCancelEdit} variant="secondary" className="flex-1"><LucideX size={14} /> Cancelar</Button></div>
+                        {loadingMatches ? (
+                            <div className="flex justify-center py-10"><LucideLoader2 className="animate-spin text-ancb-blue" /></div>
+                        ) : matches.length > 0 ? (
+                            <div className="space-y-3 pb-8">
+                                {matches.map((match) => {
+                                    const isWin = match.scoreMyTeam > match.scoreOpponent;
+                                    const isLoss = match.scoreMyTeam < match.scoreOpponent;
+                                    const borderClass = isWin ? 'border-green-500 dark:border-green-500' : isLoss ? 'border-red-500 dark:border-red-500' : 'border-gray-100 dark:border-gray-700';
+                                    return (
+                                        <div key={match.gameId} className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${borderClass} p-3`}>
+                                            <div className="text-[10px] text-gray-400 mb-2 flex justify-between uppercase font-bold tracking-wider">
+                                                <span className="flex items-center gap-1">{formatDate(match.date)}<span className="bg-gray-100 dark:bg-gray-700 px-1.5 rounded text-[9px] text-gray-500">{match.eventType}</span></span>
+                                                <span className="text-ancb-blue truncate max-w-[120px]">{match.eventName}</span>
                                             </div>
-                                        ) : (
-                                            <div className="grid grid-cols-2 gap-2 text-sm text-gray-700 dark:text-gray-300 mb-4">
-                                                <div><span className="block text-[10px] text-gray-400 uppercase">Nascimento</span><span className="font-bold">{formatDate(selectedPlayer.nascimento || '')}</span></div>
-                                                <div><span className="block text-[10px] text-gray-400 uppercase">CPF</span><span className="font-bold">{selectedPlayer.cpf || '-'}</span></div>
-                                                <div className="col-span-2"><span className="block text-[10px] text-gray-400 uppercase">Email</span><span className="font-bold">{selectedPlayer.emailContato || '-'}</span></div>
-                                                <div className="col-span-2"><span className="block text-[10px] text-gray-400 uppercase">WhatsApp</span><span className="font-bold">{selectedPlayer.telefone || '-'}</span></div>
+                                            <div className="flex justify-between items-center mb-2 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                                                <span className="font-bold text-xs text-gray-800 dark:text-gray-200 truncate w-1/3">{match.myTeam}</span>
+                                                <span className="font-mono font-bold bg-white dark:bg-gray-600 px-2 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-500">{match.scoreMyTeam} x {match.scoreOpponent}</span>
+                                                <span className="font-bold text-xs text-gray-800 dark:text-gray-200 truncate w-1/3 text-right">{match.opponent}</span>
                                             </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {activeTab === 'matches' && (
-                            <div className="animate-fadeIn space-y-6">
-                                <div>
-                                    <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 flex items-center gap-1">
-                                        <LucideHistory size={14} /> Histórico de Jogos
-                                    </h4>
-                                    {loadingMatches ? (
-                                        <div className="flex justify-center py-10"><LucideLoader2 className="animate-spin text-ancb-blue" /></div>
-                                    ) : matches.length > 0 ? (
-                                        <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-                                            {matches.map((match) => {
-                                                const isWin = match.scoreMyTeam > match.scoreOpponent;
-                                                const isLoss = match.scoreMyTeam < match.scoreOpponent;
-                                                const borderClass = isWin ? 'border-green-500 dark:border-green-500' : isLoss ? 'border-red-500 dark:border-red-500' : 'border-gray-100 dark:border-gray-700';
-                                                return (
-                                                    <div key={match.gameId} className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${borderClass} p-3`}>
-                                                        <div className="text-[10px] text-gray-400 mb-2 flex justify-between uppercase font-bold tracking-wider">
-                                                            <span className="flex items-center gap-1">{formatDate(match.date)}<span className="bg-gray-100 dark:bg-gray-700 px-1.5 rounded text-[9px] text-gray-500">{match.eventType}</span></span>
-                                                            <span className="text-ancb-blue truncate max-w-[120px]">{match.eventName}</span>
-                                                        </div>
-                                                        <div className="flex justify-between items-center mb-2 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
-                                                            <span className="font-bold text-xs text-gray-800 dark:text-gray-200 truncate w-1/3">{match.myTeam}</span>
-                                                            <span className="font-mono font-bold bg-white dark:bg-gray-600 px-2 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-500">{match.scoreMyTeam} x {match.scoreOpponent}</span>
-                                                            <span className="font-bold text-xs text-gray-800 dark:text-gray-200 truncate w-1/3 text-right">{match.opponent}</span>
-                                                        </div>
-                                                        <div className="flex flex-wrap gap-2 items-center justify-center border-t border-gray-100 dark:border-gray-700 pt-2">
-                                                            <div className="flex items-center gap-1 bg-ancb-blue/10 dark:bg-blue-900/30 px-2 py-1 rounded text-ancb-blue dark:text-blue-300 font-bold text-xs"><span>{match.individualPoints} Pts</span></div>
-                                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 flex gap-2"><span title="Bolas de 3 Pontos">3PT: <b>{match.cesta3}</b></span><span className="text-gray-300 dark:text-gray-600">|</span><span title="Bolas de 2 Pontos">2PT: <b>{match.cesta2}</b></span><span className="text-gray-300 dark:text-gray-600">|</span><span title="Lances Livres">1PT: <b>{match.cesta1}</b></span></div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
+                                            <div className="flex flex-wrap gap-2 items-center justify-center border-t border-gray-100 dark:border-gray-700 pt-2">
+                                                <div className="flex items-center gap-1 bg-ancb-blue/10 dark:bg-blue-900/30 px-2 py-1 rounded text-ancb-blue dark:text-blue-300 font-bold text-xs"><span>{match.individualPoints} Pts</span></div>
+                                                <div className="text-[10px] text-gray-500 dark:text-gray-400 flex gap-2"><span title="Bolas de 3 Pontos">3PT: <b>{match.cesta3}</b></span><span className="text-gray-300 dark:text-gray-600">|</span><span title="Bolas de 2 Pontos">2PT: <b>{match.cesta2}</b></span><span className="text-gray-300 dark:text-gray-600">|</span><span title="Lances Livres">1PT: <b>{match.cesta1}</b></span></div>
+                                            </div>
                                         </div>
-                                    ) : (
-                                        <div className="text-center py-8 bg-gray-50 dark:bg-gray-700/20 rounded-xl border border-dashed border-gray-200 dark:border-gray-700"><p className="text-gray-500 text-xs">Nenhum jogo finalizado.</p></div>
-                                    )}
-                                </div>
+                                    );
+                                })}
                             </div>
+                        ) : (
+                            <div className="text-center py-12 bg-gray-50 dark:bg-gray-700/20 rounded-xl border border-dashed border-gray-200 dark:border-gray-700"><p className="text-gray-500 text-sm">Nenhum jogo finalizado.</p></div>
                         )}
                     </div>
+
+                    {/* ADMIN EDIT MODAL (Shown only if isEditing is true, triggered by button in Hero) */}
+                    {isEditing && (
+                        <Modal isOpen={isEditing} onClose={handleCancelEdit} title="Editar Dados Administrativos">
+                            <div className="space-y-4">
+                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Data Nascimento</label><input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.nascimento || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, nascimento: e.target.value})} /></div>
+                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.cpf || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, cpf: e.target.value})} /></div>
+                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Email Contato</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.emailContato || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, emailContato: e.target.value})} /></div>
+                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">WhatsApp (Sem formato)</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="5566999999999" value={editFormData.telefone || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, telefone: e.target.value})} /></div>
+                                <div className="flex gap-2 mt-4"><Button className="flex-1" onClick={handleSavePlayer}><LucideSave size={14} /> Salvar</Button><Button variant="secondary" className="flex-1" onClick={handleCancelEdit}><LucideX size={14} /> Cancelar</Button></div>
+                            </div>
+                        </Modal>
+                    )}
                 </div>
 
                 {/* DETAIL MODAL (Single Badge) */}
