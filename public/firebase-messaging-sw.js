@@ -26,8 +26,8 @@ messaging.onBackgroundMessage(function(payload) {
   const notificationTitle = payload.notification?.title || 'Portal ANCB';
   const notificationOptions = {
     body: payload.notification?.body || 'Nova atualização disponível.',
-    icon: 'https://i.imgur.com/SE2jHsz.png', // Ícone da notificação
-    badge: 'https://i.imgur.com/SE2jHsz.png', // Ícone pequeno na barra de status (Android)
+    icon: 'https://i.imgur.com/SE2jHsz.png', // Ícone Grande (ao lado do texto)
+    badge: 'https://i.imgur.com/BudJnSQ.png', // Ícone Pequeno (Silhueta branca 96x96 para Android)
     data: { 
         url: payload.webpush?.fcm_options?.link || payload.data?.url || '/' 
     }

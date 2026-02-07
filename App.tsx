@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player } from './types';
 import firebase, { auth, db, requestFCMToken, onMessageListener } from './services/firebase';
@@ -157,17 +158,23 @@ const App: React.FC = () => {
                 navigator.serviceWorker.ready.then(registration => {
                     registration.showNotification(title, {
                         body: body,
-                        icon: 'https://i.imgur.com/SE2jHsz.png',
-                        badge: 'https://i.imgur.com/SE2jHsz.png',
+                        icon: 'https://i.imgur.com/SE2jHsz.png', // Ícone Grande (aparece ao lado do texto)
+                        badge: 'https://i.imgur.com/BudJnSQ.png', // Ícone Pequeno (Silhueta branca 96x96 para Android)
                         vibrate: [200, 100, 200]
                     } as any);
                 }).catch((e) => {
                     console.warn("SW notification failed, falling back", e);
-                    new Notification(title, { body: body, icon: 'https://i.imgur.com/SE2jHsz.png' });
+                    new Notification(title, { 
+                        body: body, 
+                        icon: 'https://i.imgur.com/SE2jHsz.png'
+                    });
                 });
             } catch (e) {
                 console.error("Erro ao disparar notificação de sistema:", e);
-                new Notification(title, { body: body, icon: 'https://i.imgur.com/SE2jHsz.png' });
+                new Notification(title, { 
+                    body: body, 
+                    icon: 'https://i.imgur.com/SE2jHsz.png' 
+                });
             }
         }
     };
@@ -593,19 +600,42 @@ const App: React.FC = () => {
             <NotificationFab notifications={notifications} onClick={() => setShowNotifications(true)} />
 
             <Modal isOpen={showNotifications} onClose={() => setShowNotifications(false)} title="Notificações">
-                {notifications.length > 0 ? (
-                    <div className="space-y-3">
-                        {notifications.map(notif => (
-                            <div key={notif.id} className={`p-4 rounded-lg border flex justify-between items-center cursor-pointer transition-colors ${notif.type === 'roster_alert' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800'} ${notif.read ? 'opacity-50' : ''}`} onClick={() => handleNotificationClick(notif)}>
-                                <div className="flex gap-3">
-                                    <div className={notif.type === 'roster_alert' ? 'text-ancb-orange' : 'text-ancb-blue'}>{notif.type === 'roster_alert' ? <LucideMegaphone size={20} /> : <LucideCheckSquare size={20} />}</div>
-                                    <div><h4 className="font-bold text-sm">{notif.title}</h4><p className="text-xs text-gray-600 dark:text-gray-400">{notif.message}</p></div>
-                                </div>
-                                {!notif.read && <div className="w-2 h-2 rounded-full bg-red-500"></div>}
+                {notificationPermissionStatus !== 'granted' && (
+                    <div className="sticky top-0 z-20 mb-4 p-4 bg-orange-50 dark:bg-orange-900/40 border-b-2 border-orange-200 dark:border-orange-800/50 flex flex-col gap-2 animate-fadeIn -mx-6 -mt-6 shadow-md backdrop-blur-sm">
+                        <div className="flex items-start gap-2">
+                            <div className="bg-orange-100 dark:bg-orange-900 p-1.5 rounded-full text-ancb-orange"><LucideBellRing size={18} /></div>
+                            <div>
+                                <h4 className="font-bold text-sm text-gray-800 dark:text-white leading-tight">Ativar Notificações</h4>
+                                <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-tight">
+                                    Não perca convocações e resultados.
+                                </p>
                             </div>
-                        ))}
+                        </div>
+                        <Button size="sm" onClick={handleEnableNotifications} className="w-full mt-1 text-xs !py-1.5">
+                            Ativar Agora
+                        </Button>
                     </div>
-                ) : <div className="text-center py-10 text-gray-400"><LucideBell size={48} className="mx-auto mb-2 opacity-20" /><p>Nenhuma notificação nova.</p></div>}
+                )}
+                <div className={notificationPermissionStatus !== 'granted' ? 'mt-4' : ''}>
+                    {notifications.length > 0 ? (
+                        <div className="space-y-3">
+                            {notifications.map(notif => (
+                                <div key={notif.id} className={`p-4 rounded-lg border flex justify-between items-center cursor-pointer transition-colors ${notif.type === 'roster_alert' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800'} ${notif.read ? 'opacity-50' : ''}`} onClick={() => handleNotificationClick(notif)}>
+                                    <div className="flex gap-3">
+                                        <div className={notif.type === 'roster_alert' ? 'text-ancb-orange' : 'text-ancb-blue'}>{notif.type === 'roster_alert' ? <LucideMegaphone size={20} /> : <LucideCheckSquare size={20} />}</div>
+                                        <div><h4 className="font-bold text-sm">{notif.title}</h4><p className="text-xs text-gray-600 dark:text-gray-400">{notif.message}</p></div>
+                                    </div>
+                                    {!notif.read && <div className="w-2 h-2 rounded-full bg-red-500"></div>}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-10 text-gray-400">
+                            <LucideBell size={48} className="mx-auto mb-2 opacity-20" />
+                            <p>Nenhuma notificação nova.</p>
+                        </div>
+                    )}
+                </div>
             </Modal>
 
             <Modal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} title="Instalar no iPhone">
