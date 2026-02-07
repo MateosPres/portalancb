@@ -49,6 +49,7 @@ export default defineConfig({
   ],
   base: './',
   build: {
+    target: 'es2015', // Aumenta a compatibilidade com iOS/Safari antigos e evita tela branca
     outDir: 'dist',
     assetsDir: 'assets',
   }
