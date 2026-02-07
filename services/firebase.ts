@@ -35,6 +35,13 @@ try {
 
 export const requestFCMToken = async (vapidKey: string): Promise<string | null> => {
     if (!messaging) return null;
+    
+    // Safety check for iOS/Browsers without Notification API exposed
+    if (typeof Notification === 'undefined') {
+        console.warn("Notification API not available.");
+        return null;
+    }
+
     try {
         if (Notification.permission === 'default') {
             const permission = await Notification.requestPermission();

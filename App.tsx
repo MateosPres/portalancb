@@ -63,7 +63,11 @@ const App: React.FC = () => {
     const [showQuiz, setShowQuiz] = useState(false);
     const [reviewTargetGame, setReviewTargetGame] = useState<{ gameId: string, eventId: string, playersToReview: Player[] } | null>(null);
     const [foregroundNotification, setForegroundNotification] = useState<{title: string, body: string, eventId?: string, type?: string} | null>(null);
-    const [notificationPermissionStatus, setNotificationPermissionStatus] = useState<NotificationPermission>(Notification.permission);
+    
+    // Safe initialization for iOS/Safari where Notification might be undefined
+    const [notificationPermissionStatus, setNotificationPermissionStatus] = useState<NotificationPermission>(
+        (typeof Notification !== 'undefined') ? Notification.permission : 'default'
+    );
 
     // PWA & Theme
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -119,6 +123,10 @@ const App: React.FC = () => {
 
     const handleEnableNotifications = async () => {
         if (!userProfile?.uid) return;
+        if (typeof Notification === 'undefined') {
+            alert("Seu navegador não suporta notificações.");
+            return;
+        }
         try {
             const token = await requestFCMToken(VAPID_KEY);
             if (token) {
@@ -140,6 +148,7 @@ const App: React.FC = () => {
     };
 
     useEffect(() => {
+        if (typeof Notification === 'undefined') return;
         if (userProfile?.uid && Notification.permission === 'granted') {
             // Silent update of token if already granted
             requestFCMToken(VAPID_KEY).then(token => {
@@ -152,14 +161,14 @@ const App: React.FC = () => {
     }, [userProfile?.uid]);
 
     const triggerSystemNotification = (title: string, body: string) => {
-        if (!("Notification" in window)) return;
+        if (typeof Notification === 'undefined') return;
         if (Notification.permission === "granted") {
             try {
                 navigator.serviceWorker.ready.then(registration => {
                     registration.showNotification(title, {
                         body: body,
                         icon: 'https://i.imgur.com/SE2jHsz.png', // Ícone Grande (aparece ao lado do texto)
-                        badge: 'https://i.imgur.com/BudJnSQ.png', // Ícone Pequeno (Silhueta branca 96x96 para Android)
+                        badge: 'https://i.imgur.com/mQWcgnZ.png', // Ícone Pequeno (Silhueta para barra de status)
                         vibrate: [200, 100, 200]
                     } as any);
                 }).catch((e) => {
@@ -473,16 +482,20 @@ const App: React.FC = () => {
                 </div>
             </div>
             {userProfile && notificationPermissionStatus === 'default' && (
-                <div className="bg-orange-600 text-white p-2 text-center text-xs flex justify-center items-center gap-2">
-                    <LucideBellRing size={14} />
-                    <span>Para receber avisos de jogos, ative as notificações.</span>
-                    <button 
-                        onClick={handleEnableNotifications}
-                        className="bg-white text-orange-600 px-2 py-0.5 rounded font-bold uppercase hover:bg-gray-100"
-                    >
-                        Ativar
-                    </button>
-                </div>
+                <div className="sticky top-0 z-20 mb-4 p-4 bg-orange-50 dark:bg-orange-900/40 border-b-2 border-orange-200 dark:border-orange-800/50 flex flex-col gap-2 animate-fadeIn -mx-6 -mt-6 shadow-md backdrop-blur-sm">
+                        <div className="flex items-start gap-2">
+                            <div className="bg-orange-100 dark:bg-orange-900 p-1.5 rounded-full text-ancb-orange"><LucideBellRing size={18} /></div>
+                            <div>
+                                <h4 className="font-bold text-sm text-gray-800 dark:text-white leading-tight">Ativar Notificações</h4>
+                                <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-tight">
+                                    Não perca convocações e resultados.
+                                </p>
+                            </div>
+                        </div>
+                        <Button size="sm" onClick={handleEnableNotifications} className="w-full mt-1 text-xs !py-1.5">
+                            Ativar Agora
+                        </Button>
+                    </div>
             )}
         </header>
     );
