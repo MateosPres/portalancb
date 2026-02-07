@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player } from './types';
 import firebase, { auth, db, requestFCMToken, onMessageListener } from './services/firebase';
@@ -68,7 +67,6 @@ const App: React.FC = () => {
     // PWA & Theme
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     const [showInstallModal, setShowInstallModal] = useState(false);
-    const [showWelcomeModal, setShowWelcomeModal] = useState(false); // NEW: Welcome/Permission Modal
     const [isIos, setIsIos] = useState(false);
     const [isAndroid, setIsAndroid] = useState(false);
     const [isStandalone, setIsStandalone] = useState(false);
@@ -115,13 +113,6 @@ const App: React.FC = () => {
         const handleBeforeInstallPrompt = (e: any) => { e.preventDefault(); setDeferredPrompt(e); };
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-        // Check for first time visit to show Notification Request
-        const hasSeenWelcome = localStorage.getItem('ancb_welcome_prompt_seen');
-        if (!hasSeenWelcome && Notification.permission === 'default') {
-            // Delay slightly for better UX
-            setTimeout(() => setShowWelcomeModal(true), 2000);
-        }
-
         return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     }, []);
 
@@ -145,16 +136,6 @@ const App: React.FC = () => {
         } catch (e) {
             console.error("Erro ao ativar notificações:", e);
         }
-    };
-
-    const handleWelcomeDismiss = () => {
-        localStorage.setItem('ancb_welcome_prompt_seen', 'true');
-        setShowWelcomeModal(false);
-    };
-
-    const handleWelcomeAccept = async () => {
-        handleWelcomeDismiss();
-        await handleEnableNotifications();
     };
 
     useEffect(() => {
@@ -625,40 +606,6 @@ const App: React.FC = () => {
                         ))}
                     </div>
                 ) : <div className="text-center py-10 text-gray-400"><LucideBell size={48} className="mx-auto mb-2 opacity-20" /><p>Nenhuma notificação nova.</p></div>}
-            </Modal>
-
-            {/* WELCOME / NOTIFICATION MODAL */}
-            <Modal isOpen={showWelcomeModal} onClose={handleWelcomeDismiss} title="Fique por Dentro!">
-                <div className="flex flex-col items-center text-center space-y-4">
-                    <div className="bg-orange-100 dark:bg-orange-900/30 p-4 rounded-full mb-2">
-                        <LucideBellRing size={48} className="text-ancb-orange" />
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Não perca nenhuma convocação!</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Ative as notificações para receber avisos imediatos quando você for escalado para um jogo ou quando houver novidades importantes no portal.
-                    </p>
-                    
-                    {isAndroid && (
-                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-xs text-blue-700 dark:text-blue-300 w-full text-left flex items-start gap-2 border border-blue-100 dark:border-blue-800">
-                            <LucideInfo size={16} className="shrink-0 mt-0.5" />
-                            <span>
-                                <strong>Android:</strong> Ao clicar em "Ativar", o navegador pode pedir permissão. Clique em <strong>Permitir</strong> para garantir que os avisos funcionem mesmo com o app fechado.
-                            </span>
-                        </div>
-                    )}
-
-                    <div className="flex flex-col gap-3 w-full mt-4">
-                        <Button onClick={handleWelcomeAccept} className="w-full justify-center !text-base shadow-xl">
-                            Ativar Notificações Agora
-                        </Button>
-                        <button 
-                            onClick={handleWelcomeDismiss}
-                            className="text-gray-400 text-sm hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-                        >
-                            Agora não, obrigado
-                        </button>
-                    </div>
-                </div>
             </Modal>
 
             <Modal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} title="Instalar no iPhone">
