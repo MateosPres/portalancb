@@ -24,7 +24,10 @@ import {
     LucideHexagon,
     LucideMedal,
     LucideInfo,
-    LucideTrendingUp
+    LucideTrendingUp,
+    LucideTrophy,
+    LucideMapPin,
+    LucideGrid
 } from 'lucide-react';
 
 interface JogadoresViewProps {
@@ -113,6 +116,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const [loadingMatches, setLoadingMatches] = useState(false);
     
     const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
+    const [showAllBadges, setShowAllBadges] = useState(false); // For modal gallery
 
     const [isEditing, setIsEditing] = useState(false);
     const [editFormData, setEditFormData] = useState<Partial<Player>>({});
@@ -331,6 +335,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         setActiveTab('info'); 
         setIsEditing(false);
         setEditFormData({});
+        window.scrollTo(0, 0); // Scroll to top when opening details
     };
 
     const handleStartEdit = () => {
@@ -376,20 +381,275 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         }
     };
 
+    const getBadgeWeight = (rarity: Badge['raridade']) => {
+        switch(rarity) {
+            case 'lendaria': return 4;
+            case 'epica': return 3;
+            case 'rara': return 2;
+            default: return 1;
+        }
+    };
+
     const radarStats = selectedPlayer 
         ? calculateStatsFromTags(selectedPlayer.stats_tags) 
         : { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
     
-    const topTags = selectedPlayer?.stats_tags 
-        ? Object.entries(selectedPlayer.stats_tags)
-            .sort((a, b) => (b[1] as number) - (a[1] as number))
-            .slice(0, 3)
-            .map(([key, count]) => ({ key, count: Number(count), ...TAG_META[key] }))
-        : [];
+    // BADGE DISPLAY LOGIC (Consistent with ProfileView)
+    let displayBadges: Badge[] = [];
+    if (selectedPlayer?.badges) {
+        const allBadges = selectedPlayer.badges;
+        const pinnedIds = selectedPlayer.pinnedBadgeIds || [];
+        
+        if (pinnedIds.length > 0) {
+            displayBadges = allBadges.filter(b => pinnedIds.includes(b.id));
+        } else {
+            // Fallback: Highest rarity then newest
+            displayBadges = [...allBadges].sort((a, b) => {
+                const weightA = getBadgeWeight(a.raridade);
+                const weightB = getBadgeWeight(b.raridade);
+                if (weightA !== weightB) return weightB - weightA;
+                return b.data.localeCompare(a.data);
+            }).slice(0, 3);
+        }
+    }
+
+    if (selectedPlayer) {
+        return (
+            <div className="animate-fadeIn pb-20">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                        <Button variant="secondary" size="sm" onClick={() => setSelectedPlayer(null)} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
+                            <LucideArrowLeft size={18} />
+                        </Button>
+                        <h2 className="text-2xl font-bold text-ancb-black dark:text-white">Ficha do Atleta</h2>
+                    </div>
+                </div>
+
+                <div className="flex flex-col h-full">
+                    
+                    {/* HERO CARD STYLE (FULL SCREEN MODE) */}
+                    <div className="relative w-full rounded-3xl overflow-hidden shadow-xl mb-6 bg-[#062553] text-white border border-blue-900 p-6 md:p-8">
+                        {/* Faded Background Icon */}
+                        <div className="absolute right-0 bottom-0 opacity-5 pointer-events-none transform translate-x-1/4 translate-y-1/4">
+                            <LucideTrophy size={500} className="text-white" />
+                        </div>
+
+                        <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
+                            
+                            {/* COLUMN 1: PHOTO & BADGE NUMBER */}
+                            <div className="flex-shrink-0 relative">
+                                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
+                                    {selectedPlayer.foto ? <img src={selectedPlayer.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-5xl font-bold text-white/50">{selectedPlayer.nome.charAt(0)}</span>}
+                                </div>
+                                <div className="absolute bottom-2 right-0 bg-ancb-orange text-white text-lg font-bold px-3 py-1 rounded-lg shadow-md border border-white/20">
+                                    #{selectedPlayer.numero_uniforme}
+                                </div>
+                            </div>
+
+                            {/* COLUMN 2: INFO & STATS */}
+                            <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left w-full">
+                                <h1 className="text-3xl md:text-4xl font-bold text-white drop-shadow-md mb-2">{selectedPlayer.apelido || selectedPlayer.nome}</h1>
+                                
+                                <div className="flex items-center gap-2 text-gray-300 text-sm font-medium mb-4 justify-center md:justify-start">
+                                    <LucideMapPin size={16} />
+                                    <span>{normalizePosition(selectedPlayer.posicao)}</span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 w-full max-w-xs">
+                                    <div className="bg-[#092b5e] rounded-xl p-3 md:p-4 text-center border border-white/5 shadow-inner">
+                                        <span className="block text-xl md:text-2xl font-bold text-white">{selectedPlayer.nascimento ? calculateAge(selectedPlayer.nascimento) : '-'}</span>
+                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Idade</span>
+                                    </div>
+                                    <div className="bg-[#092b5e] rounded-xl p-3 md:p-4 text-center border border-white/5 shadow-inner">
+                                        <span className="block text-xl md:text-2xl font-bold text-white">-</span>
+                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* COLUMN 3: RADAR & BADGES */}
+                            <div className="flex flex-col items-center justify-center w-full md:w-auto md:min-w-[250px]">
+                                <div className="mb-4">
+                                    <div className="flex items-center justify-center gap-2 mb-2 text-blue-100">
+                                        <LucideTrendingUp size={16} />
+                                        <span className="text-xs font-bold uppercase tracking-wider">Atributos</span>
+                                    </div>
+                                    <RadarChart stats={radarStats} size={180} className="text-white/70" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* INTEGRATED BADGES ROW (Bottom of Hero) */}
+                        {displayBadges.length > 0 && (
+                            <div className="mt-8 pt-6 border-t border-white/10">
+                                <div className="flex items-center justify-between mb-3 px-1">
+                                    <span className="text-xs font-bold text-blue-200 uppercase tracking-wider flex items-center gap-2">
+                                        <LucideTrophy size={14} className="text-ancb-orange" /> Principais Conquistas
+                                    </span>
+                                    {selectedPlayer.badges && selectedPlayer.badges.length > 3 && (
+                                        <button onClick={() => setShowAllBadges(true)} className="text-[10px] text-white/60 hover:text-white flex items-center gap-1 transition-colors">
+                                            Ver todas <LucideGrid size={10} />
+                                        </button>
+                                    )}
+                                </div>
+                                
+                                <div className="grid grid-cols-3 gap-3 md:gap-4">
+                                    {displayBadges.map((badge, idx) => {
+                                        const style = getRarityStyles(badge.raridade);
+                                        return (
+                                            <div 
+                                                key={idx} 
+                                                onClick={() => setSelectedBadge(badge)}
+                                                className={`rounded-lg p-2 md:p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-transform hover:scale-105 active:scale-95 shadow-lg border relative overflow-hidden ${style.classes}`}
+                                            >
+                                                <div className="text-2xl md:text-3xl mb-1 drop-shadow-md z-10">{badge.emoji}</div>
+                                                <div className="z-10 w-full">
+                                                    <span className="block text-[8px] md:text-[9px] font-bold uppercase leading-tight line-clamp-2 min-h-[2em] flex items-center justify-center">
+                                                        {badge.nome}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex border-b border-gray-100 dark:border-gray-700 mb-4 w-full">
+                            <button onClick={() => setActiveTab('info')} className={`flex-1 pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'info' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Dados & Admin</button>
+                        <button onClick={() => setActiveTab('matches')} className={`flex-1 pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'matches' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Histórico de Partidas</button>
+                    </div>
+
+                    <div className="w-full">
+                        {activeTab === 'info' && (
+                            <div className="space-y-4 animate-fadeIn">
+                                <div className="grid grid-cols-2 gap-3 w-full">
+                                    <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center">
+                                        <LucideCalendarDays className="text-ancb-blue dark:text-blue-400 mb-1" size={20} />
+                                        <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">Idade</span>
+                                        <span className="text-lg font-bold text-gray-800 dark:text-gray-200">{selectedPlayer.nascimento ? calculateAge(selectedPlayer.nascimento) : '-'}</span>
+                                    </div>
+                                    <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center justify-center">
+                                        <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Nome Completo</span>
+                                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200 leading-tight">{selectedPlayer.nome}</span>
+                                    </div>
+                                </div>
+
+                                {isAdmin && (
+                                    <div className="w-full mt-2 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-xl p-4">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <h3 className="text-xs font-bold text-red-600 dark:text-red-400 uppercase flex items-center gap-2"><LucideAlertCircle size={14} /> Dados Administrativos</h3>
+                                            {!isEditing && <button onClick={handleStartEdit} className="text-xs flex items-center gap-1 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"><LucideEdit size={12} /> Editar</button>}
+                                        </div>
+                                        
+                                        {isEditing ? (
+                                            <div className="space-y-3">
+                                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Data Nascimento</label><input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.nascimento || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, nascimento: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.cpf || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, cpf: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Email Contato</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.emailContato || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, emailContato: e.target.value})} /></div>
+                                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">WhatsApp (Sem formato)</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="5566999999999" value={editFormData.telefone || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, telefone: e.target.value})} /></div>
+                                                <div className="flex gap-2 mt-4 pt-2 border-t border-red-200 dark:border-red-900/30"><Button size="sm" onClick={handleSavePlayer} className="flex-1 !bg-green-600"><LucideSave size={14} /> Salvar</Button><Button size="sm" onClick={handleCancelEdit} variant="secondary" className="flex-1"><LucideX size={14} /> Cancelar</Button></div>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-2 gap-2 text-sm text-gray-700 dark:text-gray-300 mb-4">
+                                                <div><span className="block text-[10px] text-gray-400 uppercase">Nascimento</span><span className="font-bold">{formatDate(selectedPlayer.nascimento || '')}</span></div>
+                                                <div><span className="block text-[10px] text-gray-400 uppercase">CPF</span><span className="font-bold">{selectedPlayer.cpf || '-'}</span></div>
+                                                <div className="col-span-2"><span className="block text-[10px] text-gray-400 uppercase">Email</span><span className="font-bold">{selectedPlayer.emailContato || '-'}</span></div>
+                                                <div className="col-span-2"><span className="block text-[10px] text-gray-400 uppercase">WhatsApp</span><span className="font-bold">{selectedPlayer.telefone || '-'}</span></div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'matches' && (
+                            <div className="animate-fadeIn space-y-6">
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 flex items-center gap-1">
+                                        <LucideHistory size={14} /> Histórico de Jogos
+                                    </h4>
+                                    {loadingMatches ? (
+                                        <div className="flex justify-center py-10"><LucideLoader2 className="animate-spin text-ancb-blue" /></div>
+                                    ) : matches.length > 0 ? (
+                                        <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                            {matches.map((match) => {
+                                                const isWin = match.scoreMyTeam > match.scoreOpponent;
+                                                const isLoss = match.scoreMyTeam < match.scoreOpponent;
+                                                const borderClass = isWin ? 'border-green-500 dark:border-green-500' : isLoss ? 'border-red-500 dark:border-red-500' : 'border-gray-100 dark:border-gray-700';
+                                                return (
+                                                    <div key={match.gameId} className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${borderClass} p-3`}>
+                                                        <div className="text-[10px] text-gray-400 mb-2 flex justify-between uppercase font-bold tracking-wider">
+                                                            <span className="flex items-center gap-1">{formatDate(match.date)}<span className="bg-gray-100 dark:bg-gray-700 px-1.5 rounded text-[9px] text-gray-500">{match.eventType}</span></span>
+                                                            <span className="text-ancb-blue truncate max-w-[120px]">{match.eventName}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center mb-2 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                                                            <span className="font-bold text-xs text-gray-800 dark:text-gray-200 truncate w-1/3">{match.myTeam}</span>
+                                                            <span className="font-mono font-bold bg-white dark:bg-gray-600 px-2 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-500">{match.scoreMyTeam} x {match.scoreOpponent}</span>
+                                                            <span className="font-bold text-xs text-gray-800 dark:text-gray-200 truncate w-1/3 text-right">{match.opponent}</span>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-2 items-center justify-center border-t border-gray-100 dark:border-gray-700 pt-2">
+                                                            <div className="flex items-center gap-1 bg-ancb-blue/10 dark:bg-blue-900/30 px-2 py-1 rounded text-ancb-blue dark:text-blue-300 font-bold text-xs"><span>{match.individualPoints} Pts</span></div>
+                                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 flex gap-2"><span title="Bolas de 3 Pontos">3PT: <b>{match.cesta3}</b></span><span className="text-gray-300 dark:text-gray-600">|</span><span title="Bolas de 2 Pontos">2PT: <b>{match.cesta2}</b></span><span className="text-gray-300 dark:text-gray-600">|</span><span title="Lances Livres">1PT: <b>{match.cesta1}</b></span></div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-8 bg-gray-50 dark:bg-gray-700/20 rounded-xl border border-dashed border-gray-200 dark:border-gray-700"><p className="text-gray-500 text-xs">Nenhum jogo finalizado.</p></div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* DETAIL MODAL (Single Badge) */}
+                <Modal isOpen={!!selectedBadge} onClose={() => setSelectedBadge(null)} title="Detalhes da Conquista">
+                    {selectedBadge && (
+                        <div className="text-center p-4">
+                            <div className="text-8xl mb-4 animate-bounce-slow drop-shadow-xl">{selectedBadge.emoji}</div>
+                            <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 uppercase tracking-wide">{selectedBadge.nome}</h3>
+                            <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 border ${getRarityStyles(selectedBadge.raridade).classes}`}>
+                                {getRarityStyles(selectedBadge.raridade).label}
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-600 mb-4">
+                                <p className="text-gray-600 dark:text-gray-300 text-sm font-medium leading-relaxed">{selectedBadge.descricao}</p>
+                            </div>
+                            <p className="text-xs text-gray-400 uppercase font-bold tracking-widest">Conquistado em: {formatDate(selectedBadge.data)}</p>
+                        </div>
+                    )}
+                </Modal>
+
+                {/* GALLERY MODAL (All Badges for Viewing in Player Modal) */}
+                <Modal isOpen={showAllBadges} onClose={() => setShowAllBadges(false)} title="Galeria de Troféus">
+                    <div className="p-2">
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar p-1">
+                            {selectedPlayer?.badges && selectedPlayer.badges.length > 0 ? (
+                                [...selectedPlayer.badges].reverse().map((badge, idx) => {
+                                    const style = getRarityStyles(badge.raridade);
+                                    return (
+                                        <div key={idx} onClick={() => setSelectedBadge(badge)} className={`rounded-xl p-2 flex flex-col items-center justify-center text-center cursor-pointer hover:scale-105 transition-transform shadow-sm border ${style.classes}`}>
+                                            <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>
+                                            <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <p className="col-span-full text-center text-gray-500 py-10">Nenhuma conquista ainda.</p>
+                            )}
+                        </div>
+                    </div>
+                </Modal>
+            </div>
+        );
+    }
 
     return (
         <div className="animate-fadeIn pb-20">
-            {/* Same JSX structure, functionality relies on the updated fetch logic above */}
+            {/* ... (Search and Grid JSX same as before) ... */}
             <div className="flex items-center justify-between mb-6">
                  <div className="flex items-center gap-3">
                     <Button variant="secondary" size="sm" onClick={onBack} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
@@ -397,329 +657,26 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                     </Button>
                     <h2 className="text-2xl font-bold text-ancb-black dark:text-white">Elenco</h2>
                 </div>
-                
                 <div className="relative">
                     <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                    <input 
-                        type="text" 
-                        placeholder="Buscar atleta..." 
-                        className="pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-ancb-blue outline-none w-40 md:w-auto"
-                        value={search}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-                    />
+                    <input type="text" placeholder="Buscar atleta..." className="pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-ancb-blue outline-none w-40 md:w-auto" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} />
                 </div>
             </div>
 
             <div className="flex gap-2 overflow-x-auto pb-4 mb-2 custom-scrollbar">
                 {FILTERS.map(filter => (
-                    <button
-                        key={filter}
-                        onClick={() => setActiveFilter(filter)}
-                        className={`
-                            px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors
-                            ${activeFilter === filter 
-                                ? 'bg-ancb-blue text-white shadow-md' 
-                                : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}
-                        `}
-                    >
-                        {filter}
-                    </button>
+                    <button key={filter} onClick={() => setActiveFilter(filter)} className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${activeFilter === filter ? 'bg-ancb-blue text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>{filter}</button>
                 ))}
             </div>
 
-            {loading ? (
-                <div className="flex justify-center py-20">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ancb-blue"></div>
-                </div>
-            ) : (
+            {loading ? <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ancb-blue"></div></div> : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {filteredPlayers.map(player => (
-                        <PlayerCard 
-                            key={player.id} 
-                            player={player} 
-                            onClick={() => handlePlayerClick(player)} 
-                        />
+                        <PlayerCard key={player.id} player={player} onClick={() => handlePlayerClick(player)} />
                     ))}
-                    {filteredPlayers.length === 0 && (
-                        <div className="col-span-full text-center py-10 text-gray-400">
-                            Nenhum jogador encontrado.
-                        </div>
-                    )}
+                    {filteredPlayers.length === 0 && <div className="col-span-full text-center py-10 text-gray-400">Nenhum jogador encontrado.</div>}
                 </div>
             )}
-
-            <Modal isOpen={!!selectedPlayer} onClose={() => setSelectedPlayer(null)} title="Ficha do Atleta">
-                {selectedPlayer && (
-                    <div className="flex flex-col h-full">
-                        <div className="flex flex-col items-center mb-4">
-                            <div className="w-24 h-24 rounded-full border-4 border-gray-100 dark:border-gray-700 mb-2 overflow-hidden shadow-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                                {selectedPlayer.foto ? (
-                                    <img src={selectedPlayer.foto} alt={selectedPlayer.nome} className="w-full h-full object-cover" />
-                                ) : (
-                                    <span className="text-3xl font-bold text-gray-400">{selectedPlayer.nome.substring(0, 1)}</span>
-                                )}
-                            </div>
-                            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-1">{selectedPlayer.apelido || selectedPlayer.nome}</h2>
-                            <span className="bg-ancb-orange text-white px-3 py-0.5 rounded-full text-xs font-bold">
-                                #{selectedPlayer.numero_uniforme} • {normalizePosition(selectedPlayer.posicao)}
-                            </span>
-                        </div>
-
-                        <div className="flex border-b border-gray-100 dark:border-gray-700 mb-4 w-full">
-                             <button 
-                                onClick={() => setActiveTab('info')}
-                                className={`flex-1 pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'info' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                            >
-                                Scouting
-                            </button>
-                            <button 
-                                onClick={() => setActiveTab('matches')}
-                                className={`flex-1 pb-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'matches' ? 'border-ancb-blue text-ancb-blue dark:text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                            >
-                                Partidas
-                            </button>
-                        </div>
-
-                        <div className="w-full">
-                            {activeTab === 'info' && (
-                                <div className="space-y-4 animate-fadeIn">
-                                    {selectedPlayer.badges && selectedPlayer.badges.length > 0 && (
-                                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
-                                            <div className="flex items-center justify-between mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
-                                                <div className="flex items-center gap-2">
-                                                    <LucideMedal className="text-yellow-500" size={18} />
-                                                    <h3 className="font-bold text-gray-800 dark:text-white uppercase tracking-wider text-xs">Galeria de Troféus</h3>
-                                                </div>
-                                            </div>
-                                            <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-                                                {selectedPlayer.badges.map((badge, idx) => {
-                                                    const style = getRarityStyles(badge.raridade);
-                                                    return (
-                                                        <div 
-                                                            key={idx} 
-                                                            onClick={() => setSelectedBadge(badge)}
-                                                            className={`p-2 rounded-lg border flex flex-col items-center text-center shadow-sm cursor-pointer hover:scale-105 transition-transform active:scale-95 ${style.classes}`}
-                                                        >
-                                                            <span className="text-xl mb-1 drop-shadow-md">{badge.emoji}</span>
-                                                            <span className="text-[8px] font-bold leading-tight uppercase line-clamp-2">{badge.nome}</span>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                                        <div className="flex items-center gap-2 mb-4">
-                                            <LucideTrendingUp className="text-ancb-orange" size={18} />
-                                            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Atributos (Peer Review)</h3>
-                                        </div>
-                                        
-                                        <div className="mb-6">
-                                            <RadarChart stats={radarStats} size={220} />
-                                        </div>
-
-                                        {topTags.filter(t => t.count > 0).length > 0 && (
-                                            <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
-                                                <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 text-center">Principais Características</h4>
-                                                <div className="flex justify-center gap-2">
-                                                    {topTags.filter(t => t.count > 0).map(tag => (
-                                                        <div key={tag.key} className="flex flex-col items-center bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm min-w-[70px]">
-                                                            <span className="text-xl mb-1">{tag.emoji}</span>
-                                                            <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase">{tag.label}</span>
-                                                            <span className="text-[9px] text-ancb-blue font-bold">x{tag.count}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-3 w-full">
-                                        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center">
-                                            <LucideCalendarDays className="text-ancb-blue dark:text-blue-400 mb-1" size={20} />
-                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">Idade</span>
-                                            <span className="text-lg font-bold text-gray-800 dark:text-gray-200">
-                                                {selectedPlayer.nascimento ? calculateAge(selectedPlayer.nascimento) : '-'}
-                                            </span>
-                                        </div>
-                                        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center justify-center">
-                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Nome</span>
-                                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200 leading-tight">
-                                                {selectedPlayer.nome}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {isAdmin && (
-                                        <div className="w-full mt-2 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-xl p-4">
-                                            <div className="flex justify-between items-center mb-3">
-                                                <h3 className="text-xs font-bold text-red-600 dark:text-red-400 uppercase flex items-center gap-2">
-                                                    <LucideAlertCircle size={14} /> Dados Administrativos
-                                                </h3>
-                                                {!isEditing && (
-                                                    <button onClick={handleStartEdit} className="text-xs flex items-center gap-1 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">
-                                                        <LucideEdit size={12} /> Editar
-                                                    </button>
-                                                )}
-                                            </div>
-                                            
-                                            {isEditing ? (
-                                                <div className="space-y-3">
-                                                    <div>
-                                                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Data Nascimento</label>
-                                                        <input 
-                                                            type="date"
-                                                            className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
-                                                            value={editFormData.nascimento || ''}
-                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, nascimento: e.target.value})}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label>
-                                                        <input 
-                                                            className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
-                                                            value={editFormData.cpf || ''}
-                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, cpf: e.target.value})}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Email Contato</label>
-                                                        <input 
-                                                            className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
-                                                            value={editFormData.emailContato || ''}
-                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, emailContato: e.target.value})}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">WhatsApp (Sem formato)</label>
-                                                        <input 
-                                                            className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
-                                                            placeholder="5566999999999"
-                                                            value={editFormData.telefone || ''}
-                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, telefone: e.target.value})}
-                                                        />
-                                                    </div>
-                                                    
-                                                    <div className="flex gap-2 mt-4 pt-2 border-t border-red-200 dark:border-red-900/30">
-                                                        <Button size="sm" onClick={handleSavePlayer} className="flex-1 !bg-green-600">
-                                                            <LucideSave size={14} /> Salvar
-                                                        </Button>
-                                                        <Button size="sm" onClick={handleCancelEdit} variant="secondary" className="flex-1">
-                                                            <LucideX size={14} /> Cancelar
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div className="grid grid-cols-2 gap-2 text-sm text-gray-700 dark:text-gray-300 mb-4">
-                                                        <div>
-                                                            <span className="block text-[10px] text-gray-400 uppercase">Nascimento</span>
-                                                            <span className="font-bold">{formatDate(selectedPlayer.nascimento || '')}</span>
-                                                        </div>
-                                                        <div>
-                                                            <span className="block text-[10px] text-gray-400 uppercase">CPF</span>
-                                                            <span className="font-bold">{selectedPlayer.cpf || '-'}</span>
-                                                        </div>
-                                                        <div className="col-span-2">
-                                                            <span className="block text-[10px] text-gray-400 uppercase">Email</span>
-                                                            <span className="font-bold">{selectedPlayer.emailContato || '-'}</span>
-                                                        </div>
-                                                        <div className="col-span-2">
-                                                            <span className="block text-[10px] text-gray-400 uppercase">WhatsApp</span>
-                                                            <span className="font-bold">{selectedPlayer.telefone || '-'}</span>
-                                                        </div>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {activeTab === 'matches' && (
-                                <div className="animate-fadeIn space-y-6">
-                                    <div>
-                                        <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 flex items-center gap-1">
-                                            <LucideHistory size={14} /> Histórico de Jogos
-                                        </h4>
-                                        {loadingMatches ? (
-                                            <div className="flex justify-center py-10">
-                                                <LucideLoader2 className="animate-spin text-ancb-blue" />
-                                            </div>
-                                        ) : matches.length > 0 ? (
-                                            <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-                                                {matches.map((match) => {
-                                                    const isWin = match.scoreMyTeam > match.scoreOpponent;
-                                                    const isLoss = match.scoreMyTeam < match.scoreOpponent;
-                                                    const borderClass = isWin ? 'border-green-500 dark:border-green-500' : isLoss ? 'border-red-500 dark:border-red-500' : 'border-gray-100 dark:border-gray-700';
-
-                                                    return (
-                                                        <div key={match.gameId} className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${borderClass} p-3`}>
-                                                            <div className="text-[10px] text-gray-400 mb-2 flex justify-between uppercase font-bold tracking-wider">
-                                                                <span className="flex items-center gap-1">
-                                                                    {formatDate(match.date)}
-                                                                    <span className="bg-gray-100 dark:bg-gray-700 px-1.5 rounded text-[9px] text-gray-500">{match.eventType}</span>
-                                                                </span>
-                                                                <span className="text-ancb-blue truncate max-w-[120px]">{match.eventName}</span>
-                                                            </div>
-                                                            
-                                                            <div className="flex justify-between items-center mb-2 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
-                                                                <span className="font-bold text-xs text-gray-800 dark:text-gray-200 truncate w-1/3">{match.myTeam}</span>
-                                                                <span className="font-mono font-bold bg-white dark:bg-gray-600 px-2 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-500">
-                                                                    {match.scoreMyTeam} x {match.scoreOpponent}
-                                                                </span>
-                                                                <span className="font-bold text-xs text-gray-800 dark:text-gray-200 truncate w-1/3 text-right">{match.opponent}</span>
-                                                            </div>
-
-                                                            <div className="flex flex-wrap gap-2 items-center justify-center border-t border-gray-100 dark:border-gray-700 pt-2">
-                                                                <div className="flex items-center gap-1 bg-ancb-blue/10 dark:bg-blue-900/30 px-2 py-1 rounded text-ancb-blue dark:text-blue-300 font-bold text-xs">
-                                                                    <span>{match.individualPoints} Pts</span>
-                                                                </div>
-                                                                <div className="text-[10px] text-gray-500 dark:text-gray-400 flex gap-2">
-                                                                    <span title="Bolas de 3 Pontos">3PT: <b>{match.cesta3}</b></span>
-                                                                    <span className="text-gray-300 dark:text-gray-600">|</span>
-                                                                    <span title="Bolas de 2 Pontos">2PT: <b>{match.cesta2}</b></span>
-                                                                    <span className="text-gray-300 dark:text-gray-600">|</span>
-                                                                    <span title="Lances Livres">1PT: <b>{match.cesta1}</b></span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <div className="text-center py-8 bg-gray-50 dark:bg-gray-700/20 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
-                                                <p className="text-gray-500 text-xs">Nenhum jogo finalizado.</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </Modal>
-            
-            <Modal isOpen={!!selectedBadge} onClose={() => setSelectedBadge(null)} title="Detalhes da Conquista">
-                {selectedBadge && (
-                    <div className="text-center p-4">
-                        <div className="text-8xl mb-4 animate-bounce-slow drop-shadow-xl">{selectedBadge.emoji}</div>
-                        <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 uppercase tracking-wide">{selectedBadge.nome}</h3>
-                        <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 border ${getRarityStyles(selectedBadge.raridade).classes}`}>
-                            {getRarityStyles(selectedBadge.raridade).label}
-                        </div>
-                        <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-600 mb-4">
-                            <p className="text-gray-600 dark:text-gray-300 text-sm font-medium leading-relaxed">
-                                {selectedBadge.descricao}
-                            </p>
-                        </div>
-                        <p className="text-xs text-gray-400 uppercase font-bold tracking-widest">
-                            Conquistado em: {formatDate(selectedBadge.data)}
-                        </p>
-                    </div>
-                )}
-            </Modal>
         </div>
     );
 };

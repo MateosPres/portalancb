@@ -1,3 +1,4 @@
+
 export interface UserProfile {
     uid: string;
     nome: string;
@@ -37,6 +38,7 @@ export interface Player {
     // New Gamification Stats
     stats_tags?: Record<string, number>; // e.g. { 'muralha': 10, 'sniper': 5 }
     badges?: Badge[]; // Conquistas acumuladas
+    pinnedBadgeIds?: string[]; // IDs das conquistas fixadas no perfil
     reputation?: number; // Score de Fair Play/Reputação
 }
 

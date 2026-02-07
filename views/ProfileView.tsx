@@ -5,7 +5,7 @@ import { db, auth } from '../services/firebase';
 import { UserProfile, Player, Jogo, Evento, Cesta, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucideArrowLeft, LucideCamera, LucideLink, LucideSearch, LucideLoader2, LucideClock, LucideStar, LucideHistory, LucideEdit2, LucideTrendingUp, LucideTrophy, LucideMapPin, LucideGrid, LucideUser } from 'lucide-react';
+import { LucideArrowLeft, LucideCamera, LucideLink, LucideSearch, LucideLoader2, LucideClock, LucideStar, LucideHistory, LucideEdit2, LucideTrendingUp, LucideTrophy, LucideMapPin, LucideGrid, LucideUser, LucideCheckCircle2 } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { RadarChart } from '../components/RadarChart';
 
@@ -305,6 +305,31 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         } catch (error) { alert("Erro ao salvar."); }
     };
 
+    const handleTogglePin = async (badgeId: string) => {
+        if (!playerDocId) return;
+        
+        let currentPinned = formData.pinnedBadgeIds || [];
+        if (currentPinned.includes(badgeId)) {
+            currentPinned = currentPinned.filter(id => id !== badgeId);
+        } else {
+            if (currentPinned.length >= 3) {
+                alert("Você só pode selecionar até 3 conquistas para exibir no perfil.");
+                return;
+            }
+            currentPinned.push(badgeId);
+        }
+
+        // Optimistic update
+        setFormData({ ...formData, pinnedBadgeIds: currentPinned });
+        
+        try {
+            await setDoc(doc(db, "jogadores", playerDocId), { pinnedBadgeIds: currentPinned }, { merge: true });
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao fixar conquista.");
+        }
+    };
+
     const handleClaim = async (targetPlayer: Player) => {
         if (!userProfile || !userProfile.uid) return;
         setClaimingId(targetPlayer.id);
@@ -344,10 +369,36 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     };
 
     const radarStats = calculateStatsFromTags(formData.stats_tags);
-    const topTags = formData.stats_tags ? Object.entries(formData.stats_tags).sort((a, b) => (b[1] as number) - (a[1] as number)).slice(0, 3).map(([key, count]) => ({ key, count: Number(count), ...TAG_META[key] })) : [];
+    
+    // BADGE DISPLAY LOGIC
+    // 1. If user has pinned badges, show them (up to 3).
+    // 2. If no pinned badges, sort by Rarity (Legendary > Epic > Rare > Common) and then Date.
+    const getBadgeWeight = (rarity: Badge['raridade']) => {
+        switch(rarity) {
+            case 'lendaria': return 4;
+            case 'epica': return 3;
+            case 'rara': return 2;
+            default: return 1;
+        }
+    };
 
-    // Reverse achievements to show newest first
-    const displayBadges = formData.badges ? [...formData.badges].reverse().slice(0, 3) : [];
+    const allBadges = formData.badges || [];
+    const pinnedIds = formData.pinnedBadgeIds || [];
+    
+    let displayBadges: Badge[] = [];
+
+    if (pinnedIds.length > 0) {
+        // Filter out pinned ones and preserve order if possible, or just grab them
+        displayBadges = allBadges.filter(b => pinnedIds.includes(b.id));
+    } else {
+        // Fallback: Sort by Weight DESC, then Date DESC
+        displayBadges = [...allBadges].sort((a, b) => {
+            const weightA = getBadgeWeight(a.raridade);
+            const weightB = getBadgeWeight(b.raridade);
+            if (weightA !== weightB) return weightB - weightA;
+            return b.data.localeCompare(a.data);
+        }).slice(0, 3);
+    }
 
     const getRarityStyles = (rarity: Badge['raridade']) => {
         switch(rarity) {
@@ -545,30 +596,38 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                         <div className="text-8xl mb-6 animate-bounce-slow">{selectedBadge.emoji}</div>
                         <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">{selectedBadge.nome}</h3>
                         
-                        {/* Unified Badge Label Logic */}
                         <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 ${getRarityStyles(selectedBadge.raridade).classes} border`}>
                             {getRarityStyles(selectedBadge.raridade).label}
                         </div>
                         
                         <p className="text-gray-600 dark:text-gray-300 mb-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">{selectedBadge.descricao}</p>
-                        <p className="text-xs text-gray-400 font-bold uppercase">Conquistado em {formatDate(selectedBadge.data)}</p>
+                        <p className="text-xs text-gray-400 font-bold uppercase mb-6">Conquistado em {formatDate(selectedBadge.data)}</p>
                     </div>
                 )}
             </Modal>
 
-            {/* GALLERY MODAL (All Badges) */}
+            {/* GALLERY MODAL (All Badges - With Direct Selection) */}
             <Modal isOpen={showAllBadges} onClose={() => setShowAllBadges(false)} title="Galeria de Troféus">
                 <div className="p-2">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-4">
+                        Toque para selecionar até 3 conquistas para exibir no seu perfil.
+                    </p>
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar p-1">
                         {formData.badges && formData.badges.length > 0 ? (
                             [...formData.badges].reverse().map((badge, idx) => {
                                 const style = getRarityStyles(badge.raridade);
+                                const isPinned = formData.pinnedBadgeIds?.includes(badge.id);
                                 return (
                                     <div 
                                         key={idx} 
-                                        onClick={() => setSelectedBadge(badge)} 
-                                        className={`rounded-xl p-2 flex flex-col items-center justify-center text-center cursor-pointer hover:scale-105 transition-transform shadow-sm border ${style.classes}`}
+                                        onClick={() => handleTogglePin(badge.id)} 
+                                        className={`rounded-xl p-2 flex flex-col items-center justify-center text-center cursor-pointer transition-all shadow-sm border-2 relative ${style.classes} ${isPinned ? '!border-green-500 ring-2 ring-green-500/30 transform scale-105 z-10' : 'hover:scale-105'}`}
                                     >
+                                        {isPinned && (
+                                            <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full p-0.5 shadow-md">
+                                                <LucideCheckCircle2 size={12} fill="white" className="text-green-600" />
+                                            </div>
+                                        )}
                                         <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>
                                         <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
                                     </div>
