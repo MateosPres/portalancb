@@ -4,7 +4,7 @@ export interface UserProfile {
     nome: string;
     apelido?: string;
     email: string;
-    role: 'admin' | 'jogador';
+    role: 'admin' | 'jogador' | 'super-admin';
     status: 'active' | 'banned';
     dataNascimento?: string;
     linkedPlayerId?: string; // ID do jogador na collection 'jogadores' que este usuário controla
@@ -42,6 +42,12 @@ export interface Player {
     reputation?: number; // Score de Fair Play/Reputação
 }
 
+export interface RosterEntry {
+    playerId: string;
+    status: 'pendente' | 'confirmado' | 'recusado';
+    updatedAt: any;
+}
+
 export interface ClaimRequest {
     id: string;
     userId: string;
@@ -70,7 +76,7 @@ export interface Evento {
     modalidade: '3x3' | '5x5';
     type: 'torneio_externo' | 'torneio_interno' | 'amistoso';
     status: 'proximo' | 'andamento' | 'finalizado';
-    jogadoresEscalados?: string[];
+    jogadoresEscalados?: string[]; // Deprecated: Use sub-collection 'roster'
     adversario?: string; // Para amistosos
     times?: Time[]; // Para torneios internos
 }
@@ -174,4 +180,4 @@ export interface NotificationItem {
     timestamp: any;
 }
 
-export type ViewState = 'home' | 'eventos' | 'jogadores' | 'ranking' | 'admin' | 'painel-jogo' | 'profile';
+export type ViewState = 'home' | 'eventos' | 'evento-detalhe' | 'jogadores' | 'ranking' | 'admin' | 'painel-jogo' | 'profile';

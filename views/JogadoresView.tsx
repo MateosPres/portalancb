@@ -34,6 +34,7 @@ import {
 interface JogadoresViewProps {
     onBack: () => void;
     userProfile?: UserProfile | null;
+    initialPlayerId?: string | null;
 }
 
 interface MatchHistoryItem {
@@ -92,7 +93,7 @@ const calculateStatsFromTags = (tags?: Record<string, number>) => {
     };
 };
 
-export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfile }) => {
+export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfile, initialPlayerId }) => {
     const [players, setPlayers] = useState<Player[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -126,6 +127,12 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                 const allPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Player));
                 const visiblePlayers = allPlayers.filter(p => p.status === 'active' || !p.status);
                 setPlayers(visiblePlayers);
+                
+                // Handle direct navigation to a player
+                if (initialPlayerId) {
+                    const target = visiblePlayers.find(p => p.id === initialPlayerId);
+                    if (target) setSelectedPlayer(target);
+                }
             } catch (error) {
                 console.error("Error fetching players:", error);
             } finally {
@@ -133,7 +140,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
             }
         };
         fetchPlayers();
-    }, []);
+    }, [initialPlayerId]);
 
     useEffect(() => {
         if (!selectedPlayer) return;

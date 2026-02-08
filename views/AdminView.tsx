@@ -4,31 +4,20 @@ import firebase, { db, auth, functions } from '../services/firebase';
 import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player, Time, Cesta, UserProfile, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing, LucideBellOff, LucideSend, LucideKeyRound } from 'lucide-react';
+import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing, LucideBellOff, LucideSend, LucideKeyRound, LucideCrown, LucideShield, LucideSiren, LucideDatabase, LucideHistory, LucideSave, LucideArrowRight, LucideZap, LucideEdit2 } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 interface AdminViewProps {
     onBack: () => void;
     onOpenGamePanel: (game: Jogo, eventId: string, isEditable: boolean) => void;
+    userProfile?: UserProfile | null;
 }
 
-export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel }) => {
+export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, userProfile }) => {
     const [adminTab, setAdminTab] = useState<'general' | 'users'>('general');
     const [events, setEvents] = useState<Evento[]>([]);
-    const [selectedEvent, setSelectedEvent] = useState<Evento | null>(null);
-    const [eventGames, setEventGames] = useState<Jogo[]>([]);
     
     // Forms
-    const [showAddEvent, setShowAddEvent] = useState(false);
-    const [showAddGame, setShowAddGame] = useState(false);
-    const [newEventName, setNewEventName] = useState('');
-    const [newEventDate, setNewEventDate] = useState('');
-    const [newEventMode, setNewEventMode] = useState<'3x3'|'5x5'>('5x5');
-    const [newEventType, setNewEventType] = useState<'amistoso'|'torneio_interno'|'torneio_externo'>('amistoso');
-    const [newGameTimeA, setNewGameTimeA] = useState('');
-    const [newGameTimeB, setNewGameTimeB] = useState('');
-
-    // Feed
     const [showAddPost, setShowAddPost] = useState(false);
     const [postType, setPostType] = useState<'noticia' | 'placar' | 'aviso'>('noticia');
     const [postTitle, setPostTitle] = useState('');
@@ -42,19 +31,20 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     const [isUploading, setIsUploading] = useState(false);
 
     // Lists
-    const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
-    const [claimRequests, setClaimRequests] = useState<ClaimRequest[]>([]);
-    const [photoRequests, setPhotoRequests] = useState<PhotoRequest[]>([]);
-    const [pendingPlayers, setPendingPlayers] = useState<Player[]>([]);
-    const [activePlayers, setActivePlayers] = useState<Player[]>([]);
-    const [playerSearch, setPlayerSearch] = useState('');
     const [reviews, setReviews] = useState<any[]>([]);
     const [loadingReviews, setLoadingReviews] = useState(false);
     const [showReviewsModal, setShowReviewsModal] = useState(false);
     const [isRecovering, setIsRecovering] = useState(false);
     const [recoveringStatus, setRecoveringStatus] = useState('');
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+    const [activePlayers, setActivePlayers] = useState<Player[]>([]);
 
+    // Advanced Recovery
+    const [showAdvancedRecovery, setShowAdvancedRecovery] = useState(false);
+    const [auditGames, setAuditGames] = useState<any[]>([]);
+    const [feedPlacares, setFeedPlacares] = useState<any[]>([]);
+    const [selectedFeedMapping, setSelectedFeedMapping] = useState<Record<string, string>>({});
+    
     // Users
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [userSearch, setUserSearch] = useState('');
@@ -62,25 +52,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
     const [linkPlayerId, setLinkPlayerId] = useState('');
 
+    const isSuperAdmin = userProfile?.role === 'super-admin';
+
     useEffect(() => {
         const unsubEvents = db.collection("eventos").orderBy("data", "desc").onSnapshot((snapshot) => {
             setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Evento)));
-        });
-
-        const unsubPosts = db.collection("feed_posts").orderBy("timestamp", "desc").onSnapshot((snapshot) => {
-            setFeedPosts(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as FeedPost)));
-        });
-
-        const unsubClaims = db.collection("solicitacoes_vinculo").where("status", "==", "pending").onSnapshot((snapshot) => {
-            setClaimRequests(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as ClaimRequest)));
-        });
-
-        const unsubPhotos = db.collection("solicitacoes_foto").where("status", "==", "pending").onSnapshot((snapshot) => {
-            setPhotoRequests(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as PhotoRequest)));
-        });
-
-        const unsubPendingPlayers = db.collection("jogadores").where("status", "==", "pending").onSnapshot((snapshot) => {
-            setPendingPlayers(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Player)));
         });
 
         const unsubActivePlayers = db.collection("jogadores").orderBy("nome").onSnapshot((snapshot) => {
@@ -97,119 +73,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
         });
 
         return () => {
-            unsubEvents(); unsubPosts(); unsubClaims(); unsubPhotos(); unsubPendingPlayers(); unsubActivePlayers(); unsubUsers();
+            unsubEvents(); unsubActivePlayers(); unsubUsers();
         };
     }, []);
 
-    // ... (Existing Functions) ...
-    useEffect(() => {
-        if (!selectedEvent) return;
-        const unsubscribe = db.collection("eventos").doc(selectedEvent.id).collection("jogos").orderBy("dataJogo", "desc").onSnapshot((snapshot) => {
-            setEventGames(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Jogo)));
-        });
-        return () => unsubscribe();
-    }, [selectedEvent]);
-
-    const handleTestNotification = async () => {
-        if (!("Notification" in window)) {
-            alert("Este navegador não suporta notificações de sistema.");
-            return;
-        }
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-            try {
-                const reg = await navigator.serviceWorker.ready;
-                reg.showNotification('Teste de Push', {
-                    body: 'Se você está vendo isso, as notificações nativas estão ativas!',
-                    icon: 'https://i.imgur.com/SE2jHsz.png',
-                    vibrate: [200, 100, 200]
-                } as any);
-            } catch (e) {
-                new Notification('Teste de Push', {
-                    body: 'Se você está vendo isso, as notificações nativas estão ativas!',
-                    icon: 'https://i.imgur.com/SE2jHsz.png'
-                });
-            }
-        } else {
-            alert("Permissão negada. Verifique as configurações do navegador/sistema.");
-        }
-    };
-
-    const handleSendTestPush = async (targetUser: UserProfile) => {
-        if (!targetUser.fcmToken) {
-            alert("Este usuário não ativou notificações (Sem Token FCM).");
-            return;
-        }
-        if (!window.confirm(`Enviar notificação push de teste para ${targetUser.nome}?`)) return;
-        try {
-            await db.collection("notifications").add({
-                targetUserId: targetUser.uid,
-                title: "🔔 Teste do Admin",
-                message: `Olá ${targetUser.nome}, esta é uma notificação de teste enviada pelo painel administrativo.`,
-                type: "alert",
-                read: false,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            alert("Comando enviado.");
-        } catch (error) {
-            console.error("Erro ao enviar push:", error);
-            alert("Erro ao criar notificação.");
-        }
-    };
-
-    const handleResetPassword = async (user: UserProfile) => {
-        if (!window.confirm(`Tem certeza que deseja resetar a senha de ${user.nome} para "ancb1234"?`)) return;
-        
-        try {
-            const resetFn = functions.httpsCallable('adminResetPassword');
-            await resetFn({ targetUid: user.uid });
-            alert(`Senha de ${user.nome} resetada com sucesso para "ancb1234".`);
-        } catch (error: any) {
-            console.error("Erro ao resetar senha:", error);
-            alert("Erro ao resetar senha: " + error.message);
-        }
-    };
-
-    const loadReviews = async () => {
-        setLoadingReviews(true);
-        try {
-            const snap = await db.collection("avaliacoes_gamified").orderBy("timestamp", "desc").limit(50).get();
-            const enriched = snap.docs.map(doc => {
-                const data = doc.data() as any;
-                const reviewer = activePlayers.find(p => p.id === data.reviewerId);
-                const target = activePlayers.find(p => p.id === data.targetId);
-                return { id: doc.id, ...data, reviewerName: reviewer?.nome || 'Desconhecido', targetName: target?.nome || 'Desconhecido' };
-            });
-            setReviews(enriched);
-            setShowReviewsModal(true);
-        } catch (e) { alert("Erro ao carregar avaliações."); } finally { setLoadingReviews(false); }
-    };
-
-    const handleDeleteReview = async (review: any) => {
-        if (!window.confirm("Excluir esta avaliação? Os pontos do jogador serão decrementados.")) return;
-        try {
-            const updates: any = {};
-            if (review.tags && Array.isArray(review.tags)) {
-                review.tags.forEach((tag: string) => { updates[`stats_tags.${tag}`] = firebase.firestore.FieldValue.increment(-1); });
-                await db.collection("jogadores").doc(review.targetId).update(updates);
-            }
-            await db.collection("avaliacoes_gamified").doc(review.id).delete();
-            setReviews(prev => prev.filter(r => r.id !== review.id));
-        } catch (e) { alert("Erro ao excluir."); }
-    };
-
-    // ... (Keep existing simple functions: sendWhatsappNotification, compressImage, fileToBase64, createPost, handleDeletePost, handleImageSelect, resetPostForm) ...
-    const sendWhatsappNotification = (player: Player) => {
-        if (!selectedEvent) return;
-        if (!player.telefone) { alert("Este jogador não possui telefone cadastrado. Edite o perfil dele."); return; }
-        const firstName = player.apelido || player.nome.split(' ')[0];
-        const dateFormatted = selectedEvent.data.split('-').reverse().join('/');
-        const appUrl = window.location.origin;
-        const message = `Olá ${firstName}, você foi convocado para o evento *${selectedEvent.nome}* no dia *${dateFormatted}*.%0A%0AConfirme sua presença e veja os detalhes no portal:%0A${appUrl}`;
-        const cleanPhone = player.telefone.replace(/\D/g, '');
-        const phone = cleanPhone.length > 11 ? cleanPhone : `55${cleanPhone}`;
-        window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
-    };
+    // ... (Keep generic functions: compressImage, fileToBase64, createPost, handleImageSelect, resetPostForm) ...
     const compressImage = async (file: File): Promise<File> => { const options = { maxSizeMB: 0.1, maxWidthOrHeight: 800, useWebWorker: true, fileType: 'image/webp' }; try { return await imageCompression(file, options); } catch (error) { return file; } };
     const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
     const createPost = async (e: React.FormEvent) => { 
@@ -225,74 +93,49 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
             resetPostForm(); setShowAddPost(false); 
         } catch (error) { alert("Erro ao criar postagem."); } finally { setIsUploading(false); } 
     };
-    const handleDeletePost = async (post: FeedPost) => { if (!window.confirm("Excluir esta postagem permanentemente?")) return; try { await db.collection("feed_posts").doc(post.id).delete(); } catch (error) { console.error("Erro ao excluir post:", error); } };
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; setPostImageFile(file); setImagePreview(URL.createObjectURL(file)); } };
     const resetPostForm = () => { setPostType('noticia'); setPostTitle(''); setPostBody(''); setPostScoreAncb(''); setPostScoreAdv(''); setPostTeamAdv(''); setPostVideoLink(''); setPostImageFile(null); setImagePreview(null); };
 
-    // ... (Keep existing simple functions: handleApprovePlayer, handleRejectPlayer, handleBanPlayer, handleDeleteActivePlayer, handleApproveClaim, handleRejectClaim, handleApprovePhoto, handleRejectPhoto, handleCreateEvent, handleDeleteEvent, handleRecoverEventData, handleCreateGame, handleDeleteGame, getScores, formatDate, handleRecalculateHistory) ...
-    const handleApprovePlayer = async (player: Player) => { if (!window.confirm(`Aprovar cadastro de ${player.nome}?`)) return; try { await db.collection("jogadores").doc(player.id).update({ status: 'active' }); } catch (e) { console.error(e); } };
-    const handleRejectPlayer = async (player: Player) => { if (!window.confirm(`Rejeitar e excluir cadastro de ${player.nome}?`)) return; try { await db.collection("jogadores").doc(player.id).delete(); } catch (e) { console.error(e); } };
-    const handleBanPlayer = async (player: Player) => { if (!window.confirm(`Banir ${player.nome}?`)) return; try { if (player.userId) await db.collection("usuarios").doc(player.userId).update({ status: 'banned' }); await db.collection("jogadores").doc(player.id).update({ status: 'banned' }); alert("Banido."); } catch (e) { alert("Erro."); } };
-    const handleDeleteActivePlayer = async (player: Player) => { if (!window.confirm(`Excluir ${player.nome}?`)) return; try { await db.collection("jogadores").doc(player.id).delete(); if (player.userId) await db.collection("usuarios").doc(player.userId).update({ linkedPlayerId: null as any }); alert("Excluído."); } catch (e) { alert("Erro."); } };
-    const filteredActivePlayers = activePlayers.filter(p => (p.nome || '').toLowerCase().includes(playerSearch.toLowerCase()) || (p.apelido && p.apelido.toLowerCase().includes(playerSearch.toLowerCase())));
-    const handleApproveClaim = async (req: ClaimRequest) => { if (!window.confirm(`Vincular usuário?`)) return; try { await db.collection("usuarios").doc(req.userId).update({ linkedPlayerId: req.playerId }); await db.collection("jogadores").doc(req.playerId).update({ userId: req.userId }); if (req.playerId !== req.userId) { try { await db.collection("jogadores").doc(req.userId).delete(); } catch (e) {} } await db.collection("solicitacoes_vinculo").doc(req.id).update({ status: 'approved' }); } catch (e) { alert("Erro."); } };
-    const handleRejectClaim = async (req: ClaimRequest) => { if (!window.confirm("Rejeitar?")) return; try { await db.collection("solicitacoes_vinculo").doc(req.id).update({ status: 'rejected' }); } catch (e) {} };
-    const handleApprovePhoto = async (req: PhotoRequest) => { if(!window.confirm("Aprovar?")) return; try { await db.collection("jogadores").doc(req.playerId).update({ foto: req.newPhotoUrl }); await db.collection("solicitacoes_foto").doc(req.id).delete(); } catch (e) { alert("Erro."); } };
-    const handleRejectPhoto = async (req: PhotoRequest) => { if(!window.confirm("Rejeitar?")) return; try { await db.collection("solicitacoes_foto").doc(req.id).delete(); } catch (e) {} };
-    const handleCreateEvent = async (e: React.FormEvent) => { e.preventDefault(); try { await db.collection("eventos").add({ nome: newEventName, data: newEventDate, modalidade: newEventMode, type: newEventType, status: 'proximo' }); setShowAddEvent(false); setNewEventName(''); setNewEventDate(''); } catch (error) { alert("Erro"); } };
-    const handleDeleteEvent = async (id: string) => { if (!window.confirm("Excluir evento e dados?")) return; try { const gamesSnap = await db.collection("eventos").doc(id).collection("jogos").get(); for (const gameDoc of gamesSnap.docs) { const cestasSnap = await gameDoc.ref.collection("cestas").get(); const deleteCestasPromises = cestasSnap.docs.map(c => c.ref.delete()); await Promise.all(deleteCestasPromises); await gameDoc.ref.delete(); } await db.collection("eventos").doc(id).delete(); setSelectedEvent(null); alert("Limpo."); } catch (error) { alert("Erro."); } };
-    const handleRecoverEventData = async (event: Evento) => { if (event.type !== 'torneio_interno') return; if (!window.confirm(`Reparar dados?`)) return; setIsRecovering(true); setRecoveringStatus("Analisando..."); try { const gamesSnap = await db.collection("eventos").doc(event.id).collection("jogos").get(); const recoveredTeamsMap = new Map<string, Time>(); const getOrCreateTeam = (id: string, name: string) => { if (!recoveredTeamsMap.has(id)) { recoveredTeamsMap.set(id, { id: id, nomeTime: name, jogadores: [], logoUrl: '' }); } }; for (const gDoc of gamesSnap.docs) { const g = gDoc.data() as Jogo; if (g.timeA_id && g.timeA_nome) getOrCreateTeam(g.timeA_id, g.timeA_nome); if (g.timeB_id && g.timeB_nome) getOrCreateTeam(g.timeB_id, g.timeB_nome); } for (const gDoc of gamesSnap.docs) { const cestasSnap = await gDoc.ref.collection("cestas").get(); cestasSnap.forEach(cDoc => { const c = cDoc.data() as Cesta; if (c.timeId && c.jogadorId) { const team = recoveredTeamsMap.get(c.timeId); if (team && !team.jogadores.includes(c.jogadorId)) { team.jogadores.push(c.jogadorId); } } }); } const recoveredTeams = Array.from(recoveredTeamsMap.values()); if (recoveredTeams.length > 0) { await db.collection("eventos").doc(event.id).update({ times: recoveredTeams }); alert(`Sucesso! ${recoveredTeams.length} times.`); } else { alert("Sem dados."); } } catch (error) { alert("Erro."); } finally { setIsRecovering(false); } };
-    const handleCreateGame = async (e: React.FormEvent) => { e.preventDefault(); if (!selectedEvent) return; try { const isInternal = selectedEvent.type === 'torneio_interno'; const teamAName = isInternal ? newGameTimeA : 'ANCB'; const teamBName = newGameTimeB; await db.collection("eventos").doc(selectedEvent.id).collection("jogos").add({ dataJogo: selectedEvent.data, timeA_nome: teamAName, timeB_nome: isInternal ? teamBName : '', adversario: isInternal ? '' : teamBName, placarTimeA_final: 0, placarTimeB_final: 0, jogadoresEscalados: [] }); setShowAddGame(false); setNewGameTimeA(''); setNewGameTimeB(''); } catch (error) { alert("Erro"); } };
-    const handleDeleteGame = async (gameId: string) => { if (!selectedEvent) return; if (window.confirm("Excluir?")) { await db.collection("eventos").doc(selectedEvent.id).collection("jogos").doc(gameId).delete(); } };
-    const getScores = (game: Jogo) => { const sA = game.placarTimeA_final ?? game.placarANCB_final ?? 0; const sB = game.placarTimeB_final ?? game.placarAdversario_final ?? 0; return { sA, sB }; };
-    const formatDate = (dateStr?: string) => { if (!dateStr) return ''; return dateStr.split('-').reverse().join('/'); };
-    const handleRecalculateHistory = async () => {
-        const year = selectedYear;
-        const yearNum = parseInt(year);
-        if (!window.confirm(`Isso irá analisar TODO o histórico de jogos finalizados de ${year}, calcular estatísticas e re-atribuir medalhas. Continuar?`)) return;
-        setIsRecovering(true);
-        setRecoveringStatus("Iniciando varredura...");
+    // Super Admin Functions
+    const handlePromoteUser = async (user: UserProfile) => {
+        if (!isSuperAdmin) return;
+        if (!window.confirm(`ATENÇÃO: Tornar ${user.nome} um ADMINISTRADOR?`)) return;
         try {
-            const playersSnapshot = await db.collection("jogadores").get();
-            const playersMap: Record<string, Player & { badges: Badge[] }> = {};
-            playersSnapshot.forEach(doc => { const p = { id: doc.id, ...doc.data(), badges: [] } as Player; if (p.badges) { p.badges = p.badges.filter(b => !b.data.includes(year)); } playersMap[doc.id] = p as any; });
-            const eventsSnapshot = await db.collection("eventos").where("status", "==", "finalizado").get();
-            const seasonStats: Record<string, Record<string, { points: number, threePoints: number }>> = {};
-            for (const evDoc of eventsSnapshot.docs) {
-                const event = evDoc.data() as Evento; const eventId = evDoc.id; const eventDate = event.data || new Date().toISOString();
-                if (!eventDate.includes(year)) continue;
-                setRecoveringStatus(`Processando: ${event.nome}`);
-                const gamesSnap = await db.collection("eventos").doc(eventId).collection("jogos").get();
-                const eventPlayerStats: Record<string, { points: number, threePoints: number }> = {};
-                for (const gDoc of gamesSnap.docs) {
-                    const gameId = gDoc.id; const cestasSnap = await gDoc.ref.collection("cestas").get();
-                    cestasSnap.forEach(cDoc => { const c = cDoc.data() as Cesta; if (c.jogadorId && c.pontos) { const pid = c.jogadorId; const pts = Number(c.pontos); if (!eventPlayerStats[pid]) eventPlayerStats[pid] = { points: 0, threePoints: 0 }; if (!seasonStats[year]) seasonStats[year] = {}; if (!seasonStats[year][pid]) seasonStats[year][pid] = { points: 0, threePoints: 0 }; eventPlayerStats[pid].points += pts; const isLong = (event.modalidade === '3x3' && pts === 2) || (event.modalidade !== '3x3' && pts === 3); if (isLong) { eventPlayerStats[pid].threePoints += 1; } seasonStats[year][pid].points += pts; if (isLong) { seasonStats[year][pid].threePoints += 1; } } });
-                }
-                const sortedByPoints = Object.entries(eventPlayerStats).sort(([,a], [,b]) => b.points - a.points).filter(([,s]) => s.points > 0);
-                sortedByPoints.slice(0, 3).forEach(([pid, s], idx) => { if (playersMap[pid]) { const rarity = idx === 0 ? 'epica' : idx === 1 ? 'rara' : 'comum'; const emojis = ['👑', '🥈', '🥉']; const titles = ['Cestinha', 'Vice-Cestinha', 'Bronze']; playersMap[pid].badges!.push({ id: `evt_${eventId}_pts_${idx}`, nome: `${titles[idx]} (${event.nome})`, emoji: emojis[idx], categoria: 'partida', raridade: rarity, data: eventDate, descricao: `${s.points} pontos em ${event.nome}`, gameId: eventId }); } });
-                const sortedBy3Pt = Object.entries(eventPlayerStats).sort(([,a], [,b]) => b.threePoints - a.threePoints).filter(([,s]) => s.threePoints > 0);
-                sortedBy3Pt.slice(0, 3).forEach(([pid, s], idx) => { if (playersMap[pid]) { const rarity = idx === 0 ? 'epica' : idx === 1 ? 'rara' : 'comum'; const emojis = ['🔥', '👌', '🏀']; const titles = ['Mestre 3pts', 'Gatilho', 'Mão Quente']; playersMap[pid].badges!.push({ id: `evt_${eventId}_3pt_${idx}`, nome: `${titles[idx]} (${event.nome})`, emoji: emojis[idx], categoria: 'partida', raridade: rarity, data: eventDate, descricao: `${s.threePoints} bolas longas em ${event.nome}`, gameId: eventId }); } });
-            }
-            setRecoveringStatus("Calculando Temporadas...");
-            if (seasonStats[year]) {
-                const yearData = seasonStats[year];
-                const sortedMvp = Object.entries(yearData).sort(([,a], [,b]) => b.points - a.points);
-                sortedMvp.slice(0, 3).forEach(([pid, s], idx) => { if (playersMap[pid] && s.points > 0) { const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; const emojis = ['🏆', '⚔️', '🛡️']; const titles = [`MVP da Temporada ${year}`, `Vice-MVP ${year}`, `3º Melhor ${year}`]; playersMap[pid].badges!.push({ id: `season_${year}_mvp_${idx}`, nome: titles[idx], emoji: emojis[idx], categoria: 'temporada', raridade: rarity, data: `${year}-12-31`, descricao: `${s.points} pontos totais em ${year}` }); } });
-                const sortedShooter = Object.entries(yearData).sort(([,a], [,b]) => b.threePoints - a.threePoints);
-                sortedShooter.slice(0, 3).forEach(([pid, s], idx) => { if (playersMap[pid] && s.threePoints > 0) { const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; const emojis = ['🎯', '🏹', '☄️']; const titles = [`Atirador de Elite ${year}`, `Mão de Prata ${year}`, `Sniper ${year}`]; playersMap[pid].badges!.push({ id: `season_${year}_shoot_${idx}`, nome: titles[idx], emoji: emojis[idx], categoria: 'temporada', raridade: rarity, data: `${year}-12-31`, descricao: `${s.threePoints} bolas longas em ${year}` }); } });
-                const juvenilCandidates = Object.entries(yearData).filter(([pid]) => { const p = playersMap[pid]; if (!p || !p.nascimento) return false; const birthYear = parseInt(p.nascimento.split('-')[0]); return (yearNum - birthYear) <= 17; });
-                const sortedMvpJuv = juvenilCandidates.sort(([,a], [,b]) => b.points - a.points);
-                sortedMvpJuv.slice(0, 3).forEach(([pid, s], idx) => { if (playersMap[pid] && s.points > 0) { const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; const emojis = ['🏆', '🥈', '🥉']; const titles = [`MVP Juvenil ${year}`, `Vice-MVP Juvenil ${year}`, `Bronze Juvenil ${year}`]; playersMap[pid].badges!.push({ id: `season_${year}_juv_mvp_${idx}`, nome: titles[idx], emoji: emojis[idx], categoria: 'temporada', raridade: rarity, data: `${year}-12-31`, descricao: `${s.points} pontos na categoria Juvenil em ${year}` }); } });
-                const sortedShooterJuv = juvenilCandidates.sort(([,a], [,b]) => b.threePoints - a.threePoints);
-                sortedShooterJuv.slice(0, 3).forEach(([pid, s], idx) => { if (playersMap[pid] && s.threePoints > 0) { const rarity = idx === 0 ? 'lendaria' : idx === 1 ? 'rara' : 'comum'; const emojis = ['🎯', '🏹', '☄️']; const titles = [`Atirador Juvenil ${year}`, `Mão de Prata Juv. ${year}`, `Sniper Juvenil ${year}`]; playersMap[pid].badges!.push({ id: `season_${year}_juv_shoot_${idx}`, nome: titles[idx], emoji: emojis[idx], categoria: 'temporada', raridade: rarity, data: `${year}-12-31`, descricao: `${s.threePoints} bolas longas na categoria Juvenil em ${year}` }); } });
-            }
-            setRecoveringStatus("Salvando dados...");
-            const batchArray: any[] = []; let currentBatch = db.batch(); let opCount = 0;
-            Object.values(playersMap).forEach(player => { const ref = db.collection("jogadores").doc(player.id); currentBatch.update(ref, { badges: player.badges }); opCount++; if (opCount >= 450) { batchArray.push(currentBatch); currentBatch = db.batch(); opCount = 0; } });
-            if (opCount > 0) batchArray.push(currentBatch);
-            await Promise.all(batchArray.map(b => b.commit()));
-            alert("Histórico recalculado com sucesso!");
-        } catch (error) { console.error(error); alert("Erro ao processar histórico."); } finally { setIsRecovering(false); setRecoveringStatus(""); }
+            await db.collection("usuarios").doc(user.uid).update({ role: 'admin' });
+            alert("Usuário promovido.");
+        } catch (e) { alert("Erro ao promover."); }
+    };
+
+    const handleDemoteUser = async (user: UserProfile) => {
+        if (!isSuperAdmin) return;
+        if (!window.confirm(`Remover privilégios de admin de ${user.nome}?`)) return;
+        try {
+            await db.collection("usuarios").doc(user.uid).update({ role: 'jogador' });
+            alert("Privilégios removidos.");
+        } catch (e) { alert("Erro."); }
+    };
+
+    const handleSelfPromote = async () => {
+        if (!userProfile) return;
+        if (userProfile.email !== 'mateospres@gmail.com') return;
+        try {
+            await db.collection("usuarios").doc(userProfile.uid).update({ role: 'super-admin' });
+            alert("Agora você é Super Admin! Recarregue a página se necessário.");
+        } catch (e) {
+            alert("Erro ao atualizar permissão.");
+        }
+    };
+
+    // ... (Keep existing User management functions) ...
+    const handleResetPassword = async (user: UserProfile) => {
+        if (!window.confirm(`Tem certeza que deseja resetar a senha de ${user.nome} para "ancb1234"?`)) return;
+        try {
+            const resetFn = functions.httpsCallable('adminResetPassword');
+            await resetFn({ targetUid: user.uid });
+            alert(`Senha de ${user.nome} resetada com sucesso.`);
+        } catch (error: any) {
+            alert("Erro ao resetar senha: " + error.message);
+        }
     };
     const findMatchingPlayer = (user: UserProfile) => {
         const normalize = (str: string) => str ? str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
@@ -308,9 +151,312 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
     const handleAutoLinkUser = async (user: UserProfile, targetPlayerId: string) => { if (!window.confirm(`Vincular?`)) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(user.uid); const playerRef = db.collection("jogadores").doc(targetPlayerId); batch.update(userRef, { linkedPlayerId: targetPlayerId, status: 'active' }); batch.update(playerRef, { userId: user.uid, status: 'active' }); await batch.commit(); alert("Vinculado!"); } catch (error) { alert("Erro."); } };
     const handleLinkPlayerToUser = async () => { if (!selectedUser || !linkPlayerId) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(selectedUser.uid); const playerRef = db.collection("jogadores").doc(linkPlayerId); batch.update(userRef, { linkedPlayerId: linkPlayerId, status: 'active' }); batch.update(playerRef, { userId: selectedUser.uid, status: 'active' }); await batch.commit(); setShowUserEditModal(false); alert("Vínculo realizado!"); } catch (error) { alert("Erro."); } };
     const handleDeleteUser = async (user: UserProfile) => { if (!window.confirm(`Excluir usuário ${user.nome}?`)) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(user.uid); batch.delete(userRef); if (user.linkedPlayerId) { const playerRef = db.collection("jogadores").doc(user.linkedPlayerId); const playerSnap = await playerRef.get(); if (playerSnap.exists) { batch.update(playerRef, { userId: null }); } } await batch.commit(); alert("Usuário excluído."); } catch (error) { alert("Erro."); } };
+    
+    const handleDeleteEvent = async (id: string) => { if (!window.confirm("Excluir evento e dados?")) return; try { const gamesSnap = await db.collection("eventos").doc(id).collection("jogos").get(); for (const gameDoc of gamesSnap.docs) { const cestasSnap = await gameDoc.ref.collection("cestas").get(); const deleteCestasPromises = cestasSnap.docs.map(c => c.ref.delete()); await Promise.all(deleteCestasPromises); await gameDoc.ref.delete(); } await db.collection("eventos").doc(id).delete(); alert("Limpo."); } catch (error) { alert("Erro."); } };
+    const loadReviews = async () => { setLoadingReviews(true); try { const snap = await db.collection("avaliacoes_gamified").orderBy("timestamp", "desc").limit(50).get(); const enriched = snap.docs.map(doc => { const data = doc.data() as any; const reviewer = activePlayers.find(p => p.id === data.reviewerId); const target = activePlayers.find(p => p.id === data.targetId); return { id: doc.id, ...data, reviewerName: reviewer?.nome || 'Desconhecido', targetName: target?.nome || 'Desconhecido' }; }); setReviews(enriched); setShowReviewsModal(true); } catch (e) { alert("Erro ao carregar avaliações."); } finally { setLoadingReviews(false); } };
+    const handleDeleteReview = async (review: any) => { if (!window.confirm("Excluir?")) return; try { const updates: any = {}; if (review.tags && Array.isArray(review.tags)) { review.tags.forEach((tag: string) => { updates[`stats_tags.${tag}`] = firebase.firestore.FieldValue.increment(-1); }); await db.collection("jogadores").doc(review.targetId).update(updates); } await db.collection("avaliacoes_gamified").doc(review.id).delete(); setReviews(prev => prev.filter(r => r.id !== review.id)); } catch (e) { alert("Erro."); } };
+    
+    // EMERGENCY SYNC
+    const handleEmergencySync = async () => { 
+        if (!window.confirm("Isso irá verificar TODOS os jogos e garantir que os placares apareçam, copiando os dados existentes. Confirmar?")) return;
+        
+        setIsRecovering(true);
+        setRecoveringStatus("Analisando Banco de Dados...");
+
+        try {
+            const eventsSnap = await db.collection('eventos').get();
+            let fixedCount = 0;
+
+            for (const eventDoc of eventsSnap.docs) {
+                const gamesSnap = await eventDoc.ref.collection('jogos').get();
+                
+                for (const gameDoc of gamesSnap.docs) {
+                    const data = gameDoc.data() as any;
+                    
+                    // Legacy Fields vs New Fields Logic
+                    const oldA = Number(data.placarANCB_final) || 0;
+                    const newA = Number(data.placarTimeA_final) || 0;
+                    const oldB = Number(data.placarAdversario_final) || 0;
+                    const newB = Number(data.placarTimeB_final) || 0;
+
+                    // Take the HIGHEST value found (assuming non-zero is correct)
+                    const correctA = Math.max(oldA, newA);
+                    const correctB = Math.max(oldB, newB);
+
+                    // If we have a discrepancy or zero where there should be data, Fix it.
+                    if ((correctA > 0 || correctB > 0) && (newA !== correctA || newB !== correctB || oldA !== correctA || oldB !== correctB)) {
+                        await gameDoc.ref.update({
+                            placarTimeA_final: correctA,
+                            placarTimeB_final: correctB,
+                            placarANCB_final: correctA, 
+                            placarAdversario_final: correctB,
+                            status: 'finalizado'
+                        });
+                        fixedCount++;
+                    }
+                }
+            }
+            alert(`Sincronização Completa! ${fixedCount} jogos corrigidos e restaurados.`);
+        } catch (e) {
+            console.error(e);
+            alert("Erro: " + (e as Error).message);
+        } finally {
+            setIsRecovering(false);
+            setRecoveringStatus("");
+        }
+    };
+
+    // ADVANCED RECOVERY / AUDIT
+    const openAdvancedRecovery = async () => {
+        setShowAdvancedRecovery(true);
+        setRecoveringStatus("Carregando tudo...");
+        setIsRecovering(true);
+
+        try {
+            // 1. Load Feed (Backup Source)
+            const feedSnap = await db.collection('feed_posts').where('type', '==', 'placar').orderBy('timestamp', 'desc').get();
+            const posts = feedSnap.docs.map(d => ({id: d.id, ...d.data(), date: d.data().timestamp?.toDate()}));
+            setFeedPlacares(posts);
+
+            // 2. Find ALL Games (Internal + External)
+            // Fix: Include internal tournaments in audit
+            const eventsSnap = await db.collection('eventos').get();
+            const auditList: any[] = [];
+            
+            for (const ev of eventsSnap.docs) {
+                const games = await ev.ref.collection('jogos').get();
+                const eventData = ev.data();
+                
+                games.forEach(g => {
+                    const data = g.data();
+                    
+                    // SMART DISPLAY: Prefer whatever has value
+                    const sA = data.placarTimeA_final || data.placarANCB_final || 0;
+                    const sB = data.placarTimeB_final || data.placarAdversario_final || 0;
+                    
+                    // Correct names based on event type
+                    const isInternal = eventData.type === 'torneio_interno';
+                    const teamA = isInternal ? (data.timeA_nome || 'Time A') : 'ANCB';
+                    const teamB = isInternal ? (data.timeB_nome || 'Time B') : (data.adversario || 'Adversário');
+
+                    auditList.push({
+                        gameId: g.id,
+                        eventId: ev.id,
+                        eventName: eventData.nome,
+                        eventType: eventData.type,
+                        gameDate: data.dataJogo || eventData.data,
+                        teamAName: teamA,
+                        teamBName: teamB,
+                        currentScoreA: sA,
+                        currentScoreB: sB,
+                        manualScoreA: sA, // Init for manual edit
+                        manualScoreB: sB, // Init for manual edit
+                        data: data
+                    });
+                });
+            }
+            
+            // Sort by date desc
+            auditList.sort((a, b) => b.gameDate.localeCompare(a.gameDate));
+
+            // Initial auto-match with stronger heuristics
+            const initialMap: Record<string, string> = {};
+            
+            auditList.forEach(game => {
+                const gameDateStr = game.gameDate;
+                if (gameDateStr) {
+                    const gameDate = new Date(gameDateStr);
+                    const bestMatch = posts.find((p: any) => {
+                        if (!p.date) return false;
+                        const diffTime = Math.abs(p.date.getTime() - gameDate.getTime());
+                        const diffDays = diffTime / (1000 * 60 * 60 * 24);
+                        return diffDays <= 2;
+                    });
+                    if (bestMatch) {
+                        initialMap[game.gameId] = bestMatch.id;
+                    }
+                }
+            });
+
+            setAuditGames(auditList);
+            setSelectedFeedMapping(initialMap);
+
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao analisar dados.");
+        } finally {
+            setIsRecovering(false);
+            setRecoveringStatus("");
+        }
+    };
+
+    const updateAuditGameScore = (gameId: string, field: 'manualScoreA' | 'manualScoreB', value: string) => {
+        setAuditGames(prev => prev.map(g => {
+            if (g.gameId === gameId) {
+                return { ...g, [field]: Number(value) };
+            }
+            return g;
+        }));
+    };
+
+    const handleManualSave = async (game: any) => {
+         if(!window.confirm(`Salvar manualmente: ${game.manualScoreA} x ${game.manualScoreB}?`)) return;
+         try {
+             await db.collection("eventos").doc(game.eventId).collection("jogos").doc(game.gameId).update({
+                 placarTimeA_final: Number(game.manualScoreA),
+                 placarTimeB_final: Number(game.manualScoreB),
+                 placarANCB_final: Number(game.manualScoreA), // Legacy sync
+                 placarAdversario_final: Number(game.manualScoreB), // Legacy sync
+                 status: 'finalizado'
+             });
+             // Update "Current" to reflect saved
+             setAuditGames(prev => prev.map(g => g.gameId === game.gameId ? { ...g, currentScoreA: g.manualScoreA, currentScoreB: g.manualScoreB } : g));
+             alert("Salvo com sucesso!");
+         } catch(e) {
+             alert("Erro ao salvar.");
+         }
+    };
+
+    const handleRecalculateInternalScore = async (gameItem: any) => {
+        if(!window.confirm("Isso irá recalcular os pontos considerando:\n1. Jogadores no elenco\n2. Cestas 'anônimas' contra times convidados.\n\nContinuar?")) return;
+
+        try {
+            // 1. Get Event Data (Times)
+            const eventDoc = await db.collection("eventos").doc(gameItem.eventId).get();
+            const eventData = eventDoc.data() as Evento;
+
+            if (!eventData.times || eventData.times.length === 0) {
+                alert("Erro: Este evento não possui times cadastrados.");
+                return;
+            }
+
+            const gameData = gameItem.data;
+            const teamA = eventData.times.find(t => t.id === gameData.timeA_id);
+            const teamB = eventData.times.find(t => t.id === gameData.timeB_id);
+
+            if (!teamA || !teamB) {
+                alert("Erro: Não foi possível identificar os times A e B neste jogo.");
+                return;
+            }
+
+            // 2. Get Cestas
+            const cestasSnap = await db.collection("eventos").doc(gameItem.eventId).collection("jogos").doc(gameItem.gameId).collection("cestas").get();
+            
+            let sA = 0;
+            let sB = 0;
+
+            const normalize = (str: string) => str ? str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
+            const nameA = normalize(teamA.nomeTime);
+            const nameB = normalize(teamB.nomeTime);
+
+            cestasSnap.forEach(doc => {
+                const cesta = doc.data();
+                const points = Number(cesta.pontos);
+                let assigned = false;
+
+                // Priority 1: Explicit Time ID (Legacy or New)
+                if (cesta.timeId) {
+                    if (cesta.timeId === teamA.id || cesta.timeId === 'A') {
+                        sA += points;
+                        assigned = true;
+                    } else if (cesta.timeId === teamB.id || cesta.timeId === 'B') {
+                        sB += points;
+                        assigned = true;
+                    }
+                }
+
+                // Priority 2: Roster Match (If Player ID exists)
+                if (!assigned && cesta.jogadorId) {
+                    if (teamA.jogadores.includes(cesta.jogadorId)) {
+                        sA += points;
+                        assigned = true;
+                    } else if (teamB.jogadores.includes(cesta.jogadorId)) {
+                        sB += points;
+                        assigned = true;
+                    }
+                }
+
+                // Priority 3: Name Match (If "Anonymous" basket matches Team Name)
+                if (!assigned && cesta.nomeJogador) {
+                    const label = normalize(cesta.nomeJogador);
+                    if (label.includes(nameA)) {
+                        sA += points;
+                        assigned = true;
+                    } else if (label.includes(nameB)) {
+                        sB += points;
+                        assigned = true;
+                    }
+                }
+
+                // Priority 4: Guest Team Logic (Fallthrough)
+                // If Team A has players (ANCB) and Team B has NO players (Invited), 
+                // and the basket has NO player ID -> Assign to Team B (The guest).
+                if (!assigned && !cesta.jogadorId) {
+                    const teamAHasPlayers = teamA.jogadores && teamA.jogadores.length > 0;
+                    const teamBHasPlayers = teamB.jogadores && teamB.jogadores.length > 0;
+
+                    if (teamAHasPlayers && !teamBHasPlayers) {
+                        sB += points; // Assume guest scored
+                        assigned = true;
+                    } else if (!teamAHasPlayers && teamBHasPlayers) {
+                        sA += points; // Assume guest scored
+                        assigned = true;
+                    }
+                }
+            });
+
+            // 3. Update Doc
+            await db.collection("eventos").doc(gameItem.eventId).collection("jogos").doc(gameItem.gameId).update({
+                 placarTimeA_final: sA,
+                 placarTimeB_final: sB,
+                 placarANCB_final: sA, 
+                 placarAdversario_final: sB,
+            });
+
+            setAuditGames(prev => prev.map(g => g.gameId === gameItem.gameId ? { ...g, currentScoreA: sA, currentScoreB: sB, manualScoreA: sA, manualScoreB: sB } : g));
+            alert(`Recalculado! A: ${sA}, B: ${sB}`);
+
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao recalcular.");
+        }
+    };
+
+    const handleRestoreGameFromFeed = async (gameItem: any) => {
+        const postId = selectedFeedMapping[gameItem.gameId];
+        if(!postId) {
+            alert("Selecione um placar do feed para vincular.");
+            return;
+        }
+
+        const postItem = feedPlacares.find((p: any) => p.id === postId);
+        if (!postItem) return;
+
+        if(!window.confirm(`Restaurar este placar do Backup?\n\nBackup do Feed: ANCB ${postItem.content.placar_ancb} x ${postItem.content.placar_adv}\n\nIsso corrigirá o banco de dados permanentemente.`)) return;
+
+        try {
+             const newA = Number(postItem.content.placar_ancb);
+             const newB = Number(postItem.content.placar_adv);
+
+             await db.collection("eventos").doc(gameItem.eventId).collection("jogos").doc(gameItem.gameId).update({
+                 placarTimeA_final: newA,
+                 placarTimeB_final: newB,
+                 placarANCB_final: newA, // Sync Legacy
+                 placarAdversario_final: newB, // Sync Legacy
+                 status: 'finalizado'
+             });
+             
+             // Update local list to reflect change
+             setAuditGames(prev => prev.map(g => g.gameId === gameItem.gameId ? { ...g, currentScoreA: newA, currentScoreB: newB, manualScoreA: newA, manualScoreB: newB } : g));
+             alert("Placar restaurado com sucesso!");
+        } catch(e) { 
+            console.error(e);
+            alert("Erro ao restaurar."); 
+        }
+    };
+
     const filteredUsers = users.filter(u => (u.nome || '').toLowerCase().includes(userSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(userSearch.toLowerCase()));
 
-    // ... (Render Logic) ...
     return (
         <div className="animate-fadeIn">
             {/* Header ... */}
@@ -325,17 +471,21 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 </div>
                 <div className="flex gap-2 self-end md:self-auto">
                     <Button onClick={() => setShowAddPost(true)} variant="secondary" className="!bg-blue-600 !text-white border-none"><LucideNewspaper size={18} /> <span className="hidden sm:inline">Postar</span></Button>
-                    <Button onClick={() => setShowAddEvent(true)}><LucidePlus size={18} /> <span className="hidden sm:inline">Evento</span></Button>
                 </div>
             </div>
 
-            <div className="bg-orange-50 dark:bg-orange-900/10 border-l-4 border-ancb-orange p-4 rounded-r-lg mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
-                <div className="flex items-start gap-3">
-                    <LucideMegaphone className="text-ancb-orange mt-1 shrink-0" size={20} />
-                    <div><h4 className="font-bold text-gray-800 dark:text-white text-sm">Sistema de Notificações Ativo</h4><p className="text-xs text-gray-600 dark:text-gray-400">Notificações Push são enviadas automaticamente.</p></div>
+            {/* SUPER ADMIN CLAIM */}
+            {userProfile?.email === 'mateospres@gmail.com' && userProfile.role !== 'super-admin' && (
+                <div className="mb-6 p-4 bg-purple-100 border border-purple-300 rounded-xl flex justify-between items-center animate-pulse">
+                    <div className="text-purple-800">
+                        <h4 className="font-bold text-sm">Privilégio Disponível</h4>
+                        <p className="text-xs">Sua conta foi identificada como proprietária do sistema.</p>
+                    </div>
+                    <Button size="sm" className="!bg-purple-700 hover:!bg-purple-800 text-white border-none" onClick={handleSelfPromote}>
+                        <LucideCrown size={16}/> Reivindicar Super Admin
+                    </Button>
                 </div>
-                <Button size="sm" onClick={handleTestNotification} variant="secondary" className="!text-ancb-orange !border-ancb-orange hover:!bg-orange-100 w-full md:w-auto"><LucideBellRing size={16} /> Testar Navegador</Button>
-            </div>
+            )}
 
             {/* TAB CONTENT: USERS */}
             {adminTab === 'users' && (
@@ -343,12 +493,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2"><LucideUserCheck size={20} /> Gerenciar Usuários</h3>
-                            <div className="relative w-64"><LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={16} /><input type="text" placeholder="Buscar email ou nome..." className="w-full pl-9 p-2 text-sm border rounded bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" value={userSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUserSearch(e.target.value)} /></div>
+                            <div className="relative w-64"><LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={16} /><input type="text" placeholder="Buscar..." className="w-full pl-9 p-2 text-sm border rounded bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" value={userSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUserSearch(e.target.value)} /></div>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 uppercase font-bold text-xs">
-                                    <tr><th className="px-4 py-3">Nome</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Push</th><th className="px-4 py-3">Atleta Vinculado</th><th className="px-4 py-3 text-right">Ações</th></tr>
+                                    <tr><th className="px-4 py-3">Nome</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Cargo</th><th className="px-4 py-3">Atleta</th><th className="px-4 py-3 text-right">Ações</th></tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                     {filteredUsers.map(user => {
@@ -357,11 +507,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                                             <tr key={user.uid} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{user.nome}</td>
                                                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{user.email}</td>
-                                                <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{user.status === 'active' ? 'Ativo' : 'Pendente'}</span></td>
-                                                <td className="px-4 py-3">{user.fcmToken ? <div title="Notificações Ativas"><LucideBellRing size={16} className="text-green-500" /></div> : <div title="Sem Token Push"><LucideBellOff size={16} className="text-gray-300" /></div>}</td>
+                                                <td className="px-4 py-3">
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.role === 'super-admin' ? 'bg-purple-100 text-purple-700' : user.role === 'admin' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>
+                                                        {user.role}
+                                                    </span>
+                                                </td>
                                                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{user.linkedPlayerId ? <span className="text-green-600 flex items-center gap-1"><LucideCheck size={12}/> {activePlayers.find(p => p.id === user.linkedPlayerId)?.nome || 'ID: ' + user.linkedPlayerId}</span> : (suggestedPlayer ? <span className="text-orange-500 text-xs font-bold flex items-center gap-1"><LucideRefreshCw size={12} /> Sugestão: {suggestedPlayer.nome}</span> : <span className="text-red-400">Não vinculado</span>)}</td>
                                                 <td className="px-4 py-3 text-right flex justify-end gap-2">
-                                                    <Button size="sm" variant="secondary" onClick={() => handleSendTestPush(user)} className="!py-1 !px-2 text-xs !border-ancb-blue !text-ancb-blue hover:!bg-blue-50" title="Enviar Push de Teste"><LucideSend size={14} /></Button>
+                                                    {isSuperAdmin && user.role !== 'super-admin' && (
+                                                        user.role === 'admin' ? 
+                                                        <Button size="sm" variant="secondary" onClick={() => handleDemoteUser(user)} className="!py-1 !px-2 text-xs" title="Remover Admin"><LucideUserX size={14}/></Button> :
+                                                        <Button size="sm" variant="secondary" onClick={() => handlePromoteUser(user)} className="!py-1 !px-2 text-xs !border-purple-300 text-purple-600" title="Promover a Admin"><LucideCrown size={14}/></Button>
+                                                    )}
                                                     <Button size="sm" variant="secondary" onClick={() => handleResetPassword(user)} className="!py-1 !px-2 text-xs !border-orange-500 !text-orange-600 hover:!bg-orange-50" title="Resetar Senha"><LucideKeyRound size={14} /></Button>
                                                     {user.status !== 'active' && !user.linkedPlayerId && (suggestedPlayer ? <Button size="sm" onClick={() => handleAutoLinkUser(user, suggestedPlayer.id)} className="!py-1 !px-2 !bg-orange-500 hover:!bg-orange-600 text-xs" title={`Vincular a ${suggestedPlayer.nome}`}><LucideLink size={14} /> Vincular</Button> : <Button size="sm" onClick={() => handleApproveUser(user)} className="!py-1 !px-2 !bg-green-600 hover:!bg-green-700 text-xs" title="Aprovar e Criar Atleta"><LucideUserPlus size={14} /> Criar Atleta</Button>)}
                                                     <Button size="sm" variant="secondary" onClick={() => { setSelectedUser(user); setShowUserEditModal(true); }} className="!py-1 !px-2 text-xs"><LucideEdit size={14} /></Button>
@@ -377,132 +534,171 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                 </div>
             )}
 
-            {/* TAB CONTENT: GENERAL (Existing code...) */}
+            {/* TAB CONTENT: GENERAL (Reorganized Grid) */}
             {adminTab === 'general' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-1 space-y-6">
-                        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-orange-200 dark:border-orange-900/50 flex flex-col gap-3">
-                            <div className="flex items-center gap-2 border-b pb-2 border-orange-100 dark:border-orange-900/30">
-                                <LucideTrophy size={18} className="text-orange-600 dark:text-orange-400" />
-                                <h3 className="font-bold text-gray-700 dark:text-gray-300">Gestão de Temporada</h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <LucideCalendar size={16} className="text-gray-400"/>
-                                <select 
-                                    value={selectedYear} 
-                                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedYear(e.target.value)}
-                                    className="bg-transparent text-sm font-bold text-gray-700 dark:text-white focus:outline-none cursor-pointer flex-1"
-                                >
-                                    <option value="2024" className="text-black">2024</option>
-                                    <option value="2025" className="text-black">2025</option>
-                                    <option value="2026" className="text-black">2026</option>
-                                </select>
-                            </div>
-                            <p className="text-xs text-gray-500">Recalcular medalhas retroativas por Evento e Temporada.</p>
-                            <Button size="sm" onClick={handleRecalculateHistory} className="w-full !bg-gradient-to-r from-orange-500 to-red-500 text-white">
-                                <LucideRefreshCw size={14} /> Processar Histórico
-                            </Button>
-                            <div className="border-t border-orange-100 dark:border-orange-900/30 pt-2 mt-1">
-                                <div className="flex items-center gap-2">
-                                    <LucideStar size={16} className="text-yellow-500" />
-                                    <h4 className="font-bold text-sm">Avaliações</h4>
-                                </div>
-                                <Button size="sm" variant="secondary" onClick={loadReviews} className="w-full mt-2 text-xs">
-                                    Gerenciar Gamification Tags
-                                </Button>
-                            </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-orange-200 dark:border-orange-900/50 flex flex-col gap-3 h-fit">
+                        <div className="flex items-center gap-2 border-b pb-2 border-orange-100 dark:border-orange-900/30">
+                            <LucideTrophy size={18} className="text-orange-600 dark:text-orange-400" />
+                            <h3 className="font-bold text-gray-700 dark:text-gray-300">Gestão de Temporada</h3>
                         </div>
-                        
-                        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                            <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 border-b pb-2 dark:border-gray-600">Eventos</h3>
-                            <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                                {events.map(ev => (
-                                    <div key={ev.id} onClick={() => setSelectedEvent(ev)} className={`p-3 rounded-lg border cursor-pointer transition-all ${selectedEvent?.id === ev.id ? 'bg-blue-50 dark:bg-blue-900/30 border-ancb-blue shadow-md' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-500'}`}>
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <h4 className="font-bold text-gray-800 dark:text-gray-200 text-sm">{ev.nome}</h4>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(ev.data)} • {ev.modalidade}</p>
-                                            </div>
-                                            <div className="flex flex-col gap-1">
-                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteEvent(ev.id); }} className="text-red-300 hover:text-red-600 p-1"><LucideTrash2 size={14} /></button>
-                                                {ev.type === 'torneio_interno' && (<button onClick={(e) => { e.stopPropagation(); handleRecoverEventData(ev); }} className="text-orange-300 hover:text-orange-600 p-1"><LucideWrench size={14} /></button>)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                        <Button size="sm" onClick={handleEmergencySync} disabled={isRecovering} className="w-full !bg-gradient-to-r from-orange-600 to-red-600 text-white animate-pulse">
+                            <LucideZap size={14} className={isRecovering ? 'animate-spin' : ''} /> 
+                            {isRecovering ? recoveringStatus : 'SINCRONIZAR E CORRIGIR TUDO'}
+                        </Button>
+                        <Button size="sm" onClick={openAdvancedRecovery} disabled={isRecovering} className="w-full !bg-white hover:!bg-gray-50 !text-gray-800 border border-gray-300 shadow-sm">
+                            <LucideSiren size={14} /> 
+                            Ferramentas Avançadas
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={loadReviews} className="w-full mt-2 text-xs !text-gray-600 border border-gray-300">
+                            Gerenciar Gamification Tags
+                        </Button>
                     </div>
-
-                    <div className="lg:col-span-2">
-                        {selectedEvent ? (
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                                <div className="flex justify-between items-center mb-6 border-b border-gray-100 dark:border-gray-700 pb-4">
-                                    <div>
-                                        <h3 className="text-xl font-bold text-ancb-blue dark:text-blue-400">{selectedEvent.nome}</h3>
-                                        <span className="text-xs uppercase font-bold text-gray-400">Gerenciar Jogos</span>
-                                    </div>
-                                    <Button size="sm" onClick={() => setShowAddGame(true)}>
-                                        <LucideGamepad2 size={16} /> Adicionar Jogo
-                                    </Button>
-                                </div>
-
-                                <div className="space-y-3 mb-8">
-                                    {eventGames.length === 0 && <p className="text-gray-400 text-center py-8">Nenhum jogo criado.</p>}
-                                    {eventGames.map(game => {
-                                        const { sA, sB } = getScores(game);
-                                        const isInternal = !!game.timeA_nome && game.timeA_nome !== 'ANCB';
-                                        return (
-                                            <div key={game.id} className={`flex items-center justify-between p-3 rounded-lg border ${game.status === 'finalizado' ? 'bg-gray-100 dark:bg-gray-900/30 border-gray-300 dark:border-gray-800 opacity-80' : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600'}`}>
-                                                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
-                                                    <div className="font-bold text-gray-700 dark:text-gray-200 w-32 truncate">{isInternal ? game.timeA_nome : 'ANCB'}</div>
-                                                    <div className="font-mono font-bold bg-white dark:bg-gray-800 px-2 py-1 rounded border dark:border-gray-600 text-center dark:text-white">{sA} x {sB}</div>
-                                                    <div className="font-bold text-gray-700 dark:text-gray-200 w-32 truncate">{isInternal ? game.timeB_nome : (game.adversario || 'Adversário')}</div>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    {game.status === 'finalizado' ? (
-                                                        <Button size="sm" variant="secondary" onClick={() => onOpenGamePanel(game, selectedEvent.id, true)} className="!text-orange-500 !border-orange-200 dark:!border-orange-900/50 hover:!bg-orange-50">
-                                                            <LucideEdit size={16} /> <span className="hidden sm:inline">Editar Súmula</span>
-                                                        </Button>
-                                                    ) : (
-                                                        <Button size="sm" variant="success" onClick={() => onOpenGamePanel(game, selectedEvent.id, false)}>
-                                                            <LucidePlayCircle size={16} /> <span className="hidden sm:inline">Painel</span>
-                                                        </Button>
-                                                    )}
-                                                    <button onClick={() => handleDeleteGame(game.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"><LucideTrash2 size={18} /></button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                {selectedEvent.type !== 'torneio_interno' && (
-                                    <div className="border-t border-gray-100 dark:border-gray-700 pt-6">
-                                        <h4 className="font-bold text-gray-700 dark:text-gray-200 mb-4 flex items-center gap-2">
-                                            <LucideMessageCircle className="text-green-500" size={18} /> Notificar Elenco (Opcional - WhatsApp)
-                                        </h4>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
-                                            {activePlayers
-                                                .filter(p => selectedEvent.jogadoresEscalados?.includes(p.id))
-                                                .map(p => (
-                                                    <div key={p.id} className="flex justify-between items-center bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-100 dark:border-green-800/50">
-                                                        <span className="text-sm font-bold text-green-800 dark:text-green-200 truncate">{p.apelido || p.nome}</span>
-                                                        <button onClick={() => sendWhatsappNotification(p)} className="text-xs bg-white dark:bg-green-800 text-green-600 dark:text-green-100 px-2 py-1 rounded shadow-sm hover:bg-green-100 transition-colors font-bold flex items-center gap-1">Enviar <LucideArrowLeft className="rotate-180" size={10} /></button>
-                                                    </div>
-                                                ))
-                                            }
+                    
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                        <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 border-b pb-2 dark:border-gray-600">Eventos Recentes</h3>
+                        <div className="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar">
+                            {events.map(ev => (
+                                <div key={ev.id} className="p-3 rounded-lg border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h4 className="font-bold text-gray-800 dark:text-gray-200 text-sm">{ev.nome}</h4>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">{ev.data} • {ev.status}</p>
                                         </div>
+                                        <button onClick={() => handleDeleteEvent(ev.id)} className="text-red-300 hover:text-red-600 p-1"><LucideTrash2 size={14} /></button>
                                     </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="h-full flex items-center justify-center text-gray-400 bg-white/50 dark:bg-gray-800/50 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 min-h-[200px]">Selecione um evento para gerenciar jogos.</div>
-                        )}
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
 
             {/* MODALS */}
+            {/* ADVANCED RECOVERY MODAL */}
+            <Modal isOpen={showAdvancedRecovery} onClose={() => setShowAdvancedRecovery(false)} title="Restaurar do Histórico (Backup)">
+                <div className="space-y-4">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-sm text-blue-800 dark:text-blue-300">
+                        <p className="font-bold flex items-center gap-2"><LucideHistory size={16}/> Resgate Inteligente</p>
+                        <p className="mt-1 text-xs">Você pode <strong>vincular um post do feed</strong>, <strong>digitar manualmente</strong> ou, para torneios internos, <strong>recalcular via cestas</strong>.</p>
+                    </div>
+
+                    {auditGames.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">
+                            <LucideCheck size={48} className="mx-auto mb-2 text-green-500 opacity-50" />
+                            <p>Nenhum jogo encontrado!</p>
+                        </div>
+                    ) : (
+                        <div className="max-h-[60vh] overflow-y-auto custom-scrollbar space-y-4">
+                            {auditGames.map(game => {
+                                // Smart Sorting: Put closest date matches at the TOP
+                                const gameDate = new Date(game.gameDate);
+                                const sortedFeedOptions = [...feedPlacares].sort((a, b) => {
+                                    const diffA = Math.abs(a.date.getTime() - gameDate.getTime());
+                                    const diffB = Math.abs(b.date.getTime() - gameDate.getTime());
+                                    return diffA - diffB;
+                                });
+
+                                return (
+                                    <div key={game.gameId} className={`border rounded-lg p-3 bg-white dark:bg-gray-800 ${game.currentScoreA === 0 && game.currentScoreB === 0 ? 'border-red-300 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-700'}`}>
+                                        <div className="mb-2 pb-2 border-b border-gray-100 dark:border-gray-700 flex justify-between items-start">
+                                            <div>
+                                                <p className="font-bold text-sm text-gray-800 dark:text-gray-200">
+                                                    {game.gameDate} - {game.eventName}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">{game.teamAName} vs {game.teamBName}</p>
+                                                {game.eventType === 'torneio_interno' && <span className="text-[9px] bg-blue-100 text-blue-800 px-1 rounded uppercase font-bold">Interno</span>}
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="block text-[10px] uppercase font-bold text-gray-400">No Banco</span>
+                                                <span className="font-mono font-bold text-lg text-ancb-blue">
+                                                    {game.currentScoreA} x {game.currentScoreB}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex flex-col gap-3">
+                                            {/* MANUAL EDIT SECTION */}
+                                            <div className="bg-gray-50 dark:bg-gray-700/30 p-2 rounded-lg border border-gray-100 dark:border-gray-600">
+                                                <label className="text-[10px] font-bold text-gray-500 block mb-1 uppercase"><LucideEdit2 size={10} className="inline mr-1"/> Correção Manual Direta</label>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1">
+                                                        <label className="text-[9px] font-bold text-gray-400 text-center block truncate">{game.teamAName}</label>
+                                                        <input 
+                                                            type="number" 
+                                                            className="w-full p-1 border rounded text-center font-bold text-sm dark:bg-gray-700 dark:text-white" 
+                                                            value={game.manualScoreA}
+                                                            onChange={(e) => updateAuditGameScore(game.gameId, 'manualScoreA', e.target.value)}
+                                                        />
+                                                    </div>
+                                                    <span className="font-bold text-gray-400 mt-3">X</span>
+                                                    <div className="flex-1">
+                                                        <label className="text-[9px] font-bold text-gray-400 text-center block truncate">{game.teamBName}</label>
+                                                        <input 
+                                                            type="number" 
+                                                            className="w-full p-1 border rounded text-center font-bold text-sm dark:bg-gray-700 dark:text-white" 
+                                                            value={game.manualScoreB}
+                                                            onChange={(e) => updateAuditGameScore(game.gameId, 'manualScoreB', e.target.value)}
+                                                        />
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => handleManualSave(game)} 
+                                                        className="h-full mt-3 px-3 py-1 rounded bg-green-600 hover:bg-green-700 text-white shadow-md flex items-center justify-center transition-colors"
+                                                        title="Salvar Manualmente"
+                                                    >
+                                                        <LucideSave size={14} />
+                                                    </button>
+                                                </div>
+                                                
+                                                {/* INTERNAL RECALCULATE */}
+                                                {game.eventType === 'torneio_interno' && (
+                                                    <button 
+                                                        onClick={() => handleRecalculateInternalScore(game)} 
+                                                        className="w-full mt-2 py-2 rounded text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors shadow-sm"
+                                                    >
+                                                        <LucideRefreshCw size={12} /> Recalcular via Elenco
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            <div className="relative flex items-center py-1">
+                                                <div className="flex-grow border-t border-gray-200 dark:border-gray-600"></div>
+                                                <span className="flex-shrink-0 mx-2 text-[10px] text-gray-400 uppercase">OU Usar Feed</span>
+                                                <div className="flex-grow border-t border-gray-200 dark:border-gray-600"></div>
+                                            </div>
+
+                                            <div>
+                                                <div className="flex gap-2">
+                                                    <select 
+                                                        className="flex-1 p-2 text-xs border rounded bg-gray-50 dark:bg-gray-700 dark:text-white max-w-full"
+                                                        value={selectedFeedMapping[game.gameId] || ''}
+                                                        onChange={(e) => setSelectedFeedMapping({...selectedFeedMapping, [game.gameId]: e.target.value})}
+                                                    >
+                                                        <option value="">-- Buscar no Feed --</option>
+                                                        {sortedFeedOptions.map((p: any, idx) => {
+                                                            const dateStr = p.date ? new Intl.DateTimeFormat('pt-BR').format(p.date) : '??/??';
+                                                            const isRecommended = Math.abs(p.date.getTime() - gameDate.getTime()) / (1000 * 60 * 60 * 24) <= 2;
+                                                            return (
+                                                                <option key={p.id} value={p.id}>
+                                                                    {isRecommended ? '⭐ ' : ''}{dateStr} | ANCB {p.content.placar_ancb} x {p.content.placar_adv} ({p.content.time_adv})
+                                                                </option>
+                                                            )
+                                                        })}
+                                                    </select>
+                                                    <Button size="sm" variant="secondary" onClick={() => handleRestoreGameFromFeed(game)} disabled={!selectedFeedMapping[game.gameId]} className="whitespace-nowrap">
+                                                        <LucideRefreshCw size={14} />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </Modal>
+
             <Modal isOpen={showUserEditModal} onClose={() => setShowUserEditModal(false)} title="Editar Usuário">
                 <div className="space-y-4">
                     <p className="text-sm text-gray-500">
@@ -561,38 +757,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel })
                     <Button type="submit" className="w-full" disabled={isUploading}>{isUploading ? 'Enviando...' : 'Publicar'}</Button>
                 </form>
             </Modal>
-            
-            <Modal isOpen={showAddEvent} onClose={() => setShowAddEvent(false)} title="Criar Evento">
-                <form onSubmit={handleCreateEvent} className="space-y-4">
-                    <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Nome" value={newEventName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEventName(e.target.value)} required />
-                    <input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={newEventDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEventDate(e.target.value)} required />
-                    <Button type="submit" className="w-full">Criar</Button>
-                </form>
-            </Modal>
-
-            <Modal isOpen={showAddGame} onClose={() => setShowAddGame(false)} title="Adicionar Jogo">
-                <form onSubmit={handleCreateGame} className="space-y-4">
-                    {selectedEvent && selectedEvent.type === 'torneio_interno' ? (
-                        <>
-                            <div><label className="text-xs font-bold text-gray-500">Nome Time A</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Ex: Time Vermelho" value={newGameTimeA} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewGameTimeA(e.target.value)} required /></div>
-                            <div><label className="text-xs font-bold text-gray-500">Nome Time B</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Ex: Time Azul" value={newGameTimeB} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewGameTimeB(e.target.value)} required /></div>
-                        </>
-                    ) : (
-                        <div><label className="text-xs font-bold text-gray-500">Nome Adversário</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Nome do time rival" value={newGameTimeB} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewGameTimeB(e.target.value)} required /><p className="text-xs text-gray-400 mt-1">O Time A será automaticamente definido como "ANCB".</p></div>
-                    )}
-                    <Button type="submit" className="w-full">Criar Jogo</Button>
-                </form>
-            </Modal>
-            
-            {isRecovering && (
-                <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl flex flex-col items-center shadow-2xl">
-                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ancb-orange mb-4"></div>
-                        <h3 className="font-bold text-lg dark:text-white">Processando...</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 text-center mt-2 max-w-xs">{recoveringStatus || "Aguarde."}</p>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

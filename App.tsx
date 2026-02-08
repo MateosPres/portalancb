@@ -11,6 +11,7 @@ import { PeerReviewQuiz } from './components/PeerReviewQuiz';
 import { LiveEventHero } from './components/LiveEventHero';
 import { JogadoresView } from './views/JogadoresView';
 import { EventosView } from './views/EventosView';
+import { EventoDetalheView } from './views/EventoDetalheView';
 import { RankingView } from './views/RankingView';
 import { AdminView } from './views/AdminView';
 import { PainelJogoView } from './views/PainelJogoView';
@@ -23,6 +24,10 @@ const VAPID_KEY = "BI9T9nLXUjdJHqOSZEoORZ7UDyWQoIMcrQ5Oz-7KeKif19LoGx_Db5AdY4zi0
 
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>('home');
+    
+    // Updated Navigation History State: Stores the SPECIFIC ID to return to
+    const [returnToEventId, setReturnToEventId] = useState<string | null>(null);
+
     const [user, setUser] = useState<any>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [ongoingEvents, setOngoingEvents] = useState<Evento[]>([]);
@@ -51,6 +56,10 @@ const App: React.FC = () => {
     const [regPhotoPreview, setRegPhotoPreview] = useState<string | null>(null);
     const [isRegistering, setIsRegistering] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Navigation State
+    const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+    const [targetPlayerId, setTargetPlayerId] = useState<string | null>(null);
 
     // Game Panel State
     const [panelGame, setPanelGame] = useState<Jogo | null>(null);
@@ -188,19 +197,26 @@ const App: React.FC = () => {
         }
     };
 
-    // 1. Monitoramento de Convocações
+    // 1. Monitoramento de Convocações e Eventos em Andamento
     useEffect(() => {
-        if (!userProfile?.linkedPlayerId) return;
-        const myPlayerId = userProfile.linkedPlayerId;
         const q = db.collection("eventos").where("status", "in", ["proximo", "andamento"]);
 
         return q.onSnapshot((snapshot) => {
             const notifiedEvents = JSON.parse(localStorage.getItem('ancb_notified_rosters') || '[]');
+            const ongoing: Evento[] = [];
+
             snapshot.docChanges().forEach((change) => {
                 if (change.type === "added" || change.type === "modified") {
                     const eventData = change.doc.data() as Evento;
                     const eventId = change.doc.id;
-                    if (eventData.jogadoresEscalados?.includes(myPlayerId) && !notifiedEvents.includes(eventId)) {
+                    const fullEvent = { id: eventId, ...eventData };
+
+                    if (fullEvent.status === 'andamento') {
+                        ongoing.push(fullEvent);
+                    }
+
+                    // Check for roster notification
+                    if (userProfile?.linkedPlayerId && eventData.jogadoresEscalados?.includes(userProfile.linkedPlayerId) && !notifiedEvents.includes(eventId)) {
                         const title = "Convocação!";
                         const body = `Você foi escalado para: ${eventData.nome}`;
                         setForegroundNotification({ title, body, eventId, type: 'roster' });
@@ -212,6 +228,23 @@ const App: React.FC = () => {
                     }
                 }
             });
+            
+            // Update ongoing events state for Home View
+            const currentOngoing = snapshot.docs
+                .map(doc => ({ id: doc.id, ...(doc.data() as any) } as Evento))
+                .filter(e => e.status === 'andamento');
+            
+            // If no ongoing, maybe show next upcoming
+            if (currentOngoing.length > 0) {
+                setOngoingEvents(currentOngoing);
+            } else {
+                // Fallback to next upcoming
+                const upcoming = snapshot.docs
+                    .map(doc => ({ id: doc.id, ...(doc.data() as any) } as Evento))
+                    .filter(e => e.status === 'proximo')
+                    .sort((a,b) => a.data.localeCompare(b.data));
+                setOngoingEvents(upcoming);
+            }
         });
     }, [userProfile?.linkedPlayerId]);
 
@@ -355,7 +388,7 @@ const App: React.FC = () => {
         if (!readIds.includes(notif.id)) { readIds.push(notif.id); localStorage.setItem('ancb_read_notifications', JSON.stringify(readIds)); }
         
         if (notif.type === 'pending_review') { await handleOpenReviewQuiz(notif.data.gameId, notif.data.eventId); setShowNotifications(false); }
-        else if (notif.type === 'roster_alert') { setCurrentView('eventos'); setShowNotifications(false); }
+        else if (notif.type === 'roster_alert') { handleOpenEventDetail(notif.data.eventId); setShowNotifications(false); }
     };
 
     const handleOpenGamePanel = (game: Jogo, eventId: string, isEditable: boolean = false) => {
@@ -363,6 +396,18 @@ const App: React.FC = () => {
         setPanelEventId(eventId);
         setPanelIsEditable(isEditable);
         setCurrentView('painel-jogo');
+    };
+
+    const handleOpenEventDetail = (eventId: string) => {
+        setSelectedEventId(eventId);
+        setCurrentView('evento-detalhe');
+    };
+
+    // Updated Navigation Handler to support event-specific history
+    const handleOpenPlayerDetail = (playerId: string, fromEventId?: string) => {
+        setTargetPlayerId(playerId);
+        setReturnToEventId(fromEventId || null);
+        setCurrentView('jogadores');
     };
 
     const handleManualUpdate = async () => {
@@ -445,7 +490,7 @@ const App: React.FC = () => {
     const renderHeader = () => (
         <header className="sticky top-0 z-50 bg-[#062553] text-white py-3 border-b border-white/10 shadow-lg">
             <div className="container mx-auto px-4 flex justify-between items-center">
-                <div className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setCurrentView('home')}>
+                <div className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => { setCurrentView('home'); setReturnToEventId(null); }}>
                     <div className="relative">
                         <img src="https://i.imgur.com/sfO9ILj.png" alt="ANCB Logo" className="h-10 md:h-12 w-auto relative z-10" />
                     </div>
@@ -461,12 +506,12 @@ const App: React.FC = () => {
                                 <span className="text-sm font-semibold">{userProfile.nome}</span>
                                 <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">{userProfile.role}</span>
                             </div>
-                            {userProfile.role === 'admin' && (
-                                <Button variant="secondary" size="sm" onClick={() => setCurrentView('admin')} className={`!px-2 ${currentView === 'admin' ? '!bg-ancb-orange !border-ancb-orange !text-white' : '!text-white !border-white/30'}`}>
+                            {(userProfile.role === 'admin' || userProfile.role === 'super-admin') && (
+                                <Button variant="secondary" size="sm" onClick={() => setCurrentView('admin')} className={`!px-2 ${currentView === 'admin' ? '!bg-ancb-orange !border-ancb-orange !text-white' : '!text-white !border-white/30 hover:!bg-white hover:!text-ancb-blue'}`}>
                                     <LucideShield size={16} /> <span className="hidden sm:inline">Admin</span>
                                 </Button>
                             )}
-                            <Button variant="secondary" size="sm" onClick={() => setCurrentView('profile')} className={`!px-2 ${currentView === 'profile' ? '!bg-ancb-blueLight !border-ancb-blueLight !text-white' : '!text-white !border-white/30'}`}>
+                            <Button variant="secondary" size="sm" onClick={() => setCurrentView('profile')} className={`!px-2 ${currentView === 'profile' ? '!bg-ancb-blueLight !border-ancb-blueLight !text-white' : '!text-white !border-white/30 hover:!bg-white hover:!text-ancb-blue'}`}>
                                 <LucideUser size={16} /> <span className="hidden sm:inline">Perfil</span>
                             </Button>
                             <Button variant="secondary" size="sm" onClick={() => auth.signOut()} className="!px-2 !text-red-300 !border-red-500/50 hover:!bg-red-500/20"><LucideLogOut size={16} /></Button>
@@ -504,7 +549,9 @@ const App: React.FC = () => {
         switch (currentView) {
             case 'home': return (
                 <div className="space-y-8 animate-fadeIn">
-                    {ongoingEvents.length > 0 && <LiveEventHero event={ongoingEvents[0]} onClick={() => setCurrentView('eventos')} />}
+                    {ongoingEvents.length > 0 && ongoingEvents[0] && (
+                        <LiveEventHero event={ongoingEvents[0]} onClick={() => handleOpenEventDetail(ongoingEvents[0].id)} />
+                    )}
                     <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <Card onClick={() => setCurrentView('eventos')} className="cursor-pointer group hover:border-blue-300 transition-colors" emoji="📅">
                             <div className="flex flex-col h-full">
@@ -549,12 +596,24 @@ const App: React.FC = () => {
                     <Feed />
                 </div>
             );
-            case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onOpenGamePanel={(g, eid) => handleOpenGamePanel(g, eid, false)} onOpenReview={handleOpenReviewQuiz} />;
-            case 'jogadores': return <JogadoresView onBack={() => setCurrentView('home')} userProfile={userProfile} />;
+            case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onSelectEvent={handleOpenEventDetail} />;
+            case 'evento-detalhe': return selectedEventId ? <EventoDetalheView eventId={selectedEventId} onBack={() => setCurrentView('eventos')} userProfile={userProfile} onOpenGamePanel={(g, eid) => handleOpenGamePanel(g, eid, false)} onOpenReview={handleOpenReviewQuiz} onSelectPlayer={(pid) => handleOpenPlayerDetail(pid, selectedEventId)} /> : <div>Evento não encontrado</div>;
+            case 'jogadores': return <JogadoresView 
+                onBack={() => {
+                    if (returnToEventId) {
+                        handleOpenEventDetail(returnToEventId);
+                        setReturnToEventId(null); // Reset after using
+                    } else {
+                        setCurrentView('home');
+                    }
+                }} 
+                userProfile={userProfile} 
+                initialPlayerId={targetPlayerId} 
+            />;
             case 'ranking': return <RankingView onBack={() => setCurrentView('home')} />;
-            case 'admin': return <AdminView onBack={() => setCurrentView('home')} onOpenGamePanel={(g, eid, isEditable) => handleOpenGamePanel(g, eid, isEditable)} />;
-            case 'painel-jogo': return panelGame && panelEventId ? <PainelJogoView game={panelGame} eventId={panelEventId} onBack={() => setCurrentView('eventos')} userProfile={userProfile} isEditable={panelIsEditable} /> : null;
-            case 'profile': return userProfile ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} onOpenReview={handleOpenReviewQuiz} /> : null;
+            case 'admin': return <AdminView onBack={() => setCurrentView('home')} userProfile={userProfile} onOpenGamePanel={(g, eid, isEditable) => handleOpenGamePanel(g, eid, isEditable)} />;
+            case 'painel-jogo': return panelGame && panelEventId ? <PainelJogoView game={panelGame} eventId={panelEventId} onBack={() => handleOpenEventDetail(panelEventId)} userProfile={userProfile} isEditable={panelIsEditable} /> : null;
+            case 'profile': return userProfile ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} onOpenReview={handleOpenReviewQuiz} onOpenEvent={handleOpenEventDetail} /> : null;
             default: return <div>404</div>;
         }
     };
@@ -572,14 +631,15 @@ const App: React.FC = () => {
     return (
         <div className="min-h-screen flex flex-col font-sans text-ancb-black dark:text-gray-100 bg-gray-50 dark:bg-gray-900 transition-colors">
             {renderHeader()}
-            <main className="flex-grow container mx-auto px-4 pt-6 md:pt-10 max-w-6xl">
+            <main className={`flex-grow ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
                 {renderContent()}
             </main>
+            {/* ... Notifications and Footer (kept same as before) ... */}
             {foregroundNotification && (
                 <div 
                     onClick={() => {
                         if (foregroundNotification.type === 'review') setCurrentView('profile'); 
-                        else setCurrentView('eventos');
+                        else if (foregroundNotification.eventId) handleOpenEventDetail(foregroundNotification.eventId);
                         setForegroundNotification(null);
                     }}
                     className="fixed top-20 right-4 z-[200] bg-white dark:bg-gray-800 shadow-2xl rounded-2xl border-l-8 border-ancb-orange p-5 max-w-sm animate-slideDown flex items-start gap-4 ring-1 ring-black/5 cursor-pointer hover:bg-orange-50 dark:hover:bg-gray-700 transition-all active:scale-95 group"
@@ -598,20 +658,23 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            <footer className="bg-[#062553] text-white text-center py-8 mt-10">
-                <p className="font-bold mb-1">Associação Nova Canaã de Basquete - MT</p>
-                <p className="text-sm text-gray-400">&copy; 2025 Todos os direitos reservados.</p>
-                <div className="mt-6 flex justify-center">
-                    <button onClick={handleManualUpdate} disabled={isUpdating} className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all disabled:opacity-50">
-                        <LucideRefreshCw size={14} className={isUpdating ? 'animate-spin' : ''} />
-                        {isUpdating ? 'Verificando...' : 'Verificar Atualizações'}
-                    </button>
-                </div>
-                {(!isStandalone && (deferredPrompt || isIos)) && (<button onClick={() => { if (isIos) setShowInstallModal(true); else if (deferredPrompt) deferredPrompt.prompt(); }} className="mt-4 inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all"><LucideDownload size={14} /> Instalar Portal</button>)}
-            </footer>
+            {currentView !== 'evento-detalhe' && currentView !== 'painel-jogo' && (
+                <footer className="bg-[#062553] text-white text-center py-8 mt-10">
+                    <p className="font-bold mb-1">Associação Nova Canaã de Basquete - MT</p>
+                    <p className="text-sm text-gray-400">&copy; 2025 Todos os direitos reservados.</p>
+                    <div className="mt-6 flex justify-center">
+                        <button onClick={handleManualUpdate} disabled={isUpdating} className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all disabled:opacity-50">
+                            <LucideRefreshCw size={14} className={isUpdating ? 'animate-spin' : ''} />
+                            {isUpdating ? 'Verificando...' : 'Verificar Atualizações'}
+                        </button>
+                    </div>
+                    {(!isStandalone && (deferredPrompt || isIos)) && (<button onClick={() => { if (isIos) setShowInstallModal(true); else if (deferredPrompt) deferredPrompt.prompt(); }} className="mt-4 inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all"><LucideDownload size={14} /> Instalar Portal</button>)}
+                </footer>
+            )}
 
             <NotificationFab notifications={notifications} onClick={() => setShowNotifications(true)} />
 
+            {/* ... rest of modals ... */}
             <Modal isOpen={showNotifications} onClose={() => setShowNotifications(false)} title="Notificações">
                 {notificationPermissionStatus !== 'granted' && (
                     <div className="sticky top-0 z-20 mb-4 p-4 bg-orange-50 dark:bg-orange-900/40 border-b-2 border-orange-200 dark:border-orange-800/50 flex flex-col gap-2 animate-fadeIn -mx-6 -mt-6 shadow-md backdrop-blur-sm">
