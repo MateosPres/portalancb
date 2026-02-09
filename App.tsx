@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player } from './types';
 import firebase, { auth, db, requestFCMToken, onMessageListener } from './services/firebase';
@@ -419,7 +418,9 @@ const App: React.FC = () => {
                     await registration.update();
                     setTimeout(() => {
                         setIsUpdating(false);
-                        alert("Verificação concluída. Se houver novidades, o aplicativo irá reiniciar.");
+                        // Try to reload, but also warn user
+                        window.location.reload(); 
+                        alert("Atualização pronta! Por favor, reinicie o aplicativo para aplicar as mudanças.");
                     }, 2000);
                 } else {
                     setIsUpdating(false);

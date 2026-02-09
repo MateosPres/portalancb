@@ -38,26 +38,59 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, data })
         return new Blob([ab], { type: mimeString });
     };
 
+    // Helper: Preload images to ensure they are ready for Canvas
+    const preloadImages = async (element: HTMLElement) => {
+        const images = Array.from(element.querySelectorAll('img'));
+        const promises = images.map((img) => {
+            if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+            return new Promise((resolve) => {
+                img.onload = resolve;
+                img.onerror = resolve; // Resolve anyway to avoid blocking
+            });
+        });
+        await Promise.all(promises);
+    };
+
     // Function to generate image
     const generateImage = async () => {
         if (!hiddenRef.current) return;
         setLoading(true);
+        
         try {
-            // Increased delay to ensure all CORS images are fully ready
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            const dataUrl = await toPng(hiddenRef.current, {
+            // 1. Wait for DOM to settle
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // 2. Explicitly wait for all images inside the template to load
+            await preloadImages(hiddenRef.current);
+
+            const config = {
                 cacheBust: true,
-                skipAutoScale: true, // CRITICAL FOR MOBILE: Do not scale down to viewport
-                pixelRatio: 1, // Force 1:1 pixel ratio based on width/height
+                skipAutoScale: true,
+                pixelRatio: 1,
                 width: 1080,
                 height: 1920,
                 style: {
                     transform: 'none', 
                     transformOrigin: 'top left'
                 }
-            });
+            };
+
+            // 3. WARM UP RENDER (Critical for Safari/iOS)
+            // The first call forces the browser to decode images and layout the canvas layer.
+            // We discard this result as it often has missing assets on mobile.
+            try {
+                await toPng(hiddenRef.current, config);
+            } catch (e) {
+                console.warn("Warmup render failed (expected on some devices), proceeding to final render...");
+            }
+
+            // 4. Short buffer after warmup
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // 5. Final Render
+            const dataUrl = await toPng(hiddenRef.current, config);
             setPreviewUrl(dataUrl);
+
         } catch (error) {
             console.error("Error generating image:", error);
             alert("Erro ao gerar imagem. Tente novamente.");
@@ -69,8 +102,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, data })
     useEffect(() => {
         if (isOpen) {
             setPreviewUrl(null); 
-            // Trigger generation
-            setTimeout(generateImage, 500);
+            // Trigger generation sequence
+            setTimeout(generateImage, 100);
         }
     }, [isOpen]);
 
@@ -119,7 +152,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, data })
                         <div className="text-center py-10">
                             <LucideLoader2 size={48} className="animate-spin text-ancb-orange mx-auto mb-4" />
                             <p className="text-gray-500 font-medium animate-pulse">Gerando arte em alta definição...</p>
-                            <p className="text-xs text-gray-400 mt-2">Isso pode levar alguns segundos.</p>
+                            <p className="text-xs text-gray-400 mt-2">Aguarde, estamos renderizando os detalhes...</p>
                         </div>
                     ) : previewUrl ? (
                         <div className="w-full flex flex-col items-center animate-fadeIn">
