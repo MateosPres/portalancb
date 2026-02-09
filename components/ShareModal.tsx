@@ -43,26 +43,18 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, data })
         if (!hiddenRef.current) return;
         setLoading(true);
         try {
-            // Delay to ensure fonts and images are fully loaded/rendered in DOM
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            // Increased delay to ensure all CORS images are fully ready
+            await new Promise(resolve => setTimeout(resolve, 2000));
             
             const dataUrl = await toPng(hiddenRef.current, {
                 cacheBust: true,
-                quality: 1.0,
-                pixelRatio: 1, 
-                width: 1080, // FORCE WIDTH: Critical for consistent mobile rendering
-                height: 1920, // FORCE HEIGHT: Critical for consistent mobile rendering
+                skipAutoScale: true, // CRITICAL FOR MOBILE: Do not scale down to viewport
+                pixelRatio: 1, // Force 1:1 pixel ratio based on width/height
+                width: 1080,
+                height: 1920,
                 style: {
-                    // This forces the cloned node to behave as if it's on a 1080x1920 screen, 
-                    // ignoring the actual mobile viewport constraints.
-                    transform: 'none',
-                    transformOrigin: 'top left',
-                    width: '1080px',
-                    height: '1920px',
-                    maxHeight: '1920px',
-                    maxWidth: '1080px',
-                    display: 'flex',
-                    flexDirection: 'column'
+                    transform: 'none', 
+                    transformOrigin: 'top left'
                 }
             });
             setPreviewUrl(dataUrl);
@@ -157,18 +149,20 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, data })
                     style={{ 
                         position: 'fixed', 
                         top: 0, 
-                        left: 0, // Changed from -9999 to 0 but with z-index -1 to ensure it's within "viewport" for rendering engines
+                        left: 0, // Using 0,0 with z-index ensures it's in the viewport "area" but behind everything
                         zIndex: -50, 
-                        opacity: 0,
+                        opacity: 0, // Visibility: hidden sometimes prevents rendering in some browsers, opacity 0 is safer
                         pointerEvents: 'none',
-                        // EXPLICITLY FORCE CONTAINER SIZE HERE TOO
                         width: '1080px',
                         height: '1920px',
-                        overflow: 'hidden'
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                        justifyContent: 'flex-start'
                     }}
                 >
-                    {/* Inner wrapper to ensure content isolation */}
-                    <div style={{ width: '1080px', height: '1920px' }}>
+                    <div style={{ width: '1080px', height: '1920px', flexShrink: 0 }}>
                         <StoryRenderer 
                             ref={hiddenRef} 
                             type={data.type} 

@@ -68,7 +68,7 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
         }
 
         return (
-            <div ref={ref} className="w-[1080px] h-[1920px] bg-gradient-to-br from-red-900 via-orange-900 to-orange-800 text-white flex flex-col relative overflow-hidden font-sans">
+            <div ref={ref} className="w-[1080px] h-[1920px] bg-gradient-to-br from-red-900 via-orange-900 to-orange-800 text-white flex flex-col relative overflow-hidden font-sans shrink-0">
                 {/* Background Watermark Icon */}
                 <div className="absolute -bottom-24 -right-24 opacity-10 text-white transform -rotate-12 pointer-events-none z-0">
                     <LucideTrophy size={900} strokeWidth={1} />
@@ -79,7 +79,7 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
 
                 {/* Header */}
                 <div className="pt-16 pb-4 flex flex-col items-center z-10 relative">
-                    <img src={LOGO_URL} alt="ANCB" className="h-56 mb-4 drop-shadow-2xl" />
+                    <img src={LOGO_URL} alt="ANCB" className="h-56 mb-4 drop-shadow-2xl" crossOrigin="anonymous" />
                     <div className="bg-white/10 backdrop-blur-md border border-white/20 px-10 py-2 rounded-full mb-4">
                         <h2 className="text-3xl font-bold tracking-[0.3em] uppercase text-orange-200">Convocação Oficial</h2>
                     </div>
@@ -99,7 +99,7 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
                             <div key={idx} className="flex items-center gap-5 bg-black/40 p-3 rounded-2xl border border-white/10 backdrop-blur-sm shadow-lg w-full">
                                 <div className="w-20 h-20 rounded-full bg-gray-300 border-2 border-orange-600 overflow-hidden shrink-0 shadow-inner relative">
                                     {p.foto ? (
-                                        <img src={p.foto} className="w-full h-full object-cover" alt={p.nome} />
+                                        <img src={p.foto} className="w-full h-full object-cover" alt={p.nome} crossOrigin="anonymous" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center bg-gray-800 text-3xl font-bold text-gray-500">{p.nome.charAt(0)}</div>
                                     )}
@@ -134,14 +134,14 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
     // 2. Template: Evento Interno (Times)
     if (type === 'internal_teams' && event && teams) {
         return (
-            <div ref={ref} className="w-[1080px] h-[1920px] bg-gradient-to-br from-orange-600 to-yellow-500 text-white flex flex-col relative overflow-hidden font-sans">
+            <div ref={ref} className="w-[1080px] h-[1920px] bg-gradient-to-br from-orange-600 to-yellow-500 text-white flex flex-col relative overflow-hidden font-sans shrink-0">
                 {/* Background Watermark Icon */}
                 <div className="absolute top-1/2 -right-40 opacity-10 text-white transform -translate-y-1/2 rotate-12 pointer-events-none z-0">
                     <LucideShield size={1000} strokeWidth={1} />
                 </div>
 
                 <div className="pt-32 px-16 flex flex-col items-center z-10 relative text-center">
-                    <img src={LOGO_URL} alt="ANCB" className="h-56 mb-8 drop-shadow-xl" />
+                    <img src={LOGO_URL} alt="ANCB" className="h-56 mb-8 drop-shadow-xl" crossOrigin="anonymous" />
                     <span className="text-4xl font-black italic bg-white text-orange-600 px-6 py-2 transform -skew-x-12 inline-block mb-6 shadow-lg">
                         TORNEIO INTERNO
                     </span>
@@ -160,7 +160,7 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
                         <div key={idx} className="flex items-center justify-between bg-black/20 p-6 rounded-3xl border border-white/20 backdrop-blur-md shadow-xl">
                             <div className="flex items-center gap-6">
                                 {t.logoUrl ? (
-                                    <img src={t.logoUrl} className="w-32 h-32 object-contain drop-shadow-lg" />
+                                    <img src={t.logoUrl} className="w-32 h-32 object-contain drop-shadow-lg" crossOrigin="anonymous" />
                                 ) : (
                                     <div className="w-32 h-32 bg-white/20 rounded-full flex items-center justify-center text-6xl font-bold border-4 border-white/30">{t.nomeTime.charAt(0)}</div>
                                 )}
@@ -205,7 +205,7 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
         const hypePhrase = isToday ? "HOJE TEM BASQUETE" : "PREPARE A TORCIDA";
         
         return (
-            <div ref={ref} className="w-[1080px] h-[1920px] bg-gradient-to-br from-blue-900 to-cyan-700 text-white flex flex-col relative overflow-hidden font-sans">
+            <div ref={ref} className="w-[1080px] h-[1920px] bg-gradient-to-br from-blue-900 to-cyan-700 text-white flex flex-col relative overflow-hidden font-sans shrink-0">
                 {/* Background Watermark Icon */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
                     <LucideZap size={1200} className="text-white opacity-[0.03] transform rotate-12" strokeWidth={1.5} />
@@ -215,7 +215,7 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
                 <div className="absolute -top-[20%] -left-[20%] w-[150%] h-[50%] bg-blue-950/40 transform -rotate-6 z-0 blur-3xl"></div>
 
                 <div className="pt-24 flex flex-col items-center z-10 relative">
-                    <img src={LOGO_URL} className="h-72 drop-shadow-2xl" />
+                    <img src={LOGO_URL} className="h-72 drop-shadow-2xl" crossOrigin="anonymous" />
                     
                     {/* HYPE PHRASE - Floating Text with Yellow-Orange Gradient and Shadow */}
                     <h2 className="mt-8 text-5xl font-black tracking-[0.3em] uppercase italic text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 drop-shadow-[0_5px_5px_rgba(0,0,0,0.5)] whitespace-nowrap transform -skew-x-12">
@@ -319,7 +319,7 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
         const listSizing = getListSizing(scorers ? scorers.length : 0);
 
         return (
-            <div ref={ref} className="w-[1080px] h-[1920px] bg-slate-900 text-white flex flex-col relative overflow-hidden font-sans">
+            <div ref={ref} className="w-[1080px] h-[1920px] bg-slate-900 text-white flex flex-col relative overflow-hidden font-sans shrink-0">
                 {/* Background Watermark Icon */}
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-5 pointer-events-none z-0">
                     <LucideTarget size={1100} strokeWidth={0.5} className="text-white" />
@@ -330,7 +330,7 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
 
                 {/* BLOCK 1: HEADER & SCOREBOARD */}
                 <div className="pt-20 text-center z-10 relative px-8">
-                    <img src={LOGO_URL} className="h-48 mx-auto mb-6 drop-shadow-lg" />
+                    <img src={LOGO_URL} className="h-48 mx-auto mb-6 drop-shadow-lg" crossOrigin="anonymous" />
                     <h2 className={`text-5xl font-black uppercase tracking-[0.2em] ${statusColor} drop-shadow-xl border-y-2 border-white/10 py-3 inline-block px-12 bg-black/20 backdrop-blur-sm rounded-full mb-8`}>
                         {statusText}
                     </h2>
@@ -367,7 +367,7 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
                                 <div className="flex items-center gap-4 bg-black/60 border border-yellow-500/30 rounded-3xl p-6 backdrop-blur-xl shadow-2xl relative overflow-hidden">
                                     <div className="w-28 h-28 rounded-full border-4 border-yellow-400 overflow-hidden shrink-0 relative shadow-lg">
                                         {stats.mvp.player.foto ? (
-                                            <img src={stats.mvp.player.foto} className="w-full h-full object-cover" />
+                                            <img src={stats.mvp.player.foto} className="w-full h-full object-cover" crossOrigin="anonymous" />
                                         ) : (
                                             <div className="w-full h-full bg-gray-700 flex items-center justify-center text-4xl font-bold">{stats.mvp.player.nome.charAt(0)}</div>
                                         )}
@@ -398,7 +398,7 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
                                 <div className="flex items-center gap-4 bg-black/60 border border-blue-500/30 rounded-3xl p-6 backdrop-blur-xl shadow-2xl relative overflow-hidden">
                                     <div className="w-28 h-28 rounded-full border-4 border-blue-400 overflow-hidden shrink-0 relative shadow-lg">
                                         {stats.sniper.player.foto ? (
-                                            <img src={stats.sniper.player.foto} className="w-full h-full object-cover" />
+                                            <img src={stats.sniper.player.foto} className="w-full h-full object-cover" crossOrigin="anonymous" />
                                         ) : (
                                             <div className="w-full h-full bg-gray-700 flex items-center justify-center text-4xl font-bold">{stats.sniper.player.nome.charAt(0)}</div>
                                         )}
