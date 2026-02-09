@@ -4,7 +4,7 @@ import { Modal } from './Modal';
 import { Button } from './Button';
 import { StoryRenderer, StoryType } from './StoryTemplates';
 import { toPng } from 'html-to-image';
-import { LucideDownload, LucideShare2, LucideLoader2 } from 'lucide-react';
+import { LucideDownload, LucideShare2, LucideLoader2, LucideSave } from 'lucide-react';
 import { Evento, Jogo, Player, Time } from '../types';
 
 interface ShareModalProps {
@@ -16,7 +16,7 @@ interface ShareModalProps {
         game?: Jogo;
         players?: Player[];
         teams?: Time[];
-        scorers?: { player: Player, points: number }[]; // Added scorers prop
+        scorers?: { player: Player, points: number }[];
         stats?: any;
     };
 }
@@ -26,18 +26,44 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, data })
     const [loading, setLoading] = useState(false);
     const hiddenRef = useRef<HTMLDivElement>(null);
 
+    // Helper: Convert DataURI to Blob for Web Share API
+    const dataURItoBlob = (dataURI: string) => {
+        const byteString = atob(dataURI.split(',')[1]);
+        const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+        }
+        return new Blob([ab], { type: mimeString });
+    };
+
     // Function to generate image
     const generateImage = async () => {
         if (!hiddenRef.current) return;
         setLoading(true);
         try {
-            // Need a small delay to ensure rendering, especially images
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Delay to ensure fonts and images are fully loaded/rendered in DOM
+            await new Promise(resolve => setTimeout(resolve, 1500));
             
             const dataUrl = await toPng(hiddenRef.current, {
                 cacheBust: true,
-                quality: 0.95,
-                pixelRatio: 1, // 1080x1920 is already high res, 1x is fine
+                quality: 1.0,
+                pixelRatio: 1, 
+                width: 1080, // FORCE WIDTH: Critical for consistent mobile rendering
+                height: 1920, // FORCE HEIGHT: Critical for consistent mobile rendering
+                style: {
+                    // This forces the cloned node to behave as if it's on a 1080x1920 screen, 
+                    // ignoring the actual mobile viewport constraints.
+                    transform: 'none',
+                    transformOrigin: 'top left',
+                    width: '1080px',
+                    height: '1920px',
+                    maxHeight: '1920px',
+                    maxWidth: '1080px',
+                    display: 'flex',
+                    flexDirection: 'column'
+                }
             });
             setPreviewUrl(dataUrl);
         } catch (error) {
@@ -50,18 +76,47 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, data })
 
     useEffect(() => {
         if (isOpen) {
-            setPreviewUrl(null); // Reset
-            // Auto generate after a slight delay to ensure the hidden DOM is mounted
+            setPreviewUrl(null); 
+            // Trigger generation
             setTimeout(generateImage, 500);
         }
     }, [isOpen]);
 
-    const handleDownload = () => {
+    const handleShareOrDownload = async () => {
         if (!previewUrl) return;
-        const link = document.createElement('a');
-        link.download = `ancb-story-${Date.now()}.png`;
-        link.href = previewUrl;
-        link.click();
+
+        try {
+            // 1. Try Native Web Share API (Best for iOS/Android to Save to Gallery)
+            if (navigator.canShare && navigator.share) {
+                const blob = dataURItoBlob(previewUrl);
+                const file = new File([blob], `ancb-story-${Date.now()}.png`, { type: 'image/png' });
+                
+                if (navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: 'Story ANCB',
+                        text: 'Confira este resultado no Portal ANCB!'
+                    });
+                    return; // Success
+                }
+            }
+
+            // 2. Fallback: Classic Download Link (PC)
+            const link = document.createElement('a');
+            link.download = `ancb-story-${Date.now()}.png`;
+            link.href = previewUrl;
+            link.click();
+
+        } catch (error: any) {
+            console.error("Share failed:", error);
+            // If user cancelled share, do nothing. If error, try download fallback.
+            if (error.name !== 'AbortError') {
+                const link = document.createElement('a');
+                link.download = `ancb-story-${Date.now()}.png`;
+                link.href = previewUrl;
+                link.click();
+            }
+        }
     };
 
     return (
@@ -71,17 +126,24 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, data })
                     {loading ? (
                         <div className="text-center py-10">
                             <LucideLoader2 size={48} className="animate-spin text-ancb-orange mx-auto mb-4" />
-                            <p className="text-gray-500 font-medium">Gerando arte...</p>
+                            <p className="text-gray-500 font-medium animate-pulse">Gerando arte em alta definição...</p>
+                            <p className="text-xs text-gray-400 mt-2">Isso pode levar alguns segundos.</p>
                         </div>
                     ) : previewUrl ? (
                         <div className="w-full flex flex-col items-center animate-fadeIn">
                             <p className="text-xs text-gray-500 mb-4 text-center">Prévia (1080x1920px)</p>
-                            <div className="relative w-full max-w-[250px] aspect-[9/16] rounded-xl overflow-hidden shadow-2xl border-4 border-gray-900 bg-gray-100 mb-6">
+                            <div className="relative w-full max-w-[200px] aspect-[9/16] rounded-xl overflow-hidden shadow-2xl border-4 border-gray-900 bg-gray-100 mb-6">
                                 <img src={previewUrl} alt="Story Preview" className="w-full h-full object-contain" />
                             </div>
-                            <Button onClick={handleDownload} className="w-full max-w-xs !bg-green-600 hover:!bg-green-700 text-white font-bold py-3 text-lg shadow-lg">
-                                <LucideDownload size={20} /> Baixar Imagem
-                            </Button>
+                            
+                            <div className="flex flex-col gap-3 w-full max-w-xs">
+                                <Button onClick={handleShareOrDownload} className="w-full !bg-green-600 hover:!bg-green-700 text-white font-bold py-3 text-lg shadow-lg flex items-center justify-center gap-2">
+                                    <LucideShare2 size={20} /> Salvar / Compartilhar
+                                </Button>
+                                <p className="text-[10px] text-gray-400 text-center leading-tight px-4">
+                                    No iPhone, selecione <strong>"Salvar Imagem"</strong> nas opções de compartilhamento.
+                                </p>
+                            </div>
                         </div>
                     ) : (
                         <p className="text-red-500">Erro ao carregar prévia.</p>
@@ -89,19 +151,35 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, data })
                 </div>
             </Modal>
 
-            {/* HIDDEN RENDERER - Positioned way off-screen but rendered */}
+            {/* HIDDEN RENDERER - Positioned off-screen but rigidly defined size */}
             {isOpen && (
-                <div style={{ position: 'fixed', top: 0, left: -9999, zIndex: -1, opacity: 1 }}>
-                    <StoryRenderer 
-                        ref={hiddenRef} 
-                        type={data.type} 
-                        event={data.event} 
-                        game={data.game} 
-                        players={data.players} 
-                        teams={data.teams}
-                        scorers={data.scorers} // Passed scorers here
-                        stats={data.stats}
-                    />
+                <div 
+                    style={{ 
+                        position: 'fixed', 
+                        top: 0, 
+                        left: 0, // Changed from -9999 to 0 but with z-index -1 to ensure it's within "viewport" for rendering engines
+                        zIndex: -50, 
+                        opacity: 0,
+                        pointerEvents: 'none',
+                        // EXPLICITLY FORCE CONTAINER SIZE HERE TOO
+                        width: '1080px',
+                        height: '1920px',
+                        overflow: 'hidden'
+                    }}
+                >
+                    {/* Inner wrapper to ensure content isolation */}
+                    <div style={{ width: '1080px', height: '1920px' }}>
+                        <StoryRenderer 
+                            ref={hiddenRef} 
+                            type={data.type} 
+                            event={data.event} 
+                            game={data.game} 
+                            players={data.players} 
+                            teams={data.teams}
+                            scorers={data.scorers} 
+                            stats={data.stats}
+                        />
+                    </div>
                 </div>
             )}
         </>
