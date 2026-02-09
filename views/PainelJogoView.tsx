@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { 
     LucideArrowLeft, LucideRotateCcw, LucideCheckCircle2, LucideUsers, 
-    LucideTrophy, LucideActivity, LucideUser
+    LucideTrophy, LucideActivity, LucideUser, LucidePlayCircle, LucideCalendarClock
 } from 'lucide-react';
 import { collection, doc, updateDoc, deleteDoc, addDoc, serverTimestamp, increment, onSnapshot } from 'firebase/firestore';
 
@@ -26,6 +26,28 @@ interface ScoreAction {
     teamSide: 'A' | 'B';
     playerId?: string | null;
 }
+
+interface PlayerButtonProps {
+    player: Player;
+    onClick: () => void;
+}
+
+const PlayerButton: React.FC<PlayerButtonProps> = ({ player, onClick }) => (
+    <button 
+        onClick={onClick}
+        className="flex flex-col items-center p-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/20 border border-white/5 transition-all"
+    >
+        <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gray-700 overflow-hidden mb-2 border-2 border-white/10 relative">
+            {player.foto ? <img src={player.foto} className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center font-bold text-white/50">{player.nome.charAt(0)}</span>}
+            <div className="absolute bottom-0 right-0 bg-ancb-orange text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border border-gray-900">
+                {player.numero_uniforme}
+            </div>
+        </div>
+        <span className="text-xs font-bold text-white text-center leading-tight line-clamp-1 w-full">
+            {player.apelido || player.nome.split(' ')[0]}
+        </span>
+    </button>
+);
 
 export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, onBack, userProfile }) => {
     // Game State
@@ -116,7 +138,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
             const updates: any = {
                 [fieldToUpdate]: increment(points),
                 [legacyField]: increment(points),
-                status: 'andamento' // Ensure active
+                status: 'andamento' // Ensure active if scoring happens
             };
 
             // Add player to game roster for stats tracking if not present
@@ -125,9 +147,6 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                 if (!currentRoster.includes(player.id)) {
                     updates.jogadoresEscalados = [...currentRoster, player.id];
                 }
-                
-                // Update player stats tags (simple count for "scoring") - Optional
-                // await updateDoc(doc(db, "jogadores", player.id), { [`stats_tags.cestas`]: increment(1) });
             }
 
             await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), updates);
@@ -180,6 +199,21 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
         }
     };
 
+    const handleStartGame = async () => {
+        if (!isAdmin) return;
+        if (!window.confirm("Iniciar a partida oficialmente? Isso enviará uma notificação de jogo ao vivo.")) return;
+        try {
+            setIsProcessing(true);
+            await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), { status: 'andamento' });
+            // Also update event status if not active
+            await updateDoc(doc(db, "eventos", eventId), { status: 'andamento' });
+        } catch (e) {
+            alert("Erro ao iniciar jogo.");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     const handleFinishGame = async () => {
         if (!isAdmin) return;
         if (!window.confirm("Confirmar placar final e encerrar partida?")) return;
@@ -200,23 +234,6 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
             <span className="text-4xl font-black mb-1">+{points}</span>
             <span className="text-[10px] uppercase font-bold opacity-80">
                 {points === 1 ? 'Livre' : points === 2 ? 'Curta' : 'Longa'}
-            </span>
-        </button>
-    );
-
-    const PlayerButton = ({ player, onClick }: { player: Player, onClick: () => void }) => (
-        <button 
-            onClick={onClick}
-            className="flex flex-col items-center p-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/20 border border-white/5 transition-all"
-        >
-            <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gray-700 overflow-hidden mb-2 border-2 border-white/10 relative">
-                {player.foto ? <img src={player.foto} className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center font-bold text-white/50">{player.nome.charAt(0)}</span>}
-                <div className="absolute bottom-0 right-0 bg-ancb-orange text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border border-gray-900">
-                    {player.numero_uniforme}
-                </div>
-            </div>
-            <span className="text-xs font-bold text-white text-center leading-tight line-clamp-1 w-full">
-                {player.apelido || player.nome.split(' ')[0]}
             </span>
         </button>
     );
@@ -274,6 +291,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
     // Calculate Scores Safely
     const scoreA = liveGame.placarTimeA_final ?? liveGame.placarANCB_final ?? 0;
     const scoreB = liveGame.placarTimeB_final ?? liveGame.placarAdversario_final ?? 0;
+    const isLive = liveGame.status === 'andamento';
 
     return (
         <div className="fixed inset-0 bg-black z-[100] flex flex-col text-white font-sans overflow-hidden">
@@ -287,13 +305,29 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                 <div className="flex items-center gap-4">
                     <div className="flex flex-col items-center">
                         <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Painel de Jogo</span>
-                        <div className="flex items-center gap-2 text-xs font-bold text-red-500 animate-pulse">
-                            <div className="w-2 h-2 bg-red-500 rounded-full"></div> AO VIVO
-                        </div>
+                        {isLive ? (
+                            <div className="flex items-center gap-2 text-xs font-bold text-red-500 animate-pulse">
+                                <div className="w-2 h-2 bg-red-500 rounded-full"></div> AO VIVO
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 text-xs font-bold text-yellow-500">
+                                <LucideCalendarClock size={12} /> PRÉ-JOGO
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3">
+                    {!isLive && isAdmin && (
+                        <button 
+                            onClick={handleStartGame}
+                            disabled={isProcessing}
+                            className="bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg shadow-lg border border-green-500 flex items-center gap-1 text-xs font-bold uppercase tracking-wider animate-pulse transition-all"
+                        >
+                            <LucidePlayCircle size={16} /> INICIAR
+                        </button>
+                    )}
+                    
                     <button 
                         onClick={handleUndo} 
                         disabled={actionHistory.length === 0}
@@ -302,10 +336,11 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                     >
                         <LucideRotateCcw size={20} />
                     </button>
-                    {isAdmin && (
+                    
+                    {isAdmin && isLive && (
                         <button 
                             onClick={handleFinishGame}
-                            className="bg-green-600 hover:bg-green-500 text-white p-2 rounded-full shadow-lg border border-green-500 flex items-center gap-1 px-3 text-xs font-bold uppercase tracking-wider transition-all"
+                            className="bg-gray-800 hover:bg-gray-700 text-white p-2 rounded-full shadow-lg border border-gray-600 flex items-center gap-1 px-3 text-xs font-bold uppercase tracking-wider transition-all"
                         >
                             <LucideCheckCircle2 size={16} /> Fim
                         </button>

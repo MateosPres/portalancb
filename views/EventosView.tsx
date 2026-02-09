@@ -5,8 +5,10 @@ import { Evento, Jogo, Cesta, Player, UserProfile, Time } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucideTrash2, LucideStar, LucideMessageSquare, LucidePlayCircle, LucideShield, LucideCamera, LucideLoader2, LucideCalendar, LucideMapPin } from 'lucide-react';
+import { ShareModal } from '../components/ShareModal';
+import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucideTrash2, LucideStar, LucideMessageSquare, LucidePlayCircle, LucideShield, LucideCamera, LucideLoader2, LucideCalendar, LucideMapPin, LucideShare2 } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
+import { collection, doc, getDocs, getDoc } from 'firebase/firestore';
 
 interface EventosViewProps {
     onBack: () => void;
@@ -19,6 +21,10 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<'proximos' | 'finalizados'>('proximos');
     const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+    
+    // Share State
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [shareData, setShareData] = useState<any>(null);
     
     // For admin creating events only
     const [showEventForm, setShowEventForm] = useState(false);
@@ -76,6 +82,57 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             setShowEventForm(false);
             setFormName(''); setFormDate(''); setFormOpponent('');
         } catch (e) { alert("Erro ao criar evento"); }
+    };
+
+    const handleShareEvent = async (e: React.MouseEvent, evento: Evento) => {
+        e.stopPropagation();
+        
+        let type: 'roster' | 'internal_teams' = 'roster';
+        let players: Player[] = [];
+        let teams: Time[] = [];
+
+        if (evento.type === 'torneio_interno') {
+            type = 'internal_teams';
+            teams = evento.times || [];
+        } else {
+            type = 'roster';
+            
+            try {
+                // Fetch roster subcollection to check status
+                const rosterSnap = await db.collection("eventos").doc(evento.id).collection("roster").get();
+                let validIds: string[] = [];
+
+                if (!rosterSnap.empty) {
+                    rosterSnap.forEach(doc => {
+                        const data = doc.data();
+                        // Exclude 'recusado' players from the story
+                        if (data.status !== 'recusado') {
+                            validIds.push(doc.id); // doc.id is the playerId
+                        }
+                    });
+                } else {
+                    // Fallback to legacy array if subcollection is empty
+                    validIds = evento.jogadoresEscalados || [];
+                }
+
+                // Filter the global player list by valid IDs
+                players = allPlayers.filter(p => validIds.includes(p.id));
+
+            } catch (err) {
+                console.error("Error fetching roster for share:", err);
+                // Fallback in case of error
+                const rosterIds = evento.jogadoresEscalados || [];
+                players = allPlayers.filter(p => rosterIds.includes(p.id));
+            }
+        }
+
+        setShareData({
+            type,
+            event: evento,
+            players,
+            teams
+        });
+        setShowShareModal(true);
     };
 
     // Helper for Card Gradients based on Type
@@ -142,9 +199,18 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                     <span className="block text-[10px] font-bold uppercase tracking-wider opacity-80">{evento.data.split('-')[1] || 'MÊS'}</span>
                                     <span className="block text-2xl font-black leading-none">{evento.data.split('-')[2] || 'DIA'}</span>
                                 </div>
-                                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide ${getStatusBadgeStyle(evento.status, evento.type)}`}>
-                                    {evento.status === 'andamento' ? 'AO VIVO' : evento.status}
-                                </span>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={(e) => handleShareEvent(e, evento)}
+                                        className="p-1.5 rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors backdrop-blur-md border border-white/10"
+                                        title="Gerar Card para Instagram"
+                                    >
+                                        <LucideShare2 size={16} />
+                                    </button>
+                                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide flex items-center ${getStatusBadgeStyle(evento.status, evento.type)}`}>
+                                        {evento.status === 'andamento' ? 'AO VIVO' : evento.status}
+                                    </span>
+                                </div>
                             </div>
                             
                             <div className="flex-grow mb-4 relative z-10">
@@ -192,6 +258,15 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     <Button type="submit" className="w-full">Criar</Button>
                 </form>
             </Modal>
+
+            {/* Share Modal */}
+            {shareData && (
+                <ShareModal 
+                    isOpen={showShareModal} 
+                    onClose={() => setShowShareModal(false)} 
+                    data={shareData}
+                />
+            )}
         </div>
     );
 };

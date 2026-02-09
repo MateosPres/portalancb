@@ -151,10 +151,14 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick }) 
                                     const teamName = getTeamNameForFeed(cesta);
                                     const shotType = getShotDescription(Number(cesta.pontos));
                                     
+                                    // Determine Team Side for Color
+                                    // Team A (Orange), Team B (White/Other)
+                                    const isTeamA = cesta.timeId === activeGame.timeA_id || cesta.timeId === 'A';
+                                    
                                     return (
                                         <div key={cesta.id} className="flex items-start justify-between text-xs animate-slideDown" style={{animationDelay: `${idx * 100}ms`}}>
                                             <div className="flex items-start gap-2 overflow-hidden mr-2">
-                                                <div className="w-1 h-1 rounded-full bg-ancb-orange shrink-0 mt-1.5"></div>
+                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${isTeamA ? 'bg-ancb-orange' : 'bg-white shadow-sm shadow-white/50'}`}></div>
                                                 <div className="font-medium text-white/90 leading-tight">
                                                     {cesta.nomeJogador && cesta.nomeJogador !== 'Unknown' ? (
                                                         <>
