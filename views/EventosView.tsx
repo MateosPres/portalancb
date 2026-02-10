@@ -240,22 +240,37 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             )}
 
             <Modal isOpen={showEventForm} onClose={() => setShowEventForm(false)} title="Novo Evento">
-                <form onSubmit={handleCreateEvent} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="col-span-2"><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nome</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormName(e.target.value)} required /></div>
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Data</label><input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormDate(e.target.value)} required /></div>
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Status</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formStatus} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormStatus(e.target.value as any)}><option value="proximo">Próximo</option><option value="andamento">Em Andamento</option><option value="finalizado">Finalizado</option></select></div>
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Modalidade</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formMode} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormMode(e.target.value as any)}><option value="5x5">5x5</option><option value="3x3">3x3</option></select></div>
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Tipo</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={formType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormType(e.target.value as any)}><option value="amistoso">Amistoso</option><option value="torneio_interno">Torneio Interno</option><option value="torneio_externo">Torneio Externo</option></select></div>
+                <form onSubmit={handleCreateEvent} className="space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nome do Evento</label>
+                            <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none transition-all" value={formName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormName(e.target.value)} required placeholder="Ex: Copa Garantã 2025" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Data</label>
+                            <input type="date" className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none transition-all" value={formDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormDate(e.target.value)} required />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Status</label>
+                            <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none transition-all" value={formStatus} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormStatus(e.target.value as any)}><option value="proximo">Próximo</option><option value="andamento">Em Andamento</option><option value="finalizado">Finalizado</option></select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Modalidade</label>
+                            <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none transition-all" value={formMode} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormMode(e.target.value as any)}><option value="5x5">5x5</option><option value="3x3">3x3</option></select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Tipo</label>
+                            <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none transition-all" value={formType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormType(e.target.value as any)}><option value="amistoso">Amistoso</option><option value="torneio_interno">Torneio Interno</option><option value="torneio_externo">Torneio Externo</option></select>
+                        </div>
                         {formType === 'amistoso' && (
-                            <div className="col-span-2 bg-blue-50 dark:bg-blue-900/20 p-2 rounded border border-blue-100 dark:border-blue-800">
-                                <label className="text-xs font-bold text-blue-700 dark:text-blue-300">Adversário</label>
-                                <input className="w-full p-2 border rounded mt-1 dark:bg-gray-700 dark:text-white" placeholder="Nome do time rival" value={formOpponent} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormOpponent(e.target.value)} required />
-                                <p className="text-[10px] text-gray-500 mt-1">Isso criará automaticamente o jogo no sistema.</p>
+                            <div className="md:col-span-2 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
+                                <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Adversário</label>
+                                <input className="w-full p-3 border rounded-xl mt-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-400 outline-none transition-all" placeholder="Nome do time rival" value={formOpponent} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormOpponent(e.target.value)} required />
+                                <p className="text-[10px] text-gray-500 mt-2 flex items-center gap-1"><LucideGamepad2 size={12} /> Isso criará automaticamente o jogo no sistema.</p>
                             </div>
                         )}
                     </div>
-                    <Button type="submit" className="w-full">Criar</Button>
+                    <Button type="submit" className="w-full h-12 text-lg">Criar Evento</Button>
                 </form>
             </Modal>
 

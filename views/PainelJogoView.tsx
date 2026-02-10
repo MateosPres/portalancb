@@ -254,7 +254,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
         return (
             <div className={`flex-1 flex flex-col h-full relative ${colorClass} overflow-hidden`}>
                 {/* Score Header */}
-                <div className="flex flex-col items-center justify-center py-6 border-b border-white/10 bg-black/10">
+                <div className="flex flex-col items-center justify-center py-6 border-b border-white/10 bg-black/10 shrink-0">
                     <h3 className="text-sm font-bold uppercase tracking-widest text-white/60 mb-1 px-4 text-center truncate w-full">{name}</h3>
                     <span className="text-8xl font-black text-white leading-none tracking-tighter drop-shadow-xl">{score}</span>
                 </div>
@@ -263,7 +263,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                     {players.length > 0 ? (
                         /* Scenario A: Roster Exists */
-                        <div className="grid grid-cols-3 gap-3 content-start">
+                        <div className="grid grid-cols-3 gap-3 content-start pb-4">
                             {players.map(p => (
                                 <PlayerButton 
                                     key={p.id} 

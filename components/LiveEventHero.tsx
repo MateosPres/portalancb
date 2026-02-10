@@ -241,8 +241,9 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick }) 
         ? "bg-gradient-to-r from-[#062553] to-blue-900 border-blue-800" 
         : "bg-gradient-to-r from-gray-900 to-gray-800 border-gray-700";
 
+    // CHANGED: Use Amber/Orange for Event Status to distinguish from Red Game Live status
     const badgeClass = isLive 
-        ? "bg-red-600 text-white animate-pulse border border-red-400"
+        ? "bg-amber-500 text-white animate-pulse border border-amber-400"
         : "bg-blue-600/30 text-blue-200 border border-blue-500/30";
 
     const badgeText = isLive ? "EVENTO EM ANDAMENTO" : "PRÓXIMO EVENTO";

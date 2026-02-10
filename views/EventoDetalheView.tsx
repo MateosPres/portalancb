@@ -9,7 +9,7 @@ import {
     LucideArrowLeft, LucideCalendar, LucideMapPin, LucideTrophy, 
     LucideUsers, LucideCheckCircle2, LucideXCircle, LucideClock, 
     LucidePlus, LucideTrash2, LucideGamepad2, LucidePlayCircle, LucideEdit, LucideCheckSquare, LucideSquare,
-    LucideLoader2, LucideStar, LucideChevronRight, LucideEdit2, LucideChevronDown, LucideChevronUp, LucideShield, LucidePlay, LucideUpload, LucideSave, LucideSearch, LucideX, LucideShare2
+    LucideLoader2, LucideStar, LucideChevronRight, LucideEdit2, LucideChevronDown, LucideChevronUp, LucideShield, LucidePlay, LucideUpload, LucideSave, LucideSearch, LucideX, LucideShare2, LucideMoreVertical
 } from 'lucide-react';
 import { collection, doc, onSnapshot, updateDoc, setDoc, serverTimestamp, query, getDocs, addDoc, deleteDoc, where } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
@@ -64,6 +64,9 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const [showShareModal, setShowShareModal] = useState(false);
     const [shareData, setShareData] = useState<any>(null);
 
+    // Kebab Menu State
+    const [activeMenuGameId, setActiveMenuGameId] = useState<string | null>(null);
+
     const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
 
     useEffect(() => {
@@ -100,10 +103,16 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         };
         fetchPlayers();
 
-        return () => { unsubEvent(); unsubGames(); unsubRoster(); };
+        // Click outside to close menu
+        const handleClickOutside = () => setActiveMenuGameId(null);
+        document.addEventListener('click', handleClickOutside);
+        return () => {
+            unsubEvent(); unsubGames(); unsubRoster();
+            document.removeEventListener('click', handleClickOutside);
+        };
     }, [eventId]);
 
-    // ... (Keep existing helpers: handleAddPlayerToRoster, handleUpdateStatus, handleStartEvent, handleStartGame, handleOpenScoreEdit, handleSaveScore) ...
+    // ... (Helpers kept same)
     const handleAddPlayerToRoster = async (playerId: string) => { try { await setDoc(doc(db, "eventos", eventId, "roster", playerId), { playerId, status: 'pendente', updatedAt: serverTimestamp() }); if (event) { const currentLegacyRoster = event.jogadoresEscalados || []; if (!currentLegacyRoster.includes(playerId)) { await updateDoc(doc(db, "eventos", eventId), { jogadoresEscalados: [...currentLegacyRoster, playerId] }); } } } catch (e) { console.error(e); } };
     const handleUpdateStatus = async (playerId: string, status: 'confirmado' | 'pendente' | 'recusado') => { if (!isAdmin) return; try { await updateDoc(doc(db, "eventos", eventId, "roster", playerId), { status, updatedAt: serverTimestamp() }); } catch (e) { console.error(e); } };
     const handleStartEvent = async () => { if (!isAdmin) return; if (!window.confirm("Iniciar este evento agora? Isso o destacará na página inicial.")) return; try { await updateDoc(doc(db, "eventos", eventId), { status: 'andamento' }); } catch (e) { alert("Erro ao iniciar evento"); } };
@@ -111,7 +120,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const handleOpenScoreEdit = (game: Jogo) => { setEditScoreGame(game); setEditScoreA(String(resolveScore(game.placarTimeA_final, game.placarANCB_final))); setEditScoreB(String(resolveScore(game.placarTimeB_final, game.placarAdversario_final))); };
     const handleSaveScore = async () => { if (!editScoreGame) return; try { const sA = parseInt(editScoreA) || 0; const sB = parseInt(editScoreB) || 0; await updateDoc(doc(db, "eventos", eventId, "jogos", editScoreGame.id), { placarTimeA_final: sA, placarTimeB_final: sB, placarANCB_final: sA, placarAdversario_final: sB, status: 'finalizado' }); setEditScoreGame(null); } catch (e) { console.error(e); alert("Erro ao atualizar placar."); } };
     const resolveScore = (valNew?: number, valLegacy?: number) => { if (valNew && valNew > 0) return valNew; if (valLegacy && valLegacy > 0) return valLegacy; return valNew ?? valLegacy ?? 0; };
-    const normalizePosition = (pos: string | undefined): string => { if (!pos) return '-'; const p = pos.toLowerCase(); if (p.includes('1') || (p.includes('armador') && !p.includes('ala'))) return 'Armador (1)'; if (p.includes('2') || p.includes('ala/armador') || p.includes('ala-armador') || p.includes('sg')) return 'Ala/Armador (2)'; if (p.includes('3') || (p.includes('ala') && !p.includes('armador') && !p.includes('piv') && !p.includes('pivo')) || p.includes('sf')) return 'Ala (3)'; if (p.includes('4') || p.includes('ala/piv') || p.includes('ala-piv') || p.includes('pf')) return 'Ala/Pivô (4)'; if (p.includes('5') || (p.includes('piv') && !p.includes('ala')) || p.includes('c)') || p.trim().endsWith('(c)')) return 'Pivô (5)'; return pos; };
+    const normalizePosition = (pos: string | undefined): string => { if (!pos) return '-'; const p = pos.toLowerCase(); if (p.includes('1') || (p.includes('armador') && !p.includes('ala'))) return 'Armador (1)'; if (p.includes('2') || (p.includes('ala/armador') || p.includes('ala-armador') || p.includes('sg')) return 'Ala/Armador (2)'; if (p.includes('3') || (p.includes('ala') && !p.includes('armador') && !p.includes('piv') && !p.includes('pivo')) || p.includes('sf')) return 'Ala (3)'; if (p.includes('4') || (p.includes('ala/piv') || p.includes('ala-piv') || p.includes('pf')) return 'Ala/Pivô (4)'; if (p.includes('5') || (p.includes('piv') && !p.includes('ala')) || p.includes('c)') || p.trim().endsWith('(c)')) return 'Pivô (5)'; return pos; };
     const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
 
     // --- NEW: Add Game Logic ---
@@ -158,9 +167,6 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         if (!isAdmin) return;
         if (!window.confirm("ATENÇÃO: Excluir este jogo? Isso apagará também as estatísticas (cestas).")) return;
         try {
-            // Delete cestas subcollection manually or just the game doc
-            // Deleting subcollections from client is hard, ideally cloud function does it.
-            // We will just delete the game doc for now, orphan cestas might remain but won't be queried.
             await deleteDoc(doc(db, "eventos", eventId, "jogos", gameId));
         } catch(e) {
             alert("Erro ao excluir jogo.");
@@ -199,10 +205,10 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
     const handleShareGame = async (e: React.MouseEvent, game: Jogo) => {
         e.stopPropagation();
+        setActiveMenuGameId(null);
         if (!event) return;
 
         if (game.status === 'finalizado') {
-            // Post Game: Fetch stats for Highlights
             try {
                 const cestasRef = collection(db, "eventos", eventId, "jogos", game.id, "cestas");
                 const cestasSnap = await getDocs(cestasRef);
@@ -217,10 +223,6 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                         
                         const points = Number(data.pontos);
                         stats[data.jogadorId].points += points;
-                        
-                        // Sniper Logic: 
-                        // If 3x3: Long range is 2 points.
-                        // If 5x5: Long range is 3 points.
                         if (is3x3) {
                             if (points === 2) stats[data.jogadorId].longRangeShots += 1;
                         } else {
@@ -229,21 +231,18 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                     }
                 });
 
-                // Find MVP
                 let mvpId = '';
                 let maxPoints = -1;
                 Object.entries(stats).forEach(([id, s]) => {
                     if (s.points > maxPoints) { maxPoints = s.points; mvpId = id; }
                 });
 
-                // Find Sniper
                 let sniperId = '';
                 let maxLongRange = -1;
                 Object.entries(stats).forEach(([id, s]) => {
                     if (s.longRangeShots > maxLongRange) { maxLongRange = s.longRangeShots; sniperId = id; }
                 });
 
-                // Prepare Scorers List (Sorted)
                 const scorersList = Object.entries(stats)
                     .map(([id, s]) => {
                         const player = allPlayers.find(p => p.id === id);
@@ -252,7 +251,6 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                     .filter(s => s !== null && s.points > 0)
                     .sort((a, b) => b!.points - a!.points);
 
-                // Prepare Data
                 const mvpPlayer = allPlayers.find(p => p.id === mvpId);
                 const sniperPlayer = allPlayers.find(p => p.id === sniperId);
 
@@ -260,7 +258,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                     type: 'post_game',
                     event,
                     game,
-                    teams: event.times || [], // Pass teams for badge identification
+                    teams: event.times || [], 
                     scorers: scorersList,
                     stats: {
                         mvp: mvpPlayer ? { player: mvpPlayer, points: maxPoints } : undefined,
@@ -271,12 +269,10 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
             } catch (err) {
                 console.error(err);
-                // Fallback share without stats
                 setShareData({ type: 'post_game', event, game, teams: event.times || [] });
                 setShowShareModal(true);
             }
         } else {
-            // Pre Game
             setShareData({
                 type: 'pre_game',
                 event,
@@ -286,193 +282,22 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         }
     };
 
-    // ... (Remaining component code stays the same) ...
-    // ... team management functions ...
-    
-    const handleSaveTeam = async () => {
-        if (!event || !editingTeam || !editingTeam.nomeTime) return;
-        try {
-            let updatedTimes = [...(event.times || [])];
-            
-            if (editingTeam.id) {
-                updatedTimes = updatedTimes.map(t => t.id === editingTeam.id ? { ...t, ...editingTeam } as Time : t);
-            } else {
-                const newTeam: Time = {
-                    id: Math.random().toString(36).substr(2, 9),
-                    nomeTime: editingTeam.nomeTime,
-                    logoUrl: editingTeam.logoUrl || '',
-                    jogadores: editingTeam.jogadores || []
-                };
-                updatedTimes.push(newTeam);
-            }
+    // ... (Team management logic) ...
+    const handleSaveTeam = async () => { if (!event || !editingTeam || !editingTeam.nomeTime) return; try { let updatedTimes = [...(event.times || [])]; if (editingTeam.id) { updatedTimes = updatedTimes.map(t => t.id === editingTeam.id ? { ...t, ...editingTeam } as Time : t); } else { const newTeam: Time = { id: Math.random().toString(36).substr(2, 9), nomeTime: editingTeam.nomeTime, logoUrl: editingTeam.logoUrl || '', jogadores: editingTeam.jogadores || [] }; updatedTimes.push(newTeam); } await updateDoc(doc(db, "eventos", eventId), { times: updatedTimes }); setEditingTeam(null); } catch (e) { alert("Erro ao salvar time."); } };
+    const handleDeleteTeam = async (teamId: string) => { if (!event || !window.confirm("Excluir time? Isso pode afetar jogos existentes.")) return; try { const updatedTimes = (event.times || []).filter(t => t.id !== teamId); await updateDoc(doc(db, "eventos", eventId), { times: updatedTimes }); } catch (e) { alert("Erro ao excluir time."); } };
+    const handleTeamLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => { if (!e.target.files || !e.target.files[0]) return; setIsUploadingLogo(true); try { const file = e.target.files[0]; const options = { maxSizeMB: 0.1, maxWidthOrHeight: 256, useWebWorker: true, fileType: 'image/png' }; const compressedFile = await imageCompression(file, options); const base64 = await fileToBase64(compressedFile); setEditingTeam(prev => ({ ...prev, logoUrl: base64 })); } catch (error) { console.error(error); alert("Erro ao processar imagem."); } finally { setIsUploadingLogo(false); } };
+    const togglePlayerInTeam = (playerId: string) => { if (!editingTeam) return; const currentPlayers = editingTeam.jogadores || []; if (currentPlayers.includes(playerId)) { setEditingTeam({ ...editingTeam, jogadores: currentPlayers.filter(id => id !== playerId) }); } else { setEditingTeam({ ...editingTeam, jogadores: [...currentPlayers, playerId] }); } };
 
-            await updateDoc(doc(db, "eventos", eventId), { times: updatedTimes });
-            setEditingTeam(null);
-        } catch (e) {
-            alert("Erro ao salvar time.");
-        }
+    const renderInternalTournamentRoster = () => { /* Same as before */
+        if (!event?.times || event.times.length === 0) { return ( <div className="text-gray-500 text-sm italic text-center py-4"> Nenhum time cadastrado. {isAdmin && <Button size="sm" className="mt-2 mx-auto" onClick={() => setShowTeamManager(true)}>Criar Times</Button>} </div> ); }
+        return ( <div className="space-y-3"> {event.times.map((team) => ( <div key={team.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all"> <div className="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" onClick={() => setExpandedTeamId(expandedTeamId === team.id ? null : team.id)} > <div className="flex items-center gap-3"> {team.logoUrl ? ( <img src={team.logoUrl} alt={team.nomeTime} className="w-8 h-8 object-contain" /> ) : ( <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-ancb-blue dark:text-blue-300 font-bold text-xs"> {team.nomeTime.charAt(0)} </div> )} <div> <h4 className="font-bold text-sm text-gray-800 dark:text-white">{team.nomeTime}</h4> <p className="text-[10px] text-gray-500 dark:text-gray-400">{team.jogadores.length} jogadores</p> </div> </div> {expandedTeamId === team.id ? <LucideChevronUp size={16} className="text-gray-400"/> : <LucideChevronDown size={16} className="text-gray-400"/>} </div> {expandedTeamId === team.id && ( <div className="bg-gray-50 dark:bg-black/20 border-t border-gray-100 dark:border-gray-700 p-2 space-y-1 animate-slideDown"> {team.jogadores.map(pid => { const p = allPlayers.find(pl => pl.id === pid); return ( <div key={pid} className="flex items-center gap-3 p-2 rounded hover:bg-white dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => onSelectPlayer && onSelectPlayer(pid)}> <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center"> {p?.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-400">{p?.nome?.charAt(0) ?? '?'}</span>} </div> <div> <p className="text-xs font-bold text-gray-800 dark:text-gray-200">{p?.apelido || p?.nome || 'Desconhecido'}</p> <p className="text-[10px] text-gray-500 dark:text-gray-400">{normalizePosition(p?.posicao)}</p> </div> </div> ); })} {team.jogadores.length === 0 && <p className="text-xs text-gray-400 text-center py-2">Sem jogadores.</p>} </div> )} </div> ))} </div> );
     };
 
-    const handleDeleteTeam = async (teamId: string) => {
-        if (!event || !window.confirm("Excluir time? Isso pode afetar jogos existentes.")) return;
-        try {
-            const updatedTimes = (event.times || []).filter(t => t.id !== teamId);
-            await updateDoc(doc(db, "eventos", eventId), { times: updatedTimes });
-        } catch (e) {
-            alert("Erro ao excluir time.");
-        }
-    };
-
-    const handleTeamLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files || !e.target.files[0]) return;
-        setIsUploadingLogo(true);
-        try {
-            const file = e.target.files[0];
-            const options = { maxSizeMB: 0.1, maxWidthOrHeight: 256, useWebWorker: true, fileType: 'image/png' };
-            const compressedFile = await imageCompression(file, options);
-            const base64 = await fileToBase64(compressedFile);
-            setEditingTeam(prev => ({ ...prev, logoUrl: base64 }));
-        } catch (error) {
-            console.error(error);
-            alert("Erro ao processar imagem.");
-        } finally {
-            setIsUploadingLogo(false);
-        }
-    };
-
-    const togglePlayerInTeam = (playerId: string) => {
-        if (!editingTeam) return;
-        const currentPlayers = editingTeam.jogadores || [];
-        if (currentPlayers.includes(playerId)) {
-            setEditingTeam({ ...editingTeam, jogadores: currentPlayers.filter(id => id !== playerId) });
-        } else {
-            setEditingTeam({ ...editingTeam, jogadores: [...currentPlayers, playerId] });
-        }
-    };
-
-    const renderInternalTournamentRoster = () => {
-        if (!event?.times || event.times.length === 0) {
-            return (
-                <div className="text-gray-500 text-sm italic text-center py-4">
-                    Nenhum time cadastrado.
-                    {isAdmin && <Button size="sm" className="mt-2 mx-auto" onClick={() => setShowTeamManager(true)}>Criar Times</Button>}
-                </div>
-            );
-        }
-
-        return (
-            <div className="space-y-3">
-                {event.times.map((team) => (
-                    <div key={team.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all">
-                        <div 
-                            className="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                            onClick={() => setExpandedTeamId(expandedTeamId === team.id ? null : team.id)}
-                        >
-                            <div className="flex items-center gap-3">
-                                {team.logoUrl ? (
-                                    <img src={team.logoUrl} alt={team.nomeTime} className="w-8 h-8 object-contain" />
-                                ) : (
-                                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-ancb-blue dark:text-blue-300 font-bold text-xs">
-                                        {team.nomeTime.charAt(0)}
-                                    </div>
-                                )}
-                                <div>
-                                    <h4 className="font-bold text-sm text-gray-800 dark:text-white">{team.nomeTime}</h4>
-                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">{team.jogadores.length} jogadores</p>
-                                </div>
-                            </div>
-                            {expandedTeamId === team.id ? <LucideChevronUp size={16} className="text-gray-400"/> : <LucideChevronDown size={16} className="text-gray-400"/>}
-                        </div>
-                        
-                        {expandedTeamId === team.id && (
-                            <div className="bg-gray-50 dark:bg-black/20 border-t border-gray-100 dark:border-gray-700 p-2 space-y-1 animate-slideDown">
-                                {team.jogadores.map(pid => {
-                                    const p = allPlayers.find(pl => pl.id === pid);
-                                    return (
-                                        <div key={pid} className="flex items-center gap-3 p-2 rounded hover:bg-white dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => onSelectPlayer && onSelectPlayer(pid)}>
-                                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center">
-                                                {p?.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-400">{p?.nome?.charAt(0) ?? '?'}</span>}
-                                            </div>
-                                            <div>
-                                                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">{p?.apelido || p?.nome || 'Desconhecido'}</p>
-                                                <p className="text-[10px] text-gray-500 dark:text-gray-400">{normalizePosition(p?.posicao)}</p>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                                {team.jogadores.length === 0 && <p className="text-xs text-gray-400 text-center py-2">Sem jogadores.</p>}
-                            </div>
-                        )}
-                    </div>
-                ))}
-            </div>
-        );
-    };
-
-    const renderExternalRoster = () => {
-        const effectiveRoster = getEffectiveRoster();
-
-        if (effectiveRoster.length === 0) {
-            return (
-                <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">Nenhum jogador convocado.</p>
-                </div>
-            );
-        }
-
-        const confirmed = effectiveRoster.filter(r => r.status === 'confirmado');
-        const pending = effectiveRoster.filter(r => r.status === 'pendente');
-
-        const renderPlayerItem = (entry: RosterEntry) => {
-            const p = allPlayers.find(pl => pl.id === entry.playerId);
-            if (!p) return null;
-            return (
-                <div key={entry.playerId} className="flex items-center justify-between p-2.5 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800 transition-colors group">
-                    <div className="flex items-center gap-3 cursor-pointer overflow-hidden" onClick={() => onSelectPlayer && onSelectPlayer(p.id)}>
-                        <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center shrink-0">
-                            {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-400">{p.nome.charAt(0)}</span>}
-                        </div>
-                        <div className="min-w-0">
-                            <p className="font-bold text-gray-800 dark:text-gray-200 text-sm truncate">{p.apelido || p.nome}</p>
-                            <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-gray-500 dark:text-gray-400">{normalizePosition(p.posicao).split(' ')[0]}</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    {isAdmin ? (
-                        <div className="flex items-center gap-1">
-                             <button onClick={() => handleUpdateStatus(p.id, 'confirmado')} className={`p-1.5 rounded transition-colors ${entry.status === 'confirmado' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'text-gray-300 hover:text-green-500'}`} title="Confirmar"><LucideCheckSquare size={16}/></button>
-                             <button onClick={() => handleUpdateStatus(p.id, 'pendente')} className={`p-1.5 rounded transition-colors ${entry.status === 'pendente' ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-300 hover:text-orange-500'}`} title="Pendente"><LucideSquare size={16}/></button>
-                             <button onClick={() => handleUpdateStatus(p.id, 'recusado')} className={`p-1.5 rounded transition-colors ${entry.status === 'recusado' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'text-gray-300 hover:text-red-500'}`} title="Recusar"><LucideXCircle size={16}/></button>
-                        </div>
-                    ) : (
-                        <div className="pr-2">
-                            {entry.status === 'confirmado' && <LucideCheckCircle2 size={16} className="text-green-500"/>}
-                            {entry.status === 'recusado' && <LucideXCircle size={16} className="text-red-500"/>}
-                            {entry.status === 'pendente' && <LucideClock size={16} className="text-orange-500"/>}
-                        </div>
-                    )}
-                </div>
-            );
-        };
-
-        return (
-            <div className="space-y-4">
-                {confirmed.length > 0 && (
-                    <div>
-                        <h4 className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase mb-2 flex items-center gap-1 tracking-wider"><LucideCheckCircle2 size={12}/> Confirmados ({confirmed.length})</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">{confirmed.map(renderPlayerItem)}</div>
-                    </div>
-                )}
-                {pending.length > 0 && (
-                    <div>
-                        <h4 className="text-[10px] font-bold text-orange-500 uppercase mb-2 flex items-center gap-1 tracking-wider"><LucideClock size={12}/> Pendentes ({pending.length})</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">{pending.map(renderPlayerItem)}</div>
-                    </div>
-                )}
-            </div>
-        );
+    const renderExternalRoster = () => { /* Same as before */
+        const effectiveRoster = getEffectiveRoster(); if (effectiveRoster.length === 0) { return ( <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-200 dark:border-gray-700"> <p className="text-gray-500 dark:text-gray-400 text-sm">Nenhum jogador convocado.</p> </div> ); }
+        const confirmed = effectiveRoster.filter(r => r.status === 'confirmado'); const pending = effectiveRoster.filter(r => r.status === 'pendente');
+        const renderPlayerItem = (entry: RosterEntry) => { const p = allPlayers.find(pl => pl.id === entry.playerId); if (!p) return null; return ( <div key={entry.playerId} className="flex items-center justify-between p-2.5 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800 transition-colors group"> <div className="flex items-center gap-3 cursor-pointer overflow-hidden" onClick={() => onSelectPlayer && onSelectPlayer(p.id)}> <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center shrink-0"> {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-400">{p.nome.charAt(0)}</span>} </div> <div className="min-w-0"> <p className="font-bold text-gray-800 dark:text-gray-200 text-sm truncate">{p.apelido || p.nome}</p> <div className="flex items-center gap-2"> <span className="text-[10px] text-gray-500 dark:text-gray-400">{normalizePosition(p.posicao).split(' ')[0]}</span> </div> </div> </div> {isAdmin ? ( <div className="flex items-center gap-1"> <button onClick={() => handleUpdateStatus(p.id, 'confirmado')} className={`p-1.5 rounded transition-colors ${entry.status === 'confirmado' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'text-gray-300 hover:text-green-500'}`} title="Confirmar"><LucideCheckSquare size={16}/></button> <button onClick={() => handleUpdateStatus(p.id, 'pendente')} className={`p-1.5 rounded transition-colors ${entry.status === 'pendente' ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-300 hover:text-orange-500'}`} title="Pendente"><LucideSquare size={16}/></button> <button onClick={() => handleUpdateStatus(p.id, 'recusado')} className={`p-1.5 rounded transition-colors ${entry.status === 'recusado' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'text-gray-300 hover:text-red-500'}`} title="Recusar"><LucideXCircle size={16}/></button> </div> ) : ( <div className="pr-2"> {entry.status === 'confirmado' && <LucideCheckCircle2 size={16} className="text-green-500"/>} {entry.status === 'recusado' && <LucideXCircle size={16} className="text-red-500"/>} {entry.status === 'pendente' && <LucideClock size={16} className="text-orange-500"/>} </div> )} </div> ); };
+        return ( <div className="space-y-4"> {confirmed.length > 0 && ( <div> <h4 className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase mb-2 flex items-center gap-1 tracking-wider"><LucideCheckCircle2 size={12}/> Confirmados ({confirmed.length})</h4> <div className="grid grid-cols-1 md:grid-cols-2 gap-2">{confirmed.map(renderPlayerItem)}</div> </div> )} {pending.length > 0 && ( <div> <h4 className="text-[10px] font-bold text-orange-500 uppercase mb-2 flex items-center gap-1 tracking-wider"><LucideClock size={12}/> Pendentes ({pending.length})</h4> <div className="grid grid-cols-1 md:grid-cols-2 gap-2">{pending.map(renderPlayerItem)}</div> </div> )} </div> );
     };
 
     if (loading || !event) return <div className="flex h-screen items-center justify-center bg-gray-900 text-white"><LucideLoader2 className="animate-spin" /></div>;
@@ -614,42 +439,64 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                     <div 
                                         key={game.id} 
                                         onClick={() => onOpenGamePanel(game, eventId)}
-                                        className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors ${getGameResultClass(game)}`}
+                                        className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors relative ${getGameResultClass(game)}`}
                                     >
-                                        <div className="flex-1 flex items-center justify-between gap-4">
-                                            <span className="font-bold text-sm md:text-base text-right w-1/3 truncate">{game.timeA_nome || 'ANCB'}</span>
-                                            <div className={`px-3 py-1 rounded font-mono font-bold text-lg whitespace-nowrap ${isGameLive ? 'bg-red-100 text-red-600 animate-pulse border border-red-200' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                                        <div className="flex-1 grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                                            {/* Team A */}
+                                            <span className="font-bold text-xs md:text-sm text-right leading-tight text-gray-900 dark:text-gray-100 break-words whitespace-normal line-clamp-2">
+                                                {game.timeA_nome || 'ANCB'}
+                                            </span>
+                                            
+                                            {/* Score */}
+                                            <div className={`px-2 py-1 rounded font-mono font-bold text-base md:text-lg whitespace-nowrap text-center min-w-[60px] ${isGameLive ? 'bg-red-100 text-red-600 animate-pulse border border-red-200' : 'bg-gray-100 dark:bg-gray-700'}`}>
                                                 {sA} - {sB}
                                             </div>
-                                            <span className="font-bold text-sm md:text-base text-left w-1/3 truncate">{game.timeB_nome || game.adversario || 'ADV'}</span>
+                                            
+                                            {/* Team B */}
+                                            <span className="font-bold text-xs md:text-sm text-left leading-tight text-gray-900 dark:text-gray-100 break-words whitespace-normal line-clamp-2">
+                                                {game.timeB_nome || game.adversario || 'ADV'}
+                                            </span>
                                         </div>
                                         
-                                        <div className="ml-4 flex items-center gap-2">
-                                            <button 
-                                                onClick={(e) => handleShareGame(e, game)}
-                                                className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                                                title="Compartilhar Card"
-                                            >
-                                                <LucideShare2 size={16} />
-                                            </button>
-                                            
-                                            {isAdmin && (
-                                                <div className="flex gap-1">
-                                                    <div 
-                                                        className="text-gray-400 hover:text-ancb-blue p-1.5 rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" 
-                                                        onClick={(e) => { e.stopPropagation(); handleOpenScoreEdit(game); }}
-                                                        title="Editar Placar Manualmente"
-                                                    >
-                                                        <LucideEdit2 size={16}/>
-                                                    </div>
-                                                    <div 
-                                                        className="text-gray-400 hover:text-red-500 p-1.5 rounded bg-gray-100 dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors" 
-                                                        onClick={(e) => { e.stopPropagation(); handleDeleteGame(game.id); }}
-                                                        title="Excluir Jogo"
-                                                    >
-                                                        <LucideTrash2 size={16}/>
-                                                    </div>
+                                        {/* Actions */}
+                                        <div className="ml-2 pl-2 border-l border-gray-200 dark:border-gray-700 flex items-center relative">
+                                            {/* If Admin, show Kebab Menu or Direct Actions if space allows. Mobile = Kebab */}
+                                            {isAdmin ? (
+                                                <div 
+                                                    className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"
+                                                    onClick={(e) => { e.stopPropagation(); setActiveMenuGameId(activeMenuGameId === game.id ? null : game.id); }}
+                                                >
+                                                    <LucideMoreVertical size={18} />
+                                                    {activeMenuGameId === game.id && (
+                                                        <div className="absolute right-0 top-8 z-50 bg-white dark:bg-gray-800 shadow-xl rounded-xl border border-gray-100 dark:border-gray-700 py-1 w-48 animate-slideDown overflow-hidden">
+                                                            <button 
+                                                                className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-gray-700 dark:text-gray-200"
+                                                                onClick={(e) => { e.stopPropagation(); handleShareGame(e, game); }}
+                                                            >
+                                                                <LucideShare2 size={16} /> Compartilhar Card
+                                                            </button>
+                                                            <button 
+                                                                className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-ancb-blue"
+                                                                onClick={(e) => { e.stopPropagation(); handleOpenScoreEdit(game); }}
+                                                            >
+                                                                <LucideEdit2 size={16} /> Editar Placar
+                                                            </button>
+                                                            <button 
+                                                                className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm flex items-center gap-2 text-red-600"
+                                                                onClick={(e) => { e.stopPropagation(); handleDeleteGame(game.id); }}
+                                                            >
+                                                                <LucideTrash2 size={16} /> Excluir Jogo
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
+                                            ) : (
+                                                <button 
+                                                    onClick={(e) => handleShareGame(e, game)}
+                                                    className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                                >
+                                                    <LucideShare2 size={16} />
+                                                </button>
                                             )}
                                         </div>
                                     </div>
@@ -661,6 +508,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
                 {/* RIGHT COLUMN: ROSTER OR TEAMS */}
                 <div className="space-y-6">
+                    {/* ... (Roster header same) */}
                     <div className="flex items-center justify-between">
                         <h3 className="text-xl font-bold flex items-center gap-2">
                             {event.type === 'torneio_interno' ? <LucideShield className="text-ancb-orange" /> : <LucideUsers className="text-ancb-orange" />}
@@ -701,22 +549,22 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                 </div>
             </div>
 
-            {/* Event Edit Modal */}
+            {/* Event Edit Modal ... (Existing) */}
             <Modal isOpen={showEditEvent} onClose={() => setShowEditEvent(false)} title="Editar Evento">
+                {/* ... existing form content ... */}
                 <form onSubmit={handleUpdateEvent} className="space-y-4">
-                    {/* ... (Existing form content) ... */}
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase mb-1">Nome</label>
-                        <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={editName} onChange={e => setEditName(e.target.value)} required />
+                        <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editName} onChange={e => setEditName(e.target.value)} required />
                     </div>
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase mb-1">Data</label>
-                        <input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={editDate} onChange={e => setEditDate(e.target.value)} required />
+                        <input type="date" className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editDate} onChange={e => setEditDate(e.target.value)} required />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-bold text-gray-500 uppercase mb-1">Tipo</label>
-                            <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={editType} onChange={e => setEditType(e.target.value as any)}>
+                            <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editType} onChange={e => setEditType(e.target.value as any)}>
                                 <option value="amistoso">Amistoso</option>
                                 <option value="torneio_interno">Torneio Interno</option>
                                 <option value="torneio_externo">Torneio Externo</option>
@@ -724,7 +572,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                         </div>
                         <div>
                             <label className="text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
-                            <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={editStatus} onChange={e => setEditStatus(e.target.value as any)}>
+                            <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editStatus} onChange={e => setEditStatus(e.target.value as any)}>
                                 <option value="proximo">Próximo</option>
                                 <option value="andamento">Em Andamento</option>
                                 <option value="finalizado">Finalizado</option>
@@ -735,31 +583,44 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                 </form>
             </Modal>
 
-            {/* Add Game Modal */}
+            {/* Add Game Modal - REDESIGNED */}
             <Modal isOpen={showAddGame} onClose={() => setShowAddGame(false)} title="Agendar Jogo">
-                <form onSubmit={handleAddGame} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                <form onSubmit={handleAddGame} className="space-y-5">
+                    {/* Date and Location stacked better on mobile */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-1">Data</label>
-                            <input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={newGameDate} onChange={e => setNewGameDate(e.target.value)} required />
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data</label>
+                            <input 
+                                type="date" 
+                                className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none transition-all" 
+                                value={newGameDate} 
+                                onChange={e => setNewGameDate(e.target.value)} 
+                                required 
+                            />
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-1">Localização</label>
-                            <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Ex: Quadra Municipal" value={newGameLocation} onChange={e => setNewGameLocation(e.target.value)} />
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Localização</label>
+                            <input 
+                                className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none transition-all" 
+                                placeholder="Ex: Quadra Municipal" 
+                                value={newGameLocation} 
+                                onChange={e => setNewGameLocation(e.target.value)} 
+                            />
                         </div>
                     </div>
+
                     {event.type === 'torneio_interno' ? (
                         <>
                             <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1">Time A</label>
-                                <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={newGameTimeA} onChange={e => setNewGameTimeA(e.target.value)} required>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Time A (Mandante)</label>
+                                <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none" value={newGameTimeA} onChange={e => setNewGameTimeA(e.target.value)} required>
                                     <option value="">Selecione...</option>
                                     {event.times?.map(t => <option key={t.id} value={t.id}>{t.nomeTime}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1">Time B</label>
-                                <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Time B (Visitante)</label>
+                                <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required>
                                     <option value="">Selecione...</option>
                                     {event.times?.map(t => <option key={t.id} value={t.id}>{t.nomeTime}</option>)}
                                 </select>
@@ -767,23 +628,23 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                         </>
                     ) : (
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-1">Adversário</label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Adversário</label>
                             <input 
                                 type="text" 
-                                className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" 
+                                className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none" 
                                 placeholder="Nome do time adversário"
                                 value={newGameTimeB} 
                                 onChange={e => setNewGameTimeB(e.target.value)} 
                                 required 
                             />
-                            <p className="text-[10px] text-gray-400 mt-1">Seu time será listado como ANCB.</p>
+                            <p className="text-[10px] text-gray-400 mt-1 pl-1">Seu time será listado automaticamente como ANCB.</p>
                         </div>
                     )}
-                    <Button type="submit" className="w-full mt-2">Criar Jogo</Button>
+                    <Button type="submit" className="w-full h-12 text-lg">Criar Jogo</Button>
                 </form>
             </Modal>
 
-            {/* Score Edit Modal */}
+            {/* Score Edit Modal ... */}
             <Modal isOpen={!!editScoreGame} onClose={() => setEditScoreGame(null)} title="Editar Placar Manualmente">
                 {editScoreGame && (
                     <div className="space-y-4">
@@ -817,10 +678,9 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                 )}
             </Modal>
 
-            {/* TEAM MANAGER MODAL */}
+            {/* TEAM MANAGER MODAL ... (kept same) */}
             <Modal isOpen={showTeamManager} onClose={() => { setShowTeamManager(false); setEditingTeam(null); }} title="Gerenciar Times">
                 {!editingTeam ? (
-                    // LIST VIEW
                     <div className="space-y-4">
                         <Button className="w-full" onClick={() => setEditingTeam({ nomeTime: '', jogadores: [] })}>
                             <LucidePlus size={16} /> Adicionar Novo Time
@@ -845,12 +705,10 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                         </div>
                     </div>
                 ) : (
-                    // EDIT VIEW
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 mb-4 cursor-pointer text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white" onClick={() => setEditingTeam(null)}>
                             <LucideArrowLeft size={16} /> <span className="text-xs font-bold uppercase">Voltar para lista</span>
                         </div>
-                        
                         <div className="flex items-center gap-4">
                             <div className="relative shrink-0">
                                 <div className={`w-20 h-20 rounded-full border-2 border-dashed border-gray-400 flex items-center justify-center overflow-hidden ${editingTeam.logoUrl ? 'bg-transparent' : 'bg-gray-200 dark:bg-gray-700'}`}>
@@ -866,7 +724,6 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                 <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editingTeam.nomeTime || ''} onChange={e => setEditingTeam({...editingTeam, nomeTime: e.target.value})} placeholder="Ex: Bulls" />
                             </div>
                         </div>
-
                         <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                             <label className="text-xs font-bold text-gray-500 uppercase mb-2 block flex justify-between">
                                 <span>Elenco ({editingTeam.jogadores?.length || 0})</span>
@@ -892,7 +749,6 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                 })}
                             </div>
                         </div>
-
                         <Button className="w-full" onClick={handleSaveTeam} disabled={!editingTeam.nomeTime}>
                             <LucideSave size={16} /> Salvar Time
                         </Button>
