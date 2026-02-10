@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../services/firebase';
-import { Evento, Jogo, Cesta, Player, UserProfile, Time } from '../types';
+import { Evento, Jogo, Player, UserProfile, Time, EscaladoInfo, RosterEntry, Cesta } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { ShareModal } from '../components/ShareModal';
-import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucideTrash2, LucideStar, LucideMessageSquare, LucidePlayCircle, LucideShield, LucideCamera, LucideLoader2, LucideCalendar, LucideMapPin, LucideShare2 } from 'lucide-react';
+import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucideTrash2, LucideStar, LucideMessageSquare, LucidePlayCircle, LucideShield, LucideCamera, LucideLoader2, LucideCalendar, LucideMapPin, LucideShare2, LucideSearch } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { collection, doc, getDocs, getDoc } from 'firebase/firestore';
 
@@ -34,6 +34,10 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [formType, setFormType] = useState<'amistoso'|'torneio_interno'|'torneio_externo'>('amistoso');
     const [formStatus, setFormStatus] = useState<'proximo'|'andamento'|'finalizado'>('proximo');
     const [formOpponent, setFormOpponent] = useState(''); // Only for Amistoso
+    
+    // Roster Selection State
+    const [selectedRosterMap, setSelectedRosterMap] = useState<Record<string, number>>({});
+    const [rosterSearch, setRosterSearch] = useState('');
 
     useEffect(() => {
         const unsubscribe = db.collection("eventos").orderBy("data", "desc").onSnapshot((snapshot) => {
@@ -52,17 +56,47 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         fetchPlayers();
     }, []);
 
+    const toggleRosterPlayer = (player: Player) => {
+        setSelectedRosterMap(prev => {
+            const newMap = { ...prev };
+            if (newMap[player.id] !== undefined) {
+                delete newMap[player.id];
+            } else {
+                newMap[player.id] = player.numero_uniforme || 0;
+            }
+            return newMap;
+        });
+    };
+
+    const updateRosterNumber = (playerId: string, number: string) => {
+        setSelectedRosterMap(prev => ({
+            ...prev,
+            [playerId]: Number(number)
+        }));
+    };
+
     const handleCreateEvent = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            // Build new roster structure: Array of objects { id, numero }
+            const rosterArray: EscaladoInfo[] = Object.entries(selectedRosterMap).map(([id, num]) => ({
+                id,
+                numero: Number(num)
+            }));
+
             const eventDocRef = await db.collection("eventos").add({
                 nome: formName,
                 data: formDate,
                 modalidade: formMode,
                 type: formType,
                 status: formStatus,
-                jogadoresEscalados: [] // Start empty, manage in detail view
+                jogadoresEscalados: rosterArray // Save specific jersey numbers
             });
+
+            // Also populate the sub-collection 'roster' for better indexing if needed (optional but recommended)
+            // for (const p of rosterArray) {
+            //     await eventDocRef.collection('roster').doc(p.id).set({ playerId: p.id, status: 'pendente', updatedAt: new Date() });
+            // }
 
             // If Amistoso, automatically create the single match
             if (formType === 'amistoso' && formOpponent) {
@@ -80,7 +114,8 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             }
 
             setShowEventForm(false);
-            setFormName(''); setFormDate(''); setFormOpponent('');
+            // Reset form
+            setFormName(''); setFormDate(''); setFormOpponent(''); setSelectedRosterMap({});
         } catch (e) { alert("Erro ao criar evento"); }
     };
 
@@ -112,7 +147,14 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     });
                 } else {
                     // Fallback to legacy array if subcollection is empty
-                    validIds = evento.jogadoresEscalados || [];
+                    // Check if it's string[] or object[]
+                    if (evento.jogadoresEscalados && evento.jogadoresEscalados.length > 0) {
+                        if (typeof evento.jogadoresEscalados[0] === 'string') {
+                            validIds = evento.jogadoresEscalados as string[];
+                        } else {
+                            validIds = (evento.jogadoresEscalados as EscaladoInfo[]).map(e => e.id);
+                        }
+                    }
                 }
 
                 // Filter the global player list by valid IDs
@@ -120,9 +162,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
             } catch (err) {
                 console.error("Error fetching roster for share:", err);
-                // Fallback in case of error
-                const rosterIds = evento.jogadoresEscalados || [];
-                players = allPlayers.filter(p => rosterIds.includes(p.id));
             }
         }
 
@@ -153,6 +192,11 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
     const filteredEvents = events.filter(e => tab === 'proximos' ? e.status !== 'finalizado' : e.status === 'finalizado');
     const displayEvents = tab === 'proximos' ? [...filteredEvents].reverse() : filteredEvents;
+
+    const filteredRosterPlayers = allPlayers.filter(p => 
+        (p.nome || '').toLowerCase().includes(rosterSearch.toLowerCase()) || 
+        (p.apelido || '').toLowerCase().includes(rosterSearch.toLowerCase())
+    );
 
     return (
         <div className="animate-fadeIn pb-10">
@@ -220,7 +264,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                         <LucideTrophy size={14} className="opacity-70" />
                                         <span className="capitalize tracking-wide">{evento.type.replace('_', ' ')}</span>
                                     </div>
-                                    {/* Optional Location or other metadata could go here */}
                                 </div>
                             </div>
 
@@ -269,6 +312,52 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                 <p className="text-[10px] text-gray-500 mt-2 flex items-center gap-1"><LucideGamepad2 size={12} /> Isso criará automaticamente o jogo no sistema.</p>
                             </div>
                         )}
+                        
+                        {/* ROSTER SELECTION */}
+                        <div className="md:col-span-2 mt-2 border-t pt-4 dark:border-gray-700">
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">
+                                Jogadores (Opcional)
+                            </label>
+                            <div className="relative mb-2">
+                                <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
+                                <input 
+                                    className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600" 
+                                    placeholder="Buscar para escalar..." 
+                                    value={rosterSearch} 
+                                    onChange={e => setRosterSearch(e.target.value)} 
+                                />
+                            </div>
+                            <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
+                                {filteredRosterPlayers.map(p => {
+                                    const isSelected = selectedRosterMap[p.id] !== undefined;
+                                    return (
+                                        <div key={p.id} className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${isSelected ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                                            <div className="flex items-center gap-2 flex-1" onClick={() => toggleRosterPlayer(p)}>
+                                                <div className={`w-4 h-4 border rounded flex items-center justify-center ${isSelected ? 'bg-ancb-orange border-ancb-orange' : 'border-gray-400'}`}>
+                                                    {isSelected && <LucideCheckSquare size={10} className="text-white"/>}
+                                                </div>
+                                                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{p.nome}</span>
+                                            </div>
+                                            {isSelected && (
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-[10px] text-gray-500 uppercase">Nº</span>
+                                                    <input 
+                                                        type="number" 
+                                                        className="w-12 p-1 text-center border rounded text-xs font-bold dark:bg-gray-700 dark:text-white"
+                                                        value={selectedRosterMap[p.id]}
+                                                        onChange={(e) => updateRosterNumber(p.id, e.target.value)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-1">
+                                {Object.keys(selectedRosterMap).length} jogadores selecionados. Os números podem ser editados especificamente para este evento.
+                            </p>
+                        </div>
                     </div>
                     <Button type="submit" className="w-full h-12 text-lg">Criar Evento</Button>
                 </form>

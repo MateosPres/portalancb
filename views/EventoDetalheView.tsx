@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/firebase';
-import { Evento, Jogo, Player, UserProfile, Time, RosterEntry, Cesta } from '../types';
+import { Evento, Jogo, Player, UserProfile, Time, RosterEntry, Cesta, EscaladoInfo } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { ShareModal } from '../components/ShareModal';
@@ -45,6 +45,9 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const [editScoreGame, setEditScoreGame] = useState<Jogo | null>(null);
     const [editScoreA, setEditScoreA] = useState<string>('');
     const [editScoreB, setEditScoreB] = useState<string>('');
+
+    // Number Edit Modal State
+    const [editNumberData, setEditNumberData] = useState<{player: Player, number: string} | null>(null);
 
     // Event Edit Modal State
     const [showEditEvent, setShowEditEvent] = useState(false);
@@ -113,7 +116,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     }, [eventId]);
 
     // Helpers
-    const handleAddPlayerToRoster = async (playerId: string) => { try { await setDoc(doc(db, "eventos", eventId, "roster", playerId), { playerId, status: 'pendente', updatedAt: serverTimestamp() }); if (event) { const currentLegacyRoster = event.jogadoresEscalados || []; if (!currentLegacyRoster.includes(playerId)) { await updateDoc(doc(db, "eventos", eventId), { jogadoresEscalados: [...currentLegacyRoster, playerId] }); } } } catch (e) { console.error(e); } };
+    const handleAddPlayerToRoster = async (playerId: string) => { try { await setDoc(doc(db, "eventos", eventId, "roster", playerId), { playerId, status: 'pendente', updatedAt: serverTimestamp() }); if (event) { const currentLegacyRoster = event.jogadoresEscalados || []; if (!currentLegacyRoster.some(e => (typeof e === 'string' ? e === playerId : e.id === playerId))) { await updateDoc(doc(db, "eventos", eventId), { jogadoresEscalados: [...currentLegacyRoster, playerId] }); } } } catch (e) { console.error(e); } };
     const handleUpdateStatus = async (playerId: string, status: 'confirmado' | 'pendente' | 'recusado') => { if (!isAdmin) return; try { await updateDoc(doc(db, "eventos", eventId, "roster", playerId), { status, updatedAt: serverTimestamp() }); } catch (e) { console.error(e); } };
     const handleStartEvent = async () => { if (!isAdmin) return; if (!window.confirm("Iniciar este evento agora? Isso o destacará na página inicial.")) return; try { await updateDoc(doc(db, "eventos", eventId), { status: 'andamento' }); } catch (e) { alert("Erro ao iniciar evento"); } };
     const handleStartGame = async (game: Jogo) => { if (!isAdmin) return; try { await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), { status: 'andamento' }); if (event?.status !== 'andamento') { await updateDoc(doc(db, "eventos", eventId), { status: 'andamento' }); } onOpenGamePanel({ ...game, status: 'andamento' }, eventId); } catch (e) { alert("Erro ao iniciar jogo"); } };
@@ -134,6 +137,58 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     };
     
     const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
+
+    // --- JERSEY NUMBER LOGIC ---
+    const getEventJerseyNumber = (playerId: string) => {
+        if (!event?.jogadoresEscalados) {
+            // Fallback to profile
+            const p = allPlayers.find(ap => ap.id === playerId);
+            return p?.numero_uniforme;
+        }
+        
+        const entry = event.jogadoresEscalados.find((e: string | EscaladoInfo) => 
+            (typeof e === 'string' ? e === playerId : e.id === playerId)
+        );
+
+        if (entry && typeof entry !== 'string' && entry.numero !== undefined) {
+            return entry.numero;
+        }
+        
+        // Fallback to profile
+        const p = allPlayers.find(ap => ap.id === playerId);
+        return p?.numero_uniforme;
+    };
+
+    const handleSaveNumber = async () => {
+        if (!event || !editNumberData) return;
+        try {
+            const currentList = event.jogadoresEscalados || [];
+            let found = false;
+            
+            const newList = currentList.map((entry: string | EscaladoInfo) => {
+                const id = typeof entry === 'string' ? entry : entry.id;
+                if (id === editNumberData.player.id) {
+                    found = true;
+                    return { id, numero: Number(editNumberData.number) };
+                }
+                // Convert legacy string to object if we touch the list, or keep as is?
+                // Better keep consistency if possible, but map logic handles mixed types fine.
+                // To be safe, if we are modifying the array, we can just modify the target entry.
+                return entry; 
+            });
+
+            if (!found) {
+                // If player is in roster subcollection but somehow not in this array, add them
+                newList.push({ id: editNumberData.player.id, numero: Number(editNumberData.number) });
+            }
+
+            await updateDoc(doc(db, "eventos", eventId), { jogadoresEscalados: newList });
+            setEditNumberData(null);
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao atualizar número.");
+        }
+    };
 
     // --- NEW: Add Game Logic ---
     const handleAddGame = async (e: React.FormEvent) => {
@@ -305,10 +360,54 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         return ( <div className="space-y-3"> {event.times.map((team) => ( <div key={team.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all"> <div className="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" onClick={() => setExpandedTeamId(expandedTeamId === team.id ? null : team.id)} > <div className="flex items-center gap-3"> {team.logoUrl ? ( <img src={team.logoUrl} alt={team.nomeTime} className="w-8 h-8 object-contain" /> ) : ( <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-ancb-blue dark:text-blue-300 font-bold text-xs"> {team.nomeTime.charAt(0)} </div> )} <div> <h4 className="font-bold text-sm text-gray-800 dark:text-white">{team.nomeTime}</h4> <p className="text-[10px] text-gray-500 dark:text-gray-400">{team.jogadores.length} jogadores</p> </div> </div> {expandedTeamId === team.id ? <LucideChevronUp size={16} className="text-gray-400"/> : <LucideChevronDown size={16} className="text-gray-400"/>} </div> {expandedTeamId === team.id && ( <div className="bg-gray-50 dark:bg-black/20 border-t border-gray-100 dark:border-gray-700 p-2 space-y-1 animate-slideDown"> {team.jogadores.map(pid => { const p = allPlayers.find(pl => pl.id === pid); return ( <div key={pid} className="flex items-center gap-3 p-2 rounded hover:bg-white dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => onSelectPlayer && onSelectPlayer(pid)}> <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center"> {p?.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-400">{p?.nome?.charAt(0) ?? '?'}</span>} </div> <div> <p className="text-xs font-bold text-gray-800 dark:text-gray-200">{p?.apelido || p?.nome || 'Desconhecido'}</p> <p className="text-[10px] text-gray-500 dark:text-gray-400">{normalizePosition(p?.posicao)}</p> </div> </div> ); })} {team.jogadores.length === 0 && <p className="text-xs text-gray-400 text-center py-2">Sem jogadores.</p>} </div> )} </div> ))} </div> );
     };
 
-    const renderExternalRoster = () => { /* Same as before */
-        const effectiveRoster = getEffectiveRoster(); if (effectiveRoster.length === 0) { return ( <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-200 dark:border-gray-700"> <p className="text-gray-500 dark:text-gray-400 text-sm">Nenhum jogador convocado.</p> </div> ); }
-        const confirmed = effectiveRoster.filter(r => r.status === 'confirmado'); const pending = effectiveRoster.filter(r => r.status === 'pendente');
-        const renderPlayerItem = (entry: RosterEntry) => { const p = allPlayers.find(pl => pl.id === entry.playerId); if (!p) return null; return ( <div key={entry.playerId} className="flex items-center justify-between p-2.5 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800 transition-colors group"> <div className="flex items-center gap-3 cursor-pointer overflow-hidden" onClick={() => onSelectPlayer && onSelectPlayer(p.id)}> <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center shrink-0"> {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-400">{p.nome.charAt(0)}</span>} </div> <div className="min-w-0"> <p className="font-bold text-gray-800 dark:text-gray-200 text-sm truncate">{p.apelido || p.nome}</p> <div className="flex items-center gap-2"> <span className="text-[10px] text-gray-500 dark:text-gray-400">{normalizePosition(p.posicao).split(' ')[0]}</span> </div> </div> </div> {isAdmin ? ( <div className="flex items-center gap-1"> <button onClick={() => handleUpdateStatus(p.id, 'confirmado')} className={`p-1.5 rounded transition-colors ${entry.status === 'confirmado' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'text-gray-300 hover:text-green-500'}`} title="Confirmar"><LucideCheckSquare size={16}/></button> <button onClick={() => handleUpdateStatus(p.id, 'pendente')} className={`p-1.5 rounded transition-colors ${entry.status === 'pendente' ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-300 hover:text-orange-500'}`} title="Pendente"><LucideSquare size={16}/></button> <button onClick={() => handleUpdateStatus(p.id, 'recusado')} className={`p-1.5 rounded transition-colors ${entry.status === 'recusado' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'text-gray-300 hover:text-red-500'}`} title="Recusar"><LucideXCircle size={16}/></button> </div> ) : ( <div className="pr-2"> {entry.status === 'confirmado' && <LucideCheckCircle2 size={16} className="text-green-500"/>} {entry.status === 'recusado' && <LucideXCircle size={16} className="text-red-500"/>} {entry.status === 'pendente' && <LucideClock size={16} className="text-orange-500"/>} </div> )} </div> ); };
+    const renderExternalRoster = () => {
+        const effectiveRoster = getEffectiveRoster(); 
+        if (effectiveRoster.length === 0) { 
+            return ( <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-200 dark:border-gray-700"> <p className="text-gray-500 dark:text-gray-400 text-sm">Nenhum jogador convocado.</p> </div> ); 
+        }
+        const confirmed = effectiveRoster.filter(r => r.status === 'confirmado'); 
+        const pending = effectiveRoster.filter(r => r.status === 'pendente');
+        
+        const renderPlayerItem = (entry: RosterEntry) => { 
+            const p = allPlayers.find(pl => pl.id === entry.playerId); 
+            if (!p) return null; 
+            const jerseyNum = getEventJerseyNumber(p.id);
+
+            return ( 
+                <div key={entry.playerId} className="flex items-center justify-between p-2.5 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800 transition-colors group"> 
+                    <div className="flex items-center gap-3 cursor-pointer overflow-hidden" onClick={() => onSelectPlayer && onSelectPlayer(p.id)}> 
+                        <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center shrink-0"> 
+                            {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-400">{p.nome.charAt(0)}</span>} 
+                        </div> 
+                        <div className="min-w-0"> 
+                            <p className="font-bold text-gray-800 dark:text-gray-200 text-sm truncate">{p.apelido || p.nome}</p> 
+                            <div className="flex items-center gap-2"> 
+                                <span className="text-[10px] text-gray-500 dark:text-gray-400">{normalizePosition(p.posicao).split(' ')[0]}</span> 
+                                <span 
+                                    className="text-[10px] font-bold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-0.5"
+                                    onClick={(e) => { e.stopPropagation(); if(isAdmin) setEditNumberData({player: p, number: String(jerseyNum || '')}); }}
+                                >
+                                   #{jerseyNum || '?'} {isAdmin && <LucideEdit2 size={8} className="text-ancb-blue" />}
+                                </span>
+                            </div> 
+                        </div> 
+                    </div> 
+                    {isAdmin ? ( 
+                        <div className="flex items-center gap-1"> 
+                            <button onClick={() => handleUpdateStatus(p.id, 'confirmado')} className={`p-1.5 rounded transition-colors ${entry.status === 'confirmado' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'text-gray-300 hover:text-green-500'}`} title="Confirmar"><LucideCheckSquare size={16}/></button> 
+                            <button onClick={() => handleUpdateStatus(p.id, 'pendente')} className={`p-1.5 rounded transition-colors ${entry.status === 'pendente' ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-300 hover:text-orange-500'}`} title="Pendente"><LucideSquare size={16}/></button> 
+                            <button onClick={() => handleUpdateStatus(p.id, 'recusado')} className={`p-1.5 rounded transition-colors ${entry.status === 'recusado' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'text-gray-300 hover:text-red-500'}`} title="Recusar"><LucideXCircle size={16}/></button> 
+                        </div> 
+                    ) : ( 
+                        <div className="pr-2"> 
+                            {entry.status === 'confirmado' && <LucideCheckCircle2 size={16} className="text-green-500"/>} 
+                            {entry.status === 'recusado' && <LucideXCircle size={16} className="text-red-500"/>} 
+                            {entry.status === 'pendente' && <LucideClock size={16} className="text-orange-500"/>} 
+                        </div> 
+                    )} 
+                </div> 
+            ); 
+        };
         return ( <div className="space-y-4"> {confirmed.length > 0 && ( <div> <h4 className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase mb-2 flex items-center gap-1 tracking-wider"><LucideCheckCircle2 size={12}/> Confirmados ({confirmed.length})</h4> <div className="grid grid-cols-1 md:grid-cols-2 gap-2">{confirmed.map(renderPlayerItem)}</div> </div> )} {pending.length > 0 && ( <div> <h4 className="text-[10px] font-bold text-orange-500 uppercase mb-2 flex items-center gap-1 tracking-wider"><LucideClock size={12}/> Pendentes ({pending.length})</h4> <div className="grid grid-cols-1 md:grid-cols-2 gap-2">{pending.map(renderPlayerItem)}</div> </div> )} </div> );
     };
 
@@ -353,8 +452,9 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         const effective = [...roster];
         if (event?.jogadoresEscalados) {
             event.jogadoresEscalados.forEach(pid => {
-                if (!effective.find(e => e.playerId === pid)) {
-                    effective.push({ playerId: pid, status: 'confirmado', updatedAt: null });
+                const id = typeof pid === 'string' ? pid : pid.id;
+                if (!effective.find(e => e.playerId === id)) {
+                    effective.push({ playerId: id, status: 'confirmado', updatedAt: null });
                 }
             });
         }
@@ -686,6 +786,25 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                         <Button className="w-full mt-4" onClick={handleSaveScore}>
                             Salvar Correção
                         </Button>
+                    </div>
+                )}
+            </Modal>
+
+            {/* NEW: Edit Number Modal */}
+            <Modal isOpen={!!editNumberData} onClose={() => setEditNumberData(null)} title="Editar Número">
+                {editNumberData && (
+                    <div className="space-y-4">
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                            Defina o número da camisa de <strong>{editNumberData.player.nome}</strong> para este evento.
+                        </p>
+                        <input 
+                            type="number" 
+                            className="w-full p-4 border rounded-xl text-3xl font-bold text-center dark:bg-gray-700 dark:text-white"
+                            value={editNumberData.number}
+                            onChange={(e) => setEditNumberData({...editNumberData, number: e.target.value})}
+                            autoFocus
+                        />
+                        <Button className="w-full" onClick={handleSaveNumber}>Salvar</Button>
                     </div>
                 )}
             </Modal>

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import firebase, { db } from '../services/firebase';
-import { Jogo, Player, Evento, Cesta } from '../types';
+import { Jogo, Player, Evento, Cesta, EscaladoInfo } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { 
@@ -29,21 +29,25 @@ interface ScoreAction {
 
 interface PlayerButtonProps {
     player: Player;
+    jerseyNumber: string | number;
     onClick: () => void;
 }
 
-const PlayerButton: React.FC<PlayerButtonProps> = ({ player, onClick }) => (
+const PlayerButton: React.FC<PlayerButtonProps> = ({ player, jerseyNumber, onClick }) => (
     <button 
         onClick={onClick}
-        className="flex flex-col items-center p-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/20 border border-white/5 transition-all"
+        className="flex flex-col items-center p-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/20 border border-white/5 transition-all group"
     >
-        <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gray-700 overflow-hidden mb-2 border-2 border-white/10 relative">
-            {player.foto ? <img src={player.foto} className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center font-bold text-white/50">{player.nome.charAt(0)}</span>}
-            <div className="absolute bottom-0 right-0 bg-ancb-orange text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border border-gray-900">
-                {player.numero_uniforme}
+        <div className="relative mb-2">
+            <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gray-700 overflow-hidden border-2 border-white/10">
+                {player.foto ? <img src={player.foto} className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center font-bold text-white/50">{player.nome.charAt(0)}</span>}
+            </div>
+            {/* Number Badge - Positioned Absolute OUTSIDE the overflow-hidden container */}
+            <div className="absolute -bottom-1 -right-1 bg-ancb-orange text-white text-[10px] font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-gray-900 shadow-md z-10">
+                {jerseyNumber}
             </div>
         </div>
-        <span className="text-xs font-bold text-white text-center leading-tight line-clamp-1 w-full">
+        <span className="text-xs font-bold text-white text-center leading-tight line-clamp-1 w-full group-hover:text-ancb-orange transition-colors">
             {player.apelido || player.nome.split(' ')[0]}
         </span>
     </button>
@@ -52,6 +56,7 @@ const PlayerButton: React.FC<PlayerButtonProps> = ({ player, onClick }) => (
 export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, onBack, userProfile }) => {
     // Game State
     const [liveGame, setLiveGame] = useState<Jogo>(game);
+    const [eventData, setEventData] = useState<Evento | null>(null); // Store event data for roster numbers
     const [teamAPlayers, setTeamAPlayers] = useState<Player[]>([]);
     const [teamBPlayers, setTeamBPlayers] = useState<Player[]>([]);
     
@@ -78,19 +83,23 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
             
             const eventDoc = await db.collection("eventos").doc(eventId).get();
             if (eventDoc.exists) {
-                const eventData = eventDoc.data() as Evento;
+                const eData = eventDoc.data() as Evento;
+                setEventData(eData); // Save event data
                 
                 // Logic: Internal Tournament vs External/Friendly
-                if (game.timeA_id && game.timeB_id && eventData.times) {
+                if (game.timeA_id && game.timeB_id && eData.times) {
                     // Internal
-                    const teamA = eventData.times.find(t => t.id === game.timeA_id);
-                    const teamB = eventData.times.find(t => t.id === game.timeB_id);
+                    const teamA = eData.times.find(t => t.id === game.timeA_id);
+                    const teamB = eData.times.find(t => t.id === game.timeB_id);
                     if (teamA) setTeamAPlayers(allPlayers.filter(p => teamA.jogadores.includes(p.id)));
                     if (teamB) setTeamBPlayers(allPlayers.filter(p => teamB.jogadores.includes(p.id)));
                 } else {
                     // External: Team A is usually ANCB (Roster), Team B is Opponent (No Roster)
                     // Check if game has specific roster, else use event roster
-                    const rosterIds = eventData.jogadoresEscalados || [];
+                    const rosterIds = (eData.jogadoresEscalados || []).map((entry: string | EscaladoInfo) => 
+                        typeof entry === 'string' ? entry : entry.id
+                    );
+                    
                     const ancbParams = allPlayers.filter(p => rosterIds.includes(p.id));
                     
                     // Assume Team A is ANCB if name contains ANCB or is empty/default
@@ -110,6 +119,24 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
 
         return () => unsubGame();
     }, [game.id, eventId]);
+
+    // Helper to get jersey number from event specific roster or fall back to profile
+    const getJerseyNumber = (player: Player): string | number => {
+        if (!eventData || !eventData.jogadoresEscalados) return player.numero_uniforme;
+        
+        // Find the specific entry for this player in the event roster
+        const entry = eventData.jogadoresEscalados.find((e: string | EscaladoInfo) => {
+            if (typeof e === 'string') return e === player.id;
+            return e.id === player.id;
+        });
+
+        // If found and it's an object with 'numero', use it.
+        if (entry && typeof entry !== 'string' && entry.numero !== undefined) {
+            return entry.numero;
+        }
+
+        return player.numero_uniforme;
+    };
 
     // 2. Score Logic
     const handleAddPoint = async (points: 1 | 2 | 3, teamSide: 'A' | 'B', player?: Player) => {
@@ -260,14 +287,16 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                 </div>
 
                 {/* Controls Area */}
-                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                {/* Added pb-24 (approx 6rem) to prevent cutoff on mobile screens with bottom navigation bars */}
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar pb-24">
                     {players.length > 0 ? (
                         /* Scenario A: Roster Exists */
-                        <div className="grid grid-cols-3 gap-3 content-start pb-4">
+                        <div className="grid grid-cols-3 gap-3 content-start">
                             {players.map(p => (
                                 <PlayerButton 
                                     key={p.id} 
                                     player={p} 
+                                    jerseyNumber={getJerseyNumber(p)}
                                     onClick={() => setSelectedPlayerForScoring({ player: p, teamSide: side })} 
                                 />
                             ))}
@@ -294,7 +323,8 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
     const isLive = liveGame.status === 'andamento';
 
     return (
-        <div className="fixed inset-0 bg-black z-[100] flex flex-col text-white font-sans overflow-hidden">
+        // Use h-[100dvh] for dynamic viewport height on mobile browsers
+        <div className="fixed inset-0 h-[100dvh] bg-black z-[100] flex flex-col text-white font-sans overflow-hidden">
             
             {/* 1. TOP HEADER (Control Bar) */}
             <div className="h-16 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-4 shrink-0 z-20 shadow-xl">
@@ -349,7 +379,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
             </div>
 
             {/* 2. SPLIT VIEW AREA */}
-            <div className="flex-1 flex flex-col md:flex-row relative">
+            <div className="flex-1 flex flex-col md:flex-row relative overflow-hidden">
                 {/* Team A Panel (Left/Top) - Usually Home/ANCB */}
                 <TeamPanel 
                     name={liveGame.timeA_nome || 'ANCB'} 
@@ -360,7 +390,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                 />
 
                 {/* Divider (Visual) */}
-                <div className="h-1 w-full md:w-1 md:h-full bg-gray-800 z-10"></div>
+                <div className="h-1 w-full md:w-1 md:h-full bg-gray-800 z-10 shrink-0"></div>
 
                 {/* Team B Panel (Right/Bottom) - Usually Visitor */}
                 <TeamPanel 

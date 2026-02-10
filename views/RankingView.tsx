@@ -113,9 +113,10 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                 contextModalityMap[gameId] = evento.modalidade;
 
                                 if (game.jogadoresEscalados && Array.isArray(game.jogadoresEscalados)) {
-                                    game.jogadoresEscalados.forEach(pid => {
-                                        if (playerGamesMap[pid]) {
-                                            playerGamesMap[pid].add(gameId);
+                                    game.jogadoresEscalados.forEach((pid: any) => {
+                                        const pId = typeof pid === 'string' ? pid : pid.id;
+                                        if (playerGamesMap[pId]) {
+                                            playerGamesMap[pId].add(gameId);
                                         }
                                     });
                                 }
@@ -158,9 +159,10 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                             await Promise.all(gamePromises);
                         } else {
                             if (evento.jogadoresEscalados && Array.isArray(evento.jogadoresEscalados)) {
-                                evento.jogadoresEscalados.forEach(pid => {
-                                    if (playerGamesMap[pid]) {
-                                        playerGamesMap[pid].add(evento.id);
+                                evento.jogadoresEscalados.forEach((pid) => {
+                                    const pId = typeof pid === 'string' ? pid : pid.id;
+                                    if (playerGamesMap[pId]) {
+                                        playerGamesMap[pId].add(evento.id);
                                     }
                                 });
                             }

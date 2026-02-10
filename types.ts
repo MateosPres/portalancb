@@ -69,6 +69,11 @@ export interface PhotoRequest {
     timestamp: any;
 }
 
+export interface EscaladoInfo {
+    id: string;
+    numero: number | string;
+}
+
 export interface Evento {
     id: string;
     nome: string;
@@ -76,7 +81,8 @@ export interface Evento {
     modalidade: '3x3' | '5x5';
     type: 'torneio_externo' | 'torneio_interno' | 'amistoso';
     status: 'proximo' | 'andamento' | 'finalizado';
-    jogadoresEscalados?: string[]; // Deprecated: Use sub-collection 'roster'
+    // Updated to support both legacy string[] and new object array
+    jogadoresEscalados?: (string | EscaladoInfo)[]; 
     adversario?: string; // Para amistosos
     times?: Time[]; // Para torneios internos
 }
