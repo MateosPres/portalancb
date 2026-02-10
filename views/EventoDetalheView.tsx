@@ -374,7 +374,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col">
             {/* HERO HEADER */}
-            <div className={`relative w-full ${getGradient()} text-white p-6 pt-12 md:p-12 shadow-xl overflow-hidden`}>
+            <div className={`relative w-full ${getGradient()} text-white p-6 pt-20 md:p-12 shadow-xl overflow-hidden`}>
                 <div className="absolute top-0 right-0 opacity-10 pointer-events-none transform translate-x-10 -translate-y-10">
                     <LucideTrophy size={300} />
                 </div>
