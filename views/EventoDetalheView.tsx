@@ -112,7 +112,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         };
     }, [eventId]);
 
-    // ... (Helpers kept same)
+    // Helpers
     const handleAddPlayerToRoster = async (playerId: string) => { try { await setDoc(doc(db, "eventos", eventId, "roster", playerId), { playerId, status: 'pendente', updatedAt: serverTimestamp() }); if (event) { const currentLegacyRoster = event.jogadoresEscalados || []; if (!currentLegacyRoster.includes(playerId)) { await updateDoc(doc(db, "eventos", eventId), { jogadoresEscalados: [...currentLegacyRoster, playerId] }); } } } catch (e) { console.error(e); } };
     const handleUpdateStatus = async (playerId: string, status: 'confirmado' | 'pendente' | 'recusado') => { if (!isAdmin) return; try { await updateDoc(doc(db, "eventos", eventId, "roster", playerId), { status, updatedAt: serverTimestamp() }); } catch (e) { console.error(e); } };
     const handleStartEvent = async () => { if (!isAdmin) return; if (!window.confirm("Iniciar este evento agora? Isso o destacará na página inicial.")) return; try { await updateDoc(doc(db, "eventos", eventId), { status: 'andamento' }); } catch (e) { alert("Erro ao iniciar evento"); } };
@@ -120,7 +120,19 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const handleOpenScoreEdit = (game: Jogo) => { setEditScoreGame(game); setEditScoreA(String(resolveScore(game.placarTimeA_final, game.placarANCB_final))); setEditScoreB(String(resolveScore(game.placarTimeB_final, game.placarAdversario_final))); };
     const handleSaveScore = async () => { if (!editScoreGame) return; try { const sA = parseInt(editScoreA) || 0; const sB = parseInt(editScoreB) || 0; await updateDoc(doc(db, "eventos", eventId, "jogos", editScoreGame.id), { placarTimeA_final: sA, placarTimeB_final: sB, placarANCB_final: sA, placarAdversario_final: sB, status: 'finalizado' }); setEditScoreGame(null); } catch (e) { console.error(e); alert("Erro ao atualizar placar."); } };
     const resolveScore = (valNew?: number, valLegacy?: number) => { if (valNew && valNew > 0) return valNew; if (valLegacy && valLegacy > 0) return valLegacy; return valNew ?? valLegacy ?? 0; };
-    const normalizePosition = (pos: string | undefined): string => { if (!pos) return '-'; const p = pos.toLowerCase(); if (p.includes('1') || (p.includes('armador') && !p.includes('ala'))) return 'Armador (1)'; if (p.includes('2') || (p.includes('ala/armador') || p.includes('ala-armador') || p.includes('sg')) return 'Ala/Armador (2)'; if (p.includes('3') || (p.includes('ala') && !p.includes('armador') && !p.includes('piv') && !p.includes('pivo')) || p.includes('sf')) return 'Ala (3)'; if (p.includes('4') || (p.includes('ala/piv') || p.includes('ala-piv') || p.includes('pf')) return 'Ala/Pivô (4)'; if (p.includes('5') || (p.includes('piv') && !p.includes('ala')) || p.includes('c)') || p.trim().endsWith('(c)')) return 'Pivô (5)'; return pos; };
+    
+    // Corrected normalizePosition function
+    const normalizePosition = (pos: string | undefined): string => { 
+        if (!pos) return '-'; 
+        const p = pos.toLowerCase(); 
+        if (p.includes('1') || (p.includes('armador') && !p.includes('ala'))) return 'Armador (1)'; 
+        if (p.includes('2') || (p.includes('ala/armador') || p.includes('ala-armador') || p.includes('sg'))) return 'Ala/Armador (2)'; 
+        if (p.includes('3') || (p.includes('ala') && !p.includes('armador') && !p.includes('piv') && !p.includes('pivo')) || p.includes('sf')) return 'Ala (3)'; 
+        if (p.includes('4') || (p.includes('ala/piv') || p.includes('ala-piv') || p.includes('pf'))) return 'Ala/Pivô (4)'; 
+        if (p.includes('5') || (p.includes('piv') && !p.includes('ala')) || p.includes('c)') || p.trim().endsWith('(c)')) return 'Pivô (5)'; 
+        return pos; 
+    };
+    
     const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
 
     // --- NEW: Add Game Logic ---
