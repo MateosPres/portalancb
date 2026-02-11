@@ -5,6 +5,7 @@ import { Evento, Jogo, Player, UserProfile, Time, RosterEntry, Cesta, EscaladoIn
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { ShareModal } from '../components/ShareModal';
+import { GameSummaryModal } from '../components/GameSummaryModal';
 import { 
     LucideArrowLeft, LucideCalendar, LucideMapPin, LucideTrophy, 
     LucideUsers, LucideCheckCircle2, LucideXCircle, LucideClock, 
@@ -48,6 +49,9 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
     // Number Edit Modal State
     const [editNumberData, setEditNumberData] = useState<{player: Player, number: string} | null>(null);
+
+    // Game Summary Modal State
+    const [selectedGameForSummary, setSelectedGameForSummary] = useState<Jogo | null>(null);
 
     // Event Edit Modal State
     const [showEditEvent, setShowEditEvent] = useState(false);
@@ -171,9 +175,6 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                     found = true;
                     return { id, numero: Number(editNumberData.number) };
                 }
-                // Convert legacy string to object if we touch the list, or keep as is?
-                // Better keep consistency if possible, but map logic handles mixed types fine.
-                // To be safe, if we are modifying the array, we can just modify the target entry.
                 return entry; 
             });
 
@@ -550,7 +551,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                 return (
                                     <div 
                                         key={game.id} 
-                                        onClick={() => onOpenGamePanel(game, eventId)}
+                                        onClick={() => setSelectedGameForSummary(game)}
                                         className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors relative ${getGameResultClass(game)}`}
                                     >
                                         <div className="flex-1 grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
@@ -660,6 +661,21 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                     {event.type === 'torneio_interno' ? renderInternalTournamentRoster() : renderExternalRoster()}
                 </div>
             </div>
+
+            {/* Game Summary Modal */}
+            <GameSummaryModal
+                isOpen={!!selectedGameForSummary}
+                onClose={() => setSelectedGameForSummary(null)}
+                game={selectedGameForSummary}
+                eventId={eventId}
+                isAdmin={isAdmin}
+                onOpenAdminPanel={() => {
+                    if (selectedGameForSummary) {
+                        onOpenGamePanel(selectedGameForSummary, eventId);
+                        setSelectedGameForSummary(null);
+                    }
+                }}
+            />
 
             {/* Event Edit Modal ... (Existing) */}
             <Modal isOpen={showEditEvent} onClose={() => setShowEditEvent(false)} title="Editar Evento">
