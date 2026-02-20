@@ -6,12 +6,13 @@ import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { ShareModal } from '../components/ShareModal';
 import { GameSummaryModal } from '../components/GameSummaryModal';
+import { ImageCropperModal } from '../components/ImageCropperModal';
 import { 
     LucideArrowLeft, LucideCalendar, LucideMapPin, LucideTrophy, 
     LucideUsers, LucideCheckCircle2, LucideXCircle, LucideClock, 
     LucidePlus, LucideTrash2, LucideGamepad2, LucidePlayCircle, LucideEdit, LucideCheckSquare, LucideSquare,
     LucideLoader2, LucideStar, LucideChevronRight, LucideEdit2, LucideChevronDown, LucideChevronUp, LucideShield, LucidePlay, LucideUpload, LucideSave, LucideSearch, LucideX, LucideShare2, LucideMoreVertical,
-    LucideRotateCcw
+    LucideRotateCcw, LucideList, LucideNetwork, LucideMedal
 } from 'lucide-react';
 import { collection, doc, onSnapshot, updateDoc, setDoc, serverTimestamp, query, getDocs, addDoc, deleteDoc, where } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
@@ -33,6 +34,24 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const [loading, setLoading] = useState(true);
     const [showAddPlayer, setShowAddPlayer] = useState(false);
     const [playerSearch, setPlayerSearch] = useState('');
+    
+    // Image Cropper State
+    const [showCropper, setShowCropper] = useState(false);
+    const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+    const [cropAspect, setCropAspect] = useState(1); // 1:1 for logos
+
+    // External Tournament State
+    const [activeTab, setActiveTab] = useState<'jogos' | 'times' | 'classificacao'>('jogos');
+    const [showSimpleScorePanel, setShowSimpleScorePanel] = useState(false);
+    const [selectedGameForSimpleScore, setSelectedGameForSimpleScore] = useState<Jogo | null>(null);
+    
+    // New Team Form
+    const [newTeamName, setNewTeamName] = useState('');
+    const [newTeamIsANCB, setNewTeamIsANCB] = useState(false);
+    
+    // Podium State
+    const [showPodiumModal, setShowPodiumModal] = useState(false);
+    const [podiumSelection, setPodiumSelection] = useState({ primeiro: '', segundo: '', terceiro: '' });
     
     // Internal Tournament State
     const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
@@ -67,6 +86,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const [newGameTimeA, setNewGameTimeA] = useState(''); // ID for internal, Name for External
     const [newGameTimeB, setNewGameTimeB] = useState('');
     const [newGameLocation, setNewGameLocation] = useState('');
+    const [newGamePhase, setNewGamePhase] = useState<'fase_grupos' | 'oitavas' | 'quartas' | 'semi' | 'final'>('fase_grupos');
 
     // Share Modal
     const [showShareModal, setShowShareModal] = useState(false);
@@ -192,6 +212,121 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         }
     };
 
+    // --- External Tournament Logic ---
+    const handleSaveExternalTeam = async () => {
+        if (!event || !editingTeam?.nomeTime) return;
+        
+        try {
+            const currentTeams = event.timesParticipantes || [];
+            let updatedTeams;
+            let newPlayers: string[] = [];
+
+            if (editingTeam.id) {
+                // Edit existing
+                const oldTeam = currentTeams.find(t => t.id === editingTeam.id);
+                updatedTeams = currentTeams.map(t => t.id === editingTeam.id ? editingTeam as Time : t);
+                
+                // Calculate new players for notification
+                if (editingTeam.isANCB && editingTeam.jogadores && oldTeam) {
+                    const oldPlayers = oldTeam.jogadores || [];
+                    newPlayers = editingTeam.jogadores.filter(pid => !oldPlayers.includes(pid));
+                }
+            } else {
+                // Add new
+                const newTeam: Time = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    nomeTime: editingTeam.nomeTime,
+                    isANCB: editingTeam.isANCB,
+                    logoUrl: editingTeam.logoUrl || '',
+                    jogadores: editingTeam.jogadores || []
+                };
+                updatedTeams = [...currentTeams, newTeam];
+                
+                if (newTeam.isANCB) {
+                    newPlayers = newTeam.jogadores;
+                }
+            }
+            
+            await updateDoc(doc(db, "eventos", eventId), {
+                timesParticipantes: updatedTeams
+            });
+            
+            // Send Notifications
+            if (newPlayers.length > 0) {
+                // Using addDoc directly since writeBatch is not imported
+                const notificationsPromises = newPlayers.map(playerId => {
+                    const player = allPlayers.find(p => p.id === playerId);
+                    if (player && player.userId) {
+                        return addDoc(collection(db, "notificacoes"), {
+                            userId: player.userId,
+                            title: "Convocação!",
+                            message: `Você foi escalado para o time ${editingTeam.nomeTime} no evento ${event.nome}.`,
+                            read: false,
+                            timestamp: serverTimestamp(),
+                            type: 'convocacao',
+                            link: `/eventos/${eventId}`
+                        });
+                    }
+                    return Promise.resolve();
+                });
+                
+                await Promise.all(notificationsPromises);
+            }
+            
+            setEditingTeam(null);
+            alert("Time salvo com sucesso!");
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao salvar time.");
+        }
+    };
+
+    const handleDeleteExternalTeam = async (teamId: string) => {
+        if (!event || !window.confirm("Excluir este time?")) return;
+        try {
+            const currentTeams = event.timesParticipantes || [];
+            const updatedTeams = currentTeams.filter(t => t.id !== teamId);
+            await updateDoc(doc(db, "eventos", eventId), {
+                timesParticipantes: updatedTeams
+            });
+        } catch (e) {
+            alert("Erro ao excluir time.");
+        }
+    };
+
+    const handleSavePodium = async () => {
+        if (!event || !podiumSelection.primeiro || !podiumSelection.segundo || !podiumSelection.terceiro) {
+            alert("Selecione os 3 primeiros colocados.");
+            return;
+        }
+        
+        try {
+            await updateDoc(doc(db, "eventos", eventId), {
+                podio: podiumSelection,
+                status: 'finalizado'
+            });
+            setShowPodiumModal(false);
+            alert("Torneio encerrado com sucesso!");
+        } catch (e) {
+            alert("Erro ao salvar pódio.");
+        }
+    };
+
+    const handleOpenGame = (game: Jogo) => {
+        // Check if it's an ANCB game
+        const teamA = (event?.timesParticipantes || []).find(t => t.id === game.timeA_id);
+        const teamB = (event?.timesParticipantes || []).find(t => t.id === game.timeB_id);
+        
+        const isANCBGame = teamA?.isANCB || teamB?.isANCB || game.timeA_nome?.toUpperCase().includes('ANCB') || game.timeB_nome?.toUpperCase().includes('ANCB');
+        
+        if (isANCBGame || event?.type === 'torneio_interno' || event?.type === 'amistoso') {
+            onOpenGamePanel(game, eventId);
+        } else {
+            setSelectedGameForSimpleScore(game);
+            setShowSimpleScorePanel(true);
+        }
+    };
+
     // --- NEW: Add Game Logic ---
     const handleAddGame = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -217,8 +352,19 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                 gameData.timeA_nome = teamA.nomeTime;
                 gameData.timeB_id = teamB.id;
                 gameData.timeB_nome = teamB.nomeTime;
+            } else if (event.type === 'torneio_externo') {
+                const teamA = event.timesParticipantes?.find(t => t.id === newGameTimeA);
+                const teamB = event.timesParticipantes?.find(t => t.id === newGameTimeB);
+                
+                if (!teamA || !teamB) { alert("Selecione os times."); return; }
+                
+                gameData.timeA_id = teamA.id;
+                gameData.timeA_nome = teamA.nomeTime;
+                gameData.timeB_id = teamB.id;
+                gameData.timeB_nome = teamB.nomeTime;
+                gameData.adversario = teamB.nomeTime; // Legacy support
             } else {
-                // External / Friendly
+                // Friendly
                 gameData.timeA_nome = 'ANCB'; // Default
                 gameData.timeB_nome = newGameTimeB || 'Adversário';
                 gameData.adversario = newGameTimeB || 'Adversário';
@@ -354,7 +500,44 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     // ... (Team management logic) ...
     const handleSaveTeam = async () => { if (!event || !editingTeam || !editingTeam.nomeTime) return; try { let updatedTimes = [...(event.times || [])]; if (editingTeam.id) { updatedTimes = updatedTimes.map(t => t.id === editingTeam.id ? { ...t, ...editingTeam } as Time : t); } else { const newTeam: Time = { id: Math.random().toString(36).substr(2, 9), nomeTime: editingTeam.nomeTime, logoUrl: editingTeam.logoUrl || '', jogadores: editingTeam.jogadores || [] }; updatedTimes.push(newTeam); } await updateDoc(doc(db, "eventos", eventId), { times: updatedTimes }); setEditingTeam(null); } catch (e) { alert("Erro ao salvar time."); } };
     const handleDeleteTeam = async (teamId: string) => { if (!event || !window.confirm("Excluir time? Isso pode afetar jogos existentes.")) return; try { const updatedTimes = (event.times || []).filter(t => t.id !== teamId); await updateDoc(doc(db, "eventos", eventId), { times: updatedTimes }); } catch (e) { alert("Erro ao excluir time."); } };
-    const handleTeamLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => { if (!e.target.files || !e.target.files[0]) return; setIsUploadingLogo(true); try { const file = e.target.files[0]; const options = { maxSizeMB: 0.1, maxWidthOrHeight: 256, useWebWorker: true, fileType: 'image/png' }; const compressedFile = await imageCompression(file, options); const base64 = await fileToBase64(compressedFile); setEditingTeam(prev => ({ ...prev, logoUrl: base64 })); } catch (error) { console.error(error); alert("Erro ao processar imagem."); } finally { setIsUploadingLogo(false); } };
+    const handleTeamLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.addEventListener('load', () => {
+                setImageToCrop(reader.result as string);
+                setShowCropper(true);
+            });
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleCropComplete = async (croppedImageBlob: Blob) => {
+        setIsUploadingLogo(true);
+        try {
+            // Aggressive compression
+            const file = new File([croppedImageBlob], "team_logo.jpg", { type: "image/jpeg" });
+            const options = {
+                maxSizeMB: 0.1, 
+                maxWidthOrHeight: 256,
+                useWebWorker: true,
+                fileType: 'image/jpeg'
+            };
+            
+            const compressedFile = await imageCompression(file, options);
+            const base64 = await fileToBase64(compressedFile);
+            
+            setEditingTeam(prev => ({ ...prev, logoUrl: base64 }));
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao processar imagem.");
+        } finally {
+            setIsUploadingLogo(false);
+            setShowCropper(false);
+            setImageToCrop(null);
+        }
+    };
+
     const togglePlayerInTeam = (playerId: string) => { if (!editingTeam) return; const currentPlayers = editingTeam.jogadores || []; if (currentPlayers.includes(playerId)) { setEditingTeam({ ...editingTeam, jogadores: currentPlayers.filter(id => id !== playerId) }); } else { setEditingTeam({ ...editingTeam, jogadores: [...currentPlayers, playerId] }); } };
 
     const renderInternalTournamentRoster = () => { /* Same as before */
@@ -577,142 +760,530 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                 </div>
             </div>
 
-            <div className="flex-grow container mx-auto px-4 py-8 max-w-5xl grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="flex-grow container mx-auto px-4 py-8 max-w-5xl">
                 
-                {/* LEFT COLUMN: GAMES */}
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="flex justify-between items-center">
-                        <h3 className="text-xl font-bold flex items-center gap-2"><LucideGamepad2 className="text-ancb-blue" /> Partidas</h3>
-                        {isAdmin && (
-                            <Button size="sm" onClick={() => setShowAddGame(true)} className="!py-1 !px-3 text-xs">
-                                <LucidePlus size={14} /> Agendar Jogo
-                            </Button>
-                        )}
+                {/* TABS FOR EXTERNAL TOURNAMENT */}
+                {event.type === 'torneio_externo' && (
+                    <div className="flex items-center gap-4 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+                        <button 
+                            onClick={() => setActiveTab('jogos')}
+                            className={`pb-3 px-2 text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'jogos' ? 'text-ancb-blue border-b-2 border-ancb-blue' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                        >
+                            <LucideGamepad2 className="inline-block mr-1 mb-0.5" size={16}/> Jogos
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('times')}
+                            className={`pb-3 px-2 text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'times' ? 'text-ancb-blue border-b-2 border-ancb-blue' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                        >
+                            <LucideUsers className="inline-block mr-1 mb-0.5" size={16}/> Times
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('classificacao')}
+                            className={`pb-3 px-2 text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'classificacao' ? 'text-ancb-blue border-b-2 border-ancb-blue' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                        >
+                            {event.formato === 'chaveamento' ? <LucideNetwork className="inline-block mr-1 mb-0.5" size={16}/> : <LucideList className="inline-block mr-1 mb-0.5" size={16}/>} Classificação
+                        </button>
                     </div>
+                )}
+
+                <div className={`grid gap-8 ${event.type === 'torneio_externo' ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-3'}`}>
                     
-                    {games.length === 0 ? (
-                        <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-xl border-dashed border-2 border-gray-200 dark:border-gray-700">
-                            <p className="text-gray-500">Nenhum jogo agendado.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            {games.map(game => {
-                                const sA = resolveScore(game.placarTimeA_final, game.placarANCB_final);
-                                const sB = resolveScore(game.placarTimeB_final, game.placarAdversario_final);
-                                const isGameLive = game.status === 'andamento';
-                                return (
-                                    <div 
-                                        key={game.id} 
-                                        onClick={() => setSelectedGameForSummary(game)}
-                                        className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors relative ${getGameResultClass(game)}`}
-                                    >
-                                        <div className="flex-1 grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
-                                            {/* Team A */}
-                                            <span className="font-bold text-xs md:text-sm text-right leading-tight text-gray-900 dark:text-gray-100 break-words whitespace-normal line-clamp-2">
-                                                {game.timeA_nome || 'ANCB'}
-                                            </span>
-                                            
-                                            {/* Score */}
-                                            <div className={`px-2 py-1 rounded font-mono font-bold text-base md:text-lg whitespace-nowrap text-center min-w-[60px] ${isGameLive ? 'bg-red-100 text-red-600 animate-pulse border border-red-200' : 'bg-gray-100 dark:bg-gray-700'}`}>
-                                                {sA} - {sB}
-                                            </div>
-                                            
-                                            {/* Team B */}
-                                            <span className="font-bold text-xs md:text-sm text-left leading-tight text-gray-900 dark:text-gray-100 break-words whitespace-normal line-clamp-2">
-                                                {game.timeB_nome || game.adversario || 'ADV'}
-                                            </span>
-                                        </div>
-                                        
-                                        {/* Actions */}
-                                        <div className="ml-2 pl-2 border-l border-gray-200 dark:border-gray-700 flex items-center relative">
-                                            {/* If Admin, show Kebab Menu or Direct Actions if space allows. Mobile = Kebab */}
-                                            {isAdmin ? (
-                                                <div 
-                                                    className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"
-                                                    onClick={(e) => { e.stopPropagation(); setActiveMenuGameId(activeMenuGameId === game.id ? null : game.id); }}
-                                                >
-                                                    <LucideMoreVertical size={18} />
-                                                    {activeMenuGameId === game.id && (
-                                                        <div className="absolute right-0 top-8 z-50 bg-white dark:bg-gray-800 shadow-xl rounded-xl border border-gray-100 dark:border-gray-700 py-1 w-48 animate-slideDown overflow-hidden">
-                                                            <button 
-                                                                className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-gray-700 dark:text-gray-200"
-                                                                onClick={(e) => { e.stopPropagation(); handleShareGame(e, game); }}
-                                                            >
-                                                                <LucideShare2 size={16} /> Compartilhar Card
-                                                            </button>
-                                                            <button 
-                                                                className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-ancb-blue"
-                                                                onClick={(e) => { e.stopPropagation(); handleOpenScoreEdit(game); }}
-                                                            >
-                                                                <LucideEdit2 size={16} /> Editar Placar
-                                                            </button>
-                                                            <button 
-                                                                className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm flex items-center gap-2 text-red-600"
-                                                                onClick={(e) => { e.stopPropagation(); handleDeleteGame(game.id); }}
-                                                            >
-                                                                <LucideTrash2 size={16} /> Excluir Jogo
-                                                            </button>
+                    {/* LEFT COLUMN: GAMES / MAIN CONTENT */}
+                    {(activeTab === 'jogos' || event.type !== 'torneio_externo') && (
+                        <div className={`${event.type === 'torneio_externo' ? 'w-full' : 'lg:col-span-2'} space-y-6`}>
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-xl font-bold flex items-center gap-2"><LucideGamepad2 className="text-ancb-blue" /> Partidas</h3>
+                                {isAdmin && (
+                                    <Button size="sm" onClick={() => setShowAddGame(true)} className="!py-1 !px-3 text-xs">
+                                        <LucidePlus size={14} /> Agendar Jogo
+                                    </Button>
+                                )}
+                            </div>
+                            
+                            {games.length === 0 ? (
+                                <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-xl border-dashed border-2 border-gray-200 dark:border-gray-700">
+                                    <p className="text-gray-500">Nenhum jogo agendado.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {games.map(game => {
+                                        const sA = resolveScore(game.placarTimeA_final, game.placarANCB_final);
+                                        const sB = resolveScore(game.placarTimeB_final, game.placarAdversario_final);
+                                        const isGameLive = game.status === 'andamento';
+                                        return (
+                                            <div 
+                                                key={game.id} 
+                                                onClick={() => event.type === 'torneio_externo' ? handleOpenGame(game) : setSelectedGameForSummary(game)}
+                                                className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors relative ${getGameResultClass(game)}`}
+                                            >
+                                                <div className="flex-1 grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                                                    {/* Team A */}
+                                                    <span className="font-bold text-xs md:text-sm text-right leading-tight text-gray-900 dark:text-gray-100 break-words whitespace-normal line-clamp-2">
+                                                        {game.timeA_nome || 'ANCB'}
+                                                    </span>
+                                                    
+                                                    {/* Score */}
+                                                    <div className={`px-2 py-1 rounded font-mono font-bold text-base md:text-lg whitespace-nowrap text-center min-w-[60px] ${isGameLive ? 'bg-red-100 text-red-600 animate-pulse border border-red-200' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                                                        {sA} - {sB}
+                                                    </div>
+                                                    
+                                                    {/* Team B */}
+                                                    <span className="font-bold text-xs md:text-sm text-left leading-tight text-gray-900 dark:text-gray-100 break-words whitespace-normal line-clamp-2">
+                                                        {game.timeB_nome || game.adversario || 'ADV'}
+                                                    </span>
+                                                </div>
+                                                
+                                                {/* Actions */}
+                                                <div className="ml-2 pl-2 border-l border-gray-200 dark:border-gray-700 flex items-center relative">
+                                                    {/* If Admin, show Kebab Menu or Direct Actions if space allows. Mobile = Kebab */}
+                                                    {isAdmin ? (
+                                                        <div 
+                                                            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"
+                                                            onClick={(e) => { e.stopPropagation(); setActiveMenuGameId(activeMenuGameId === game.id ? null : game.id); }}
+                                                        >
+                                                            <LucideMoreVertical size={18} />
+                                                            {activeMenuGameId === game.id && (
+                                                                <div className="absolute right-0 top-8 z-50 bg-white dark:bg-gray-800 shadow-xl rounded-xl border border-gray-100 dark:border-gray-700 py-1 w-48 animate-slideDown overflow-hidden">
+                                                                    <button 
+                                                                        className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-gray-700 dark:text-gray-200"
+                                                                        onClick={(e) => { e.stopPropagation(); handleShareGame(e, game); }}
+                                                                    >
+                                                                        <LucideShare2 size={16} /> Compartilhar Card
+                                                                    </button>
+                                                                    <button 
+                                                                        className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-ancb-blue"
+                                                                        onClick={(e) => { e.stopPropagation(); handleOpenScoreEdit(game); }}
+                                                                    >
+                                                                        <LucideEdit2 size={16} /> Editar Placar
+                                                                    </button>
+                                                                    <button 
+                                                                        className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm flex items-center gap-2 text-red-600"
+                                                                        onClick={(e) => { e.stopPropagation(); handleDeleteGame(game.id); }}
+                                                                    >
+                                                                        <LucideTrash2 size={16} /> Excluir Jogo
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                         </div>
+                                                    ) : (
+                                                        <button 
+                                                            onClick={(e) => handleShareGame(e, game)}
+                                                            className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                                        >
+                                                            <LucideShare2 size={16} />
+                                                        </button>
                                                     )}
                                                 </div>
-                                            ) : (
-                                                <button 
-                                                    onClick={(e) => handleShareGame(e, game)}
-                                                    className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                                                >
-                                                    <LucideShare2 size={16} />
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     )}
-                </div>
 
-                {/* RIGHT COLUMN: ROSTER OR TEAMS */}
-                <div className="space-y-6">
-                    {/* ... (Roster header same) */}
-                    <div className="flex items-center justify-between">
-                        <h3 className="text-xl font-bold flex items-center gap-2">
-                            {event.type === 'torneio_interno' ? <LucideShield className="text-ancb-orange" /> : <LucideUsers className="text-ancb-orange" />}
-                            {event.type === 'torneio_interno' ? 'Times' : 'Convocação'}
-                        </h3>
-                        {isAdmin && event.type === 'torneio_interno' && (
-                            <button onClick={() => { setShowTeamManager(true); setEditingTeam(null); }} className="text-xs flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-lg shadow-sm font-bold text-gray-600 dark:text-gray-300 hover:text-ancb-blue transition-all">
-                                <LucideEdit2 size={12} /> Gerenciar
-                            </button>
-                        )}
-                        {isAdmin && event.type !== 'torneio_interno' && (
-                            <button onClick={() => setShowAddPlayer(!showAddPlayer)} className="text-sm text-ancb-blue font-bold hover:underline">
-                                {showAddPlayer ? 'Fechar' : '+ Adicionar'}
-                            </button>
-                        )}
-                    </div>
+                    {/* TEAMS TAB CONTENT */}
+                    {activeTab === 'times' && event.type === 'torneio_externo' && (
+                        <div className="lg:col-span-3 space-y-6">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-xl font-bold flex items-center gap-2"><LucideUsers className="text-ancb-blue" /> Times Participantes</h3>
+                                {isAdmin && (
+                                    <Button size="sm" onClick={() => setEditingTeam({ nomeTime: '', isANCB: false, jogadores: [] })} className="!py-1 !px-3 text-xs">
+                                        <LucidePlus size={14} /> Adicionar Time
+                                    </Button>
+                                )}
+                            </div>
 
-                    {showAddPlayer && isAdmin && event.type !== 'torneio_interno' && (
-                        <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-4 animate-slideDown">
-                            <input 
-                                type="text" 
-                                placeholder="Buscar jogador..." 
-                                className="w-full p-2 mb-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600"
-                                value={playerSearch}
-                                onChange={(e) => setPlayerSearch(e.target.value)}
-                            />
-                            <div className="max-h-40 overflow-y-auto custom-scrollbar flex flex-col gap-1">
-                                {filteredAddPlayers.map(p => (
-                                    <button key={p.id} onClick={() => handleAddPlayerToRoster(p.id)} className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-left text-xs font-bold">
-                                        <LucidePlus size={14}/> {p.nome}
-                                    </button>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {event.timesParticipantes?.map(team => (
+                                    <div 
+                                        key={team.id} 
+                                        onClick={() => isAdmin && setEditingTeam(team)}
+                                        className={`${team.isANCB ? 'bg-blue-900 border-blue-700' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'} p-4 rounded-xl shadow-sm border flex justify-between items-center group ${isAdmin ? 'cursor-pointer hover:shadow-md transition-all' : ''}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg overflow-hidden border-2 ${team.isANCB ? 'bg-blue-800 border-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 border-gray-100 dark:border-gray-600 text-gray-600 dark:text-gray-300'}`}>
+                                                {team.logoUrl ? (
+                                                    <img src={team.logoUrl} alt={team.nomeTime} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <span>{team.nomeTime.charAt(0)}</span>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <h4 className={`font-bold ${team.isANCB ? 'text-white' : 'text-gray-800 dark:text-white'}`}>{team.nomeTime}</h4>
+                                                {team.isANCB && (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[10px] text-blue-200">({team.jogadores?.length || 0} atletas)</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {isAdmin && (
+                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={(e) => { e.stopPropagation(); setEditingTeam(team); }} className={`p-2 rounded-full transition-colors ${team.isANCB ? 'text-blue-200 hover:text-white hover:bg-blue-800' : 'text-gray-400 hover:text-ancb-blue bg-gray-50 dark:bg-gray-700'}`}>
+                                                    <LucideEdit2 size={16} />
+                                                </button>
+                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteExternalTeam(team.id); }} className={`p-2 rounded-full transition-colors ${team.isANCB ? 'text-blue-200 hover:text-red-400 hover:bg-blue-800' : 'text-gray-400 hover:text-red-500 bg-gray-50 dark:bg-gray-700'}`}>
+                                                    <LucideTrash2 size={16} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 ))}
+                                {(!event.timesParticipantes || event.timesParticipantes.length === 0) && (
+                                    <p className="col-span-full text-center text-gray-500 py-8">Nenhum time cadastrado.</p>
+                                )}
                             </div>
                         </div>
                     )}
 
-                    {event.type === 'torneio_interno' ? renderInternalTournamentRoster() : renderExternalRoster()}
+                    {/* STANDINGS TAB CONTENT */}
+                    {activeTab === 'classificacao' && event.type === 'torneio_externo' && (
+                        <div className="lg:col-span-3 space-y-6">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-xl font-bold flex items-center gap-2">
+                                    {event.formato === 'chaveamento' ? <LucideNetwork className="text-ancb-blue" /> : <LucideList className="text-ancb-blue" />}
+                                    Classificação & Pódio
+                                </h3>
+                                {isAdmin && event.status !== 'finalizado' && (
+                                    <Button size="sm" onClick={() => setShowPodiumModal(true)} className="bg-yellow-500 hover:bg-yellow-600 text-white border-none">
+                                        <LucideMedal size={16} className="mr-1" /> Definir Pódio
+                                    </Button>
+                                )}
+                            </div>
+
+                            {event.podio && (
+                                <div className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 p-6 rounded-2xl border border-yellow-500/20 mb-6 text-center">
+                                    <h4 className="text-lg font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-widest mb-6">Pódio Final</h4>
+                                    <div className="flex flex-col md:flex-row items-end justify-center gap-4 md:gap-8">
+                                        {/* 2nd Place */}
+                                        <div className="order-2 md:order-1 flex flex-col items-center">
+                                            <div className="w-16 h-16 rounded-full bg-gray-300 border-4 border-white shadow-lg flex items-center justify-center text-2xl font-black text-gray-600 mb-2">2</div>
+                                            <span className="font-bold text-gray-800 dark:text-white">{event.timesParticipantes?.find(t => t.id === event.podio?.segundo)?.nomeTime || 'Time'}</span>
+                                        </div>
+                                        {/* 1st Place */}
+                                        <div className="order-1 md:order-2 flex flex-col items-center mb-4 md:mb-0">
+                                            <LucideTrophy size={32} className="text-yellow-500 mb-2 animate-bounce" />
+                                            <div className="w-24 h-24 rounded-full bg-yellow-400 border-4 border-white shadow-xl flex items-center justify-center text-4xl font-black text-yellow-800 mb-2">1</div>
+                                            <span className="font-black text-xl text-gray-900 dark:text-white">{event.timesParticipantes?.find(t => t.id === event.podio?.primeiro)?.nomeTime || 'Campeão'}</span>
+                                        </div>
+                                        {/* 3rd Place */}
+                                        <div className="order-3 flex flex-col items-center">
+                                            <div className="w-16 h-16 rounded-full bg-orange-300 border-4 border-white shadow-lg flex items-center justify-center text-2xl font-black text-orange-800 mb-2">3</div>
+                                            <span className="font-bold text-gray-800 dark:text-white">{event.timesParticipantes?.find(t => t.id === event.podio?.terceiro)?.nomeTime || 'Time'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Bracket or Table */}
+                            {event.formato === 'chaveamento' ? (
+                                <div className="overflow-x-auto pb-4">
+                                    <div className="flex gap-8 min-w-[800px]">
+                                        {/* Quartas */}
+                                        <div className="flex-1 space-y-4">
+                                            <h5 className="text-center font-bold text-gray-500 uppercase text-xs mb-4">Quartas de Final</h5>
+                                            {games.filter(g => g.fase === 'quartas').map(game => (
+                                                <div key={game.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm relative">
+                                                    <div className="flex justify-between items-center mb-1">
+                                                        <span className="text-xs font-bold truncate w-24">{game.timeA_nome}</span>
+                                                        <span className="font-mono font-bold">{game.placarTimeA_final || 0}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs font-bold truncate w-24">{game.timeB_nome}</span>
+                                                        <span className="font-mono font-bold">{game.placarTimeB_final || 0}</span>
+                                                    </div>
+                                                    {/* Connector Line */}
+                                                    <div className="absolute top-1/2 -right-4 w-4 h-px bg-gray-300 dark:bg-gray-600"></div>
+                                                </div>
+                                            ))}
+                                            {games.filter(g => g.fase === 'quartas').length === 0 && <p className="text-center text-xs text-gray-400">A definir</p>}
+                                        </div>
+
+                                        {/* Semi */}
+                                        <div className="flex-1 space-y-8 mt-8">
+                                            <h5 className="text-center font-bold text-gray-500 uppercase text-xs mb-4">Semi-Final</h5>
+                                            {games.filter(g => g.fase === 'semi').map(game => (
+                                                <div key={game.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm relative">
+                                                    <div className="absolute top-1/2 -left-4 w-4 h-px bg-gray-300 dark:bg-gray-600"></div>
+                                                    <div className="flex justify-between items-center mb-1">
+                                                        <span className="text-xs font-bold truncate w-24">{game.timeA_nome}</span>
+                                                        <span className="font-mono font-bold">{game.placarTimeA_final || 0}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs font-bold truncate w-24">{game.timeB_nome}</span>
+                                                        <span className="font-mono font-bold">{game.placarTimeB_final || 0}</span>
+                                                    </div>
+                                                    <div className="absolute top-1/2 -right-4 w-4 h-px bg-gray-300 dark:bg-gray-600"></div>
+                                                </div>
+                                            ))}
+                                            {games.filter(g => g.fase === 'semi').length === 0 && <p className="text-center text-xs text-gray-400">A definir</p>}
+                                        </div>
+
+                                        {/* Final */}
+                                        <div className="flex-1 space-y-4 mt-16">
+                                            <h5 className="text-center font-bold text-yellow-500 uppercase text-xs mb-4">Grande Final</h5>
+                                            {games.filter(g => g.fase === 'final').map(game => (
+                                                <div key={game.id} className="bg-white dark:bg-gray-800 border-2 border-yellow-400 rounded-lg p-4 shadow-md relative">
+                                                    <div className="absolute top-1/2 -left-4 w-4 h-px bg-gray-300 dark:bg-gray-600"></div>
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <span className="text-sm font-black truncate w-24">{game.timeA_nome}</span>
+                                                        <span className="font-mono font-black text-lg">{game.placarTimeA_final || 0}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-sm font-black truncate w-24">{game.timeB_nome}</span>
+                                                        <span className="font-mono font-black text-lg">{game.placarTimeB_final || 0}</span>
+                                                    </div>
+                                                    <LucideTrophy className="absolute -top-3 -right-3 text-yellow-500 bg-white dark:bg-gray-800 rounded-full p-1 border border-yellow-200" size={24} />
+                                                </div>
+                                            ))}
+                                            {games.filter(g => g.fase === 'final').length === 0 && <p className="text-center text-xs text-gray-400">A definir</p>}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* Simple Standings Table */
+                                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-300 font-bold uppercase text-xs">
+                                            <tr>
+                                                <th className="p-3">Time</th>
+                                                <th className="p-3 text-center">J</th>
+                                                <th className="p-3 text-center">V</th>
+                                                <th className="p-3 text-center">D</th>
+                                                <th className="p-3 text-center">Pts</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                            {event.timesParticipantes?.map(team => {
+                                                // Calculate stats on the fly
+                                                const teamGames = games.filter(g => g.status === 'finalizado' && (g.timeA_id === team.id || g.timeB_id === team.id));
+                                                const wins = teamGames.filter(g => {
+                                                    const sA = g.placarTimeA_final || 0;
+                                                    const sB = g.placarTimeB_final || 0;
+                                                    if (g.timeA_id === team.id) return sA > sB;
+                                                    return sB > sA;
+                                                }).length;
+                                                const losses = teamGames.length - wins;
+                                                
+                                                return (
+                                                    <tr key={team.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                                                        <td className="p-3 font-bold text-gray-800 dark:text-gray-200">{team.nomeTime}</td>
+                                                        <td className="p-3 text-center">{teamGames.length}</td>
+                                                        <td className="p-3 text-center text-green-600 font-bold">{wins}</td>
+                                                        <td className="p-3 text-center text-red-500">{losses}</td>
+                                                        <td className="p-3 text-center font-black">{wins * 2 + losses}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                            {(!event.timesParticipantes || event.timesParticipantes.length === 0) && (
+                                                <tr><td colSpan={5} className="p-4 text-center text-gray-500">Sem dados.</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* RIGHT COLUMN: ROSTER OR TEAMS (Only show if NOT in Teams/Standings tab for external) */}
+                    {event.type !== 'torneio_externo' && (
+                        <div className="space-y-6">
+                            {/* ... (Roster header same) */}
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-xl font-bold flex items-center gap-2">
+                                    {event.type === 'torneio_interno' ? <LucideShield className="text-ancb-orange" /> : <LucideUsers className="text-ancb-orange" />}
+                                    {event.type === 'torneio_interno' ? 'Times' : 'Convocação'}
+                                </h3>
+                                {isAdmin && event.type === 'torneio_interno' && (
+                                    <button onClick={() => { setShowTeamManager(true); setEditingTeam(null); }} className="text-xs flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-lg shadow-sm font-bold text-gray-600 dark:text-gray-300 hover:text-ancb-blue transition-all">
+                                        <LucideEdit2 size={12} /> Gerenciar
+                                    </button>
+                                )}
+                                {isAdmin && event.type !== 'torneio_interno' && (
+                                    <button onClick={() => setShowAddPlayer(!showAddPlayer)} className="text-sm text-ancb-blue font-bold hover:underline">
+                                        {showAddPlayer ? 'Fechar' : '+ Adicionar'}
+                                    </button>
+                                )}
+                            </div>
+
+                            {showAddPlayer && isAdmin && event.type !== 'torneio_interno' && (
+                                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-4 animate-slideDown">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Buscar jogador..." 
+                                        className="w-full p-2 mb-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600"
+                                        value={playerSearch}
+                                        onChange={(e) => setPlayerSearch(e.target.value)}
+                                    />
+                                    <div className="max-h-40 overflow-y-auto custom-scrollbar flex flex-col gap-1">
+                                        {filteredAddPlayers.map(p => (
+                                            <button key={p.id} onClick={() => handleAddPlayerToRoster(p.id)} className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-left text-xs font-bold">
+                                                <LucidePlus size={14}/> {p.nome}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {event.type === 'torneio_interno' ? renderInternalTournamentRoster() : renderExternalRoster()}
+                        </div>
+                    )}
                 </div>
+
+                {/* Image Cropper Modal */}
+                {showCropper && imageToCrop && (
+                    <ImageCropperModal
+                        isOpen={showCropper}
+                        onClose={() => { setShowCropper(false); setImageToCrop(null); }}
+                        imageSrc={imageToCrop}
+                        onCropComplete={handleCropComplete}
+                        aspect={cropAspect}
+                    />
+                )}
+
+                {/* Simple Score Panel Modal */}
+                {showSimpleScorePanel && selectedGameForSimpleScore && (
+                    <SimpleScorePanel 
+                        game={selectedGameForSimpleScore}
+                        eventId={eventId}
+                        onClose={() => setShowSimpleScorePanel(false)}
+                        onSave={() => {
+                            // Refresh logic if needed, snapshot handles it
+                        }}
+                    />
+                )}
+
+                {/* Podium Modal */}
+                <Modal isOpen={showPodiumModal} onClose={() => setShowPodiumModal(false)} title="Definir Pódio">
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-yellow-500 uppercase mb-1">1º Lugar (Campeão)</label>
+                            <select 
+                                className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                                value={podiumSelection.primeiro}
+                                onChange={e => setPodiumSelection({...podiumSelection, primeiro: e.target.value})}
+                            >
+                                <option value="">Selecione...</option>
+                                {event.timesParticipantes?.map(t => <option key={t.id} value={t.id}>{t.nomeTime}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">2º Lugar</label>
+                            <select 
+                                className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                                value={podiumSelection.segundo}
+                                onChange={e => setPodiumSelection({...podiumSelection, segundo: e.target.value})}
+                            >
+                                <option value="">Selecione...</option>
+                                {event.timesParticipantes?.map(t => <option key={t.id} value={t.id}>{t.nomeTime}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-orange-500 uppercase mb-1">3º Lugar</label>
+                            <select 
+                                className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                                value={podiumSelection.terceiro}
+                                onChange={e => setPodiumSelection({...podiumSelection, terceiro: e.target.value})}
+                            >
+                                <option value="">Selecione...</option>
+                                {event.timesParticipantes?.map(t => <option key={t.id} value={t.id}>{t.nomeTime}</option>)}
+                            </select>
+                        </div>
+                        <Button onClick={handleSavePodium} className="w-full mt-4">Salvar e Encerrar Torneio</Button>
+                    </div>
+                </Modal>
+
+                {/* External Team Manager Modal */}
+                {event.type === 'torneio_externo' && editingTeam && (
+                    <Modal isOpen={!!editingTeam} onClose={() => setEditingTeam(null)} title={editingTeam.id ? "Editar Time" : "Adicionar Time"}>
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-4">
+                                <div className="relative shrink-0">
+                                    <div className={`w-20 h-20 rounded-full border-2 border-dashed border-gray-400 flex items-center justify-center overflow-hidden ${editingTeam.logoUrl ? 'bg-transparent' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                                        {isUploadingLogo ? <LucideLoader2 className="animate-spin text-gray-500"/> : editingTeam.logoUrl ? <img src={editingTeam.logoUrl} className="w-full h-full object-contain"/> : <span className="text-xs text-gray-400 text-center px-1">Sem Logo</span>}
+                                    </div>
+                                    <label className="absolute bottom-0 right-0 bg-ancb-blue text-white p-1.5 rounded-full cursor-pointer shadow-md hover:bg-blue-600 transition-colors">
+                                        <LucideUpload size={12} />
+                                        <input type="file" className="hidden" accept="image/*" onChange={handleTeamLogoUpload} />
+                                    </label>
+                                </div>
+                                <div className="flex-1">
+                                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Nome do Time</label>
+                                    <input 
+                                        className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" 
+                                        value={editingTeam.nomeTime || ''} 
+                                        onChange={e => setEditingTeam({...editingTeam, nomeTime: e.target.value})} 
+                                        placeholder="Ex: Chicago Bulls" 
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 pb-2">
+                                <input 
+                                    type="checkbox" 
+                                    id="modalIsANCB" 
+                                    checked={editingTeam.isANCB || false} 
+                                    onChange={e => setEditingTeam({...editingTeam, isANCB: e.target.checked})}
+                                    className="w-4 h-4 text-ancb-blue rounded"
+                                />
+                                <label htmlFor="modalIsANCB" className="text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer">Este time é a ANCB?</label>
+                            </div>
+
+                            {editingTeam.isANCB && (
+                                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 animate-slideDown">
+                                    <label className="text-xs font-bold text-gray-500 uppercase mb-2 block flex justify-between">
+                                        <span>Elenco ({editingTeam.jogadores?.length || 0})</span>
+                                    </label>
+                                    <div className="relative mb-2">
+                                        <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
+                                        <input 
+                                            className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600" 
+                                            placeholder="Buscar jogador..." 
+                                            value={teamRosterSearch} 
+                                            onChange={e => setTeamRosterSearch(e.target.value)} 
+                                        />
+                                    </div>
+                                    <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                                        {allPlayers
+                                            .filter(p => p.nome.toLowerCase().includes(teamRosterSearch.toLowerCase()) || (p.apelido && p.apelido.toLowerCase().includes(teamRosterSearch.toLowerCase())))
+                                            .map(p => {
+                                                const isSelected = editingTeam.jogadores?.includes(p.id);
+                                                return (
+                                                    <div 
+                                                        key={p.id} 
+                                                        onClick={() => {
+                                                            const currentPlayers = editingTeam.jogadores || [];
+                                                            const newPlayers = isSelected 
+                                                                ? currentPlayers.filter(id => id !== p.id)
+                                                                : [...currentPlayers, p.id];
+                                                            setEditingTeam({...editingTeam, jogadores: newPlayers});
+                                                        }} 
+                                                        className={`flex items-center justify-between p-2 cursor-pointer border-b last:border-0 border-gray-100 dark:border-gray-700 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-white dark:hover:bg-gray-700'}`}
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center">
+                                                                {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-[10px] font-bold text-gray-500">{p.nome.charAt(0)}</span>}
+                                                            </div>
+                                                            <span className={`text-xs font-medium ${isSelected ? 'text-ancb-blue dark:text-blue-300 font-bold' : 'text-gray-600 dark:text-gray-300'}`}>{p.nome}</span>
+                                                        </div>
+                                                        {isSelected && <LucideCheckCircle2 size={14} className="text-ancb-blue" />}
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
+                                </div>
+                            )}
+
+                            <Button className="w-full" onClick={handleSaveExternalTeam} disabled={!editingTeam.nomeTime}>
+                                <LucideSave size={16} /> Salvar Time
+                            </Button>
+                        </div>
+                    </Modal>
+                )}
             </div>
+
 
             {/* Game Summary Modal */}
             <GameSummaryModal
@@ -789,6 +1360,23 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                         </div>
                     </div>
 
+                    {event.formato === 'chaveamento' && (
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Fase do Torneio</label>
+                            <select 
+                                className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none"
+                                value={newGamePhase}
+                                onChange={e => setNewGamePhase(e.target.value as any)}
+                            >
+                                <option value="fase_grupos">Fase de Grupos</option>
+                                <option value="oitavas">Oitavas de Final</option>
+                                <option value="quartas">Quartas de Final</option>
+                                <option value="semi">Semi-Final</option>
+                                <option value="final">Final</option>
+                            </select>
+                        </div>
+                    )}
+
                     {event.type === 'torneio_interno' ? (
                         <>
                             <div>
@@ -803,6 +1391,23 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                 <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required>
                                     <option value="">Selecione...</option>
                                     {event.times?.map(t => <option key={t.id} value={t.id}>{t.nomeTime}</option>)}
+                                </select>
+                            </div>
+                        </>
+                    ) : event.type === 'torneio_externo' ? (
+                        <>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Time A</label>
+                                <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none" value={newGameTimeA} onChange={e => setNewGameTimeA(e.target.value)} required>
+                                    <option value="">Selecione...</option>
+                                    {event.timesParticipantes?.map(t => <option key={t.id} value={t.id}>{t.nomeTime} {t.isANCB ? '(ANCB)' : ''}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Time B</label>
+                                <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none" value={newGameTimeB} onChange={e => setNewGameTimeB(e.target.value)} required>
+                                    <option value="">Selecione...</option>
+                                    {event.timesParticipantes?.map(t => <option key={t.id} value={t.id}>{t.nomeTime} {t.isANCB ? '(ANCB)' : ''}</option>)}
                                 </select>
                             </div>
                         </>

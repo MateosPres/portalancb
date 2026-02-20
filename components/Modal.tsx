@@ -6,9 +6,10 @@ interface ModalProps {
     onClose: () => void;
     title?: string;
     children: React.ReactNode;
+    zIndex?: number;
 }
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
+export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, zIndex = 100 }) => {
     // Prevent background scrolling when modal is open
     useEffect(() => {
         if (isOpen) {
@@ -22,7 +23,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fadeIn">
+        <div className="fixed inset-0 flex items-center justify-center p-4 animate-fadeIn" style={{ zIndex }}>
             {/* Backdrop */}
             <div 
                 className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" 

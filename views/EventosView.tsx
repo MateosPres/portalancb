@@ -322,51 +322,53 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                             </div>
                         )}
                         
-                        {/* ROSTER SELECTION */}
-                        <div className="md:col-span-2 mt-2 border-t pt-4 dark:border-gray-700">
-                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">
-                                Jogadores (Opcional)
-                            </label>
-                            <div className="relative mb-2">
-                                <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
-                                <input 
-                                    className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600" 
-                                    placeholder="Buscar para escalar..." 
-                                    value={rosterSearch} 
-                                    onChange={e => setRosterSearch(e.target.value)} 
-                                />
-                            </div>
-                            <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
-                                {filteredRosterPlayers.map(p => {
-                                    const isSelected = selectedRosterMap[p.id] !== undefined;
-                                    return (
-                                        <div key={p.id} className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${isSelected ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
-                                            <div className="flex items-center gap-2 flex-1" onClick={() => toggleRosterPlayer(p)}>
-                                                <div className={`w-4 h-4 border rounded flex items-center justify-center ${isSelected ? 'bg-ancb-orange border-ancb-orange' : 'border-gray-400'}`}>
-                                                    {isSelected && <LucideCheckSquare size={10} className="text-white"/>}
+                        {/* ROSTER SELECTION (Only for Amistoso) */}
+                        {formType === 'amistoso' && (
+                            <div className="md:col-span-2 mt-2 border-t pt-4 dark:border-gray-700">
+                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">
+                                    Jogadores (Opcional)
+                                </label>
+                                <div className="relative mb-2">
+                                    <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
+                                    <input 
+                                        className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600" 
+                                        placeholder="Buscar para escalar..." 
+                                        value={rosterSearch} 
+                                        onChange={e => setRosterSearch(e.target.value)} 
+                                    />
+                                </div>
+                                <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
+                                    {filteredRosterPlayers.map(p => {
+                                        const isSelected = selectedRosterMap[p.id] !== undefined;
+                                        return (
+                                            <div key={p.id} className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${isSelected ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                                                <div className="flex items-center gap-2 flex-1" onClick={() => toggleRosterPlayer(p)}>
+                                                    <div className={`w-4 h-4 border rounded flex items-center justify-center ${isSelected ? 'bg-ancb-orange border-ancb-orange' : 'border-gray-400'}`}>
+                                                        {isSelected && <LucideCheckSquare size={10} className="text-white"/>}
+                                                    </div>
+                                                    <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{p.nome}</span>
                                                 </div>
-                                                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{p.nome}</span>
+                                                {isSelected && (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[10px] text-gray-500 uppercase">Nº</span>
+                                                        <input 
+                                                            type="number" 
+                                                            className="w-12 p-1 text-center border rounded text-xs font-bold dark:bg-gray-700 dark:text-white"
+                                                            value={selectedRosterMap[p.id]}
+                                                            onChange={(e) => updateRosterNumber(p.id, e.target.value)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
-                                            {isSelected && (
-                                                <div className="flex items-center gap-1">
-                                                    <span className="text-[10px] text-gray-500 uppercase">Nº</span>
-                                                    <input 
-                                                        type="number" 
-                                                        className="w-12 p-1 text-center border rounded text-xs font-bold dark:bg-gray-700 dark:text-white"
-                                                        value={selectedRosterMap[p.id]}
-                                                        onChange={(e) => updateRosterNumber(p.id, e.target.value)}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-1">
+                                    {Object.keys(selectedRosterMap).length} jogadores selecionados. Os números podem ser editados especificamente para este evento.
+                                </p>
                             </div>
-                            <p className="text-[10px] text-gray-400 mt-1">
-                                {Object.keys(selectedRosterMap).length} jogadores selecionados. Os números podem ser editados especificamente para este evento.
-                            </p>
-                        </div>
+                        )}
                     </div>
                     <Button type="submit" className="w-full h-12 text-lg">Criar Evento</Button>
                 </form>

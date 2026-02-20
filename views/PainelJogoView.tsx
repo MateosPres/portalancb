@@ -93,8 +93,25 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                     const teamB = eData.times.find(t => t.id === game.timeB_id);
                     if (teamA) setTeamAPlayers(allPlayers.filter(p => teamA.jogadores.includes(p.id)));
                     if (teamB) setTeamBPlayers(allPlayers.filter(p => teamB.jogadores.includes(p.id)));
+                } else if (eData.type === 'torneio_externo' && eData.timesParticipantes) {
+                    // External Tournament with Team Manager
+                    const teamA = eData.timesParticipantes.find(t => t.id === game.timeA_id);
+                    const teamB = eData.timesParticipantes.find(t => t.id === game.timeB_id);
+                    
+                    if (teamA && teamA.jogadores && teamA.jogadores.length > 0) {
+                        setTeamAPlayers(allPlayers.filter(p => teamA.jogadores.includes(p.id)));
+                    } else {
+                        // Fallback for legacy or empty roster
+                        setTeamAPlayers([]);
+                    }
+
+                    if (teamB && teamB.jogadores && teamB.jogadores.length > 0) {
+                        setTeamBPlayers(allPlayers.filter(p => teamB.jogadores.includes(p.id)));
+                    } else {
+                        setTeamBPlayers([]);
+                    }
                 } else {
-                    // External: Team A is usually ANCB (Roster), Team B is Opponent (No Roster)
+                    // Friendly or Legacy External
                     // Check if game has specific roster, else use event roster
                     const rosterIds = (eData.jogadoresEscalados || []).map((entry: string | EscaladoInfo) => 
                         typeof entry === 'string' ? entry : entry.id
@@ -252,7 +269,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
 
     // --- UI COMPONENTS ---
 
-    const ScoreButton = ({ points, onClick, colorClass }: { points: number, onClick: () => void, colorClass: string }) => (
+    const ScoreButton = ({ points, onClick, colorClass, label }: { points: number, onClick: () => void, colorClass: string, label?: string }) => (
         <button 
             onClick={onClick}
             disabled={isProcessing}
@@ -260,7 +277,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
         >
             <span className="text-4xl font-black mb-1">+{points}</span>
             <span className="text-[10px] uppercase font-bold opacity-80">
-                {points === 1 ? 'Livre' : points === 2 ? 'Curta' : 'Longa'}
+                {label || (points === 1 ? 'Livre' : points === 2 ? 'Curta' : 'Longa')}
             </span>
         </button>
     );
@@ -422,9 +439,18 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                         </div>
 
                         <div className="grid grid-cols-3 gap-4 mb-4">
-                            <ScoreButton points={1} onClick={() => handleAddPoint(1, selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)} colorClass="bg-green-600 hover:bg-green-500 text-white" />
-                            <ScoreButton points={2} onClick={() => handleAddPoint(2, selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)} colorClass="bg-blue-600 hover:bg-blue-500 text-white" />
-                            <ScoreButton points={3} onClick={() => handleAddPoint(3, selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)} colorClass="bg-orange-600 hover:bg-orange-500 text-white" />
+                            {eventData?.modalidade === '3x3' ? (
+                                <>
+                                    <ScoreButton points={1} onClick={() => handleAddPoint(1, selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)} colorClass="bg-blue-600 hover:bg-blue-500 text-white col-span-1" label="1 Pt" />
+                                    <ScoreButton points={2} onClick={() => handleAddPoint(2, selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)} colorClass="bg-orange-600 hover:bg-orange-500 text-white col-span-2" label="2 Pts (Longa)" />
+                                </>
+                            ) : (
+                                <>
+                                    <ScoreButton points={1} onClick={() => handleAddPoint(1, selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)} colorClass="bg-green-600 hover:bg-green-500 text-white" label="Livre" />
+                                    <ScoreButton points={2} onClick={() => handleAddPoint(2, selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)} colorClass="bg-blue-600 hover:bg-blue-500 text-white" label="Curta" />
+                                    <ScoreButton points={3} onClick={() => handleAddPoint(3, selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)} colorClass="bg-orange-600 hover:bg-orange-500 text-white" label="Longa" />
+                                </>
+                            )}
                         </div>
 
                         <button 

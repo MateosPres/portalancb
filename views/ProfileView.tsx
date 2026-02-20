@@ -8,6 +8,7 @@ import { Modal } from '../components/Modal';
 import { LucideArrowLeft, LucideCamera, LucideLink, LucideSearch, LucideLoader2, LucideClock, LucideStar, LucideHistory, LucideEdit2, LucideTrendingUp, LucideTrophy, LucideMapPin, LucideGrid, LucideUser, LucideCheckCircle2, LucidePin, LucidePinOff, LucideCalendar } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { RadarChart } from '../components/RadarChart';
+import { ImageCropperModal } from '../components/ImageCropperModal';
 
 interface ProfileViewProps {
     userProfile: UserProfile;
@@ -73,6 +74,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const [claimStatus, setClaimStatus] = useState<'none'|'pending'>('none');
     const [claimingId, setClaimingId] = useState<string | null>(null);
     
+    // Image Cropper State
+    const [showCropper, setShowCropper] = useState(false);
+    const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+
     const playerDocId = userProfile.linkedPlayerId || userProfile.uid;
 
     const POSITIONS = ["Armador (1)", "Ala/Armador (2)", "Ala (3)", "Ala/Pivô (4)", "Pivô (5)"];
@@ -235,7 +240,56 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     // ... (Keep existing helpers: useEffect search, fileToBase64, handlePhotoUpload, handleSave, handleTogglePin, handleClaim, formatDate, normalizePosition, calculateAge, etc.) ...
     useEffect(() => { if (!claimSearch || claimSearch.length < 3) { setFoundPlayers([]); return; } const search = async () => { try { const q = query(collection(db, "jogadores"), orderBy("nome")); const snap = await getDocs(q); const matches = snap.docs.map(d => ({id: d.id, ...(d.data() as any)} as Player)).filter(p => { const pName = p.nome ? p.nome.toLowerCase() : ''; const pNick = p.apelido ? p.apelido.toLowerCase() : ''; return (pName.includes(claimSearch.toLowerCase()) || pNick.includes(claimSearch.toLowerCase())) && !p.userId && p.id !== userProfile.uid; }); setFoundPlayers(matches); } catch (err) {} }; const timer = setTimeout(search, 500); return () => clearTimeout(timer); }, [claimSearch, userProfile.uid]);
     const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
-    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => { if (!e.target.files || !e.target.files[0]) return; const file = e.target.files[0]; setIsUploading(true); try { const options = { maxSizeMB: 0.1, maxWidthOrHeight: 500, useWebWorker: true, fileType: 'image/webp' }; const compressedFile = await imageCompression(file, options); const base64String = await fileToBase64(compressedFile); await addDoc(collection(db, "solicitacoes_foto"), { userId: userProfile.uid,playerId: playerDocId, playerName: formData.nome || 'Desconhecido', newPhotoUrl: base64String, currentPhotoUrl: formData.foto || null, status: 'pending', timestamp: serverTimestamp() }); setPendingPhotoRequest(true); alert("Foto enviada para análise."); } catch (error) { alert("Erro ao processar imagem."); } finally { setIsUploading(false); } };
+    
+    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.addEventListener('load', () => {
+                setImageToCrop(reader.result as string);
+                setShowCropper(true);
+            });
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleCropComplete = async (croppedImageBlob: Blob) => {
+        setIsUploading(true);
+        try {
+            // Aggressive compression
+            const file = new File([croppedImageBlob], "profile_photo.jpg", { type: "image/jpeg" });
+            const options = { 
+                maxSizeMB: 0.1, 
+                maxWidthOrHeight: 500, 
+                useWebWorker: true, 
+                fileType: 'image/jpeg' 
+            };
+            
+            const compressedFile = await imageCompression(file, options);
+            const base64String = await fileToBase64(compressedFile);
+            
+            await addDoc(collection(db, "solicitacoes_foto"), { 
+                userId: userProfile.uid,
+                playerId: playerDocId, 
+                playerName: formData.nome || 'Desconhecido', 
+                newPhotoUrl: base64String, 
+                currentPhotoUrl: formData.foto || null, 
+                status: 'pending', 
+                timestamp: serverTimestamp() 
+            });
+            
+            setPendingPhotoRequest(true);
+            alert("Foto enviada para análise.");
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao processar imagem.");
+        } finally {
+            setIsUploading(false);
+            setShowCropper(false);
+            setImageToCrop(null);
+        }
+    };
+
     const handleSave = async (e: React.FormEvent) => { e.preventDefault(); try { const dataToSave = { ...formData }; if (!dataToSave.id) dataToSave.id = playerDocId; await setDoc(doc(db, "jogadores", playerDocId), dataToSave, { merge: true }); if (newPassword && auth.currentUser) { if (newPassword.length < 6) { alert("A senha deve ter no mínimo 6 caracteres."); return; } try { await auth.currentUser.updatePassword(newPassword); alert("Senha alterada!"); } catch (passError: any) { alert("Erro ao alterar senha: " + passError.message); } } setShowEditModal(false); setNewPassword(''); alert("Perfil atualizado!"); } catch (error) { alert("Erro ao salvar."); } };
     const handleTogglePin = async (badgeId: string) => { if (!playerDocId) return; let currentPinned = formData.pinnedBadgeIds || []; if (currentPinned.includes(badgeId)) { currentPinned = currentPinned.filter(id => id !== badgeId); } else { if (currentPinned.length >= 3) { alert("Limite de 3 conquistas fixadas."); return; } currentPinned.push(badgeId); } setFormData({ ...formData, pinnedBadgeIds: currentPinned }); try { await setDoc(doc(db, "jogadores", playerDocId), { pinnedBadgeIds: currentPinned }, { merge: true }); } catch (e) { alert("Erro ao fixar."); } };
     const handleClaim = async (targetPlayer: Player) => { if (!userProfile || !userProfile.uid) return; setClaimingId(targetPlayer.id); try { await addDoc(collection(db, "solicitacoes_vinculo"), { userId: userProfile.uid, userName: userProfile.nome || 'Usuário Sem Nome', playerId: targetPlayer.id, playerName: targetPlayer.nome || 'Atleta Sem Nome', status: 'pending', timestamp: serverTimestamp() }); setClaimStatus('pending'); setShowClaimSection(false); alert("Solicitação enviada!"); } catch (e: any) { alert(`Erro: ${e.message}`); } finally { setClaimingId(null); } };
@@ -518,6 +572,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     </div>
                 </div>
             </Modal>
+
+            {/* Image Cropper Modal */}
+            {showCropper && imageToCrop && (
+                <ImageCropperModal
+                    isOpen={showCropper}
+                    onClose={() => { setShowCropper(false); setImageToCrop(null); }}
+                    imageSrc={imageToCrop}
+                    onCropComplete={handleCropComplete}
+                    aspect={1} // Profile photos are 1:1
+                />
+            )}
         </div>
     );
 };

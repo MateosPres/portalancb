@@ -85,6 +85,15 @@ export interface Evento {
     jogadoresEscalados?: (string | EscaladoInfo)[]; 
     adversario?: string; // Para amistosos
     times?: Time[]; // Para torneios internos
+    
+    // New External Tournament Fields
+    formato?: 'chaveamento' | 'grupo_unico';
+    podio?: {
+        primeiro: string;
+        segundo: string;
+        terceiro: string;
+    };
+    timesParticipantes?: Time[]; // Para torneios externos
 }
 
 export interface Time {
@@ -92,6 +101,8 @@ export interface Time {
     nomeTime: string;
     logoUrl?: string;
     jogadores: string[]; // IDs dos jogadores
+    isANCB?: boolean; // Identifica se é um time da associação
+    grupo?: string; // Para fase de grupos (A, B, C...)
 }
 
 export interface Jogo {
