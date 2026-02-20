@@ -28,8 +28,10 @@ import {
     LucideTrophy,
     LucideMapPin,
     LucideGrid,
-    LucideEdit2
+    LucideEdit2,
+    LucideTrash2
 } from 'lucide-react';
+import { deleteDoc, doc } from 'firebase/firestore';
 
 interface JogadoresViewProps {
     onBack: () => void;
@@ -109,7 +111,8 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const [isEditing, setIsEditing] = useState(false);
     const [editFormData, setEditFormData] = useState<Partial<Player>>({});
 
-    const isAdmin = userProfile?.role === 'admin';
+    const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
+    const isSuperAdmin = userProfile?.role === 'super-admin';
 
     const FILTERS = [
         "Todos",
@@ -359,6 +362,34 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         }
     };
 
+    const handleDeletePlayer = async () => {
+        if (!selectedPlayer) return;
+        if (!window.confirm(`Tem certeza que deseja EXCLUIR PERMANENTEMENTE o perfil de ${selectedPlayer.nome}? Essa ação é irreversível.`)) return;
+        
+        try {
+            await deleteDoc(doc(db, "jogadores", selectedPlayer.id));
+            setPlayers(prev => prev.filter(p => p.id !== selectedPlayer.id));
+            setSelectedPlayer(null);
+            alert("Jogador excluído com sucesso.");
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao excluir jogador.");
+        }
+    };
+
+    const handleDeletePlayerFromList = async (player: Player) => {
+        if (!window.confirm(`Tem certeza que deseja EXCLUIR PERMANENTEMENTE o perfil de ${player.nome}? Essa ação é irreversível.`)) return;
+        
+        try {
+            await deleteDoc(doc(db, "jogadores", player.id));
+            setPlayers(prev => prev.filter(p => p.id !== player.id));
+            alert("Jogador excluído com sucesso.");
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao excluir jogador.");
+        }
+    };
+
     const getRarityStyles = (rarity: Badge['raridade']) => {
         switch(rarity) {
             case 'lendaria': 
@@ -446,14 +477,23 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                         <span>{normalizePosition(selectedPlayer.posicao)}</span>
                                     </div>
 
-                                    {/* ADMIN EDIT BUTTON (IF ADMIN) */}
+                                    {/* ADMIN EDIT BUTTONS */}
                                     {isAdmin && (
-                                        <button 
-                                            onClick={handleStartEdit}
-                                            className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition-colors text-xs font-bold uppercase tracking-wider text-white mb-6"
-                                        >
-                                            <LucideEdit2 size={14} /> Editar Dados
-                                        </button>
+                                        <div className="flex gap-2 mb-6">
+                                            <button 
+                                                onClick={handleStartEdit}
+                                                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition-colors text-xs font-bold uppercase tracking-wider text-white"
+                                            >
+                                                <LucideEdit2 size={14} /> Editar
+                                            </button>
+                                            <button 
+                                                onClick={handleDeletePlayer}
+                                                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-red-500/50 bg-red-600/20 hover:bg-red-600 hover:text-white transition-colors text-xs font-bold uppercase tracking-wider text-red-300"
+                                                title="Excluir Jogador"
+                                            >
+                                                <LucideTrash2 size={14} />
+                                            </button>
+                                        </div>
                                     )}
 
                                     <div className="grid grid-cols-2 gap-4 w-full max-w-[240px] mx-auto md:mx-0">
@@ -636,7 +676,18 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
             {loading ? <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ancb-blue"></div></div> : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {filteredPlayers.map(player => (
-                        <PlayerCard key={player.id} player={player} onClick={() => handlePlayerClick(player)} />
+                        <div key={player.id} className="relative group">
+                            <PlayerCard player={player} onClick={() => handlePlayerClick(player)} />
+                            {isSuperAdmin && (
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); handleDeletePlayerFromList(player); }}
+                                    className="absolute top-2 left-2 bg-red-600 text-white p-1.5 rounded-full shadow-md opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10 hover:bg-red-700"
+                                    title="Excluir Jogador"
+                                >
+                                    <LucideTrash2 size={14} />
+                                </button>
+                            )}
+                        </div>
                     ))}
                     {filteredPlayers.length === 0 && <div className="col-span-full text-center py-10 text-gray-400">Nenhum jogador encontrado.</div>}
                 </div>

@@ -10,7 +10,8 @@ import {
     LucideArrowLeft, LucideCalendar, LucideMapPin, LucideTrophy, 
     LucideUsers, LucideCheckCircle2, LucideXCircle, LucideClock, 
     LucidePlus, LucideTrash2, LucideGamepad2, LucidePlayCircle, LucideEdit, LucideCheckSquare, LucideSquare,
-    LucideLoader2, LucideStar, LucideChevronRight, LucideEdit2, LucideChevronDown, LucideChevronUp, LucideShield, LucidePlay, LucideUpload, LucideSave, LucideSearch, LucideX, LucideShare2, LucideMoreVertical
+    LucideLoader2, LucideStar, LucideChevronRight, LucideEdit2, LucideChevronDown, LucideChevronUp, LucideShield, LucidePlay, LucideUpload, LucideSave, LucideSearch, LucideX, LucideShare2, LucideMoreVertical,
+    LucideRotateCcw
 } from 'lucide-react';
 import { collection, doc, onSnapshot, updateDoc, setDoc, serverTimestamp, query, getDocs, addDoc, deleteDoc, where } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
@@ -366,8 +367,10 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         if (effectiveRoster.length === 0) { 
             return ( <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-200 dark:border-gray-700"> <p className="text-gray-500 dark:text-gray-400 text-sm">Nenhum jogador convocado.</p> </div> ); 
         }
+        
         const confirmed = effectiveRoster.filter(r => r.status === 'confirmado'); 
         const pending = effectiveRoster.filter(r => r.status === 'pendente');
+        const rejected = effectiveRoster.filter(r => r.status === 'recusado'); // Only show for admin
         
         const renderPlayerItem = (entry: RosterEntry) => { 
             const p = allPlayers.find(pl => pl.id === entry.playerId); 
@@ -375,41 +378,87 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
             const jerseyNum = getEventJerseyNumber(p.id);
 
             return ( 
-                <div key={entry.playerId} className="flex items-center justify-between p-2.5 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800 transition-colors group"> 
-                    <div className="flex items-center gap-3 cursor-pointer overflow-hidden" onClick={() => onSelectPlayer && onSelectPlayer(p.id)}> 
-                        <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center shrink-0"> 
-                            {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-400">{p.nome.charAt(0)}</span>} 
-                        </div> 
-                        <div className="min-w-0"> 
-                            <p className="font-bold text-gray-800 dark:text-gray-200 text-sm truncate">{p.apelido || p.nome}</p> 
-                            <div className="flex items-center gap-2"> 
-                                <span className="text-[10px] text-gray-500 dark:text-gray-400">{normalizePosition(p.posicao).split(' ')[0]}</span> 
-                                <span 
-                                    className="text-[10px] font-bold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-0.5"
-                                    onClick={(e) => { e.stopPropagation(); if(isAdmin) setEditNumberData({player: p, number: String(jerseyNum || '')}); }}
-                                >
-                                   #{jerseyNum || '?'} {isAdmin && <LucideEdit2 size={8} className="text-ancb-blue" />}
-                                </span>
-                            </div> 
-                        </div> 
-                    </div> 
+                <div key={entry.playerId} className="flex flex-row items-center justify-between p-3 bg-white dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700/50 shadow-sm"> 
+                    {/* Left: Avatar */}
+                    <div className="w-12 h-12 flex-shrink-0 cursor-pointer" onClick={() => onSelectPlayer && onSelectPlayer(p.id)}>
+                        <div className="w-full h-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center border border-gray-100 dark:border-gray-600">
+                            {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-sm font-bold text-gray-400">{p.nome.charAt(0)}</span>}
+                        </div>
+                    </div>
+
+                    {/* Middle: Info */}
+                    <div className="flex-grow px-3 min-w-0 cursor-pointer" onClick={() => onSelectPlayer && onSelectPlayer(p.id)}>
+                        <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate leading-tight">{p.apelido || p.nome}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{normalizePosition(p.posicao).split(' ')[0]}</span>
+                            <span 
+                                className="text-[10px] font-bold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-0.5"
+                                onClick={(e) => { e.stopPropagation(); if(isAdmin) setEditNumberData({player: p, number: String(jerseyNum || '')}); }}
+                            >
+                               #{jerseyNum || '?'} {isAdmin && <LucideEdit2 size={8} className="text-ancb-blue" />}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Right: Actions */}
                     {isAdmin ? ( 
-                        <div className="flex items-center gap-1"> 
-                            <button onClick={() => handleUpdateStatus(p.id, 'confirmado')} className={`p-1.5 rounded transition-colors ${entry.status === 'confirmado' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'text-gray-300 hover:text-green-500'}`} title="Confirmar"><LucideCheckSquare size={16}/></button> 
-                            <button onClick={() => handleUpdateStatus(p.id, 'pendente')} className={`p-1.5 rounded transition-colors ${entry.status === 'pendente' ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' : 'text-gray-300 hover:text-orange-500'}`} title="Pendente"><LucideSquare size={16}/></button> 
-                            <button onClick={() => handleUpdateStatus(p.id, 'recusado')} className={`p-1.5 rounded transition-colors ${entry.status === 'recusado' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'text-gray-300 hover:text-red-500'}`} title="Recusar"><LucideXCircle size={16}/></button> 
+                        <div className="flex items-center gap-2 flex-shrink-0"> 
+                            <button 
+                                onClick={() => handleUpdateStatus(p.id, 'confirmado')} 
+                                className={`p-2 rounded-md transition-all ${entry.status === 'confirmado' ? 'bg-green-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 hover:bg-green-100 dark:hover:bg-green-900/30 hover:text-green-600'}`} 
+                                title="Confirmar"
+                            >
+                                <LucideCheckSquare size={18}/>
+                            </button> 
+                            <button 
+                                onClick={() => handleUpdateStatus(p.id, 'pendente')} 
+                                className={`p-2 rounded-md transition-all ${entry.status === 'pendente' ? 'bg-orange-500 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-600'}`} 
+                                title="Pendente"
+                            >
+                                <LucideSquare size={18}/>
+                            </button> 
+                            <button 
+                                onClick={() => handleUpdateStatus(p.id, 'recusado')} 
+                                className={`p-2 rounded-md transition-all ${entry.status === 'recusado' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600'}`} 
+                                title="Recusar"
+                            >
+                                <LucideXCircle size={18}/>
+                            </button> 
                         </div> 
                     ) : ( 
-                        <div className="pr-2"> 
-                            {entry.status === 'confirmado' && <LucideCheckCircle2 size={16} className="text-green-500"/>} 
-                            {entry.status === 'recusado' && <LucideXCircle size={16} className="text-red-500"/>} 
-                            {entry.status === 'pendente' && <LucideClock size={16} className="text-orange-500"/>} 
+                        <div className="pr-2 flex-shrink-0"> 
+                            {entry.status === 'confirmado' && <div className="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 p-1.5 rounded-full"><LucideCheckCircle2 size={20}/></div>} 
+                            {entry.status === 'recusado' && <div className="bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-1.5 rounded-full"><LucideXCircle size={20}/></div>} 
+                            {entry.status === 'pendente' && <div className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 p-1.5 rounded-full"><LucideClock size={20}/></div>} 
                         </div> 
                     )} 
                 </div> 
             ); 
         };
-        return ( <div className="space-y-4"> {confirmed.length > 0 && ( <div> <h4 className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase mb-2 flex items-center gap-1 tracking-wider"><LucideCheckCircle2 size={12}/> Confirmados ({confirmed.length})</h4> <div className="grid grid-cols-1 md:grid-cols-2 gap-2">{confirmed.map(renderPlayerItem)}</div> </div> )} {pending.length > 0 && ( <div> <h4 className="text-[10px] font-bold text-orange-500 uppercase mb-2 flex items-center gap-1 tracking-wider"><LucideClock size={12}/> Pendentes ({pending.length})</h4> <div className="grid grid-cols-1 md:grid-cols-2 gap-2">{pending.map(renderPlayerItem)}</div> </div> )} </div> );
+        
+        return ( 
+            <div className="space-y-6"> 
+                {confirmed.length > 0 && ( 
+                    <div> 
+                        <h4 className="text-xs font-bold text-green-600 dark:text-green-400 uppercase mb-3 flex items-center gap-1.5 tracking-wider"><LucideCheckCircle2 size={14}/> Confirmados ({confirmed.length})</h4> 
+                        <div className="flex flex-col gap-3">{confirmed.map(renderPlayerItem)}</div> 
+                    </div> 
+                )} 
+                {pending.length > 0 && ( 
+                    <div> 
+                        <h4 className="text-xs font-bold text-orange-500 uppercase mb-3 flex items-center gap-1.5 tracking-wider"><LucideClock size={14}/> Pendentes ({pending.length})</h4> 
+                        <div className="flex flex-col gap-3">{pending.map(renderPlayerItem)}</div> 
+                    </div> 
+                )}
+                {/* Admin Only: Show rejected/removed players to allow restore */}
+                {isAdmin && rejected.length > 0 && (
+                    <div className="pt-4 border-t border-gray-200 dark:border-gray-700"> 
+                        <h4 className="text-xs font-bold text-red-500 uppercase mb-3 flex items-center gap-1.5 tracking-wider opacity-80"><LucideXCircle size={14}/> Recusados / Indisponíveis ({rejected.length})</h4> 
+                        <div className="flex flex-col gap-3">{rejected.map(renderPlayerItem)}</div> 
+                    </div>
+                )}
+            </div> 
+        );
     };
 
     if (loading || !event) return <div className="flex h-screen items-center justify-center bg-gray-900 text-white"><LucideLoader2 className="animate-spin" /></div>;
@@ -451,11 +500,14 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
     const getEffectiveRoster = () => {
         const effective = [...roster];
+        // Merge legacy array but prefer existing subcollection status
         if (event?.jogadoresEscalados) {
             event.jogadoresEscalados.forEach(pid => {
                 const id = typeof pid === 'string' ? pid : pid.id;
+                // Only add if not already in the subcollection map
                 if (!effective.find(e => e.playerId === id)) {
-                    effective.push({ playerId: id, status: 'confirmado', updatedAt: null });
+                    // Default to 'pendente' instead of 'confirmado' for safety
+                    effective.push({ playerId: id, status: 'pendente', updatedAt: null });
                 }
             });
         }

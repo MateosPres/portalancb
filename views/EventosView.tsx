@@ -8,7 +8,7 @@ import { Modal } from '../components/Modal';
 import { ShareModal } from '../components/ShareModal';
 import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucideTrash2, LucideStar, LucideMessageSquare, LucidePlayCircle, LucideShield, LucideCamera, LucideLoader2, LucideCalendar, LucideMapPin, LucideShare2, LucideSearch } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
-import { collection, doc, getDocs, getDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, writeBatch } from 'firebase/firestore';
 
 interface EventosViewProps {
     onBack: () => void;
@@ -90,13 +90,22 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 modalidade: formMode,
                 type: formType,
                 status: formStatus,
-                jogadoresEscalados: rosterArray // Save specific jersey numbers
+                jogadoresEscalados: rosterArray // Save specific jersey numbers for legacy/backup
             });
 
-            // Also populate the sub-collection 'roster' for better indexing if needed (optional but recommended)
-            // for (const p of rosterArray) {
-            //     await eventDocRef.collection('roster').doc(p.id).set({ playerId: p.id, status: 'pendente', updatedAt: new Date() });
-            // }
+            // CRITICAL FIX: Write to subcollection immediately as 'pendente'
+            if (rosterArray.length > 0) {
+                const batch = writeBatch(db);
+                rosterArray.forEach(p => {
+                    const rosterRef = eventDocRef.collection('roster').doc(p.id);
+                    batch.set(rosterRef, { 
+                        playerId: p.id, 
+                        status: 'pendente', // Force pending on creation
+                        updatedAt: new Date() 
+                    });
+                });
+                await batch.commit();
+            }
 
             // If Amistoso, automatically create the single match
             if (formType === 'amistoso' && formOpponent) {
