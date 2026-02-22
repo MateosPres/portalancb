@@ -231,6 +231,54 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
         });
     };
 
+    const handleUpdateMyStatus = async (status: 'confirmado' | 'recusado') => {
+        if (!event || !team.id || !userProfile?.linkedPlayerId) return;
+        
+        // Optimistic update
+        const prevStatus = team.rosterStatus?.[userProfile.linkedPlayerId];
+        setTeam(prev => ({
+            ...prev,
+            rosterStatus: {
+                ...(prev.rosterStatus || {}),
+                [userProfile.linkedPlayerId!]: status
+            }
+        }));
+
+        try {
+            const isExternal = event.type === 'torneio_externo';
+            const collectionField = isExternal ? 'timesParticipantes' : 'times';
+            const currentTeams = (isExternal ? event.timesParticipantes : event.times) || [];
+            
+            const updatedTeams = currentTeams.map(t => {
+                if (t.id === team.id) {
+                    return {
+                        ...t,
+                        rosterStatus: {
+                            ...(t.rosterStatus || {}),
+                            [userProfile.linkedPlayerId!]: status
+                        }
+                    };
+                }
+                return t;
+            });
+
+            await updateDoc(doc(db, "eventos", eventId), {
+                [collectionField]: updatedTeams
+            });
+        } catch (error) {
+            console.error("Error updating status:", error);
+            // Revert on error
+            setTeam(prev => ({
+                ...prev,
+                rosterStatus: {
+                    ...(prev.rosterStatus || {}),
+                    [userProfile.linkedPlayerId!]: prevStatus
+                }
+            }));
+            alert("Erro ao atualizar status.");
+        }
+    };
+
     const filteredPlayers = allPlayers.filter(p => 
         p.nome.toLowerCase().includes(search.toLowerCase()) || 
         (p.apelido && p.apelido.toLowerCase().includes(search.toLowerCase()))
@@ -269,11 +317,46 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
             </div>
 
             <div className="max-w-3xl mx-auto p-4 space-y-6">
+                {/* User Status Banner */}
+                {userProfile?.linkedPlayerId && team.jogadores?.includes(userProfile.linkedPlayerId) && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-blue-100 dark:bg-blue-800 p-2 rounded-full text-ancb-blue dark:text-blue-300">
+                                <LucideAlertCircle size={24} />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-gray-800 dark:text-white">Sua Convocação</h3>
+                                <p className="text-sm text-gray-600 dark:text-gray-300">
+                                    Você está escalado para este jogo.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            <Button 
+                                size="sm" 
+                                className={`flex-1 sm:flex-none ${team.rosterStatus?.[userProfile.linkedPlayerId] === 'confirmado' ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-white text-green-600 border border-green-600 hover:bg-green-50'}`}
+                                onClick={() => handleUpdateMyStatus('confirmado')}
+                            >
+                                <LucideCheckCircle2 size={16} className="mr-1" />
+                                {team.rosterStatus?.[userProfile.linkedPlayerId] === 'confirmado' ? 'Confirmado' : 'Confirmar'}
+                            </Button>
+                            <Button 
+                                size="sm" 
+                                className={`flex-1 sm:flex-none ${team.rosterStatus?.[userProfile.linkedPlayerId] === 'recusado' ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-white text-red-600 border border-red-600 hover:bg-red-50'}`}
+                                onClick={() => handleUpdateMyStatus('recusado')}
+                            >
+                                <LucideXCircle size={16} className="mr-1" />
+                                {team.rosterStatus?.[userProfile.linkedPlayerId] === 'recusado' ? 'Recusado' : 'Recusar'}
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Team Info Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
                     <div className="flex flex-col sm:flex-row items-center gap-6">
                         <div className="relative shrink-0 group">
-                            <div className={`w-24 h-24 rounded-full border-4 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden ${team.logoUrl ? 'bg-white' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                            <div className={`w-24 h-24 rounded-full flex items-center justify-center overflow-hidden shadow-md ${team.logoUrl ? 'bg-white' : 'bg-gray-100 dark:bg-gray-700'}`}>
                                 {isUploadingLogo ? (
                                     <LucideLoader2 className="animate-spin text-gray-400" />
                                 ) : team.logoUrl ? (
