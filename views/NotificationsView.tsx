@@ -4,21 +4,27 @@ import { UserProfile, NotificationItem, Evento } from '../types';
 import { Button } from '../components/Button';
 import { 
     LucideArrowLeft, 
-    LucideTrash2, 
     LucideBell, 
     LucideCheckCircle2, 
     LucideXCircle, 
     LucideCalendar,
-    LucideLoader2
+    LucideLoader2,
+    LucideX,
+    LucidePlayCircle,
+    LucideTrash2,
+    LucideBellRing
 } from 'lucide-react';
-import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, orderBy, getDoc, documentId } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, orderBy, getDoc } from 'firebase/firestore';
+import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from 'framer-motion';
 
 interface NotificationsViewProps {
     onBack: () => void;
     userProfile: UserProfile;
+    notificationPermissionStatus?: 'granted' | 'denied' | 'default';
+    onEnableNotifications?: () => void;
 }
 
-export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, userProfile }) => {
+export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, userProfile, notificationPermissionStatus, onEnableNotifications }) => {
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [rosteredEvents, setRosteredEvents] = useState<Evento[]>([]);
     const [loading, setLoading] = useState(true);
@@ -26,56 +32,52 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
     useEffect(() => {
         const fetchNotifications = async () => {
             try {
-                // 1. Fetch Notifications from Firestore
-                // Assuming notifications are stored in a root 'notificacoes' collection or user subcollection
-                // Based on previous code, it seems mixed. Let's assume a root collection filtered by playerId/userId
-                // We need to find the player ID linked to this user first if not in profile
-                
-                let playerId = userProfile.linkedPlayerId;
-                if (!playerId) {
-                    // Try to find player by userId
-                    const playerQuery = query(collection(db, 'jogadores'), where('userId', '==', userProfile.uid));
-                    const playerSnap = await getDocs(playerQuery);
-                    if (!playerSnap.empty) {
-                        playerId = playerSnap.docs[0].id;
-                    }
-                }
+                // Use userProfile.uid directly as targetUserId, matching the index and App.tsx
+                const targetUserId = userProfile.uid;
 
-                if (playerId) {
+                if (targetUserId) {
                     const q = query(
-                        collection(db, 'notificacoes'), 
-                        where('playerId', '==', playerId),
+                        collection(db, 'notifications'), 
+                        where('targetUserId', '==', targetUserId),
                         orderBy('timestamp', 'desc')
                     );
                     const snapshot = await getDocs(q);
                     const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as NotificationItem));
                     setNotifications(notifs);
 
-                    // 2. Fetch Rostered Events
-                    // We need to check all events where this player is in 'jogadoresEscalados' or in a team
-                    const eventsSnap = await getDocs(collection(db, 'eventos'));
-                    const myEvents: Evento[] = [];
-                    
-                    eventsSnap.forEach(doc => {
-                        const event = { id: doc.id, ...doc.data() } as Evento;
-                        let isRostered = false;
+                    // Fetch rostered events (logic remains similar but we need playerId for roster checks)
+                    let playerId = userProfile.linkedPlayerId;
+                    if (!playerId) {
+                         const playerQuery = query(collection(db, 'jogadores'), where('userId', '==', userProfile.uid));
+                         const playerSnap = await getDocs(playerQuery);
+                         if (!playerSnap.empty) {
+                             playerId = playerSnap.docs[0].id;
+                         }
+                    }
 
-                        // Check direct roster (legacy or simple events)
-                        if (event.jogadoresEscalados?.includes(playerId!)) isRostered = true;
+                    if (playerId) {
+                        const eventsSnap = await getDocs(collection(db, 'eventos'));
+                        const myEvents: Evento[] = [];
+                        
+                        eventsSnap.forEach(doc => {
+                            const event = { id: doc.id, ...doc.data() } as Evento;
+                            let isRostered = false;
 
-                        // Check teams (internal/external)
-                        if (!isRostered && (event.times || event.timesParticipantes)) {
-                            const teams = event.times || event.timesParticipantes || [];
-                            if (teams.some(t => t.jogadores?.includes(playerId!))) {
-                                isRostered = true;
+                            if (event.jogadoresEscalados?.includes(playerId!)) isRostered = true;
+
+                            if (!isRostered && (event.times || event.timesParticipantes)) {
+                                const teams = event.times || event.timesParticipantes || [];
+                                if (teams.some(t => t.jogadores?.includes(playerId!))) {
+                                    isRostered = true;
+                                }
                             }
-                        }
 
-                        if (isRostered && event.status !== 'finalizado') {
-                            myEvents.push(event);
-                        }
-                    });
-                    setRosteredEvents(myEvents);
+                            if (isRostered && event.status !== 'finalizado') {
+                                myEvents.push(event);
+                            }
+                        });
+                        setRosteredEvents(myEvents);
+                    }
                 }
 
             } catch (error) {
@@ -90,12 +92,11 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
 
     const handleDeleteNotification = async (id: string, type: string) => {
         if (type === 'roster_invite' || type === 'pending_review') {
-            alert("Esta notificação não pode ser excluída manualmente. Responda à solicitação para removê-la.");
-            return;
+            return; // Cannot delete these manually
         }
         
         try {
-            await deleteDoc(doc(db, 'notificacoes', id));
+            await deleteDoc(doc(db, 'notifications', id));
             setNotifications(prev => prev.filter(n => n.id !== id));
         } catch (error) {
             console.error("Error deleting notification:", error);
@@ -108,7 +109,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
         const deletable = notifications.filter(n => n.type !== 'roster_invite' && n.type !== 'pending_review');
         
         for (const notif of deletable) {
-            await deleteDoc(doc(db, 'notificacoes', notif.id));
+            await deleteDoc(doc(db, 'notifications', notif.id));
         }
         
         setNotifications(prev => prev.filter(n => n.type === 'roster_invite' || n.type === 'pending_review'));
@@ -136,26 +137,26 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
                     const team = teams[teamIndex];
                     const currentStatus = team.rosterStatus || {};
                     
-                    // Update status
-                    const newStatus = { ...currentStatus, [notification.playerId]: accept ? 'confirmado' : 'recusado' };
+                    // Use notification.playerId if available, otherwise try to find it
+                    const playerId = notification.playerId || userProfile.linkedPlayerId;
                     
-                    // If rejected, maybe remove from 'jogadores' list too?
-                    // The prompt says "option to accept or not". If rejected, user stays in roster but marked rejected?
-                    // Or removed? Usually rejected means removed or marked rejected.
-                    // Let's keep in list but marked rejected for history, or remove if that's the requirement.
-                    // But 'TeamManagerView' shows rejected players. So let's keep them.
-                    
-                    const updatedTeam = { ...team, rosterStatus: newStatus };
-                    const updatedTeams = [...teams];
-                    updatedTeams[teamIndex] = updatedTeam;
+                    if (playerId) {
+                        const newStatus = { ...currentStatus, [playerId]: accept ? 'confirmado' : 'recusado' };
+                        
+                        const updatedTeam = { ...team, rosterStatus: newStatus };
+                        const updatedTeams = [...teams];
+                        updatedTeams[teamIndex] = updatedTeam;
 
-                    await updateDoc(eventRef, {
-                        [teamsField]: updatedTeams
-                    });
+                        await updateDoc(eventRef, {
+                            [teamsField]: updatedTeams
+                        });
+                    } else {
+                        console.error("Player ID not found for roster response");
+                    }
                 }
             }
             
-            await deleteDoc(doc(db, 'notificacoes', notification.id));
+            await deleteDoc(doc(db, 'notifications', notification.id));
             setNotifications(prev => prev.filter(n => n.id !== notification.id));
             alert(accept ? "Convocação aceita!" : "Convocação recusada.");
         } catch (error) {
@@ -164,20 +165,27 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
         }
     };
 
-    if (loading) return <div className="flex justify-center items-center h-screen"><LucideLoader2 className="animate-spin" /></div>;
+    const handleStartEvaluation = (notification: NotificationItem) => {
+        // Placeholder for evaluation logic
+        // This should navigate to the evaluation screen or open a modal
+        alert("Iniciar avaliação: " + notification.title);
+        // After completion, the notification should be deleted (handled by the evaluation completion logic)
+    };
+
+    if (loading) return <div className="fixed inset-0 z-50 flex justify-center items-center bg-black/50 backdrop-blur-sm"><LucideLoader2 className="animate-spin text-white" /></div>;
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex flex-col bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-md animate-fadeIn overflow-y-auto">
             {/* Header */}
-            <div className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between shadow-sm">
+            <div className="sticky top-0 z-40 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-3">
                     <Button variant="secondary" size="sm" onClick={onBack}>
                         <LucideArrowLeft size={20} />
                     </Button>
                     <h1 className="text-lg font-bold text-gray-800 dark:text-white leading-tight">Notificações</h1>
                 </div>
-                {notifications.length > 0 && (
-                    <button onClick={handleClearAll} className="text-xs text-red-500 hover:text-red-700 font-bold uppercase">
+                {notifications.some(n => n.type !== 'roster_invite' && n.type !== 'pending_review') && (
+                    <button onClick={handleClearAll} className="text-xs text-red-500 hover:text-red-700 font-bold uppercase transition-colors">
                         Limpar Tudo
                     </button>
                 )}
@@ -185,6 +193,24 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
 
             <div className="max-w-3xl mx-auto p-4 space-y-8">
                 
+                {/* Enable Notifications Banner */}
+                {notificationPermissionStatus !== 'granted' && onEnableNotifications && (
+                    <div className="bg-orange-50 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-800/50 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4 shadow-sm">
+                        <div className="bg-orange-100 dark:bg-orange-900 p-2 rounded-full text-ancb-orange shrink-0">
+                            <LucideBellRing size={20} />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="font-bold text-gray-800 dark:text-white text-sm">Ativar Notificações</h3>
+                            <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                                Receba avisos de convocações, resultados e avaliações em tempo real.
+                            </p>
+                        </div>
+                        <Button size="sm" onClick={onEnableNotifications} className="w-full sm:w-auto text-xs whitespace-nowrap">
+                            Ativar Agora
+                        </Button>
+                    </div>
+                )}
+
                 {/* Rostered Events Section */}
                 {rosteredEvents.length > 0 && (
                     <section>
@@ -212,42 +238,113 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
                     </h2>
                     <div className="space-y-3">
                         {notifications.length === 0 ? (
-                            <div className="text-center py-10 text-gray-400">Nenhuma notificação nova.</div>
+                            <div className="text-center py-10 text-gray-400">
+                                <LucideBell size={48} className="mx-auto mb-2 opacity-20" />
+                                <p>Nenhuma notificação nova.</p>
+                            </div>
                         ) : (
-                            notifications.map(notif => (
-                                <div key={notif.id} className={`bg-white dark:bg-gray-800 p-4 rounded-xl border shadow-sm relative ${notif.type === 'roster_invite' ? 'border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-900/10' : 'border-gray-200 dark:border-gray-700'}`}>
-                                    <div className="pr-8">
-                                        <h3 className="font-bold text-gray-800 dark:text-white text-sm mb-1">{notif.title}</h3>
-                                        <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{notif.message}</p>
-                                        
-                                        {/* Roster Invite Actions */}
-                                        {notif.type === 'roster_invite' && (
-                                            <div className="flex gap-3 mt-3">
-                                                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleRosterResponse(notif, true)}>
-                                                    <LucideCheckCircle2 size={16} className="mr-1" /> Aceitar
-                                                </Button>
-                                                <Button size="sm" variant="secondary" className="text-red-500 border-red-200 hover:bg-red-50" onClick={() => handleRosterResponse(notif, false)}>
-                                                    <LucideXCircle size={16} className="mr-1" /> Recusar
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Delete Button (Conditional) */}
-                                    {notif.type !== 'roster_invite' && notif.type !== 'pending_review' && (
-                                        <button 
-                                            onClick={() => handleDeleteNotification(notif.id, notif.type)}
-                                            className="absolute top-3 right-3 text-gray-400 hover:text-red-500 transition-colors"
-                                        >
-                                            <LucideTrash2 size={16} />
-                                        </button>
-                                    )}
-                                </div>
-                            ))
+                            <AnimatePresence mode='popLayout'>
+                                {notifications.map(notif => (
+                                    <NotificationCard 
+                                        key={notif.id} 
+                                        notification={notif} 
+                                        onDelete={handleDeleteNotification}
+                                        onRosterResponse={handleRosterResponse}
+                                        onStartEvaluation={handleStartEvaluation}
+                                    />
+                                ))}
+                            </AnimatePresence>
                         )}
                     </div>
                 </section>
             </div>
         </div>
+    );
+};
+
+interface NotificationCardProps {
+    notification: NotificationItem;
+    onDelete: (id: string, type: string) => void;
+    onRosterResponse: (notification: NotificationItem, accept: boolean) => void;
+    onStartEvaluation: (notification: NotificationItem) => void;
+}
+
+const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onDelete, onRosterResponse, onStartEvaluation }) => {
+    const isDeletable = notification.type !== 'roster_invite' && notification.type !== 'pending_review';
+    const x = useMotionValue(0);
+    const opacity = useTransform(x, [-100, 0], [0, 1]);
+    
+    // We don't need background transform here as we use a separate div for background
+    // But we can use it to control opacity of the content if we want
+
+    const handleDragEnd = (event: any, info: PanInfo) => {
+        if (info.offset.x < -100 && isDeletable) {
+            onDelete(notification.id, notification.type);
+        }
+    };
+
+    return (
+        <motion.div
+            layout
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, x: -100 }}
+            style={{ x, opacity }}
+            drag={isDeletable ? "x" : false}
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={{ left: 0.5, right: 0 }} // Only allow dragging left
+            onDragEnd={handleDragEnd}
+            className={`relative bg-white dark:bg-gray-800 rounded-xl border shadow-sm overflow-hidden touch-pan-y
+                ${notification.type === 'roster_invite' ? 'border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-900/10' : 
+                  notification.type === 'pending_review' ? 'border-purple-200 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-900/10' :
+                  'border-gray-200 dark:border-gray-700'}`}
+        >
+            {/* Swipe Background Indicator (Visual feedback) */}
+            <motion.div 
+                className="absolute inset-y-0 right-0 w-full bg-red-500 flex items-center justify-end pr-4"
+                style={{ opacity: useTransform(x, [-50, 0], [0, 1]), zIndex: 0 }}
+            >
+                <LucideTrash2 className="text-white" />
+            </motion.div>
+
+            <div className="p-4 relative z-10 bg-inherit">
+                <div className="pr-8">
+                    <h3 className="font-bold text-gray-800 dark:text-white text-sm mb-1">{notification.title}</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{notification.message}</p>
+                    
+                    {/* Roster Invite Actions */}
+                    {notification.type === 'roster_invite' && (
+                        <div className="flex gap-3 mt-3">
+                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => onRosterResponse(notification, true)}>
+                                <LucideCheckCircle2 size={16} className="mr-1" /> Aceitar
+                            </Button>
+                            <Button size="sm" variant="secondary" className="text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => onRosterResponse(notification, false)}>
+                                <LucideXCircle size={16} className="mr-1" /> Recusar
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* Evaluation Actions */}
+                    {notification.type === 'pending_review' && (
+                        <div className="flex gap-3 mt-3">
+                            <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white" onClick={() => onStartEvaluation(notification)}>
+                                <LucidePlayCircle size={16} className="mr-1" /> Iniciar Avaliação
+                            </Button>
+                        </div>
+                    )}
+                </div>
+
+                {/* Individual Delete Button (Discrete X) */}
+                {isDeletable && (
+                    <button 
+                        onClick={() => onDelete(notification.id, notification.type)}
+                        className="absolute top-3 right-3 text-gray-300 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                        title="Excluir notificação"
+                    >
+                        <LucideX size={14} />
+                    </button>
+                )}
+            </div>
+        </motion.div>
     );
 };

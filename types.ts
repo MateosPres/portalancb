@@ -192,7 +192,7 @@ export interface ReviewTagDefinition {
 
 export interface NotificationItem {
     id: string;
-    type: 'pending_review' | 'roster_alert';
+    type: 'pending_review' | 'roster_invite' | 'evaluation' | 'roster_alert';
     title: string;
     message: string;
     data: any; // Dados extras (gameId, eventId, etc)

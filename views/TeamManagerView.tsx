@@ -148,19 +148,17 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                 newPlayers = currentRoster.filter(pid => team.rosterStatus?.[pid] === 'pendente');
             }
 
+            let savedTeamId = team.id;
+
             if (team.id) {
                 // Update existing
                 updatedTeams = currentTeams.map(t => t.id === team.id ? team as Time : t);
             } else {
                 // Create new
                 const newTeamId = Date.now().toString();
+                savedTeamId = newTeamId;
                 const newTeam = { ...team, id: newTeamId } as Time;
                 updatedTeams = [...currentTeams, newTeam];
-                // Update team state so notifications use the correct ID
-                // Ideally we should use 'newTeamId' directly in notification logic
-                // But since 'newPlayers' logic is above, we need to be careful.
-                // Actually, let's just use 'newTeamId' in the notification block below.
-                (team as any)._tempId = newTeamId; 
             }
 
             await updateDoc(doc(db, "eventos", eventId), {
@@ -170,7 +168,6 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
             // Send Notifications
             if (newPlayers.length > 0) {
                 const batch = db.batch();
-                const effectiveTeamId = team.id || (team as any)._tempId;
                 
                 // We need to find the UserProfile for each player
                 // This is tricky because 'allPlayers' has 'userId' but we need to query 'notificacoes'
@@ -179,16 +176,17 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                 newPlayers.forEach(playerId => {
                     const player = allPlayers.find(p => p.id === playerId);
                     if (player && player.userId) {
-                        const notifRef = doc(collection(db, "notificacoes"));
+                        const notifRef = doc(collection(db, "notifications"));
                         batch.set(notifRef, {
                             type: 'roster_invite',
                             title: 'Convocação!',
                             message: `Você foi convocado para o time ${team.nomeTime} no evento ${event.nome}.`,
                             data: { 
                                 eventId: event.id, 
-                                teamId: effectiveTeamId,
+                                teamId: savedTeamId,
                             },
                             playerId: playerId,
+                            targetUserId: player.userId,
                             read: false,
                             timestamp: serverTimestamp(),
                             status: 'pending'

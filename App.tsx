@@ -77,7 +77,7 @@ const App: React.FC = () => {
 
     // --- NOTIFICATIONS STATE ---
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-    const [showNotifications, setShowNotifications] = useState(false);
+    const [showNotificationsView, setShowNotificationsView] = useState(false);
     const [showQuiz, setShowQuiz] = useState(false);
     const [reviewTargetGame, setReviewTargetGame] = useState<{ gameId: string, eventId: string, playersToReview: Player[] } | null>(null);
     const [foregroundNotification, setForegroundNotification] = useState<{title: string, body: string, eventId?: string, type?: string} | null>(null);
@@ -394,20 +394,6 @@ const App: React.FC = () => {
         } catch (e) { alert("Erro ao carregar dados."); }
     };
 
-    const handleNotificationClick = async (notif: NotificationItem) => {
-        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
-        if (!notif.id.startsWith('roster-') && !notif.id.startsWith('review-')) {
-             try {
-                 await db.collection("notifications").doc(notif.id).update({ read: true });
-             } catch(e) { console.warn("Could not mark read in DB"); }
-        }
-        const readIds = JSON.parse(localStorage.getItem('ancb_read_notifications') || '[]');
-        if (!readIds.includes(notif.id)) { readIds.push(notif.id); localStorage.setItem('ancb_read_notifications', JSON.stringify(readIds)); }
-        
-        if (notif.type === 'pending_review') { await handleOpenReviewQuiz(notif.data.gameId, notif.data.eventId); setShowNotifications(false); }
-        else if (notif.type === 'roster_alert') { handleOpenEventDetail(notif.data.eventId); setShowNotifications(false); }
-    };
-
     const handleOpenGamePanel = (game: Jogo, eventId: string, isEditable: boolean = false) => {
         const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
         if (isAdmin) {
@@ -667,7 +653,6 @@ const App: React.FC = () => {
             case 'public-game': return selectedPublicGame ? <PublicGameView game={selectedPublicGame.game} eventId={selectedPublicGame.eventId} onBack={() => setCurrentView('home')} /> : <div>Jogo não encontrado</div>;
             case 'profile': return userProfile ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} onOpenReview={handleOpenReviewQuiz} onOpenEvent={handleOpenEventDetail} /> : null;
             case 'team-manager': return teamManagerEventId ? <TeamManagerView eventId={teamManagerEventId} teamId={teamManagerTeamId} onBack={() => { setCurrentView('evento-detalhe'); }} userProfile={userProfile} /> : null;
-            case 'notifications': return userProfile ? <NotificationsView onBack={() => setCurrentView('home')} userProfile={userProfile} /> : null;
             default: return <div>404</div>;
         }
     };
@@ -726,47 +711,16 @@ const App: React.FC = () => {
                 </footer>
             )}
 
-            <NotificationFab notifications={notifications} onClick={() => setShowNotifications(true)} />
+            <NotificationFab notifications={notifications} onClick={() => setShowNotificationsView(true)} />
 
-            {/* ... rest of modals ... */}
-            <Modal isOpen={showNotifications} onClose={() => setShowNotifications(false)} title="Notificações">
-                {notificationPermissionStatus !== 'granted' && (
-                    <div className="sticky top-0 z-20 mb-4 p-4 bg-orange-50 dark:bg-orange-900/40 border-b-2 border-orange-200 dark:border-orange-800/50 flex flex-col gap-2 animate-fadeIn -mx-6 -mt-6 shadow-md backdrop-blur-sm">
-                        <div className="flex items-start gap-2">
-                            <div className="bg-orange-100 dark:bg-orange-900 p-1.5 rounded-full text-ancb-orange"><LucideBellRing size={18} /></div>
-                            <div>
-                                <h4 className="font-bold text-sm text-gray-800 dark:text-white leading-tight">Ativar Notificações</h4>
-                                <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-tight">
-                                    Não perca convocações e resultados.
-                                </p>
-                            </div>
-                        </div>
-                        <Button size="sm" onClick={handleEnableNotifications} className="w-full mt-1 text-xs !py-1.5">
-                            Ativar Agora
-                        </Button>
-                    </div>
-                )}
-                <div className={notificationPermissionStatus !== 'granted' ? 'mt-4' : ''}>
-                    {notifications.length > 0 ? (
-                        <div className="space-y-3">
-                            {notifications.map(notif => (
-                                <div key={notif.id} className={`p-4 rounded-lg border flex justify-between items-center cursor-pointer transition-colors ${notif.type === 'roster_alert' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800'} ${notif.read ? 'opacity-50' : ''}`} onClick={() => handleNotificationClick(notif)}>
-                                    <div className="flex gap-3">
-                                        <div className={notif.type === 'roster_alert' ? 'text-ancb-orange' : 'text-ancb-blue'}>{notif.type === 'roster_alert' ? <LucideMegaphone size={20} /> : <LucideCheckSquare size={20} />}</div>
-                                        <div><h4 className="font-bold text-sm">{notif.title}</h4><p className="text-xs text-gray-600 dark:text-gray-400">{notif.message}</p></div>
-                                    </div>
-                                    {!notif.read && <div className="w-2 h-2 rounded-full bg-red-500"></div>}
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-10 text-gray-400">
-                            <LucideBell size={48} className="mx-auto mb-2 opacity-20" />
-                            <p>Nenhuma notificação nova.</p>
-                        </div>
-                    )}
-                </div>
-            </Modal>
+            {showNotificationsView && userProfile && (
+                <NotificationsView 
+                    onBack={() => setShowNotificationsView(false)} 
+                    userProfile={userProfile} 
+                    notificationPermissionStatus={notificationPermissionStatus}
+                    onEnableNotifications={handleEnableNotifications}
+                />
+            )}
 
             <Modal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} title="Instalar no iPhone">
                 <div className="flex flex-col items-center text-center space-y-6">
