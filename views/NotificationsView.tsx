@@ -43,7 +43,22 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
                     );
                     const snapshot = await getDocs(q);
                     const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as NotificationItem));
-                    setNotifications(notifs);
+                    const rawNotifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as NotificationItem));
+                    
+                    // Limpeza automática de notificações de jogos deletados
+                    const validNotifs: NotificationItem[] = [];
+                    for (const notif of rawNotifs) {
+                        if (notif.type === 'pending_review' && notif.data?.eventId && notif.data?.gameId) {
+                            const gameSnap = await getDoc(doc(db, 'eventos', notif.data.eventId, 'jogos', notif.data.gameId));
+                            if (!gameSnap.exists()) {
+                                // O jogo não existe mais, exclui a notificação do banco e ignora
+                                deleteDoc(doc(db, 'notifications', notif.id)).catch(console.error);
+                                continue; 
+                            }
+                        }
+                        validNotifs.push(notif);
+                    }
+                    setNotifications(validNotifs);
 
                     // Fetch rostered events (logic remains similar but we need playerId for roster checks)
                     let playerId = userProfile.linkedPlayerId;
@@ -62,17 +77,30 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
                         eventsSnap.forEach(doc => {
                             const event = { id: doc.id, ...doc.data() } as Evento;
                             let isRostered = false;
+                            let isRecusado = false;
 
-                            if (event.jogadoresEscalados?.includes(playerId!)) isRostered = true;
+                            // Verifica tanto formato de string quanto de objetos (caso tenha número de camisa)
+                            const isEscalado = event.jogadoresEscalados?.some((e: any) => 
+                                typeof e === 'string' ? e === playerId : e.id === playerId
+                            );
+
+                            if (isEscalado) isRostered = true;
 
                             if (!isRostered && (event.times || event.timesParticipantes)) {
                                 const teams = event.times || event.timesParticipantes || [];
-                                if (teams.some(t => t.jogadores?.includes(playerId!))) {
+                                const myTeam = teams.find(t => t.jogadores?.includes(playerId!));
+                                
+                                if (myTeam) {
                                     isRostered = true;
+                                    // Se o jogador tiver status 'recusado' neste time, marca a flag
+                                    if (myTeam.rosterStatus && myTeam.rosterStatus[playerId!] === 'recusado') {
+                                        isRecusado = true;
+                                    }
                                 }
                             }
 
-                            if (isRostered && event.status !== 'finalizado') {
+                            // Só entra na lista se estiver escalado, NÃO tiver recusado e o evento não tiver acabado
+                            if (isRostered && !isRecusado && event.status !== 'finalizado') {
                                 myEvents.push(event);
                             }
                         });
@@ -165,11 +193,38 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
         }
     };
 
-    const handleStartEvaluation = (notification: NotificationItem) => {
-        // Placeholder for evaluation logic
-        // This should navigate to the evaluation screen or open a modal
-        alert("Iniciar avaliação: " + notification.title);
-        // After completion, the notification should be deleted (handled by the evaluation completion logic)
+    const handleStartEvaluation = async (notification: NotificationItem) => {
+        // Tenta pegar os IDs. Se não existirem (notificação de teste antigo), será undefined
+        const { eventId, gameId } = notification.data || {};
+
+        // 1. Se a notificação não tem os dados de ligação, é lixo. Apaga na hora.
+        if (!eventId || !gameId) {
+            alert("Notificação sem vínculo com partida. Limpando...");
+            await deleteDoc(doc(db, 'notifications', notification.id));
+            setNotifications(prev => prev.filter(n => n.id !== notification.id));
+            return;
+        }
+
+        try {
+            // 2. Procura o jogo no banco
+            const gameRef = doc(db, 'eventos', eventId, 'jogos', gameId);
+            const gameSnap = await getDoc(gameRef);
+
+            // 3. Se o jogo foi apagado do portal, apaga a notificação
+            if (!gameSnap.exists()) {
+                alert("A partida original foi excluída. Limpando notificação...");
+                await deleteDoc(doc(db, 'notifications', notification.id));
+                setNotifications(prev => prev.filter(n => n.id !== notification.id));
+                return;
+            }
+
+            // Se o jogo existe, o fluxo normal segue (futura tela de avaliação)
+            alert("Partida encontrada! Iniciar avaliação: " + notification.title);
+
+        } catch (error) {
+            console.error("Erro ao verificar partida:", error);
+            alert("Erro ao acessar os dados do jogo.");
+        }
     };
 
     if (loading) return <div className="fixed inset-0 z-50 flex justify-center items-center bg-black/50 backdrop-blur-sm"><LucideLoader2 className="animate-spin text-white" /></div>;
@@ -222,7 +277,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
                                 <div key={event.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-green-200 dark:border-green-900 shadow-sm flex justify-between items-center">
                                     <div>
                                         <h3 className="font-bold text-gray-800 dark:text-white">{event.nome}</h3>
-                                        <p className="text-xs text-gray-500">{new Date(event.data).toLocaleDateString()}</p>
+                                        <p className="text-xs text-gray-500">{event.data.split('-').reverse().join('/')}</p>
                                     </div>
                                     <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-full">Escalado</span>
                                 </div>
@@ -269,12 +324,11 @@ interface NotificationCardProps {
     onStartEvaluation: (notification: NotificationItem) => void;
 }
 
-const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onDelete, onRosterResponse, onStartEvaluation }) => {
+const NotificationCard = React.forwardRef<HTMLDivElement, NotificationCardProps>(({ notification, onDelete, onRosterResponse, onStartEvaluation }, ref) => {
     const isDeletable = notification.type !== 'roster_invite' && notification.type !== 'pending_review';
     const x = useMotionValue(0);
     const opacity = useTransform(x, [-100, 0], [0, 1]);
     
-    // Corrige a opacidade para o vermelho só aparecer durante o arrasto
     const swipeOpacity = useTransform(x, [-50, 0], [1, 0]); 
 
     const handleDragEnd = (event: any, info: PanInfo) => {
@@ -285,6 +339,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onDel
 
     return (
         <motion.div
+            ref={ref} // <- A referência exigida pelo aviso do console foi adicionada aqui
             layout
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -299,7 +354,6 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onDel
                   notification.type === 'pending_review' ? 'border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-900/20' :
                   'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}
         >
-            {/* O fundo vermelho e a lixeira agora só renderizam se a notificação puder ser apagada */}
             {isDeletable && (
                 <motion.div 
                     className="absolute inset-y-0 right-0 w-full bg-red-500 flex items-center justify-end pr-4"
@@ -314,7 +368,6 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onDel
                     <h3 className="font-bold text-gray-800 dark:text-white text-sm mb-1">{notification.title}</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{notification.message}</p>
                     
-                    {/* Botões de Convocação */}
                     {notification.type === 'roster_invite' && (
                         <div className="flex gap-3 mt-3">
                             <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white border-none" onClick={() => onRosterResponse(notification, true)}>
@@ -326,7 +379,6 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onDel
                         </div>
                     )}
 
-                    {/* Botão de Avaliação - Alterado para Azul */}
                     {notification.type === 'pending_review' && (
                         <div className="flex gap-3 mt-3">
                             <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white border-none" onClick={() => onStartEvaluation(notification)}>
@@ -336,7 +388,6 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onDel
                     )}
                 </div>
 
-                {/* Botão X discreto */}
                 {isDeletable && (
                     <button 
                         onClick={() => onDelete(notification.id, notification.type)}
@@ -349,4 +400,4 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onDel
             </div>
         </motion.div>
     );
-}
+});
