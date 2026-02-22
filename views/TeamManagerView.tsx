@@ -16,7 +16,8 @@ import {
     LucideBell,
     LucideClock,
     LucideXCircle,
-    LucideShield
+    LucideShield,
+    LucideMoreVertical
 } from 'lucide-react';
 import { fileToBase64 } from '../utils/imageUtils';
 import imageCompression from 'browser-image-compression';
@@ -34,6 +35,13 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
     const [event, setEvent] = useState<Evento | null>(null);
     const [team, setTeam] = useState<Partial<Time>>({ nomeTime: '', jogadores: [], rosterStatus: {} });
     const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+    const [activeMenuPlayerId, setActiveMenuPlayerId] = useState<string | null>(null);
+    // Fecha o menu de 3 pontinhos ao clicar em fora
+    useEffect(() => {
+        const handleClickOutside = () => setActiveMenuPlayerId(null);
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, []);
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -359,27 +367,20 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 animate-fadeIn">
             {/* Header */}
-            <div className="sticky top-0 z-40 bg-gray-50 dark:bg-gray-900 px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <Button variant="secondary" size="sm" onClick={onBack} className="rounded-full w-10 h-10 p-0 flex items-center justify-center border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
-                        <LucideArrowLeft size={20} />
-                    </Button>
-                    <div>
-                        <h1 className="text-lg font-bold text-gray-800 dark:text-white leading-tight">
-                            {team.id ? (isAdmin ? 'Editar Time' : 'Visualizar Time') : 'Novo Time'}
-                        </h1>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{event?.nome}</p>
-                    </div>
+            <div className="sticky top-0 z-40 bg-gray-50 dark:bg-gray-900 px-4 py-3 flex items-center gap-3">
+                <Button variant="secondary" size="sm" onClick={onBack} className="rounded-full w-10 h-10 p-0 flex items-center justify-center border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm shrink-0">
+                    <LucideArrowLeft size={20} />
+                </Button>
+                <div className="min-w-0">
+                    <h1 className="text-lg font-bold text-gray-800 dark:text-white leading-tight truncate">
+                        {team.id ? (isAdmin ? 'Editar Time' : 'Visualizar Time') : 'Novo Time'}
+                    </h1>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{event?.nome}</p>
                 </div>
-                {isAdmin && (
-                    <Button onClick={handleSaveTeam} disabled={!team.nomeTime || saving} className="flex items-center gap-2">
-                        {saving ? <LucideLoader2 className="animate-spin" size={18} /> : <LucideSave size={18} />}
-                        <span className="hidden sm:inline">Salvar</span>
-                    </Button>
-                )}
             </div>
 
-            <div className="max-w-3xl mx-auto p-4 space-y-6">
+            {/* O pb-24 aqui em baixo garante que a lista não fique escondida atrás do novo botão salvar */}
+            <div className="max-w-3xl mx-auto p-4 space-y-4 sm:space-y-6 pb-24">
                 {/* User Status Banner */}
                 {userProfile?.linkedPlayerId && team.jogadores?.includes(userProfile.linkedPlayerId) && (
                     <>
@@ -439,10 +440,10 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                 )}
 
                 {/* Team Info Card */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex flex-col sm:flex-row items-center gap-6">
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 sm:p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex flex-row items-center gap-4">
                         <div className="relative shrink-0 group">
-                            <div className={`w-24 h-24 rounded-full flex items-center justify-center overflow-hidden shadow-md ${team.logoUrl ? 'bg-white' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                            <div className={`w-16 h-16 sm:w-24 sm:h-24 rounded-full flex items-center justify-center overflow-hidden shadow-md ${team.logoUrl ? 'bg-white' : 'bg-gray-100 dark:bg-gray-700'}`}>
                                 {isUploadingLogo ? (
                                     <LucideLoader2 className="animate-spin text-gray-400" />
                                 ) : team.logoUrl ? (
@@ -557,38 +558,30 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                                                         )}
                                                     </div>
 
-                                                    {/* Admin Actions */}
+                                                    {/* Admin Actions - Menu 3 pontinhos */}
                                                     {isAdmin && (
-                                                        <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-1 shadow-sm">
+                                                        <div className="relative flex items-center">
                                                             <button 
-                                                                onClick={() => updatePlayerStatus(p.id, 'confirmado')}
-                                                                className={`p-1.5 rounded hover:bg-green-50 dark:hover:bg-green-900/20 text-gray-400 hover:text-green-600 ${status === 'confirmado' ? 'text-green-600' : ''}`}
-                                                                title="Confirmar"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setActiveMenuPlayerId(activeMenuPlayerId === p.id ? null : p.id);
+                                                                }}
+                                                                className="p-2 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                                                             >
-                                                                <LucideCheckCircle2 size={16} />
+                                                                <LucideMoreVertical size={20} />
                                                             </button>
-                                                            <button 
-                                                                onClick={() => updatePlayerStatus(p.id, 'pendente')}
-                                                                className={`p-1.5 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 text-gray-400 hover:text-orange-600 ${!status || status === 'pendente' ? 'text-orange-600' : ''}`}
-                                                                title="Pendente"
-                                                            >
-                                                                <LucideClock size={16} />
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => updatePlayerStatus(p.id, 'recusado')}
-                                                                className={`p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-600 ${status === 'recusado' ? 'text-red-600' : ''}`}
-                                                                title="Recusar"
-                                                            >
-                                                                <LucideXCircle size={16} />
-                                                            </button>
-                                                            <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1"></div>
-                                                            <button 
-                                                                onClick={() => togglePlayer(p.id)}
-                                                                className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500"
-                                                                title="Remover do time"
-                                                            >
-                                                                <LucideTrash2 size={16} />
-                                                            </button>
+
+                                                            {/* Dropdown Menu */}
+                                                            {activeMenuPlayerId === p.id && (
+                                                                <div className="absolute right-0 top-10 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden flex flex-col">
+                                                                    <button onClick={(e) => { e.stopPropagation(); updatePlayerStatus(p.id, 'confirmado'); setActiveMenuPlayerId(null); }} className="px-4 py-3 text-left text-sm font-bold text-green-600 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700">✅ Confirmar</button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); updatePlayerStatus(p.id, 'pendente'); setActiveMenuPlayerId(null); }} className="px-4 py-3 text-left text-sm font-bold text-orange-500 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700">⏳ Pendente</button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); updatePlayerStatus(p.id, 'recusado'); setActiveMenuPlayerId(null); }} className="px-4 py-3 text-left text-sm font-bold text-red-500 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700">❌ Recusar</button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); togglePlayer(p.id); setActiveMenuPlayerId(null); }} className="px-4 py-3 text-left text-sm font-bold text-gray-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 transition-colors flex items-center justify-between">
+                                                                        Remover <LucideTrash2 size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </>
@@ -610,7 +603,21 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                     </div>
                 )}
             </div>
-
+            {/* Barra Inferior Fixa para Salvar */}
+            {isAdmin && (
+                <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-40 flex justify-center">
+                    <div className="max-w-3xl w-full flex justify-end">
+                        <Button 
+                            onClick={handleSaveTeam} 
+                            disabled={!team.nomeTime || saving} 
+                            className="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md w-full sm:w-auto py-3 text-lg flex items-center justify-center gap-2"
+                        >
+                            {saving ? <LucideLoader2 className="animate-spin" size={24} /> : <LucideSave size={24} />}
+                            Salvar Time
+                        </Button>
+                    </div>
+                </div>
+            )}
             {/* Refusal Modal */}
             {showRefusalModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
