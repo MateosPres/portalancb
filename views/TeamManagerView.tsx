@@ -177,7 +177,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                     const player = allPlayers.find(p => p.id === playerId);
                     if (player && player.userId) {
                         const notifRef = doc(collection(db, "notifications"));
-                        batch.set(notifRef, {
+                        batch.set(notifRef as any, {
                             type: 'roster_invite',
                             title: 'Convocação!',
                             message: `Você foi convocado para o time ${team.nomeTime} no evento ${event.nome}.`,
@@ -302,7 +302,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                 ...prev,
                 rosterStatus: {
                     ...(prev.rosterStatus || {}),
-                    [userProfile.linkedPlayerId!]: prevStatus
+                    [userProfile.linkedPlayerId!]: prevStatus || 'pendente'
                 },
                 rosterRefusalReason: prevReason ? {
                     ...(prev.rosterRefusalReason || {}),
@@ -515,9 +515,9 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                                 return (
                                     <div 
                                         key={p.id} 
-                                        className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700 transition-colors ${isSelected ? 'bg-blue-50/50 dark:bg-blue-900/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
+                                        className={`flex flex-row items-center justify-between p-3 sm:p-4 border-b border-gray-100 dark:border-gray-700 transition-colors ${isSelected ? 'bg-blue-50/50 dark:bg-blue-900/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
                                     >
-                                        <div className="flex items-center gap-4 mb-3 sm:mb-0 cursor-pointer" onClick={() => isAdmin && !isSelected && togglePlayer(p.id)}>
+                                        <div className="flex items-center gap-3 cursor-pointer min-w-0 mr-2" onClick={() => isAdmin && !isSelected && togglePlayer(p.id)}>
                                             <div className="relative">
                                                 <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center border-2 border-white dark:border-gray-700 shadow-sm">
                                                     {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-sm font-bold text-gray-500">{p.nome.charAt(0)}</span>}
