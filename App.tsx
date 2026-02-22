@@ -9,6 +9,8 @@ import { NotificationFab } from './components/NotificationFab';
 import { PeerReviewQuiz } from './components/PeerReviewQuiz';
 import { LiveEventHero } from './components/LiveEventHero';
 import { PublicGameView } from './views/PublicGameView';
+import { TeamManagerView } from './views/TeamManagerView';
+import { NotificationsView } from './views/NotificationsView';
 import { JogadoresView } from './views/JogadoresView';
 import { EventosView } from './views/EventosView';
 import { EventoDetalheView } from './views/EventoDetalheView';
@@ -28,6 +30,7 @@ const App: React.FC = () => {
     // Updated Navigation History State: Stores the SPECIFIC ID to return to
     const [returnToEventId, setReturnToEventId] = useState<string | null>(null);
     const [returnToTeamId, setReturnToTeamId] = useState<string | null>(null);
+    const [returnToTab, setReturnToTab] = useState<'jogos' | 'times' | 'classificacao'>('jogos');
 
     const [user, setUser] = useState<any>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -67,6 +70,10 @@ const App: React.FC = () => {
     const [panelEventId, setPanelEventId] = useState<string | null>(null);
     const [panelIsEditable, setPanelIsEditable] = useState(false); // New state to control edit mode
     const [selectedPublicGame, setSelectedPublicGame] = useState<{ game: Jogo, eventId: string } | null>(null);
+
+    // Team Manager State
+    const [teamManagerEventId, setTeamManagerEventId] = useState<string | null>(null);
+    const [teamManagerTeamId, setTeamManagerTeamId] = useState<string | undefined>(undefined);
 
     // --- NOTIFICATIONS STATE ---
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -623,7 +630,22 @@ const App: React.FC = () => {
                 </div>
             );
             case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onSelectEvent={handleOpenEventDetail} />;
-            case 'evento-detalhe': return selectedEventId ? <EventoDetalheView eventId={selectedEventId} initialTeamId={returnToTeamId} onBack={() => { setCurrentView('eventos'); setReturnToTeamId(null); }} userProfile={userProfile} onOpenGamePanel={(g, eid) => handleOpenGamePanel(g, eid, false)} onOpenReview={handleOpenReviewQuiz} onSelectPlayer={(pid, teamId) => handleOpenPlayerDetail(pid, selectedEventId, teamId)} /> : <div>Evento não encontrado</div>;
+            case 'evento-detalhe': return selectedEventId ? <EventoDetalheView 
+                eventId={selectedEventId} 
+                initialTeamId={returnToTeamId} 
+                initialTab={returnToTab}
+                onBack={() => { setCurrentView('eventos'); setReturnToTeamId(null); setReturnToTab('jogos'); }} 
+                userProfile={userProfile} 
+                onOpenGamePanel={(g, eid) => handleOpenGamePanel(g, eid, false)} 
+                onOpenReview={handleOpenReviewQuiz} 
+                onSelectPlayer={(pid, teamId) => handleOpenPlayerDetail(pid, selectedEventId, teamId)}
+                onOpenTeamManager={(eventId, teamId) => {
+                    setTeamManagerEventId(eventId);
+                    setTeamManagerTeamId(teamId);
+                    setReturnToTab('times');
+                    setCurrentView('team-manager');
+                }}
+            /> : <div>Evento não encontrado</div>;
             case 'jogadores': return <JogadoresView 
                 onBack={() => {
                     setTargetPlayerId(null);
@@ -644,6 +666,8 @@ const App: React.FC = () => {
             case 'painel-jogo': return panelGame && panelEventId ? <PainelJogoView game={panelGame} eventId={panelEventId} onBack={() => handleOpenEventDetail(panelEventId)} userProfile={userProfile} isEditable={panelIsEditable} /> : null;
             case 'public-game': return selectedPublicGame ? <PublicGameView game={selectedPublicGame.game} eventId={selectedPublicGame.eventId} onBack={() => setCurrentView('home')} /> : <div>Jogo não encontrado</div>;
             case 'profile': return userProfile ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} onOpenReview={handleOpenReviewQuiz} onOpenEvent={handleOpenEventDetail} /> : null;
+            case 'team-manager': return teamManagerEventId ? <TeamManagerView eventId={teamManagerEventId} teamId={teamManagerTeamId} onBack={() => { setCurrentView('evento-detalhe'); }} userProfile={userProfile} /> : null;
+            case 'notifications': return userProfile ? <NotificationsView onBack={() => setCurrentView('home')} userProfile={userProfile} /> : null;
             default: return <div>404</div>;
         }
     };

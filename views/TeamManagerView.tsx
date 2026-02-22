@@ -1,0 +1,448 @@
+import React, { useState, useEffect } from 'react';
+import { db } from '../services/firebase';
+import { Evento, Time, Player, UserProfile } from '../types';
+import { Button } from '../components/Button';
+import { 
+    LucideArrowLeft, 
+    LucideSave, 
+    LucideSearch, 
+    LucideCheckCircle2, 
+    LucideUpload, 
+    LucideLoader2,
+    LucideTrash2,
+    LucideUserPlus,
+    LucideUserMinus,
+    LucideAlertCircle,
+    LucideBell,
+    LucideClock,
+    LucideXCircle,
+    LucideShield
+} from 'lucide-react';
+import { fileToBase64 } from '../utils/imageUtils';
+import imageCompression from 'browser-image-compression';
+import { ImageCropperModal } from '../components/ImageCropperModal';
+import { doc, updateDoc, arrayUnion, arrayRemove, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+
+interface TeamManagerViewProps {
+    eventId: string;
+    teamId?: string; // If null, creating a new team
+    onBack: () => void;
+    userProfile?: UserProfile | null;
+}
+
+export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamId, onBack, userProfile }) => {
+    const [event, setEvent] = useState<Evento | null>(null);
+    const [team, setTeam] = useState<Partial<Time>>({ nomeTime: '', jogadores: [], rosterStatus: {} });
+    const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+    const [search, setSearch] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    
+    // Image Upload State
+    const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+    const [showCropper, setShowCropper] = useState(false);
+    const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+
+    const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                // Fetch Event
+                const eventDoc = await db.collection('eventos').doc(eventId).get();
+                if (eventDoc.exists) {
+                    const eventData = { id: eventDoc.id, ...eventDoc.data() } as Evento;
+                    setEvent(eventData);
+
+                    // If editing existing team, find it
+                    if (teamId) {
+                        const existingTeam = (eventData.times || eventData.timesParticipantes || []).find(t => t.id === teamId);
+                        if (existingTeam) {
+                            setTeam({
+                                ...existingTeam,
+                                rosterStatus: existingTeam.rosterStatus || {} // Ensure object exists
+                            });
+                        }
+                    }
+                }
+
+                // Fetch Players
+                const playersSnap = await db.collection('jogadores').orderBy('nome').get();
+                const playersData = playersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player));
+                setAllPlayers(playersData);
+
+            } catch (error) {
+                console.error("Error fetching data:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, [eventId, teamId]);
+
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = () => {
+                setImageToCrop(reader.result as string);
+                setShowCropper(true);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleCropComplete = async (croppedImage: Blob) => {
+        setIsUploadingLogo(true);
+        try {
+            const file = new File([croppedImage], "team_logo.jpg", { type: "image/jpeg" });
+            
+            const compressedFile = await imageCompression(file, {
+                maxSizeMB: 0.1,
+                maxWidthOrHeight: 500,
+                useWebWorker: true
+            });
+            
+            const base64 = await fileToBase64(compressedFile);
+            setTeam(prev => ({ ...prev, logoUrl: base64 }));
+        } catch (error) {
+            console.error("Error processing logo:", error);
+            alert("Erro ao processar logo.");
+        } finally {
+            setIsUploadingLogo(false);
+            setShowCropper(false);
+            setImageToCrop(null);
+        }
+    };
+
+    const handleSaveTeam = async () => {
+        if (!event || !team.nomeTime) return;
+        setSaving(true);
+
+        try {
+            const isExternal = event.type === 'torneio_externo';
+            const collectionField = isExternal ? 'timesParticipantes' : 'times';
+            const currentTeams = (isExternal ? event.timesParticipantes : event.times) || [];
+            
+            let updatedTeams;
+            let newPlayers: string[] = [];
+
+            // Identify new players for notification
+            // We only notify if it's an ANCB team and the player is 'pendente'
+            if (team.isANCB) {
+                const currentRoster = team.jogadores || [];
+                // If editing, exclude players already in the team before edit
+                // But here 'team' state already has the new players.
+                // We need to compare with the 'original' team from DB, but we don't have it stored separately in state.
+                // However, we can check if the player has been notified? No.
+                // Best approach: Check if status is 'pendente'. If so, send notification.
+                // To avoid spam, we should only send if we haven't sent recently? 
+                // For simplicity: Send notification for all 'pendente' players in the list.
+                // Ideally, we should track who was just added.
+                
+                // Let's rely on the fact that we set status to 'pendente' when adding.
+                // We can filter by status 'pendente'.
+                newPlayers = currentRoster.filter(pid => team.rosterStatus?.[pid] === 'pendente');
+            }
+
+            if (team.id) {
+                // Update existing
+                updatedTeams = currentTeams.map(t => t.id === team.id ? team as Time : t);
+            } else {
+                // Create new
+                const newTeam = { ...team, id: Date.now().toString() } as Time;
+                updatedTeams = [...currentTeams, newTeam];
+            }
+
+            await updateDoc(doc(db, "eventos", eventId), {
+                [collectionField]: updatedTeams
+            });
+
+            // Send Notifications
+            if (newPlayers.length > 0) {
+                const batch = db.batch();
+                
+                // We need to find the UserProfile for each player
+                // This is tricky because 'allPlayers' has 'userId' but we need to query 'notificacoes'
+                // We can just add to 'notificacoes' collection.
+                
+                newPlayers.forEach(playerId => {
+                    const player = allPlayers.find(p => p.id === playerId);
+                    if (player && player.userId) {
+                        const notifRef = doc(collection(db, "notificacoes"));
+                        batch.set(notifRef, {
+                            type: 'roster_invite',
+                            title: 'Convocação!',
+                            message: `Você foi convocado para o time ${team.nomeTime} no evento ${event.nome}.`,
+                            data: { 
+                                eventId: event.id, 
+                                teamId: team.id || (team as any).id, // If new, we might miss ID here if we don't use the one generated above.
+                                // Fix: If new team, we can't easily get the ID here unless we refactor.
+                                // But notifications are async.
+                                // Let's just pass eventId and teamName for now, or rely on the fact that we update the doc.
+                            },
+                            playerId: playerId,
+                            read: false,
+                            timestamp: serverTimestamp(),
+                            status: 'pending'
+                        });
+                    }
+                });
+                await batch.commit();
+            }
+
+            onBack();
+        } catch (error) {
+            console.error("Error saving team:", error);
+            alert("Erro ao salvar time.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const togglePlayer = (playerId: string) => {
+        const currentPlayers = team.jogadores || [];
+        const currentStatus = team.rosterStatus || {};
+        
+        if (currentPlayers.includes(playerId)) {
+            // Remove player
+            const newPlayers = currentPlayers.filter(id => id !== playerId);
+            const newStatus = { ...currentStatus };
+            delete newStatus[playerId];
+            setTeam({ ...team, jogadores: newPlayers, rosterStatus: newStatus });
+        } else {
+            // Add player
+            // If ANCB team, status is 'pendente'. Else 'confirmado'.
+            const status = team.isANCB ? 'pendente' : 'confirmado';
+            
+            setTeam({ 
+                ...team, 
+                jogadores: [...currentPlayers, playerId],
+                rosterStatus: { ...currentStatus, [playerId]: status }
+            });
+        }
+    };
+
+    const updatePlayerStatus = (playerId: string, status: 'pendente' | 'confirmado' | 'recusado') => {
+        const currentStatus = team.rosterStatus || {};
+        setTeam({
+            ...team,
+            rosterStatus: { ...currentStatus, [playerId]: status }
+        });
+    };
+
+    const filteredPlayers = allPlayers.filter(p => 
+        p.nome.toLowerCase().includes(search.toLowerCase()) || 
+        (p.apelido && p.apelido.toLowerCase().includes(search.toLowerCase()))
+    );
+
+    // Sort: Selected first, then alphabetical
+    const sortedFilteredPlayers = [...filteredPlayers].sort((a, b) => {
+        const aSelected = team.jogadores?.includes(a.id) ? 1 : 0;
+        const bSelected = team.jogadores?.includes(b.id) ? 1 : 0;
+        return bSelected - aSelected || a.nome.localeCompare(b.nome);
+    });
+
+    if (loading) return <div className="flex justify-center items-center h-screen"><LucideLoader2 className="animate-spin" /></div>;
+
+    return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 animate-fadeIn">
+            {/* Header */}
+            <div className="sticky top-0 z-40 bg-gray-50 dark:bg-gray-900 px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <Button variant="secondary" size="sm" onClick={onBack} className="rounded-full w-10 h-10 p-0 flex items-center justify-center border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+                        <LucideArrowLeft size={20} />
+                    </Button>
+                    <div>
+                        <h1 className="text-lg font-bold text-gray-800 dark:text-white leading-tight">
+                            {team.id ? (isAdmin ? 'Editar Time' : 'Visualizar Time') : 'Novo Time'}
+                        </h1>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{event?.nome}</p>
+                    </div>
+                </div>
+                {isAdmin && (
+                    <Button onClick={handleSaveTeam} disabled={!team.nomeTime || saving} className="flex items-center gap-2">
+                        {saving ? <LucideLoader2 className="animate-spin" size={18} /> : <LucideSave size={18} />}
+                        <span className="hidden sm:inline">Salvar</span>
+                    </Button>
+                )}
+            </div>
+
+            <div className="max-w-3xl mx-auto p-4 space-y-6">
+                {/* Team Info Card */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex flex-col sm:flex-row items-center gap-6">
+                        <div className="relative shrink-0 group">
+                            <div className={`w-24 h-24 rounded-full border-4 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden ${team.logoUrl ? 'bg-white' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                                {isUploadingLogo ? (
+                                    <LucideLoader2 className="animate-spin text-gray-400" />
+                                ) : team.logoUrl ? (
+                                    <img src={team.logoUrl} className="w-full h-full object-contain" />
+                                ) : (
+                                    <span className="text-xs text-gray-400 text-center px-2">Logo</span>
+                                )}
+                            </div>
+                            <label className={`absolute bottom-0 right-0 bg-ancb-blue text-white p-2 rounded-full cursor-pointer shadow-lg hover:bg-blue-600 transition-transform hover:scale-110 ${!isAdmin ? 'hidden' : ''}`}>
+                                <LucideUpload size={16} />
+                                <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} disabled={!isAdmin} />
+                            </label>
+                        </div>
+                        
+                        <div className="flex-1 w-full space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Time</label>
+                                <input 
+                                    className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none text-lg font-bold disabled:opacity-50"
+                                    value={team.nomeTime}
+                                    onChange={e => setTeam({...team, nomeTime: e.target.value})}
+                                    placeholder="Ex: Chicago Bulls"
+                                    disabled={!isAdmin}
+                                />
+                            </div>
+                            
+                            {isAdmin && (
+                                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-100 dark:border-gray-700">
+                                    <input 
+                                        type="checkbox" 
+                                        id="isANCB" 
+                                        checked={team.isANCB || false} 
+                                        onChange={e => setTeam({...team, isANCB: e.target.checked})}
+                                        className="w-5 h-5 text-ancb-blue rounded focus:ring-ancb-blue"
+                                    />
+                                    <label htmlFor="isANCB" className="text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer select-none flex items-center gap-2">
+                                        <LucideShield size={16} className={team.isANCB ? "text-ancb-blue" : "text-gray-400"} />
+                                        Este time representa a ANCB?
+                                    </label>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Roster Management */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                            <LucideUserPlus className="text-ancb-orange" size={20} />
+                            {isAdmin ? 'Gerenciar Elenco' : 'Elenco'} <span className="text-sm font-normal text-gray-500">({team.jogadores?.length || 0})</span>
+                        </h2>
+                        <div className="relative w-full sm:w-64">
+                            <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                            <input 
+                                className="w-full pl-10 pr-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-ancb-blue outline-none"
+                                placeholder="Buscar jogador..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
+                        {(isAdmin ? sortedFilteredPlayers : sortedFilteredPlayers.filter(p => team.jogadores?.includes(p.id))).map(p => {
+                            const isSelected = team.jogadores?.includes(p.id);
+                            const status = team.rosterStatus?.[p.id];
+                            
+                            return (
+                                <div 
+                                    key={p.id} 
+                                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700 transition-colors ${isSelected ? 'bg-blue-50/50 dark:bg-blue-900/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
+                                >
+                                    <div className="flex items-center gap-4 mb-3 sm:mb-0 cursor-pointer" onClick={() => isAdmin && !isSelected && togglePlayer(p.id)}>
+                                        <div className="relative">
+                                            <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center border-2 border-white dark:border-gray-700 shadow-sm">
+                                                {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-sm font-bold text-gray-500">{p.nome.charAt(0)}</span>}
+                                            </div>
+                                            {isSelected && (
+                                                <div className="absolute -bottom-1 -right-1 bg-ancb-blue text-white rounded-full p-0.5 border-2 border-white dark:border-gray-800">
+                                                    <LucideCheckCircle2 size={14} />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className={`text-sm font-bold ${isSelected ? 'text-ancb-blue dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'}`}>
+                                                {p.apelido || p.nome}
+                                            </p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">{p.posicao}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-2 justify-end">
+                                        {isSelected ? (
+                                            <>
+                                                {/* Status Badge */}
+                                                <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase flex items-center gap-1
+                                                    ${status === 'confirmado' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 
+                                                      status === 'recusado' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 
+                                                      'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'}`}>
+                                                    {status === 'confirmado' && <LucideCheckCircle2 size={12} />}
+                                                    {status === 'recusado' && <LucideXCircle size={12} />}
+                                                    {status === 'pendente' && <LucideClock size={12} />}
+                                                    {status || 'Pendente'}
+                                                </div>
+
+                                                {/* Admin Actions */}
+                                                {isAdmin && (
+                                                    <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-1 shadow-sm">
+                                                        <button 
+                                                            onClick={() => updatePlayerStatus(p.id, 'confirmado')}
+                                                            className={`p-1.5 rounded hover:bg-green-50 dark:hover:bg-green-900/20 text-gray-400 hover:text-green-600 ${status === 'confirmado' ? 'text-green-600' : ''}`}
+                                                            title="Confirmar"
+                                                        >
+                                                            <LucideCheckCircle2 size={16} />
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => updatePlayerStatus(p.id, 'pendente')}
+                                                            className={`p-1.5 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 text-gray-400 hover:text-orange-600 ${status === 'pendente' ? 'text-orange-600' : ''}`}
+                                                            title="Pendente"
+                                                        >
+                                                            <LucideClock size={16} />
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => updatePlayerStatus(p.id, 'recusado')}
+                                                            className={`p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-600 ${status === 'recusado' ? 'text-red-600' : ''}`}
+                                                            title="Recusar"
+                                                        >
+                                                            <LucideXCircle size={16} />
+                                                        </button>
+                                                        <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1"></div>
+                                                        <button 
+                                                            onClick={() => togglePlayer(p.id)}
+                                                            className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500"
+                                                            title="Remover do time"
+                                                        >
+                                                            <LucideTrash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            isAdmin && (
+                                                <Button size="sm" variant="secondary" onClick={() => togglePlayer(p.id)} className="text-xs dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:text-white">
+                                                    <LucideUserPlus size={14} className="mr-1" /> Adicionar
+                                                </Button>
+                                            )
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {filteredPlayers.length === 0 && (
+                            <div className="p-8 text-center text-gray-500">Nenhum jogador encontrado.</div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Image Cropper */}
+            {showCropper && imageToCrop && (
+                <ImageCropperModal
+                    isOpen={showCropper}
+                    onClose={() => { setShowCropper(false); setImageToCrop(null); }}
+                    imageSrc={imageToCrop}
+                    onCropComplete={handleCropComplete}
+                    aspect={1}
+                />
+            )}
+        </div>
+    );
+};

@@ -25,20 +25,25 @@ interface EventoDetalheViewProps {
     onOpenReview?: (gameId: string, eventId: string) => void;
     onSelectPlayer?: (playerId: string, teamId?: string) => void;
     initialTeamId?: string | null;
+    onOpenTeamManager?: (eventId: string, teamId?: string) => void;
+    initialTab?: 'jogos' | 'times' | 'classificacao';
 }
 
-export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, onBack, userProfile, onOpenGamePanel, onOpenReview, onSelectPlayer, initialTeamId }) => {
+export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, onBack, userProfile, onOpenGamePanel, onOpenReview, onSelectPlayer, initialTeamId, onOpenTeamManager, initialTab = 'jogos' }) => {
     const [event, setEvent] = useState<Evento | null>(null);
     // ...
     
     // Effect to handle initialTeamId
     useEffect(() => {
-        if (initialTeamId && event && event.timesParticipantes) {
-            const team = event.timesParticipantes.find(t => t.id === initialTeamId);
-            if (team) setViewingTeam(team);
-        } else if (initialTeamId && event && event.times) {
-             const team = event.times.find(t => t.id === initialTeamId);
-             if (team) setViewingTeam(team);
+        if (initialTeamId && event) {
+            const team = (event.timesParticipantes || []).find(t => t.id === initialTeamId) || (event.times || []).find(t => t.id === initialTeamId);
+            if (team) {
+                if (team.isANCB && onOpenTeamManager) {
+                    onOpenTeamManager(eventId, team.id);
+                } else {
+                    setViewingTeam(team);
+                }
+            }
         }
     }, [initialTeamId, event]);
     
@@ -56,7 +61,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const [cropAspect, setCropAspect] = useState(1); // 1:1 for logos
 
     // External Tournament State
-    const [activeTab, setActiveTab] = useState<'jogos' | 'times' | 'classificacao'>('jogos');
+    const [activeTab, setActiveTab] = useState<'jogos' | 'times' | 'classificacao'>(initialTab);
     const [showSimpleScorePanel, setShowSimpleScorePanel] = useState(false);
     const [selectedGameForSimpleScore, setSelectedGameForSimpleScore] = useState<Jogo | null>(null);
     
@@ -567,7 +572,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
             return (
                 <div className="text-gray-500 text-sm italic text-center py-4">
                     Nenhum time cadastrado.
-                    {isAdmin && <Button size="sm" className="mt-2 mx-auto" onClick={() => setShowTeamManager(true)}>Criar Times</Button>}
+                    {isAdmin && <Button size="sm" className="mt-2 mx-auto" onClick={() => onOpenTeamManager && onOpenTeamManager(eventId)}>Criar Times</Button>}
                 </div>
             );
         }
@@ -589,7 +594,17 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                     <p className="text-[10px] text-gray-500 dark:text-gray-400">{team.jogadores.length} jogadores</p>
                                 </div>
                             </div>
-                            {expandedTeamId === team.id ? <LucideChevronUp size={16} className="text-gray-400"/> : <LucideChevronDown size={16} className="text-gray-400"/>}
+                            <div className="flex items-center gap-2">
+                                {isAdmin && (
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); onOpenTeamManager && onOpenTeamManager(eventId, team.id); }}
+                                        className="p-1.5 text-gray-400 hover:text-ancb-blue bg-gray-50 dark:bg-gray-700 rounded"
+                                    >
+                                        <LucideEdit2 size={14}/>
+                                    </button>
+                                )}
+                                {expandedTeamId === team.id ? <LucideChevronUp size={16} className="text-gray-400"/> : <LucideChevronDown size={16} className="text-gray-400"/>}
+                            </div>
                         </div>
                         {expandedTeamId === team.id && (
                             <div className="bg-gray-50 dark:bg-black/20 border-t border-gray-100 dark:border-gray-700 p-2 space-y-1 animate-slideDown">
@@ -959,7 +974,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                             <div className="flex justify-between items-center">
                                 <h3 className="text-xl font-bold flex items-center gap-2"><LucideUsers className="text-ancb-blue" /> Times Participantes</h3>
                                 {isAdmin && (
-                                    <Button size="sm" onClick={() => setEditingTeam({ nomeTime: '', isANCB: false, jogadores: [] })} className="!py-1 !px-3 text-xs">
+                                    <Button size="sm" onClick={() => onOpenTeamManager && onOpenTeamManager(eventId)} className="!py-1 !px-3 text-xs">
                                         <LucidePlus size={14} /> Adicionar Time
                                     </Button>
                                 )}
@@ -970,8 +985,11 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                     <div 
                                         key={team.id} 
                                         onClick={() => {
-                                            if (isAdmin) setEditingTeam(team);
-                                            else if (team.isANCB) setViewingTeam(team);
+                                            if (isAdmin || team.isANCB) {
+                                                onOpenTeamManager && onOpenTeamManager(eventId, team.id);
+                                            } else {
+                                                setViewingTeam(team);
+                                            }
                                         }}
                                         className={`${team.isANCB ? 'bg-ancb-blue border-blue-700' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'} p-4 rounded-xl shadow-sm border flex justify-between items-center group ${(isAdmin || team.isANCB) ? 'cursor-pointer hover:shadow-md transition-all' : ''}`}
                                     >
@@ -994,7 +1012,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                         </div>
                                         {isAdmin && (
                                             <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={(e) => { e.stopPropagation(); setEditingTeam(team); }} className={`p-2 rounded-full transition-colors ${team.isANCB ? 'text-blue-200 hover:text-white hover:bg-blue-800' : 'text-gray-400 hover:text-ancb-blue bg-gray-50 dark:bg-gray-700'}`}>
+                                                <button onClick={(e) => { e.stopPropagation(); onOpenTeamManager && onOpenTeamManager(eventId, team.id); }} className={`p-2 rounded-full transition-colors ${team.isANCB ? 'text-blue-200 hover:text-white hover:bg-blue-800' : 'text-gray-400 hover:text-ancb-blue bg-gray-50 dark:bg-gray-700'}`}>
                                                     <LucideEdit2 size={16} />
                                                 </button>
                                                 <button onClick={(e) => { e.stopPropagation(); handleDeleteExternalTeam(team.id); }} className={`p-2 rounded-full transition-colors ${team.isANCB ? 'text-blue-200 hover:text-red-400 hover:bg-blue-800' : 'text-gray-400 hover:text-red-500 bg-gray-50 dark:bg-gray-700'}`}>
@@ -1268,94 +1286,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                     </div>
                 </Modal>
 
-                {/* External Team Manager Modal */}
-                {event.type === 'torneio_externo' && editingTeam && (
-                    <Modal isOpen={!!editingTeam} onClose={() => setEditingTeam(null)} title={editingTeam.id ? "Editar Time" : "Adicionar Time"}>
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-4">
-                                <div className="relative shrink-0">
-                                    <div className={`w-20 h-20 rounded-full border-2 border-dashed border-gray-400 flex items-center justify-center overflow-hidden ${editingTeam.logoUrl ? 'bg-transparent' : 'bg-gray-200 dark:bg-gray-700'}`}>
-                                        {isUploadingLogo ? <LucideLoader2 className="animate-spin text-gray-500"/> : editingTeam.logoUrl ? <img src={editingTeam.logoUrl} className="w-full h-full object-contain"/> : <span className="text-xs text-gray-400 text-center px-1">Sem Logo</span>}
-                                    </div>
-                                    <label className="absolute bottom-0 right-0 bg-ancb-blue text-white p-1.5 rounded-full cursor-pointer shadow-md hover:bg-blue-600 transition-colors">
-                                        <LucideUpload size={12} />
-                                        <input type="file" className="hidden" accept="image/*" onChange={handleTeamLogoUpload} />
-                                    </label>
-                                </div>
-                                <div className="flex-1">
-                                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Nome do Time</label>
-                                    <input 
-                                        className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" 
-                                        value={editingTeam.nomeTime || ''} 
-                                        onChange={e => setEditingTeam({...editingTeam, nomeTime: e.target.value})} 
-                                        placeholder="Ex: Chicago Bulls" 
-                                        autoFocus
-                                    />
-                                </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 pb-2">
-                                <input 
-                                    type="checkbox" 
-                                    id="modalIsANCB" 
-                                    checked={editingTeam.isANCB || false} 
-                                    onChange={e => setEditingTeam({...editingTeam, isANCB: e.target.checked})}
-                                    className="w-4 h-4 text-ancb-blue rounded"
-                                />
-                                <label htmlFor="modalIsANCB" className="text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer">Este time é a ANCB?</label>
-                            </div>
-
-                            {editingTeam.isANCB && (
-                                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 animate-slideDown">
-                                    <label className="text-xs font-bold text-gray-500 uppercase mb-2 block flex justify-between">
-                                        <span>Elenco ({editingTeam.jogadores?.length || 0})</span>
-                                    </label>
-                                    <div className="relative mb-2">
-                                        <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
-                                        <input 
-                                            className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600" 
-                                            placeholder="Buscar jogador..." 
-                                            value={teamRosterSearch} 
-                                            onChange={e => setTeamRosterSearch(e.target.value)} 
-                                        />
-                                    </div>
-                                    <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-                                        {allPlayers
-                                            .filter(p => p.nome.toLowerCase().includes(teamRosterSearch.toLowerCase()) || (p.apelido && p.apelido.toLowerCase().includes(teamRosterSearch.toLowerCase())))
-                                            .map(p => {
-                                                const isSelected = editingTeam.jogadores?.includes(p.id);
-                                                return (
-                                                    <div 
-                                                        key={p.id} 
-                                                        onClick={() => {
-                                                            const currentPlayers = editingTeam.jogadores || [];
-                                                            const newPlayers = isSelected 
-                                                                ? currentPlayers.filter(id => id !== p.id)
-                                                                : [...currentPlayers, p.id];
-                                                            setEditingTeam({...editingTeam, jogadores: newPlayers});
-                                                        }} 
-                                                        className={`flex items-center justify-between p-2 cursor-pointer border-b last:border-0 border-gray-100 dark:border-gray-700 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-white dark:hover:bg-gray-700'}`}
-                                                    >
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center">
-                                                                {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-[10px] font-bold text-gray-500">{p.nome.charAt(0)}</span>}
-                                                            </div>
-                                                            <span className={`text-xs font-medium ${isSelected ? 'text-ancb-blue dark:text-blue-300 font-bold' : 'text-gray-600 dark:text-gray-300'}`}>{p.nome}</span>
-                                                        </div>
-                                                        {isSelected && <LucideCheckCircle2 size={14} className="text-ancb-blue" />}
-                                                    </div>
-                                                );
-                                            })}
-                                    </div>
-                                </div>
-                            )}
-
-                            <Button className="w-full" onClick={handleSaveExternalTeam} disabled={!editingTeam.nomeTime}>
-                                <LucideSave size={16} /> Salvar Time
-                            </Button>
-                        </div>
-                    </Modal>
-                )}
+                {/* External Team Manager Modal REMOVED - Replaced by TeamManagerView */}
 
                 {/* Viewing Team Roster Modal (Read-Only) */}
                 {viewingTeam && (
@@ -1607,83 +1538,9 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                 )}
             </Modal>
 
-            {/* TEAM MANAGER MODAL ... (kept same) */}
-            <Modal isOpen={showTeamManager} onClose={() => { setShowTeamManager(false); setEditingTeam(null); }} title="Gerenciar Times">
-                {!editingTeam ? (
-                    <div className="space-y-4">
-                        <Button className="w-full" onClick={() => setEditingTeam({ nomeTime: '', jogadores: [] })}>
-                            <LucidePlus size={16} /> Adicionar Novo Time
-                        </Button>
-                        <div className="space-y-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                            {event.times?.map(t => (
-                                <div key={t.id} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-ancb-blue transition-colors">
-                                    <div className="flex items-center gap-3">
-                                        {t.logoUrl ? <img src={t.logoUrl} className="w-10 h-10 object-contain"/> : <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center font-bold text-gray-500">{t.nomeTime.charAt(0)}</div>}
-                                        <div>
-                                            <p className="font-bold text-sm text-gray-800 dark:text-white">{t.nomeTime}</p>
-                                            <p className="text-xs text-gray-500">{t.jogadores.length} atletas</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => setEditingTeam(t)} className="p-2 text-gray-400 hover:text-ancb-blue bg-gray-50 dark:bg-gray-700 rounded"><LucideEdit2 size={16}/></button>
-                                        <button onClick={() => handleDeleteTeam(t.id)} className="p-2 text-gray-400 hover:text-red-500 bg-gray-50 dark:bg-gray-700 rounded"><LucideTrash2 size={16}/></button>
-                                    </div>
-                                </div>
-                            ))}
-                            {(!event.times || event.times.length === 0) && <p className="text-center text-gray-400 text-sm py-4">Nenhum time criado.</p>}
-                        </div>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 mb-4 cursor-pointer text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white" onClick={() => setEditingTeam(null)}>
-                            <LucideArrowLeft size={16} /> <span className="text-xs font-bold uppercase">Voltar para lista</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="relative shrink-0">
-                                <div className={`w-20 h-20 rounded-full border-2 border-dashed border-gray-400 flex items-center justify-center overflow-hidden ${editingTeam.logoUrl ? 'bg-transparent' : 'bg-gray-200 dark:bg-gray-700'}`}>
-                                    {isUploadingLogo ? <LucideLoader2 className="animate-spin text-gray-500"/> : editingTeam.logoUrl ? <img src={editingTeam.logoUrl} className="w-full h-full object-contain"/> : <span className="text-xs text-gray-400 text-center px-1">Sem Logo</span>}
-                                </div>
-                                <label className="absolute bottom-0 right-0 bg-ancb-blue text-white p-1.5 rounded-full cursor-pointer shadow-md hover:bg-blue-600 transition-colors">
-                                    <LucideUpload size={12} />
-                                    <input type="file" className="hidden" accept="image/*" onChange={handleTeamLogoUpload} />
-                                </label>
-                            </div>
-                            <div className="flex-1">
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Nome do Time</label>
-                                <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editingTeam.nomeTime || ''} onChange={e => setEditingTeam({...editingTeam, nomeTime: e.target.value})} placeholder="Ex: Bulls" />
-                            </div>
-                        </div>
-                        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block flex justify-between">
-                                <span>Elenco ({editingTeam.jogadores?.length || 0})</span>
-                            </label>
-                            <div className="relative mb-2">
-                                <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
-                                <input className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Buscar jogador para adicionar..." value={teamRosterSearch} onChange={e => setTeamRosterSearch(e.target.value)} />
-                            </div>
-                            <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-                                {filteredTeamPlayers.map(p => {
-                                    const isSelected = editingTeam.jogadores?.includes(p.id);
-                                    return (
-                                        <div key={p.id} onClick={() => togglePlayerInTeam(p.id)} className={`flex items-center justify-between p-2 cursor-pointer border-b last:border-0 border-gray-100 dark:border-gray-700 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-white dark:hover:bg-gray-700'}`}>
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center">
-                                                    {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-[10px] font-bold text-gray-500">{p.nome.charAt(0)}</span>}
-                                                </div>
-                                                <span className={`text-xs font-medium ${isSelected ? 'text-ancb-blue dark:text-blue-300 font-bold' : 'text-gray-600 dark:text-gray-300'}`}>{p.nome}</span>
-                                            </div>
-                                            {isSelected && <LucideCheckCircle2 size={14} className="text-ancb-blue" />}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        <Button className="w-full" onClick={handleSaveTeam} disabled={!editingTeam.nomeTime}>
-                            <LucideSave size={16} /> Salvar Time
-                        </Button>
-                    </div>
-                )}
-            </Modal>
+            {/* TEAM MANAGER MODAL REMOVED - Replaced by TeamManagerView */}
+            
+            {/* Share Modal */}
 
             {/* Share Modal */}
             {shareData && (

@@ -103,6 +103,7 @@ export interface Time {
     jogadores: string[]; // IDs dos jogadores
     isANCB?: boolean; // Identifica se é um time da associação
     grupo?: string; // Para fase de grupos (A, B, C...)
+    rosterStatus?: Record<string, 'pendente' | 'confirmado' | 'recusado'>; // Status de cada jogador (ID -> Status)
 }
 
 export interface Jogo {
@@ -198,4 +199,4 @@ export interface NotificationItem {
     timestamp: any;
 }
 
-export type ViewState = 'home' | 'eventos' | 'evento-detalhe' | 'jogadores' | 'ranking' | 'admin' | 'painel-jogo' | 'profile';
+export type ViewState = 'home' | 'eventos' | 'evento-detalhe' | 'jogadores' | 'ranking' | 'admin' | 'painel-jogo' | 'public-game' | 'profile' | 'team-manager' | 'notifications';

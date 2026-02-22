@@ -18,7 +18,7 @@ export const Button: React.FC<ButtonProps> = ({
     const variants = {
         primary: "bg-ancb-orange text-white hover:bg-orange-600 shadow-md hover:shadow-lg",
         // Changed secondary to be dark gray text/border by default for visibility on white/gray backgrounds
-        secondary: "bg-transparent border border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900",
+        secondary: "bg-transparent border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white",
         danger: "bg-red-600 text-white hover:bg-red-700",
         success: "bg-green-600 text-white hover:bg-green-700"
     };
