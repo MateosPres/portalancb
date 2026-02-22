@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { collection, doc, onSnapshot, updateDoc, setDoc, serverTimestamp, query, getDocs, addDoc, deleteDoc, where } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
+import { SimpleScorePanel } from '../components/SimpleScorePanel';
 
 interface EventoDetalheViewProps {
     eventId: string;
@@ -981,7 +982,11 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {event.timesParticipantes?.map(team => (
+                                {event.timesParticipantes?.slice().sort((a, b) => {
+                                    if (a.isANCB && !b.isANCB) return -1;
+                                    if (!a.isANCB && b.isANCB) return 1;
+                                    return a.nomeTime.localeCompare(b.nomeTime); // Organiza o restante em ordem alfabética
+                                }).map(team => (
                                     <div 
                                         key={team.id} 
                                         onClick={() => {
@@ -1075,7 +1080,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                         {/* Quartas */}
                                         <div className="flex-1 space-y-4">
                                             <h5 className="text-center font-bold text-gray-500 uppercase text-xs mb-4">Quartas de Final</h5>
-                                            {games.filter(g => g.fase === 'quartas').map(game => (
+                                            {games.filter(g => (g as any).fase === 'quartas').map(game => (
                                                 <div key={game.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm relative">
                                                     <div className="flex justify-between items-center mb-1">
                                                         <span className="text-xs font-bold truncate w-24">{game.timeA_nome}</span>
@@ -1089,13 +1094,13 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                     <div className="absolute top-1/2 -right-4 w-4 h-px bg-gray-300 dark:bg-gray-600"></div>
                                                 </div>
                                             ))}
-                                            {games.filter(g => g.fase === 'quartas').length === 0 && <p className="text-center text-xs text-gray-400">A definir</p>}
+                                            {games.filter(g => (g as any).fase === 'quartas').length === 0 && <p className="text-center text-xs text-gray-400">A definir</p>}
                                         </div>
 
                                         {/* Semi */}
                                         <div className="flex-1 space-y-8 mt-8">
                                             <h5 className="text-center font-bold text-gray-500 uppercase text-xs mb-4">Semi-Final</h5>
-                                            {games.filter(g => g.fase === 'semi').map(game => (
+                                            {games.filter(g => (g as any).fase === 'semi').map(game => (
                                                 <div key={game.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm relative">
                                                     <div className="absolute top-1/2 -left-4 w-4 h-px bg-gray-300 dark:bg-gray-600"></div>
                                                     <div className="flex justify-between items-center mb-1">
@@ -1109,13 +1114,13 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                     <div className="absolute top-1/2 -right-4 w-4 h-px bg-gray-300 dark:bg-gray-600"></div>
                                                 </div>
                                             ))}
-                                            {games.filter(g => g.fase === 'semi').length === 0 && <p className="text-center text-xs text-gray-400">A definir</p>}
+                                            {games.filter(g => (g as any).fase === 'semi').length === 0 && <p className="text-center text-xs text-gray-400">A definir</p>}
                                         </div>
 
                                         {/* Final */}
                                         <div className="flex-1 space-y-4 mt-16">
                                             <h5 className="text-center font-bold text-yellow-500 uppercase text-xs mb-4">Grande Final</h5>
-                                            {games.filter(g => g.fase === 'final').map(game => (
+                                            {games.filter(g => (g as any).fase === 'final').map(game => (
                                                 <div key={game.id} className="bg-white dark:bg-gray-800 border-2 border-yellow-400 rounded-lg p-4 shadow-md relative">
                                                     <div className="absolute top-1/2 -left-4 w-4 h-px bg-gray-300 dark:bg-gray-600"></div>
                                                     <div className="flex justify-between items-center mb-2">
@@ -1129,7 +1134,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                     <LucideTrophy className="absolute -top-3 -right-3 text-yellow-500 bg-white dark:bg-gray-800 rounded-full p-1 border border-yellow-200" size={24} />
                                                 </div>
                                             ))}
-                                            {games.filter(g => g.fase === 'final').length === 0 && <p className="text-center text-xs text-gray-400">A definir</p>}
+                                            {games.filter(g => (g as any).fase === 'final').length === 0 && <p className="text-center text-xs text-gray-400">A definir</p>}
                                         </div>
                                     </div>
                                 </div>
