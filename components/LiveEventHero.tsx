@@ -8,9 +8,10 @@ import { LucideMapPin, LucideCalendar, LucideChevronRight, LucideTrophy, LucideA
 interface LiveEventHeroProps {
     event: Evento;
     onClick: () => void;
+    onOpenLiveGame?: (game: Jogo) => void;
 }
 
-export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick }) => {
+export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, onOpenLiveGame }) => {
     const [activeGame, setActiveGame] = useState<Jogo | null>(null);
     const [latestFinishedGame, setLatestFinishedGame] = useState<Jogo | null>(null);
     const [nextGame, setNextGame] = useState<Jogo | null>(null);
@@ -97,7 +98,7 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick }) 
     if (activeGame) {
         return (
             <div 
-                onClick={onClick}
+                onClick={() => onOpenLiveGame ? onOpenLiveGame(activeGame) : onClick()}
                 className="w-full bg-gradient-to-r from-[#062553] to-blue-900 rounded-2xl shadow-xl overflow-hidden cursor-pointer relative group border border-blue-800 transition-all hover:shadow-2xl hover:scale-[1.01] mb-8"
             >
                 {/* Background Pattern */}

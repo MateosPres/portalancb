@@ -23,11 +23,26 @@ interface EventoDetalheViewProps {
     userProfile?: UserProfile | null;
     onOpenGamePanel: (game: Jogo, eventId: string) => void;
     onOpenReview?: (gameId: string, eventId: string) => void;
-    onSelectPlayer?: (playerId: string) => void;
+    onSelectPlayer?: (playerId: string, teamId?: string) => void;
+    initialTeamId?: string | null;
 }
 
-export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, onBack, userProfile, onOpenGamePanel, onOpenReview, onSelectPlayer }) => {
+export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, onBack, userProfile, onOpenGamePanel, onOpenReview, onSelectPlayer, initialTeamId }) => {
     const [event, setEvent] = useState<Evento | null>(null);
+    // ...
+    
+    // Effect to handle initialTeamId
+    useEffect(() => {
+        if (initialTeamId && event && event.timesParticipantes) {
+            const team = event.timesParticipantes.find(t => t.id === initialTeamId);
+            if (team) setViewingTeam(team);
+        } else if (initialTeamId && event && event.times) {
+             const team = event.times.find(t => t.id === initialTeamId);
+             if (team) setViewingTeam(team);
+        }
+    }, [initialTeamId, event]);
+    
+    // ...
     const [games, setGames] = useState<Jogo[]>([]);
     const [allPlayers, setAllPlayers] = useState<Player[]>([]);
     const [roster, setRoster] = useState<RosterEntry[]>([]);
@@ -59,6 +74,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     // Team Management State
     const [showTeamManager, setShowTeamManager] = useState(false);
     const [editingTeam, setEditingTeam] = useState<Partial<Time> | null>(null);
+    const [viewingTeam, setViewingTeam] = useState<Time | null>(null);
     const [isUploadingLogo, setIsUploadingLogo] = useState(false);
     const [teamRosterSearch, setTeamRosterSearch] = useState('');
 
@@ -319,6 +335,12 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         
         const isANCBGame = teamA?.isANCB || teamB?.isANCB || game.timeA_nome?.toUpperCase().includes('ANCB') || game.timeB_nome?.toUpperCase().includes('ANCB');
         
+        // If not admin, always open public panel (via onOpenGamePanel which handles logic in App.tsx)
+        if (!isAdmin) {
+            onOpenGamePanel(game, eventId);
+            return;
+        }
+
         if (isANCBGame || event?.type === 'torneio_interno' || event?.type === 'amistoso') {
             onOpenGamePanel(game, eventId);
         } else {
@@ -540,9 +562,58 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
     const togglePlayerInTeam = (playerId: string) => { if (!editingTeam) return; const currentPlayers = editingTeam.jogadores || []; if (currentPlayers.includes(playerId)) { setEditingTeam({ ...editingTeam, jogadores: currentPlayers.filter(id => id !== playerId) }); } else { setEditingTeam({ ...editingTeam, jogadores: [...currentPlayers, playerId] }); } };
 
-    const renderInternalTournamentRoster = () => { /* Same as before */
-        if (!event?.times || event.times.length === 0) { return ( <div className="text-gray-500 text-sm italic text-center py-4"> Nenhum time cadastrado. {isAdmin && <Button size="sm" className="mt-2 mx-auto" onClick={() => setShowTeamManager(true)}>Criar Times</Button>} </div> ); }
-        return ( <div className="space-y-3"> {event.times.map((team) => ( <div key={team.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all"> <div className="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" onClick={() => setExpandedTeamId(expandedTeamId === team.id ? null : team.id)} > <div className="flex items-center gap-3"> {team.logoUrl ? ( <img src={team.logoUrl} alt={team.nomeTime} className="w-8 h-8 object-contain" /> ) : ( <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-ancb-blue dark:text-blue-300 font-bold text-xs"> {team.nomeTime.charAt(0)} </div> )} <div> <h4 className="font-bold text-sm text-gray-800 dark:text-white">{team.nomeTime}</h4> <p className="text-[10px] text-gray-500 dark:text-gray-400">{team.jogadores.length} jogadores</p> </div> </div> {expandedTeamId === team.id ? <LucideChevronUp size={16} className="text-gray-400"/> : <LucideChevronDown size={16} className="text-gray-400"/>} </div> {expandedTeamId === team.id && ( <div className="bg-gray-50 dark:bg-black/20 border-t border-gray-100 dark:border-gray-700 p-2 space-y-1 animate-slideDown"> {team.jogadores.map(pid => { const p = allPlayers.find(pl => pl.id === pid); return ( <div key={pid} className="flex items-center gap-3 p-2 rounded hover:bg-white dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => onSelectPlayer && onSelectPlayer(pid)}> <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center"> {p?.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-400">{p?.nome?.charAt(0) ?? '?'}</span>} </div> <div> <p className="text-xs font-bold text-gray-800 dark:text-gray-200">{p?.apelido || p?.nome || 'Desconhecido'}</p> <p className="text-[10px] text-gray-500 dark:text-gray-400">{normalizePosition(p?.posicao)}</p> </div> </div> ); })} {team.jogadores.length === 0 && <p className="text-xs text-gray-400 text-center py-2">Sem jogadores.</p>} </div> )} </div> ))} </div> );
+    const renderInternalTournamentRoster = () => {
+        if (!event?.times || event.times.length === 0) {
+            return (
+                <div className="text-gray-500 text-sm italic text-center py-4">
+                    Nenhum time cadastrado.
+                    {isAdmin && <Button size="sm" className="mt-2 mx-auto" onClick={() => setShowTeamManager(true)}>Criar Times</Button>}
+                </div>
+            );
+        }
+        return (
+            <div className="space-y-3">
+                {event.times.map((team) => (
+                    <div key={team.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all">
+                        <div className="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" onClick={() => setExpandedTeamId(expandedTeamId === team.id ? null : team.id)} >
+                            <div className="flex items-center gap-3">
+                                {team.logoUrl ? (
+                                    <img src={team.logoUrl} alt={team.nomeTime} className="w-8 h-8 object-contain" />
+                                ) : (
+                                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-ancb-blue dark:text-blue-300 font-bold text-xs">
+                                        {team.nomeTime.charAt(0)}
+                                    </div>
+                                )}
+                                <div>
+                                    <h4 className="font-bold text-sm text-gray-800 dark:text-white">{team.nomeTime}</h4>
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">{team.jogadores.length} jogadores</p>
+                                </div>
+                            </div>
+                            {expandedTeamId === team.id ? <LucideChevronUp size={16} className="text-gray-400"/> : <LucideChevronDown size={16} className="text-gray-400"/>}
+                        </div>
+                        {expandedTeamId === team.id && (
+                            <div className="bg-gray-50 dark:bg-black/20 border-t border-gray-100 dark:border-gray-700 p-2 space-y-1 animate-slideDown">
+                                {team.jogadores.map(pid => {
+                                    const p = allPlayers.find(pl => pl.id === pid);
+                                    return (
+                                        <div key={pid} className="flex items-center gap-3 p-2 rounded hover:bg-white dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => onSelectPlayer && onSelectPlayer(pid, team.id)}>
+                                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center">
+                                                {p?.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-400">{p?.nome?.charAt(0) ?? '?'}</span>}
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">{p?.apelido || p?.nome || 'Desconhecido'}</p>
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400">{normalizePosition(p?.posicao)}</p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {team.jogadores.length === 0 && <p className="text-xs text-gray-400 text-center py-2">Sem jogadores.</p>}
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+        );
     };
 
     const renderExternalRoster = () => {
@@ -898,8 +969,11 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                 {event.timesParticipantes?.map(team => (
                                     <div 
                                         key={team.id} 
-                                        onClick={() => isAdmin && setEditingTeam(team)}
-                                        className={`${team.isANCB ? 'bg-blue-900 border-blue-700' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'} p-4 rounded-xl shadow-sm border flex justify-between items-center group ${isAdmin ? 'cursor-pointer hover:shadow-md transition-all' : ''}`}
+                                        onClick={() => {
+                                            if (isAdmin) setEditingTeam(team);
+                                            else if (team.isANCB) setViewingTeam(team);
+                                        }}
+                                        className={`${team.isANCB ? 'bg-ancb-blue border-blue-700' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'} p-4 rounded-xl shadow-sm border flex justify-between items-center group ${(isAdmin || team.isANCB) ? 'cursor-pointer hover:shadow-md transition-all' : ''}`}
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg overflow-hidden border-2 ${team.isANCB ? 'bg-blue-800 border-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 border-gray-100 dark:border-gray-600 text-gray-600 dark:text-gray-300'}`}>
@@ -1067,7 +1141,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                 const losses = teamGames.length - wins;
                                                 
                                                 return (
-                                                    <tr key={team.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                                                    <tr key={team.id} className="hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
                                                         <td className="p-3 font-bold text-gray-800 dark:text-gray-200">{team.nomeTime}</td>
                                                         <td className="p-3 text-center">{teamGames.length}</td>
                                                         <td className="p-3 text-center text-green-600 font-bold">{wins}</td>
@@ -1279,6 +1353,57 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                             <Button className="w-full" onClick={handleSaveExternalTeam} disabled={!editingTeam.nomeTime}>
                                 <LucideSave size={16} /> Salvar Time
                             </Button>
+                        </div>
+                    </Modal>
+                )}
+
+                {/* Viewing Team Roster Modal (Read-Only) */}
+                {viewingTeam && (
+                    <Modal isOpen={!!viewingTeam} onClose={() => setViewingTeam(null)} title={viewingTeam.nomeTime}>
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-4 justify-center mb-6">
+                                <div className={`w-24 h-24 rounded-full border-4 border-blue-100 dark:border-blue-900 flex items-center justify-center overflow-hidden ${viewingTeam.logoUrl ? 'bg-transparent' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                                    {viewingTeam.logoUrl ? <img src={viewingTeam.logoUrl} className="w-full h-full object-contain"/> : <span className="text-2xl font-bold text-gray-400">{viewingTeam.nomeTime.charAt(0)}</span>}
+                                </div>
+                            </div>
+                            
+                            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                                <label className="text-xs font-bold text-gray-500 uppercase mb-3 block flex justify-between items-center">
+                                    <span>Elenco ({viewingTeam.jogadores?.length || 0})</span>
+                                </label>
+                                
+                                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar border rounded-xl dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                                    {viewingTeam.jogadores && viewingTeam.jogadores.length > 0 ? (
+                                        allPlayers
+                                            .filter(p => viewingTeam.jogadores?.includes(p.id))
+                                            .map(p => (
+                                                <div 
+                                                    key={p.id} 
+                                                    onClick={() => {
+                                                        if (onSelectPlayer) {
+                                                            onSelectPlayer(p.id, viewingTeam.id);
+                                                            setViewingTeam(null);
+                                                        }
+                                                    }}
+                                                    className="flex items-center gap-3 p-3 cursor-pointer border-b last:border-0 border-gray-100 dark:border-gray-700/50 hover:bg-white dark:hover:bg-gray-700 transition-colors"
+                                                >
+                                                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center border border-gray-100 dark:border-gray-500">
+                                                        {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-500">{p.nome.charAt(0)}</span>}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{p.apelido || p.nome}</p>
+                                                        <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">{normalizePosition(p.posicao)}</p>
+                                                    </div>
+                                                    <LucideChevronRight size={16} className="ml-auto text-gray-300" />
+                                                </div>
+                                            ))
+                                    ) : (
+                                        <div className="p-8 text-center text-gray-400 text-sm italic">
+                                            Nenhum jogador escalado.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </Modal>
                 )}

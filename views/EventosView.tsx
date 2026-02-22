@@ -195,7 +195,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
     const getStatusBadgeStyle = (status: string, cardType: string) => {
         // On colored cards, use semi-transparent black or white
-        if (status === 'andamento') return 'bg-red-600 text-white animate-pulse border border-red-400';
+        if (status === 'andamento') return 'bg-amber-500 text-white animate-pulse border border-amber-400';
         return 'bg-black/30 text-white backdrop-blur-sm border border-white/10';
     };
 
@@ -261,7 +261,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                         <LucideShare2 size={16} />
                                     </button>
                                     <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide flex items-center ${getStatusBadgeStyle(evento.status, evento.type)}`}>
-                                        {evento.status === 'andamento' ? 'AO VIVO' : evento.status}
+                                        {evento.status === 'andamento' ? 'EM ANDAMENTO' : evento.status}
                                     </span>
                                 </div>
                             </div>

@@ -8,6 +8,7 @@ import { Feed } from './components/Feed';
 import { NotificationFab } from './components/NotificationFab';
 import { PeerReviewQuiz } from './components/PeerReviewQuiz';
 import { LiveEventHero } from './components/LiveEventHero';
+import { PublicGameView } from './views/PublicGameView';
 import { JogadoresView } from './views/JogadoresView';
 import { EventosView } from './views/EventosView';
 import { EventoDetalheView } from './views/EventoDetalheView';
@@ -26,6 +27,7 @@ const App: React.FC = () => {
     
     // Updated Navigation History State: Stores the SPECIFIC ID to return to
     const [returnToEventId, setReturnToEventId] = useState<string | null>(null);
+    const [returnToTeamId, setReturnToTeamId] = useState<string | null>(null);
 
     const [user, setUser] = useState<any>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -64,6 +66,7 @@ const App: React.FC = () => {
     const [panelGame, setPanelGame] = useState<Jogo | null>(null);
     const [panelEventId, setPanelEventId] = useState<string | null>(null);
     const [panelIsEditable, setPanelIsEditable] = useState(false); // New state to control edit mode
+    const [selectedPublicGame, setSelectedPublicGame] = useState<{ game: Jogo, eventId: string } | null>(null);
 
     // --- NOTIFICATIONS STATE ---
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -215,15 +218,20 @@ const App: React.FC = () => {
                     }
 
                     // Check for roster notification
-                    if (userProfile?.linkedPlayerId && eventData.jogadoresEscalados?.includes(userProfile.linkedPlayerId) && !notifiedEvents.includes(eventId)) {
-                        const title = "Convocação!";
-                        const body = `Você foi escalado para: ${eventData.nome}`;
-                        setForegroundNotification({ title, body, eventId, type: 'roster' });
-                        triggerSystemNotification(title, body);
-                        setTimeout(() => setForegroundNotification(null), 10000);
-                        notifiedEvents.push(eventId);
-                        localStorage.setItem('ancb_notified_rosters', JSON.stringify(notifiedEvents));
-                        checkStaticNotifications();
+                    if (userProfile?.linkedPlayerId) {
+                        const isRosterMember = eventData.jogadoresEscalados?.includes(userProfile.linkedPlayerId);
+                        const isExternalTeamMember = eventData.type === 'torneio_externo' && eventData.timesParticipantes?.some(t => t.isANCB && t.jogadores?.includes(userProfile.linkedPlayerId));
+
+                        if ((isRosterMember || isExternalTeamMember) && !notifiedEvents.includes(eventId)) {
+                            const title = "Convocação!";
+                            const body = `Você foi escalado para: ${eventData.nome}`;
+                            setForegroundNotification({ title, body, eventId, type: 'roster' });
+                            triggerSystemNotification(title, body);
+                            setTimeout(() => setForegroundNotification(null), 10000);
+                            notifiedEvents.push(eventId);
+                            localStorage.setItem('ancb_notified_rosters', JSON.stringify(notifiedEvents));
+                            checkStaticNotifications();
+                        }
                     }
                 }
             });
@@ -313,7 +321,10 @@ const App: React.FC = () => {
             const rosterSnap = await rosterQ.get();
             rosterSnap.forEach(doc => {
                 const eventData = doc.data() as Evento;
-                if (eventData.jogadoresEscalados?.includes(myPlayerId)) {
+                const isRosterMember = eventData.jogadoresEscalados?.includes(myPlayerId);
+                const isExternalTeamMember = eventData.type === 'torneio_externo' && eventData.timesParticipantes?.some(t => t.isANCB && t.jogadores?.includes(myPlayerId));
+
+                if (isRosterMember || isExternalTeamMember) {
                     inferredNotifications.push({ 
                         id: `roster-${doc.id}`, 
                         type: 'roster_alert', 
@@ -391,10 +402,16 @@ const App: React.FC = () => {
     };
 
     const handleOpenGamePanel = (game: Jogo, eventId: string, isEditable: boolean = false) => {
-        setPanelGame(game);
-        setPanelEventId(eventId);
-        setPanelIsEditable(isEditable);
-        setCurrentView('painel-jogo');
+        const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
+        if (isAdmin) {
+            setPanelGame(game);
+            setPanelEventId(eventId);
+            setPanelIsEditable(isEditable);
+            setCurrentView('painel-jogo');
+        } else {
+            setSelectedPublicGame({ game, eventId });
+            setCurrentView('public-game');
+        }
     };
 
     const handleOpenEventDetail = (eventId: string) => {
@@ -403,9 +420,10 @@ const App: React.FC = () => {
     };
 
     // Updated Navigation Handler to support event-specific history
-    const handleOpenPlayerDetail = (playerId: string, fromEventId?: string) => {
+    const handleOpenPlayerDetail = (playerId: string, fromEventId?: string, fromTeamId?: string) => {
         setTargetPlayerId(playerId);
         setReturnToEventId(fromEventId || null);
+        setReturnToTeamId(fromTeamId || null);
         setCurrentView('jogadores');
     };
 
@@ -551,7 +569,14 @@ const App: React.FC = () => {
             case 'home': return (
                 <div className="space-y-8 animate-fadeIn">
                     {ongoingEvents.length > 0 && ongoingEvents[0] && (
-                        <LiveEventHero event={ongoingEvents[0]} onClick={() => handleOpenEventDetail(ongoingEvents[0].id)} />
+                        <LiveEventHero 
+                            event={ongoingEvents[0]} 
+                            onClick={() => handleOpenEventDetail(ongoingEvents[0].id)} 
+                            onOpenLiveGame={(game) => {
+                                setSelectedPublicGame({ game, eventId: ongoingEvents[0].id });
+                                setCurrentView('public-game');
+                            }}
+                        />
                     )}
                     <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <Card onClick={() => setCurrentView('eventos')} className="cursor-pointer group hover:border-blue-300 transition-colors" emoji="📅">
@@ -598,14 +623,17 @@ const App: React.FC = () => {
                 </div>
             );
             case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onSelectEvent={handleOpenEventDetail} />;
-            case 'evento-detalhe': return selectedEventId ? <EventoDetalheView eventId={selectedEventId} onBack={() => setCurrentView('eventos')} userProfile={userProfile} onOpenGamePanel={(g, eid) => handleOpenGamePanel(g, eid, false)} onOpenReview={handleOpenReviewQuiz} onSelectPlayer={(pid) => handleOpenPlayerDetail(pid, selectedEventId)} /> : <div>Evento não encontrado</div>;
+            case 'evento-detalhe': return selectedEventId ? <EventoDetalheView eventId={selectedEventId} initialTeamId={returnToTeamId} onBack={() => { setCurrentView('eventos'); setReturnToTeamId(null); }} userProfile={userProfile} onOpenGamePanel={(g, eid) => handleOpenGamePanel(g, eid, false)} onOpenReview={handleOpenReviewQuiz} onSelectPlayer={(pid, teamId) => handleOpenPlayerDetail(pid, selectedEventId, teamId)} /> : <div>Evento não encontrado</div>;
             case 'jogadores': return <JogadoresView 
                 onBack={() => {
+                    setTargetPlayerId(null);
                     if (returnToEventId) {
                         handleOpenEventDetail(returnToEventId);
                         setReturnToEventId(null); // Reset after using
+                        // Note: We do NOT reset returnToTeamId here, because it needs to be passed to EventoDetalheView
                     } else {
                         setCurrentView('home');
+                        setReturnToTeamId(null);
                     }
                 }} 
                 userProfile={userProfile} 
@@ -614,6 +642,7 @@ const App: React.FC = () => {
             case 'ranking': return <RankingView onBack={() => setCurrentView('home')} />;
             case 'admin': return <AdminView onBack={() => setCurrentView('home')} userProfile={userProfile} onOpenGamePanel={(g, eid, isEditable) => handleOpenGamePanel(g, eid, isEditable)} />;
             case 'painel-jogo': return panelGame && panelEventId ? <PainelJogoView game={panelGame} eventId={panelEventId} onBack={() => handleOpenEventDetail(panelEventId)} userProfile={userProfile} isEditable={panelIsEditable} /> : null;
+            case 'public-game': return selectedPublicGame ? <PublicGameView game={selectedPublicGame.game} eventId={selectedPublicGame.eventId} onBack={() => setCurrentView('home')} /> : <div>Jogo não encontrado</div>;
             case 'profile': return userProfile ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} onOpenReview={handleOpenReviewQuiz} onOpenEvent={handleOpenEventDetail} /> : null;
             default: return <div>404</div>;
         }

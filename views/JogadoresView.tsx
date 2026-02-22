@@ -439,7 +439,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
             <div className="animate-fadeIn pb-20">
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
-                        <Button variant="secondary" size="sm" onClick={() => setSelectedPlayer(null)} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
+                        <Button variant="secondary" size="sm" onClick={() => initialPlayerId ? onBack() : setSelectedPlayer(null)} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
                             <LucideArrowLeft size={18} />
                         </Button>
                         <h2 className="text-2xl font-bold text-ancb-black dark:text-white">Ficha do Atleta</h2>
