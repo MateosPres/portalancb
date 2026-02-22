@@ -153,8 +153,14 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                 updatedTeams = currentTeams.map(t => t.id === team.id ? team as Time : t);
             } else {
                 // Create new
-                const newTeam = { ...team, id: Date.now().toString() } as Time;
+                const newTeamId = Date.now().toString();
+                const newTeam = { ...team, id: newTeamId } as Time;
                 updatedTeams = [...currentTeams, newTeam];
+                // Update team state so notifications use the correct ID
+                // Ideally we should use 'newTeamId' directly in notification logic
+                // But since 'newPlayers' logic is above, we need to be careful.
+                // Actually, let's just use 'newTeamId' in the notification block below.
+                (team as any)._tempId = newTeamId; 
             }
 
             await updateDoc(doc(db, "eventos", eventId), {
@@ -164,6 +170,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
             // Send Notifications
             if (newPlayers.length > 0) {
                 const batch = db.batch();
+                const effectiveTeamId = team.id || (team as any)._tempId;
                 
                 // We need to find the UserProfile for each player
                 // This is tricky because 'allPlayers' has 'userId' but we need to query 'notificacoes'
@@ -179,10 +186,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                             message: `Você foi convocado para o time ${team.nomeTime} no evento ${event.nome}.`,
                             data: { 
                                 eventId: event.id, 
-                                teamId: team.id || (team as any).id, // If new, we might miss ID here if we don't use the one generated above.
-                                // Fix: If new team, we can't easily get the ID here unless we refactor.
-                                // But notifications are async.
-                                // Let's just pass eventId and teamName for now, or rely on the fact that we update the doc.
+                                teamId: effectiveTeamId,
                             },
                             playerId: playerId,
                             read: false,
@@ -325,26 +329,31 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
         if (!aSelected && bSelected) return 1;
 
         if (aSelected && bSelected) {
+            // Priority: Confirmado (0) > Pendente (1) > Recusado (2)
             const statusOrder: Record<string, number> = { 'confirmado': 0, 'pendente': 1, 'recusado': 2 };
             const aStatus = team.rosterStatus?.[a.id] || 'pendente';
             const bStatus = team.rosterStatus?.[b.id] || 'pendente';
             
-            if (statusOrder[aStatus] !== statusOrder[bStatus]) {
-                return statusOrder[aStatus] - statusOrder[bStatus];
+            const orderA = statusOrder[aStatus] ?? 1;
+            const orderB = statusOrder[bStatus] ?? 1;
+
+            if (orderA !== orderB) {
+                return orderA - orderB;
             }
         }
 
         return a.nome.localeCompare(b.nome);
     });
 
-    const formatPosition = (position: string | undefined) => {
-        if (!position) return '';
-        return position
-            .replace(/\(PG\)/i, '(1)')
-            .replace(/\(SG\)/i, '(2)')
-            .replace(/\(SF\)/i, '(3)')
-            .replace(/\(PF\)/i, '(4)')
-            .replace(/\(C\)/i, '(5)');
+    const formatPosition = (pos: string | undefined) => {
+        if (!pos) return '-';
+        const p = pos.toLowerCase();
+        if (p.includes('1') || (p.includes('armador') && !p.includes('ala'))) return 'Armador (1)';
+        if (p.includes('2') || (p.includes('ala/armador') || p.includes('ala-armador') || p.includes('sg'))) return 'Ala/Armador (2)';
+        if (p.includes('3') || (p.includes('ala') && !p.includes('armador') && !p.includes('piv') && !p.includes('pivo')) || p.includes('sf')) return 'Ala (3)';
+        if (p.includes('4') || (p.includes('ala/piv') || p.includes('ala-piv') || p.includes('pf'))) return 'Ala/Pivô (4)';
+        if (p.includes('5') || (p.includes('piv') && !p.includes('ala')) || p.includes('c)') || p.trim().endsWith('(c)')) return 'Pivô (5)';
+        return pos;
     };
 
     if (loading) return <div className="flex justify-center items-center h-screen"><LucideLoader2 className="animate-spin" /></div>;
@@ -482,124 +491,126 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                 </div>
 
                 {/* Roster Management */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
-                        <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                            <LucideUserPlus className="text-ancb-orange" size={20} />
-                            {isAdmin ? 'Gerenciar Elenco' : 'Elenco'} <span className="text-sm font-normal text-gray-500">({team.jogadores?.length || 0})</span>
-                        </h2>
-                        <div className="relative w-full sm:w-64">
-                            <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                            <input 
-                                className="w-full pl-10 pr-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-ancb-blue outline-none"
-                                placeholder="Buscar jogador..."
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                            />
+                {team.isANCB && (
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                <LucideUserPlus className="text-ancb-orange" size={20} />
+                                {isAdmin ? 'Gerenciar Elenco' : 'Elenco'} <span className="text-sm font-normal text-gray-500">({team.jogadores?.length || 0})</span>
+                            </h2>
+                            <div className="relative w-full sm:w-64">
+                                <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                                <input 
+                                    className="w-full pl-10 pr-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-ancb-blue outline-none"
+                                    placeholder="Buscar jogador..."
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                />
+                            </div>
                         </div>
-                    </div>
 
-                    <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
-                        {(isAdmin ? sortedFilteredPlayers : sortedFilteredPlayers.filter(p => team.jogadores?.includes(p.id))).map(p => {
-                            const isSelected = team.jogadores?.includes(p.id);
-                            const status = team.rosterStatus?.[p.id];
-                            
-                            return (
-                                <div 
-                                    key={p.id} 
-                                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700 transition-colors ${isSelected ? 'bg-blue-50/50 dark:bg-blue-900/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
-                                >
-                                    <div className="flex items-center gap-4 mb-3 sm:mb-0 cursor-pointer" onClick={() => isAdmin && !isSelected && togglePlayer(p.id)}>
-                                        <div className="relative">
-                                            <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center border-2 border-white dark:border-gray-700 shadow-sm">
-                                                {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-sm font-bold text-gray-500">{p.nome.charAt(0)}</span>}
-                                            </div>
-                                            {isSelected && (
-                                                <div className="absolute -bottom-1 -right-1 bg-ancb-blue text-white rounded-full p-0.5 border-2 border-white dark:border-gray-800">
-                                                    <LucideCheckCircle2 size={14} />
+                        <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
+                            {(isAdmin ? sortedFilteredPlayers : sortedFilteredPlayers.filter(p => team.jogadores?.includes(p.id))).map(p => {
+                                const isSelected = team.jogadores?.includes(p.id);
+                                const status = team.rosterStatus?.[p.id];
+                                
+                                return (
+                                    <div 
+                                        key={p.id} 
+                                        className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700 transition-colors ${isSelected ? 'bg-blue-50/50 dark:bg-blue-900/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
+                                    >
+                                        <div className="flex items-center gap-4 mb-3 sm:mb-0 cursor-pointer" onClick={() => isAdmin && !isSelected && togglePlayer(p.id)}>
+                                            <div className="relative">
+                                                <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center border-2 border-white dark:border-gray-700 shadow-sm">
+                                                    {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-sm font-bold text-gray-500">{p.nome.charAt(0)}</span>}
                                                 </div>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <p className={`text-sm font-bold ${isSelected ? 'text-ancb-blue dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'}`}>
-                                                {p.apelido || p.nome}
-                                            </p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">{formatPosition(p.posicao)}</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center gap-2 justify-end">
-                                        {isSelected ? (
-                                            <>
-                                                {/* Status Badge */}
-                                                <div className="flex flex-col items-end gap-1">
-                                                    <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase flex items-center gap-1
-                                                        ${status === 'confirmado' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 
-                                                          status === 'recusado' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 
-                                                          'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'}`}>
-                                                        {status === 'confirmado' && <LucideCheckCircle2 size={12} />}
-                                                        {status === 'recusado' && <LucideXCircle size={12} />}
-                                                        {(!status || status === 'pendente') && <LucideClock size={12} />}
-                                                        {status || 'Pendente'}
-                                                    </div>
-                                                    {isAdmin && status === 'recusado' && team.rosterRefusalReason?.[p.id] && (
-                                                        <div className="text-[10px] text-gray-500 dark:text-gray-400 max-w-[150px] truncate" title={team.rosterRefusalReason[p.id]}>
-                                                            "{team.rosterRefusalReason[p.id]}"
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* Admin Actions */}
-                                                {isAdmin && (
-                                                    <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-1 shadow-sm">
-                                                        <button 
-                                                            onClick={() => updatePlayerStatus(p.id, 'confirmado')}
-                                                            className={`p-1.5 rounded hover:bg-green-50 dark:hover:bg-green-900/20 text-gray-400 hover:text-green-600 ${status === 'confirmado' ? 'text-green-600' : ''}`}
-                                                            title="Confirmar"
-                                                        >
-                                                            <LucideCheckCircle2 size={16} />
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => updatePlayerStatus(p.id, 'pendente')}
-                                                            className={`p-1.5 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 text-gray-400 hover:text-orange-600 ${!status || status === 'pendente' ? 'text-orange-600' : ''}`}
-                                                            title="Pendente"
-                                                        >
-                                                            <LucideClock size={16} />
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => updatePlayerStatus(p.id, 'recusado')}
-                                                            className={`p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-600 ${status === 'recusado' ? 'text-red-600' : ''}`}
-                                                            title="Recusar"
-                                                        >
-                                                            <LucideXCircle size={16} />
-                                                        </button>
-                                                        <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1"></div>
-                                                        <button 
-                                                            onClick={() => togglePlayer(p.id)}
-                                                            className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500"
-                                                            title="Remover do time"
-                                                        >
-                                                            <LucideTrash2 size={16} />
-                                                        </button>
+                                                {isSelected && (
+                                                    <div className="absolute -bottom-1 -right-1 bg-ancb-blue text-white rounded-full p-0.5 border-2 border-white dark:border-gray-800">
+                                                        <LucideCheckCircle2 size={14} />
                                                     </div>
                                                 )}
-                                            </>
-                                        ) : (
-                                            isAdmin && (
-                                                <Button size="sm" variant="secondary" onClick={() => togglePlayer(p.id)} className="text-xs dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:text-white">
-                                                    <LucideUserPlus size={14} className="mr-1" /> Adicionar
-                                                </Button>
-                                            )
-                                        )}
+                                            </div>
+                                            <div>
+                                                <p className={`text-sm font-bold ${isSelected ? 'text-ancb-blue dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'}`}>
+                                                    {p.apelido || p.nome}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">{formatPosition(p.posicao)}</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-2 justify-end">
+                                            {isSelected ? (
+                                                <>
+                                                    {/* Status Badge */}
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase flex items-center gap-1
+                                                            ${status === 'confirmado' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 
+                                                              status === 'recusado' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 
+                                                              'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'}`}>
+                                                            {status === 'confirmado' && <LucideCheckCircle2 size={12} />}
+                                                            {status === 'recusado' && <LucideXCircle size={12} />}
+                                                            {(!status || status === 'pendente') && <LucideClock size={12} />}
+                                                            {status || 'Pendente'}
+                                                        </div>
+                                                        {isAdmin && status === 'recusado' && team.rosterRefusalReason?.[p.id] && (
+                                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 max-w-[150px] truncate" title={team.rosterRefusalReason[p.id]}>
+                                                                "{team.rosterRefusalReason[p.id]}"
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Admin Actions */}
+                                                    {isAdmin && (
+                                                        <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-1 shadow-sm">
+                                                            <button 
+                                                                onClick={() => updatePlayerStatus(p.id, 'confirmado')}
+                                                                className={`p-1.5 rounded hover:bg-green-50 dark:hover:bg-green-900/20 text-gray-400 hover:text-green-600 ${status === 'confirmado' ? 'text-green-600' : ''}`}
+                                                                title="Confirmar"
+                                                            >
+                                                                <LucideCheckCircle2 size={16} />
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => updatePlayerStatus(p.id, 'pendente')}
+                                                                className={`p-1.5 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 text-gray-400 hover:text-orange-600 ${!status || status === 'pendente' ? 'text-orange-600' : ''}`}
+                                                                title="Pendente"
+                                                            >
+                                                                <LucideClock size={16} />
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => updatePlayerStatus(p.id, 'recusado')}
+                                                                className={`p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-600 ${status === 'recusado' ? 'text-red-600' : ''}`}
+                                                                title="Recusar"
+                                                            >
+                                                                <LucideXCircle size={16} />
+                                                            </button>
+                                                            <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1"></div>
+                                                            <button 
+                                                                onClick={() => togglePlayer(p.id)}
+                                                                className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500"
+                                                                title="Remover do time"
+                                                            >
+                                                                <LucideTrash2 size={16} />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                isAdmin && (
+                                                    <Button size="sm" variant="secondary" onClick={() => togglePlayer(p.id)} className="text-xs dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:text-white">
+                                                        <LucideUserPlus size={14} className="mr-1" /> Adicionar
+                                                    </Button>
+                                                )
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
-                        {filteredPlayers.length === 0 && (
-                            <div className="p-8 text-center text-gray-500">Nenhum jogador encontrado.</div>
-                        )}
+                                );
+                            })}
+                            {filteredPlayers.length === 0 && (
+                                <div className="p-8 text-center text-gray-500">Nenhum jogador encontrado.</div>
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
 
             {/* Refusal Modal */}
