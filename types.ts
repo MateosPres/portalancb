@@ -104,6 +104,7 @@ export interface Time {
     isANCB?: boolean; // Identifica se é um time da associação
     grupo?: string; // Para fase de grupos (A, B, C...)
     rosterStatus?: Record<string, 'pendente' | 'confirmado' | 'recusado'>; // Status de cada jogador (ID -> Status)
+    rosterRefusalReason?: Record<string, string>; // Motivo da recusa (ID -> Motivo)
 }
 
 export interface Jogo {

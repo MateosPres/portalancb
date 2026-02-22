@@ -43,6 +43,9 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
     const [showCropper, setShowCropper] = useState(false);
     const [imageToCrop, setImageToCrop] = useState<string | null>(null);
 
+    const [showRefusalModal, setShowRefusalModal] = useState(false);
+    const [refusalReason, setRefusalReason] = useState('');
+
     const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
 
     useEffect(() => {
@@ -231,18 +234,29 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
         });
     };
 
-    const handleUpdateMyStatus = async (status: 'confirmado' | 'recusado') => {
+    const handleUpdateMyStatus = async (status: 'confirmado' | 'recusado', reason?: string) => {
         if (!event || !team.id || !userProfile?.linkedPlayerId) return;
         
         // Optimistic update
         const prevStatus = team.rosterStatus?.[userProfile.linkedPlayerId];
-        setTeam(prev => ({
-            ...prev,
+        const prevReason = team.rosterRefusalReason?.[userProfile.linkedPlayerId];
+
+        const newTeamState = {
+            ...team,
             rosterStatus: {
-                ...(prev.rosterStatus || {}),
+                ...(team.rosterStatus || {}),
                 [userProfile.linkedPlayerId!]: status
             }
-        }));
+        };
+
+        if (reason) {
+            newTeamState.rosterRefusalReason = {
+                ...(team.rosterRefusalReason || {}),
+                [userProfile.linkedPlayerId!]: reason
+            };
+        }
+
+        setTeam(newTeamState);
 
         try {
             const isExternal = event.type === 'torneio_externo';
@@ -251,13 +265,22 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
             
             const updatedTeams = currentTeams.map(t => {
                 if (t.id === team.id) {
-                    return {
+                    const updatedTeam = {
                         ...t,
                         rosterStatus: {
                             ...(t.rosterStatus || {}),
                             [userProfile.linkedPlayerId!]: status
                         }
                     };
+
+                    if (reason) {
+                        updatedTeam.rosterRefusalReason = {
+                            ...(t.rosterRefusalReason || {}),
+                            [userProfile.linkedPlayerId!]: reason
+                        };
+                    }
+                    
+                    return updatedTeam;
                 }
                 return t;
             });
@@ -265,6 +288,11 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
             await updateDoc(doc(db, "eventos", eventId), {
                 [collectionField]: updatedTeams
             });
+            
+            if (status === 'recusado') {
+                setShowRefusalModal(false);
+                setRefusalReason('');
+            }
         } catch (error) {
             console.error("Error updating status:", error);
             // Revert on error
@@ -273,7 +301,11 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                 rosterStatus: {
                     ...(prev.rosterStatus || {}),
                     [userProfile.linkedPlayerId!]: prevStatus
-                }
+                },
+                rosterRefusalReason: prevReason ? {
+                    ...(prev.rosterRefusalReason || {}),
+                    [userProfile.linkedPlayerId!]: prevReason
+                } : prev.rosterRefusalReason
             }));
             alert("Erro ao atualizar status.");
         }
@@ -284,12 +316,36 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
         (p.apelido && p.apelido.toLowerCase().includes(search.toLowerCase()))
     );
 
-    // Sort: Selected first, then alphabetical
+    // Sort: Selected first (Confirmed > Pending > Refused), then alphabetical
     const sortedFilteredPlayers = [...filteredPlayers].sort((a, b) => {
-        const aSelected = team.jogadores?.includes(a.id) ? 1 : 0;
-        const bSelected = team.jogadores?.includes(b.id) ? 1 : 0;
-        return bSelected - aSelected || a.nome.localeCompare(b.nome);
+        const aSelected = team.jogadores?.includes(a.id);
+        const bSelected = team.jogadores?.includes(b.id);
+
+        if (aSelected && !bSelected) return -1;
+        if (!aSelected && bSelected) return 1;
+
+        if (aSelected && bSelected) {
+            const statusOrder: Record<string, number> = { 'confirmado': 0, 'pendente': 1, 'recusado': 2 };
+            const aStatus = team.rosterStatus?.[a.id] || 'pendente';
+            const bStatus = team.rosterStatus?.[b.id] || 'pendente';
+            
+            if (statusOrder[aStatus] !== statusOrder[bStatus]) {
+                return statusOrder[aStatus] - statusOrder[bStatus];
+            }
+        }
+
+        return a.nome.localeCompare(b.nome);
     });
+
+    const formatPosition = (position: string | undefined) => {
+        if (!position) return '';
+        return position
+            .replace(/\(PG\)/i, '(1)')
+            .replace(/\(SG\)/i, '(2)')
+            .replace(/\(SF\)/i, '(3)')
+            .replace(/\(PF\)/i, '(4)')
+            .replace(/\(C\)/i, '(5)');
+    };
 
     if (loading) return <div className="flex justify-center items-center h-screen"><LucideLoader2 className="animate-spin" /></div>;
 
@@ -319,37 +375,60 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
             <div className="max-w-3xl mx-auto p-4 space-y-6">
                 {/* User Status Banner */}
                 {userProfile?.linkedPlayerId && team.jogadores?.includes(userProfile.linkedPlayerId) && (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-100 dark:bg-blue-800 p-2 rounded-full text-ancb-blue dark:text-blue-300">
-                                <LucideAlertCircle size={24} />
+                    <>
+                        {/* Pending Status */}
+                        {(!team.rosterStatus?.[userProfile.linkedPlayerId] || team.rosterStatus?.[userProfile.linkedPlayerId] === 'pendente') && (
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-blue-100 dark:bg-blue-800 p-2 rounded-full text-ancb-blue dark:text-blue-300">
+                                        <LucideAlertCircle size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-gray-800 dark:text-white">Sua Convocação</h3>
+                                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                                            Você está escalado para este jogo.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2 w-full sm:w-auto">
+                                    <Button 
+                                        size="sm" 
+                                        className="flex-1 sm:flex-none bg-white text-green-600 border border-green-600 hover:bg-green-50"
+                                        onClick={() => handleUpdateMyStatus('confirmado')}
+                                    >
+                                        <LucideCheckCircle2 size={16} className="mr-1" />
+                                        Confirmar
+                                    </Button>
+                                    <Button 
+                                        size="sm" 
+                                        className="flex-1 sm:flex-none bg-white text-red-600 border border-red-600 hover:bg-red-50"
+                                        onClick={() => handleUpdateMyStatus('recusado')}
+                                    >
+                                        <LucideXCircle size={16} className="mr-1" />
+                                        Recusar
+                                    </Button>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="font-bold text-gray-800 dark:text-white">Sua Convocação</h3>
-                                <p className="text-sm text-gray-600 dark:text-gray-300">
-                                    Você está escalado para este jogo.
-                                </p>
+                        )}
+
+                        {/* Confirmed Status */}
+                        {team.rosterStatus?.[userProfile.linkedPlayerId] === 'confirmado' && (
+                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-3 flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-2">
+                                    <LucideCheckCircle2 size={20} className="text-green-600 dark:text-green-400" />
+                                    <span className="text-sm font-medium text-green-800 dark:text-green-300">
+                                        Você foi escalado para o time!
+                                    </span>
+                                </div>
+                                <button 
+                                    onClick={() => setShowRefusalModal(true)}
+                                    className="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 underline"
+                                >
+                                    (Desistir)
+                                </button>
                             </div>
-                        </div>
-                        <div className="flex gap-2 w-full sm:w-auto">
-                            <Button 
-                                size="sm" 
-                                className={`flex-1 sm:flex-none ${team.rosterStatus?.[userProfile.linkedPlayerId] === 'confirmado' ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-white text-green-600 border border-green-600 hover:bg-green-50'}`}
-                                onClick={() => handleUpdateMyStatus('confirmado')}
-                            >
-                                <LucideCheckCircle2 size={16} className="mr-1" />
-                                {team.rosterStatus?.[userProfile.linkedPlayerId] === 'confirmado' ? 'Confirmado' : 'Confirmar'}
-                            </Button>
-                            <Button 
-                                size="sm" 
-                                className={`flex-1 sm:flex-none ${team.rosterStatus?.[userProfile.linkedPlayerId] === 'recusado' ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-white text-red-600 border border-red-600 hover:bg-red-50'}`}
-                                onClick={() => handleUpdateMyStatus('recusado')}
-                            >
-                                <LucideXCircle size={16} className="mr-1" />
-                                {team.rosterStatus?.[userProfile.linkedPlayerId] === 'recusado' ? 'Recusado' : 'Recusar'}
-                            </Button>
-                        </div>
-                    </div>
+                        )}
+                    </>
                 )}
 
                 {/* Team Info Card */}
@@ -445,7 +524,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                                             <p className={`text-sm font-bold ${isSelected ? 'text-ancb-blue dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'}`}>
                                                 {p.apelido || p.nome}
                                             </p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">{p.posicao}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">{formatPosition(p.posicao)}</p>
                                         </div>
                                     </div>
                                     
@@ -453,14 +532,21 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                                         {isSelected ? (
                                             <>
                                                 {/* Status Badge */}
-                                                <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase flex items-center gap-1
-                                                    ${status === 'confirmado' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 
-                                                      status === 'recusado' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 
-                                                      'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'}`}>
-                                                    {status === 'confirmado' && <LucideCheckCircle2 size={12} />}
-                                                    {status === 'recusado' && <LucideXCircle size={12} />}
-                                                    {status === 'pendente' && <LucideClock size={12} />}
-                                                    {status || 'Pendente'}
+                                                <div className="flex flex-col items-end gap-1">
+                                                    <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase flex items-center gap-1
+                                                        ${status === 'confirmado' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 
+                                                          status === 'recusado' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 
+                                                          'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'}`}>
+                                                        {status === 'confirmado' && <LucideCheckCircle2 size={12} />}
+                                                        {status === 'recusado' && <LucideXCircle size={12} />}
+                                                        {(!status || status === 'pendente') && <LucideClock size={12} />}
+                                                        {status || 'Pendente'}
+                                                    </div>
+                                                    {isAdmin && status === 'recusado' && team.rosterRefusalReason?.[p.id] && (
+                                                        <div className="text-[10px] text-gray-500 dark:text-gray-400 max-w-[150px] truncate" title={team.rosterRefusalReason[p.id]}>
+                                                            "{team.rosterRefusalReason[p.id]}"
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 {/* Admin Actions */}
@@ -475,7 +561,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                                                         </button>
                                                         <button 
                                                             onClick={() => updatePlayerStatus(p.id, 'pendente')}
-                                                            className={`p-1.5 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 text-gray-400 hover:text-orange-600 ${status === 'pendente' ? 'text-orange-600' : ''}`}
+                                                            className={`p-1.5 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 text-gray-400 hover:text-orange-600 ${!status || status === 'pendente' ? 'text-orange-600' : ''}`}
                                                             title="Pendente"
                                                         >
                                                             <LucideClock size={16} />
@@ -515,6 +601,40 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                     </div>
                 </div>
             </div>
+
+            {/* Refusal Modal */}
+            {showRefusalModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-xl">
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Motivo da Desistência</h3>
+                        <textarea
+                            className="w-full p-3 border rounded-lg dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none resize-none h-32"
+                            placeholder="Por que você está desistindo?"
+                            value={refusalReason}
+                            onChange={e => setRefusalReason(e.target.value)}
+                        />
+                        <div className="flex justify-end gap-3 mt-4">
+                            <Button variant="secondary" onClick={() => setShowRefusalModal(false)}>
+                                Cancelar
+                            </Button>
+                            <Button 
+                                variant="danger" 
+                                onClick={() => {
+                                    if (refusalReason.trim()) {
+                                        handleUpdateMyStatus('recusado', refusalReason);
+                                        setShowRefusalModal(false);
+                                        setRefusalReason('');
+                                    } else {
+                                        alert('Por favor, informe o motivo.');
+                                    }
+                                }}
+                            >
+                                Confirmar Desistência
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Image Cropper */}
             {showCropper && imageToCrop && (
