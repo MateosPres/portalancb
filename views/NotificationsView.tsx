@@ -138,7 +138,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
                     const currentStatus = team.rosterStatus || {};
                     
                     // Use notification.playerId if available, otherwise try to find it
-                    const playerId = notification.playerId || userProfile.linkedPlayerId;
+                    const playerId = (notification as any).playerId || notification.data?.playerId || userProfile.linkedPlayerId;
                     
                     if (playerId) {
                         const newStatus = { ...currentStatus, [playerId]: accept ? 'confirmado' : 'recusado' };
@@ -191,7 +191,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
                 )}
             </div>
 
-            <div className="max-w-3xl mx-auto p-4 space-y-8">
+            <div className="w-full max-w-3xl mx-auto p-4 space-y-8">
                 
                 {/* Enable Notifications Banner */}
                 {notificationPermissionStatus !== 'granted' && onEnableNotifications && (
@@ -274,8 +274,8 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onDel
     const x = useMotionValue(0);
     const opacity = useTransform(x, [-100, 0], [0, 1]);
     
-    // We don't need background transform here as we use a separate div for background
-    // But we can use it to control opacity of the content if we want
+    // Corrige a opacidade para o vermelho só aparecer durante o arrasto
+    const swipeOpacity = useTransform(x, [-50, 0], [1, 0]); 
 
     const handleDragEnd = (event: any, info: PanInfo) => {
         if (info.offset.x < -100 && isDeletable) {
@@ -289,33 +289,35 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onDel
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, x: -100 }}
-            style={{ x, opacity }}
+            style={{ x, opacity, width: '100%' }}
             drag={isDeletable ? "x" : false}
             dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={{ left: 0.5, right: 0 }} // Only allow dragging left
+            dragElastic={{ left: 0.5, right: 0 }}
             onDragEnd={handleDragEnd}
-            className={`relative bg-white dark:bg-gray-800 rounded-xl border shadow-sm overflow-hidden touch-pan-y
-                ${notification.type === 'roster_invite' ? 'border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-900/10' : 
-                  notification.type === 'pending_review' ? 'border-purple-200 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-900/10' :
-                  'border-gray-200 dark:border-gray-700'}`}
+            className={`w-full relative rounded-xl border shadow-sm overflow-hidden touch-pan-y
+                ${notification.type === 'roster_invite' ? 'border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-900/20' : 
+                  notification.type === 'pending_review' ? 'border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-900/20' :
+                  'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}
         >
-            {/* Swipe Background Indicator (Visual feedback) */}
-            <motion.div 
-                className="absolute inset-y-0 right-0 w-full bg-red-500 flex items-center justify-end pr-4"
-                style={{ opacity: useTransform(x, [-50, 0], [0, 1]), zIndex: 0 }}
-            >
-                <LucideTrash2 className="text-white" />
-            </motion.div>
+            {/* O fundo vermelho e a lixeira agora só renderizam se a notificação puder ser apagada */}
+            {isDeletable && (
+                <motion.div 
+                    className="absolute inset-y-0 right-0 w-full bg-red-500 flex items-center justify-end pr-4"
+                    style={{ opacity: swipeOpacity, zIndex: 0 }}
+                >
+                    <LucideTrash2 className="text-white" />
+                </motion.div>
+            )}
 
             <div className="p-4 relative z-10 bg-inherit">
                 <div className="pr-8">
                     <h3 className="font-bold text-gray-800 dark:text-white text-sm mb-1">{notification.title}</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{notification.message}</p>
                     
-                    {/* Roster Invite Actions */}
+                    {/* Botões de Convocação */}
                     {notification.type === 'roster_invite' && (
                         <div className="flex gap-3 mt-3">
-                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => onRosterResponse(notification, true)}>
+                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white border-none" onClick={() => onRosterResponse(notification, true)}>
                                 <LucideCheckCircle2 size={16} className="mr-1" /> Aceitar
                             </Button>
                             <Button size="sm" variant="secondary" className="text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => onRosterResponse(notification, false)}>
@@ -324,21 +326,21 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onDel
                         </div>
                     )}
 
-                    {/* Evaluation Actions */}
+                    {/* Botão de Avaliação - Alterado para Azul */}
                     {notification.type === 'pending_review' && (
                         <div className="flex gap-3 mt-3">
-                            <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white" onClick={() => onStartEvaluation(notification)}>
+                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white border-none" onClick={() => onStartEvaluation(notification)}>
                                 <LucidePlayCircle size={16} className="mr-1" /> Iniciar Avaliação
                             </Button>
                         </div>
                     )}
                 </div>
 
-                {/* Individual Delete Button (Discrete X) */}
+                {/* Botão X discreto */}
                 {isDeletable && (
                     <button 
                         onClick={() => onDelete(notification.id, notification.type)}
-                        className="absolute top-3 right-3 text-gray-300 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                        className="absolute top-3 right-3 text-gray-400 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
                         title="Excluir notificação"
                     >
                         <LucideX size={14} />
@@ -347,4 +349,4 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onDel
             </div>
         </motion.div>
     );
-};
+}

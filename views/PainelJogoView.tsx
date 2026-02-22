@@ -71,7 +71,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
     useEffect(() => {
         // Real-time Game Updates
         const unsubGame = onSnapshot(doc(db, "eventos", eventId, "jogos", game.id), (docSnap) => {
-            if (docSnap.exists) {
+            if (docSnap.exists()) {
                 setLiveGame({ id: docSnap.id, ...(docSnap.data() as any) } as Jogo);
             }
         });
