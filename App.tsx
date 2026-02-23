@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player } from './types';
 import firebase, { auth, db, requestFCMToken, onMessageListener } from './services/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
 import { Modal } from './components/Modal';
@@ -20,6 +21,7 @@ import { PainelJogoView } from './views/PainelJogoView';
 import { ProfileView } from './views/ProfileView';
 import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare, LucideUserPlus, LucideRefreshCw, LucideBellRing, LucideSettings } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
+import { Header } from './components/Header';
 
 // Chave VAPID fornecida para autenticação do Push Notification
 const VAPID_KEY = "BI9T9nLXUjdJHqOSZEoORZ7UDyWQoIMcrQ5Oz-7KeKif19LoGx_Db5AdY4zi0yXT5zTdvZRbJy6nF65Dv-8ncKk"; 
@@ -218,7 +220,7 @@ const App: React.FC = () => {
                 if (change.type === "added" || change.type === "modified") {
                     const eventData = change.doc.data() as Evento;
                     const eventId = change.doc.id;
-                    const fullEvent = { id: eventId, ...eventData };
+                    const fullEvent = { ...eventData, id: eventId };
 
                     if (fullEvent.status === 'andamento') {
                         ongoing.push(fullEvent);
@@ -227,7 +229,7 @@ const App: React.FC = () => {
                     // Check for roster notification
                     if (userProfile?.linkedPlayerId) {
                         const isRosterMember = eventData.jogadoresEscalados?.includes(userProfile.linkedPlayerId);
-                        const isExternalTeamMember = eventData.type === 'torneio_externo' && eventData.timesParticipantes?.some(t => t.isANCB && t.jogadores?.includes(userProfile.linkedPlayerId));
+                        const isExternalTeamMember = eventData.type === 'torneio_externo' && eventData.timesParticipantes?.some(t => t.isANCB && t.jogadores?.includes(userProfile.linkedPlayerId!));
 
                         if ((isRosterMember || isExternalTeamMember) && !notifiedEvents.includes(eventId)) {
                             const title = "Convocação!";
@@ -364,23 +366,77 @@ const App: React.FC = () => {
     }, [userProfile]);
 
     useEffect(() => {
-        let unsubProfile: (() => void) | undefined;
-        const unsubscribeAuth = auth.onAuthStateChanged(async (currentUser) => {
-            setUser(currentUser);
-            if (unsubProfile) unsubProfile();
-            if (currentUser) {
-                unsubProfile = db.collection("usuarios").doc(currentUser.uid).onSnapshot((docSnap) => {
-                    if (docSnap.exists) {
-                        const profile = { ...(docSnap.data() as any), uid: docSnap.id } as UserProfile;
-                        if (profile.status === 'banned') { auth.signOut(); alert("Conta suspensa."); return; }
-                        setUserProfile(profile);
+        const unsubscribe = auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                console.log("LOGIN DETECTADO. UID:", user.uid);
+                
+                try {
+                    // 1. Tenta achar na coleção 'usuarios'
+                    let userRef = doc(db, "usuarios", user.uid);
+                    let userSnap = await getDoc(userRef);
+                    let data = null;
+
+                    // 2. Se não achar em 'usuarios', tenta na coleção 'jogadores'
+                    if (!userSnap.exists()) {
+                        console.log("Não achou em 'usuarios', tentando 'jogadores'...");
+                        userRef = doc(db, "jogadores", user.uid);
+                        userSnap = await getDoc(userRef);
                     }
-                    setLoading(false);
-                });
-            } else { setUserProfile(null); setLoading(false); }
+
+                    // 3. Processa os dados se encontrou
+                    if (userSnap.exists()) {
+                        data = userSnap.data();
+                        
+                        // Busca foto (Prioridade: User -> Google -> Jogador Linkado)
+                        let finalPhoto = data.foto || data.photoURL || data.avatar || null;
+                        
+                        // Se não tem foto, mas tem link de jogador, busca lá
+                        if (!finalPhoto && data.linkedPlayerId) {
+                            try {
+                                const playerDoc = await getDoc(doc(db, "jogadores", data.linkedPlayerId));
+                                if (playerDoc.exists()) {
+                                    const pData = playerDoc.data();
+                                    finalPhoto = pData.foto || pData.photoURL || null;
+                                }
+                            } catch (e) { console.warn("Erro ao buscar link", e); }
+                        }
+
+                        // Salva o perfil oficial
+                        setUserProfile({
+                            uid: user.uid,
+                            ...data, // Isso recupera o linkedPlayerId e todos os outros campos do banco!
+                            nome: data.nome || data.apelido || "Usuário",
+                            email: data.email,
+                            role: data.role || "jogador", // <--- MUDADO AQUI (Fallback para jogador)
+                            foto: finalPhoto,
+                            status: data.status || "active"
+                        } as UserProfile);
+
+                    } else {
+                        // 4. FALLBACK DE EMERGÊNCIA (Se não tiver cadastro no banco)
+                        console.warn("PERFIL NÃO EXISTE NO BANCO. USANDO DADOS TEMPORÁRIOS.");
+                        
+                        setUserProfile({
+                            uid: user.uid,
+                            nome: user.displayName || "Novo Usuário",
+                            email: user.email || "",
+                            role: "jogador", // <--- MUDADO AQUI (Padrão agora é jogador)
+                            foto: user.photoURL,
+                            status: "active"
+                        } as UserProfile);
+                    }
+
+                } catch (error) {
+                    console.error("ERRO NO LOGIN:", error);
+                }
+            } else {
+                setUserProfile(null);
+            }
+            setLoading(false);
         });
-        return () => { unsubscribeAuth(); if (unsubProfile) unsubProfile(); };
+        return () => unsubscribe();
     }, []);
+
 
     const handleOpenReviewQuiz = async (gameId: string, eventId: string) => {
         try {
@@ -500,61 +556,16 @@ const App: React.FC = () => {
     };
 
     const renderHeader = () => (
-        <header className="sticky top-0 z-50 bg-[#062553] text-white py-3 border-b border-white/10 shadow-lg">
-            <div className="container mx-auto px-4 flex justify-between items-center">
-                <div className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => { setCurrentView('home'); setReturnToEventId(null); }}>
-                    <div className="relative">
-                        <img src="https://i.imgur.com/sfO9ILj.png" alt="ANCB Logo" className="h-10 md:h-12 w-auto relative z-10" />
-                    </div>
-                    <h1 className="text-lg md:text-2xl font-bold tracking-wide">Portal ANCB-MT</h1>
-                </div>
-                <div className="flex items-center gap-2 md:gap-3">
-                    <button onClick={() => { const newMode = !isDarkMode; setIsDarkMode(newMode); document.documentElement.classList.toggle('dark', newMode); localStorage.setItem('theme', newMode ? 'dark' : 'light'); }} className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors">
-                        {isDarkMode ? <LucideSun size={20} /> : <LucideMoon size={20} />}
-                    </button>
-                    {userProfile ? (
-                        <div className="flex items-center gap-2 md:gap-3">
-                            <div className="hidden md:flex flex-col text-right leading-tight cursor-pointer" onClick={() => setCurrentView('profile')}>
-                                <span className="text-sm font-semibold">{userProfile.nome}</span>
-                                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">{userProfile.role}</span>
-                            </div>
-                            {(userProfile.role === 'admin' || userProfile.role === 'super-admin') && (
-                                <Button variant="secondary" size="sm" onClick={() => setCurrentView('admin')} className={`!px-2 ${currentView === 'admin' ? '!bg-ancb-orange !border-ancb-orange !text-white' : '!text-white !border-white/30 hover:!bg-white hover:!text-ancb-blue'}`}>
-                                    <LucideShield size={16} /> <span className="hidden sm:inline">Admin</span>
-                                </Button>
-                            )}
-                            <Button variant="secondary" size="sm" onClick={() => setCurrentView('profile')} className={`!px-2 ${currentView === 'profile' ? '!bg-ancb-blueLight !border-ancb-blueLight !text-white' : '!text-white !border-white/30 hover:!bg-white hover:!text-ancb-blue'}`}>
-                                <LucideUser size={16} /> <span className="hidden sm:inline">Perfil</span>
-                            </Button>
-                            <Button variant="secondary" size="sm" onClick={() => auth.signOut()} className="!px-2 !text-red-300 !border-red-500/50 hover:!bg-red-500/20"><LucideLogOut size={16} /></Button>
-                        </div>
-                    ) : (
-                        <div className="flex gap-2">
-                            <Button variant="secondary" size="sm" onClick={() => setShowLogin(true)} className="!text-white !border-white/30 hover:!bg-white hover:!text-ancb-blue">Entrar</Button>
-                            <Button variant="primary" size="sm" onClick={() => setShowRegister(true)} className="flex items-center gap-1">
-                                <LucideUserPlus size={16} className="hidden xs:block" /> Registrar
-                            </Button>
-                        </div>
-                    )}
-                </div>
-            </div>
-            {userProfile && notificationPermissionStatus === 'default' && (
-                <div className="sticky top-0 z-20 mb-4 p-4 bg-orange-50 dark:bg-orange-900/40 border-b-2 border-orange-200 dark:border-orange-800/50 flex flex-col gap-2 animate-fadeIn -mx-6 -mt-6 shadow-md backdrop-blur-sm">
-                        <div className="flex items-start gap-2">
-                            <div className="bg-orange-100 dark:bg-orange-900 p-1.5 rounded-full text-ancb-orange"><LucideBellRing size={18} /></div>
-                            <div>
-                                <h4 className="font-bold text-sm text-gray-800 dark:text-white leading-tight">Ativar Notificações</h4>
-                                <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-tight">
-                                    Não perca convocações e resultados.
-                                </p>
-                            </div>
-                        </div>
-                        <Button size="sm" onClick={handleEnableNotifications} className="w-full mt-1 text-xs !py-1.5">
-                            Ativar Agora
-                        </Button>
-                    </div>
-            )}
-        </header>
+        <Header 
+            user={headerUser} 
+            isDarkMode={isDarkMode}
+            onToggleTheme={handleToggleTheme}
+            onLogin={handleLogin} 
+            onLogout={handleLogout}
+            onProfileClick={handleProfileClick}
+            onAdminClick={handleAdminClick}
+            onHomeClick={handleHomeClick}
+        />
     );
 
     const renderContent = () => {
@@ -656,6 +667,59 @@ const App: React.FC = () => {
             default: return <div>404</div>;
         }
     };
+// ========================================================================
+
+// ========================================================================
+    // LÓGICA DO HEADER (VERSÃO FINAL CORRIGIDA)
+    // Cole isto EXATAMENTE acima da linha: if (loading) return
+    // ========================================================================
+
+    // 1. Funções de Ação
+    const handleLogin = () => setShowLogin(true);
+    const handleLogout = () => auth.signOut();
+    
+    const handleToggleTheme = () => {
+        const newMode = !isDarkMode;
+        setIsDarkMode(newMode);
+        document.documentElement.classList.toggle('dark', newMode);
+        localStorage.setItem('theme', newMode ? 'dark' : 'light');
+    };
+
+    // 2. Funções de Navegação
+    const handleProfileClick = () => setCurrentView('profile');
+    const handleAdminClick = () => setCurrentView('admin');
+    const handleHomeClick = () => {
+        setCurrentView('home');
+        setReturnToEventId(null);
+    };
+
+    // 3. Função segura para tratar a FOTO
+    const getSafePhoto = (profile: any) => {
+        if (!profile) return null;
+        
+        // Tenta pegar foto ou photoURL e remove espaços
+        let raw = (profile.foto || profile.photoURL || '').trim();
+        if (!raw) return null;
+
+        // Se já for link web ou base64 completo, retorna
+        if (raw.startsWith('http') || raw.startsWith('data:')) return raw;
+
+        // Se for código cru, adiciona o cabeçalho JPG
+        return `data:image/jpeg;base64,${raw}`;
+    };
+
+    // 4. Prepara o objeto para o Header
+    const headerUser = userProfile ? {
+        name: userProfile.nome,
+        photo: getSafePhoto(userProfile), 
+        role: userProfile.role,
+        email: userProfile.email
+    } : null;
+
+    // DEBUG: Veja no console (F12) se a foto está aparecendo agora
+    console.log("DADOS DO HEADER:", headerUser);
+
+// ========================================================================
 
     if (loading) return (
         <div className="fixed inset-0 bg-[#062553] flex flex-col items-center justify-center z-[9999]">
@@ -666,10 +730,22 @@ const App: React.FC = () => {
             <div className="w-12 h-12 border-4 border-white/10 border-t-ancb-orange rounded-full animate-spin"></div>
         </div>
     );
-
+    
     return (
         <div className="min-h-screen flex flex-col font-sans text-ancb-black dark:text-gray-100 bg-gray-50 dark:bg-gray-900 transition-colors">
-            {renderHeader()}
+            
+            {/* AQUI: Trocamos {renderHeader()} pelo novo componente */}
+            <Header 
+                user={headerUser} 
+                isDarkMode={isDarkMode}
+                onToggleTheme={handleToggleTheme}
+                onLogin={handleLogin} 
+                onLogout={handleLogout}
+                onProfileClick={handleProfileClick}
+                onAdminClick={handleAdminClick}
+                onHomeClick={handleHomeClick}
+            />
+
             <main className={`flex-grow ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
                 {renderContent()}
             </main>
