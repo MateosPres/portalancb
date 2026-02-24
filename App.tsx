@@ -181,25 +181,28 @@ const App: React.FC = () => {
 
     const triggerSystemNotification = (title: string, body: string) => {
         if (typeof Notification === 'undefined') return;
-        // ✅ CORREÇÃO DUPLICAÇÃO: Se o app está aberto e visível, não dispara notificação
-        // do sistema — o banner in-app (setForegroundNotification) já avisa o usuário.
-        // O Service Worker (FCM background) cuida dos casos em que o app está fechado.
-        if (document.visibilityState === 'visible') return;
         if (Notification.permission === "granted") {
             try {
                 navigator.serviceWorker.ready.then(registration => {
                     registration.showNotification(title, {
                         body: body,
-                        icon: 'https://i.imgur.com/SE2jHsz.png',
-                        badge: 'https://i.imgur.com/mQWcgnZ.png',
+                        icon: 'https://i.imgur.com/SE2jHsz.png', // Ícone Grande (aparece ao lado do texto)
+                        badge: 'https://i.imgur.com/mQWcgnZ.png', // Ícone Pequeno (Silhueta para barra de status)
                         vibrate: [200, 100, 200]
                     } as any);
                 }).catch((e) => {
                     console.warn("SW notification failed, falling back", e);
-                    new Notification(title, { body: body, icon: 'https://i.imgur.com/SE2jHsz.png' });
+                    new Notification(title, { 
+                        body: body, 
+                        icon: 'https://i.imgur.com/SE2jHsz.png'
+                    });
                 });
             } catch (e) {
                 console.error("Erro ao disparar notificação de sistema:", e);
+                new Notification(title, { 
+                    body: body, 
+                    icon: 'https://i.imgur.com/SE2jHsz.png' 
+                });
             }
         }
     };
@@ -434,32 +437,63 @@ const App: React.FC = () => {
     }, []);
 
 
-    // ✅ CORREÇÃO DEEP LINK: Abre o quiz automaticamente quando o usuário
-    // clica na notificação do sistema (PWA fechado/background).
-    // O firebase-messaging-sw.js abre o app com ?action=review&gameId=X&eventId=Y
-    useEffect(() => {
-        if (!userProfile) return;
-        const params = new URLSearchParams(window.location.search);
-        const action = params.get('action');
-        const gameId = params.get('gameId');
-        const eventId = params.get('eventId');
-        if (action === 'review' && gameId && eventId) {
-            // Limpa os parâmetros da URL para não reabrir ao recarregar
-            window.history.replaceState({}, '', '/');
-            handleOpenReviewQuiz(gameId, eventId);
-        }
-    }, [userProfile]);
-
     const handleOpenReviewQuiz = async (gameId: string, eventId: string) => {
         try {
             const playersSnap = await db.collection("jogadores").get();
             const allPlayers = playersSnap.docs.map(d => ({id: d.id, ...(d.data() as any)} as Player));
             const eventDoc = await db.collection("eventos").doc(eventId).get();
-            const eventRoster = eventDoc.exists ? (eventDoc.data() as Evento).jogadoresEscalados || [] : [];
-            const playersToReview = allPlayers.filter(p => eventRoster.includes(p.id) && p.id !== userProfile?.linkedPlayerId);
-            if (playersToReview.length > 0) { setReviewTargetGame({ gameId, eventId, playersToReview }); setShowQuiz(true); }
-            else { alert("Não há outros jogadores para avaliar nesta partida."); }
-        } catch (e) { alert("Erro ao carregar dados."); }
+            if (!eventDoc.exists) { alert("Evento não encontrado."); return; }
+            const eventData = eventDoc.data() as Evento;
+
+            // Busca o jogo para saber quais times jogaram
+            const gameDoc = await db.collection("eventos").doc(eventId).collection("jogos").doc(gameId).get();
+            const gameData = gameDoc.exists ? gameDoc.data() as Jogo : null;
+
+            let ancbPlayerIds: string[] = [];
+
+            // ── NOVO SISTEMA: timesParticipantes com isANCB ──────────────────
+            // Verifica se o jogo envolve um time ANCB e pega apenas esses jogadores
+            if (eventData.timesParticipantes && eventData.timesParticipantes.length > 0) {
+                // Se temos o jogo, filtra só os times que participaram dessa partida
+                if (gameData && (gameData.timeA_id || gameData.timeB_id)) {
+                    const gameTeamIds = [gameData.timeA_id, gameData.timeB_id].filter(Boolean);
+                    const ancbTeam = eventData.timesParticipantes.find(t => 
+                        t.isANCB && gameTeamIds.includes(t.id)
+                    );
+                    if (ancbTeam) ancbPlayerIds = ancbTeam.jogadores || [];
+                } else {
+                    // Sem ID de jogo: pega o time ANCB do evento
+                    const ancbTeam = eventData.timesParticipantes.find(t => t.isANCB);
+                    if (ancbTeam) ancbPlayerIds = ancbTeam.jogadores || [];
+                }
+            }
+            // ── SISTEMA LEGADO: jogadoresEscalados no evento ─────────────────
+            else if (eventData.jogadoresEscalados && eventData.jogadoresEscalados.length > 0) {
+                ancbPlayerIds = (eventData.jogadoresEscalados as any[])
+                    .map((e: any) => typeof e === 'string' ? e : e.id)
+                    .filter(Boolean);
+            }
+
+            if (ancbPlayerIds.length === 0) {
+                alert("Não há jogadores ANCB escalados nesta partida para avaliar.");
+                return;
+            }
+
+            // Monta a lista de jogadores do time ANCB, excluindo o próprio avaliador
+            const playersToReview = allPlayers.filter(p => 
+                ancbPlayerIds.includes(p.id) && p.id !== userProfile?.linkedPlayerId
+            );
+
+            if (playersToReview.length > 0) {
+                setReviewTargetGame({ gameId, eventId, playersToReview });
+                setShowQuiz(true);
+            } else {
+                alert("Não há outros jogadores ANCB para avaliar nesta partida.");
+            }
+        } catch (e) {
+            console.error("Erro ao carregar quiz:", e);
+            alert("Erro ao carregar dados da avaliação.");
+        }
     };
 
     const handleOpenGamePanel = (game: Jogo, eventId: string, isEditable: boolean = false) => {

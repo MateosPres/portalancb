@@ -4,6 +4,15 @@ const admin = require("firebase-admin");
 admin.initializeApp();
 
 // ─────────────────────────────────────────────────────────────
+// ÍNDICE FIRESTORE NECESSÁRIO:
+// Para a query de deduplicação de notificações funcionar, crie
+// um índice composto na coleção 'notifications' com os campos:
+//   targetUserId (Ascending) + type (Ascending) + data.gameId (Ascending)
+// O Firebase vai mostrar o link para criar automaticamente nos
+// logs do Functions na primeira execução — clique nele!
+// ─────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────
 // HELPER: Extrai o ID de um item do roster (string ou objeto)
 // ─────────────────────────────────────────────────────────────
 function extractPlayerId(entry) {
@@ -55,11 +64,10 @@ exports.sendRosterNotification = functions.firestore
 // ─────────────────────────────────────────────────────────────
 // 2. MONITOR DE FIM DE PARTIDA → Quiz de Avaliação
 //
-// BUG CORRIGIDO: Não existia nenhuma função que escutasse o status
-// dos jogos. O handleFinishGame atualiza eventos/{eventId}/jogos/{gameId},
-// mas nenhuma Cloud Function respondia a essa mudança.
-// Esta função detecta a transição para 'finalizado' e envia a
-// notificação do quiz de avaliação para todos os jogadores escalados.
+// ATUALIZADO: Novo sistema usa timesParticipantes com flag isANCB.
+// O quiz só é enviado para jogadores do time ANCB — eles avaliam
+// apenas os colegas do próprio time. Times adversários externos
+// não têm jogadores cadastrados e são ignorados.
 // ─────────────────────────────────────────────────────────────
 exports.onGameFinished = functions.firestore
     .document('eventos/{eventId}/jogos/{gameId}')
@@ -69,61 +77,77 @@ exports.onGameFinished = functions.firestore
 
         if (!newData || !oldData) return null;
 
-        // Dispara APENAS na transição andamento → finalizado
+        // Dispara APENAS na transição → finalizado
         const justFinished = oldData.status !== 'finalizado' && newData.status === 'finalizado';
         if (!justFinished) return null;
 
         const { eventId, gameId } = context.params;
+        console.log(`Jogo ${gameId} finalizado no evento ${eventId}.`);
 
-        console.log(`Jogo ${gameId} finalizado no evento ${eventId}. Buscando jogadores para notificar...`);
-
-        // Busca o documento do evento para obter os times
         const eventDoc = await admin.firestore().collection('eventos').doc(eventId).get();
         if (!eventDoc.exists) return null;
         const eventData = eventDoc.data();
 
-        // Monta a lista de IDs dos jogadores participantes da partida
-        // Considera torneios internos (times com jogadores) e eventos simples
-        let playerIds = [];
+        let ancbPlayerIds = [];
 
-        if (newData.timeA_id && newData.timeB_id && eventData.times) {
-            // Torneio interno: pega jogadores dos dois times
-            const allTimes = eventData.times || [];
-            const timeA = allTimes.find(t => t.id === newData.timeA_id);
-            const timeB = allTimes.find(t => t.id === newData.timeB_id);
-            if (timeA) playerIds.push(...(timeA.jogadores || []));
-            if (timeB) playerIds.push(...(timeB.jogadores || []));
-        } else if (eventData.type === 'torneio_externo' && eventData.timesParticipantes) {
-            // Torneio externo
-            const allTimes = eventData.timesParticipantes || [];
-            const timeA = allTimes.find(t => t.id === newData.timeA_id);
-            const timeB = allTimes.find(t => t.id === newData.timeB_id);
-            if (timeA) playerIds.push(...(timeA.jogadores || []));
-            if (timeB) playerIds.push(...(timeB.jogadores || []));
-        } else {
-            // Evento simples / amistoso: usa jogadoresEscalados do evento
-            playerIds = (eventData.jogadoresEscalados || [])
-                .map(extractPlayerId)
-                .filter(Boolean);
+        // ── NOVO SISTEMA: timesParticipantes com flag isANCB ─────────────
+        // Só notifica jogadores do time ANCB — eles avaliam os próprios colegas.
+        // Times adversários não têm jogadores cadastrados no sistema.
+        if (eventData.timesParticipantes && eventData.timesParticipantes.length > 0) {
+            // Se o jogo tem IDs de times, filtra apenas o time ANCB que participou
+            if (newData.timeA_id || newData.timeB_id) {
+                const gameTeamIds = [newData.timeA_id, newData.timeB_id].filter(Boolean);
+                const ancbTeam = eventData.timesParticipantes.find(t =>
+                    t.isANCB && gameTeamIds.includes(t.id)
+                );
+                if (ancbTeam) {
+                    ancbPlayerIds = ancbTeam.jogadores || [];
+                    console.log(`Torneio externo (novo sistema): time ANCB "${ancbTeam.nomeTime}" com ${ancbPlayerIds.length} jogadores.`);
+                } else {
+                    console.log(`Jogo ${gameId} não envolve time ANCB. Quiz não enviado.`);
+                    return null;
+                }
+            } else {
+                // Sem ID de time no jogo — pega o único time ANCB do evento
+                const ancbTeam = eventData.timesParticipantes.find(t => t.isANCB);
+                if (ancbTeam) {
+                    ancbPlayerIds = ancbTeam.jogadores || [];
+                    console.log(`Time ANCB (fallback): ${ancbPlayerIds.length} jogadores.`);
+                }
+            }
+        }
+        // ── SISTEMA LEGADO: torneio interno com 'times' ──────────────────
+        else if (eventData.times && eventData.times.length > 0 && newData.timeA_id && newData.timeB_id) {
+            const timeA = eventData.times.find(t => t.id === newData.timeA_id);
+            const timeB = eventData.times.find(t => t.id === newData.timeB_id);
+            if (timeA) ancbPlayerIds.push(...(timeA.jogadores || []));
+            if (timeB) ancbPlayerIds.push(...(timeB.jogadores || []));
+            console.log(`Torneio interno (legado): ${ancbPlayerIds.length} jogadores dos dois times.`);
+        }
+        // ── SISTEMA LEGADO: amistoso com jogadoresEscalados ──────────────
+        else {
+            const gameRoster = (newData.jogadoresEscalados || []).map(extractPlayerId).filter(Boolean);
+            const eventRoster = (eventData.jogadoresEscalados || []).map(extractPlayerId).filter(Boolean);
+            ancbPlayerIds = gameRoster.length > 0 ? gameRoster : eventRoster;
+            console.log(`Amistoso (legado): ${ancbPlayerIds.length} jogadores.`);
         }
 
-        // Remove duplicatas
-        playerIds = [...new Set(playerIds)];
+        ancbPlayerIds = [...new Set(ancbPlayerIds.filter(Boolean))];
 
-        if (playerIds.length === 0) {
-            console.log("Nenhum jogador encontrado para notificar.");
+        if (ancbPlayerIds.length === 0) {
+            console.log("Nenhum jogador ANCB encontrado. Verifique se o time está marcado como isANCB.");
             return null;
         }
 
         const eventName = eventData.nome || 'Evento';
         const scoreA = newData.placarTimeA_final ?? newData.placarANCB_final ?? 0;
         const scoreB = newData.placarTimeB_final ?? newData.placarAdversario_final ?? 0;
-        const teamAName = newData.timeA_nome || 'Time A';
-        const teamBName = newData.timeB_nome || newData.adversario || 'Time B';
+        const teamAName = newData.timeA_nome || 'ANCB';
+        const teamBName = newData.timeB_nome || newData.adversario || 'Adversário';
 
-        console.log(`Notificando ${playerIds.length} jogadores sobre o quiz pós-jogo.`);
+        console.log(`Notificando ${ancbPlayerIds.length} jogadores ANCB sobre o quiz pós-jogo.`);
 
-        const promises = playerIds.map(playerId =>
+        const promises = ancbPlayerIds.map(playerId =>
             notifyPlayerQuizPosJogo(playerId, eventId, gameId, eventName, teamAName, scoreA, teamBName, scoreB)
         );
 
@@ -286,43 +310,68 @@ async function notifyPlayerQuizPosJogo(playerId, eventId, gameId, eventName, tea
 
         const userDoc = querySnapshot.docs[0];
         const userData = userDoc.data();
-        const fcmToken = userData.fcmToken;
-        if (!fcmToken) return;
+        const targetUserId = userDoc.id;
 
-        // ✅ CORREÇÃO DEEP LINK: A URL agora inclui os parâmetros do jogo.
-        // O App.tsx lê esses parâmetros ao abrir e abre o quiz automaticamente.
-        const deepLinkUrl = `/?action=review&gameId=${gameId}&eventId=${eventId}`;
+        const notifTitle = "Avalie seus companheiros! 🏆";
+        const notifBody = `${teamAName} ${scoreA} x ${scoreB} ${teamBName} — Partida de ${eventName} encerrada.`;
 
-        const message = {
-            token: fcmToken,
-            notification: {
-                title: "Partida encerrada! Avalie seus companheiros 🏆",
-                body: `${teamAName} ${scoreA} x ${scoreB} ${teamBName} — Toque para avaliar o time!`
-            },
+        // ─────────────────────────────────────────────────────────────
+        // CORREÇÃO PRINCIPAL: Cria documento na coleção 'notifications'
+        // Isso garante que a notificação aparece no painel do portal
+        // independente de FCM, token ou estado do app.
+        // ─────────────────────────────────────────────────────────────
+
+        // Evita duplicatas: só cria se não existir notificação para este jogo
+        const existingQuery = await admin.firestore().collection('notifications')
+            .where('targetUserId', '==', targetUserId)
+            .where('type', '==', 'pending_review')
+            .where('data.gameId', '==', gameId)
+            .get();
+
+        if (!existingQuery.empty) {
+            console.log(`Notificação de review já existe para jogador ${playerId} no jogo ${gameId}. Pulando.`);
+            return;
+        }
+
+        await admin.firestore().collection('notifications').add({
+            targetUserId: targetUserId,
+            type: 'pending_review',
+            title: notifTitle,
+            message: notifBody,
             data: {
-                type: "peer_review",
                 eventId: eventId,
                 gameId: gameId,
-                url: deepLinkUrl
             },
-            android: {
-                priority: "high",
-                notification: {
-                    priority: "max",
-                    channelId: "ancb_alerts",
-                    defaultSound: true,
-                    defaultVibrateTimings: true,
-                    color: '#F27405'
-                }
-            },
-            webpush: {
-                headers: { Urgency: "high" },
-                fcm_options: { link: deepLinkUrl } // ✅ Link correto para PWA
-            }
-        };
+            read: false,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
 
-        await admin.messaging().send(message);
-        console.log(`✅ Notificação de quiz pós-jogo enviada para ${userData.nome}`);
+        console.log(`✅ Notificação pending_review criada no Firestore para ${userData.nome}`);
+
+        // Push FCM: envia push se o jogador tiver token (bônus — não é crítico)
+        const fcmToken = userData.fcmToken;
+        if (fcmToken) {
+            const deepLinkUrl = `/?action=review&gameId=${gameId}&eventId=${eventId}`;
+            const message = {
+                token: fcmToken,
+                notification: { title: notifTitle, body: notifBody },
+                data: { type: "peer_review", eventId: eventId, gameId: gameId, url: deepLinkUrl },
+                android: {
+                    priority: "high",
+                    notification: { priority: "max", channelId: "ancb_alerts", defaultSound: true, defaultVibrateTimings: true, color: '#F27405' }
+                },
+                webpush: { headers: { Urgency: "high" }, fcm_options: { link: deepLinkUrl } }
+            };
+            try {
+                await admin.messaging().send(message);
+                console.log(`✅ Push FCM enviado para ${userData.nome}`);
+            } catch (fcmError) {
+                console.warn(`⚠️ Push FCM falhou para ${userData.nome} (token expirado?):`, fcmError.message);
+            }
+        } else {
+            console.log(`Jogador ${userData.nome} sem token FCM — notificação só no painel.`);
+        }
+
     } catch (error) {
         console.error("Erro ao notificar jogador para quiz pós-jogo:", playerId, error);
     }
