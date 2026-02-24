@@ -6,7 +6,6 @@ import { Button } from './components/Button';
 import { Card } from './components/Card';
 import { Modal } from './components/Modal';
 import { Feed } from './components/Feed';
-import { NotificationFab } from './components/NotificationFab';
 import { PeerReviewQuiz } from './components/PeerReviewQuiz';
 import { LiveEventHero } from './components/LiveEventHero';
 import { PublicGameView } from './views/PublicGameView';
@@ -744,6 +743,8 @@ const App: React.FC = () => {
                 onProfileClick={handleProfileClick}
                 onAdminClick={handleAdminClick}
                 onHomeClick={handleHomeClick}
+                notifications={notifications}
+                onNotificationsClick={() => setShowNotificationsView(true)}
             />
 
             <main className={`flex-grow ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
@@ -787,7 +788,7 @@ const App: React.FC = () => {
                 </footer>
             )}
 
-            <NotificationFab notifications={notifications} onClick={() => setShowNotificationsView(true)} />
+
 
             {showNotificationsView && userProfile && (
                 <NotificationsView 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Menu, X, User, LogIn, ClipboardList, Home, Settings, Shield, Moon, Sun, LogOut } from 'lucide-react';
+import { Menu, X, User, LogIn, ClipboardList, Home, Shield, Moon, Sun, LogOut, Bell } from 'lucide-react';
+import { NotificationItem } from '../types';
 
 const PRANCHETA_URL = "https://mateospres.github.io/ancbprancheta/";
 const LOGO_URL = "https://i.imgur.com/sfO9ILj.png";
@@ -18,6 +19,8 @@ interface HeaderProps {
   onProfileClick: () => void;
   onAdminClick: () => void;
   onHomeClick: () => void;
+  notifications?: NotificationItem[];
+  onNotificationsClick?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -28,17 +31,19 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   onProfileClick,
   onAdminClick,
-  onHomeClick
+  onHomeClick,
+  notifications = [],
+  onNotificationsClick,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeMenu = () => setIsMenuOpen(false);
 
-  // Verifica se é admin para mostrar botão extra
   const isAdmin = user?.role === 'admin' || user?.role === 'super-admin';
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <>
-      <header className="bg-[#062553] border-b border-white/10 shadow-lg fixed w-full top-0 z-50 h-16 transition-colors">
+      <header className="bg-[#062553] border-b border-white/10 shadow-lg fixed w-full top-0 z-50 h-16 md:h-20 transition-colors">
         <div className="max-w-7xl mx-auto px-4 h-full flex justify-between items-center">
           
           {/* 1. LOGO E NOME (Esquerda) */}
@@ -46,25 +51,41 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity" 
             onClick={onHomeClick}
           >
-            <img src={LOGO_URL} alt="ANCB Logo" className="h-10 w-auto relative z-10 drop-shadow-md" />
-            <h1 className="text-white text-lg md:text-xl font-bold tracking-wide hidden xs:block">
+            <img src={LOGO_URL} alt="ANCB Logo" className="h-10 md:h-13 w-auto relative z-10 drop-shadow-md" />
+            <h1 className="text-white text-lg md:text-xl font-bold tracking-wide">
               Portal ANCB-MT
             </h1>
           </div>
 
-          {/* 2. ÁREA DA DIREITA (Tema + User + Menu) */}
-          <div className="flex items-center gap-2 md:gap-4">
+          {/* 2. ÁREA DA DIREITA (Tema + Notificações + User + Menu) */}
+          <div className="flex items-center gap-3">
             
-            {/* TEMA (Sempre visível fora do menu) */}
+            {/* TEMA */}
             <button 
               onClick={onToggleTheme} 
-              className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+              className="w-9 h-9 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
               title="Alternar Tema"
             >
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
-            {/* USUÁRIO (Visual original: Nome e Cargo sem caixa) */}
+            {/* SINO DE NOTIFICAÇÕES (apenas se estiver logado) */}
+            {user && onNotificationsClick && (
+              <button
+                onClick={onNotificationsClick}
+                className="relative w-9 h-9 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                title="Notificações"
+              >
+                <Bell size={20} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1 shadow-md">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* USUÁRIO */}
             {user ? (
               <div 
                 className="flex items-center gap-3 cursor-pointer group"
@@ -115,7 +136,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* 3. MENU DROPDOWN */}
       <div 
-        className={`fixed inset-x-0 top-16 bg-[#041b3d] border-b-4 border-[#F27405] shadow-2xl transition-all duration-300 ease-in-out z-40 overflow-hidden ${
+        className={`fixed inset-x-0 top-16 md:top-20 bg-[#041b3d] border-b-4 border-[#F27405] shadow-2xl transition-all duration-300 ease-in-out z-40 overflow-hidden ${
           isMenuOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
         }`}
       >
@@ -180,7 +201,7 @@ export const Header: React.FC<HeaderProps> = ({
         />
       </div>
       
-      <div className="h-16"></div>
+      <div className="h-16 md:h-20"></div>
     </>
   );
 };

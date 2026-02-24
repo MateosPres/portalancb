@@ -9,6 +9,7 @@ export interface UserProfile {
     dataNascimento?: string;
     linkedPlayerId?: string; // ID do jogador na collection 'jogadores' que este usuário controla
     fcmToken?: string; // Token para Notificações Push
+    foto?: string | null;
 }
 
 export interface Badge {
