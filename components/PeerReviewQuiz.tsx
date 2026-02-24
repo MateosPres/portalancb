@@ -298,7 +298,7 @@ export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({
                 {/* Negativas */}
                 <div className="mb-2">
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-400/70 mb-2 px-1">
-                        ✦ Zueira
+                        ✦ Vacilos
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                         {NEGATIVE_TAGS.map(tag => {
