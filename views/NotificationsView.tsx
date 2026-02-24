@@ -22,9 +22,10 @@ interface NotificationsViewProps {
     userProfile: UserProfile;
     notificationPermissionStatus?: 'granted' | 'denied' | 'default';
     onEnableNotifications?: () => void;
+    onStartEvaluation: (gameId: string, eventId: string) => void; // ✅ Abre o quiz pelo App.tsx
 }
 
-export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, userProfile, notificationPermissionStatus, onEnableNotifications }) => {
+export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, userProfile, notificationPermissionStatus, onEnableNotifications, onStartEvaluation }) => {
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [rosteredEvents, setRosteredEvents] = useState<Evento[]>([]);
     const [loading, setLoading] = useState(true);
@@ -194,10 +195,9 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
     };
 
     const handleStartEvaluation = async (notification: NotificationItem) => {
-        // Tenta pegar os IDs. Se não existirem (notificação de teste antigo), será undefined
         const { eventId, gameId } = notification.data || {};
 
-        // 1. Se a notificação não tem os dados de ligação, é lixo. Apaga na hora.
+        // Se a notificação não tem os dados, apaga e avisa
         if (!eventId || !gameId) {
             alert("Notificação sem vínculo com partida. Limpando...");
             await deleteDoc(doc(db, 'notifications', notification.id));
@@ -206,11 +206,10 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
         }
 
         try {
-            // 2. Procura o jogo no banco
+            // Verifica se o jogo ainda existe antes de abrir o quiz
             const gameRef = doc(db, 'eventos', eventId, 'jogos', gameId);
             const gameSnap = await getDoc(gameRef);
 
-            // 3. Se o jogo foi apagado do portal, apaga a notificação
             if (!gameSnap.exists()) {
                 alert("A partida original foi excluída. Limpando notificação...");
                 await deleteDoc(doc(db, 'notifications', notification.id));
@@ -218,8 +217,8 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ onBack, us
                 return;
             }
 
-            // Se o jogo existe, o fluxo normal segue (futura tela de avaliação)
-            alert("Partida encontrada! Iniciar avaliação: " + notification.title);
+            // ✅ CORREÇÃO: Chama o App.tsx para abrir o PeerReviewQuiz de verdade
+            onStartEvaluation(gameId, eventId);
 
         } catch (error) {
             console.error("Erro ao verificar partida:", error);

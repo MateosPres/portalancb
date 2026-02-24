@@ -181,28 +181,25 @@ const App: React.FC = () => {
 
     const triggerSystemNotification = (title: string, body: string) => {
         if (typeof Notification === 'undefined') return;
+        // ✅ CORREÇÃO DUPLICAÇÃO: Se o app está aberto e visível, não dispara notificação
+        // do sistema — o banner in-app (setForegroundNotification) já avisa o usuário.
+        // O Service Worker (FCM background) cuida dos casos em que o app está fechado.
+        if (document.visibilityState === 'visible') return;
         if (Notification.permission === "granted") {
             try {
                 navigator.serviceWorker.ready.then(registration => {
                     registration.showNotification(title, {
                         body: body,
-                        icon: 'https://i.imgur.com/SE2jHsz.png', // Ícone Grande (aparece ao lado do texto)
-                        badge: 'https://i.imgur.com/mQWcgnZ.png', // Ícone Pequeno (Silhueta para barra de status)
+                        icon: 'https://i.imgur.com/SE2jHsz.png',
+                        badge: 'https://i.imgur.com/mQWcgnZ.png',
                         vibrate: [200, 100, 200]
                     } as any);
                 }).catch((e) => {
                     console.warn("SW notification failed, falling back", e);
-                    new Notification(title, { 
-                        body: body, 
-                        icon: 'https://i.imgur.com/SE2jHsz.png'
-                    });
+                    new Notification(title, { body: body, icon: 'https://i.imgur.com/SE2jHsz.png' });
                 });
             } catch (e) {
                 console.error("Erro ao disparar notificação de sistema:", e);
-                new Notification(title, { 
-                    body: body, 
-                    icon: 'https://i.imgur.com/SE2jHsz.png' 
-                });
             }
         }
     };
@@ -436,6 +433,22 @@ const App: React.FC = () => {
         return () => unsubscribe();
     }, []);
 
+
+    // ✅ CORREÇÃO DEEP LINK: Abre o quiz automaticamente quando o usuário
+    // clica na notificação do sistema (PWA fechado/background).
+    // O firebase-messaging-sw.js abre o app com ?action=review&gameId=X&eventId=Y
+    useEffect(() => {
+        if (!userProfile) return;
+        const params = new URLSearchParams(window.location.search);
+        const action = params.get('action');
+        const gameId = params.get('gameId');
+        const eventId = params.get('eventId');
+        if (action === 'review' && gameId && eventId) {
+            // Limpa os parâmetros da URL para não reabrir ao recarregar
+            window.history.replaceState({}, '', '/');
+            handleOpenReviewQuiz(gameId, eventId);
+        }
+    }, [userProfile]);
 
     const handleOpenReviewQuiz = async (gameId: string, eventId: string) => {
         try {
@@ -796,6 +809,10 @@ const App: React.FC = () => {
                     userProfile={userProfile} 
                     notificationPermissionStatus={notificationPermissionStatus}
                     onEnableNotifications={handleEnableNotifications}
+                    onStartEvaluation={(gameId, eventId) => {
+                        setShowNotificationsView(false);
+                        handleOpenReviewQuiz(gameId, eventId);
+                    }}
                 />
             )}
 

@@ -1,9 +1,8 @@
 
-// Scripts for firebase messaging
-importScripts('https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js');
-importScripts('https://www.gstatic.com/firebasejs/8.10.0/firebase-messaging.js');
+/* public/firebase-messaging-sw.js */
+importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
 
-// Initialize the Firebase app in the service worker by passing the generated config
 const firebaseConfig = {
     apiKey: "AIzaSyCZ2yeJJ34VwYAmQnFCEv72Q1uDFFGKKjQ",
     authDomain: "ancb-painel-db.firebaseapp.com",
@@ -16,17 +15,49 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 
-// Retrieve an instance of Firebase Messaging so that it can handle background messages.
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Received background message ', payload);
-  // Customize notification here if needed
-  const notificationTitle = payload.notification.title;
+// Isso lida com notificações quando o app está FECHADO/BACKGROUND
+messaging.onBackgroundMessage(function(payload) {
+  console.log('[firebase-messaging-sw.js] Mensagem em background:', payload);
+  
+  // Customização da notificação quando o app está fechado
+  // O título e corpo vêm do payload 'notification' enviado pelo servidor (functions)
+  const notificationTitle = payload.notification?.title || 'Portal ANCB';
   const notificationOptions = {
-    body: payload.notification.body,
-    icon: 'https://i.imgur.com/SE2jHsz.png' // ANCB Icon
+    body: payload.notification?.body || 'Nova atualização disponível.',
+    icon: 'https://i.imgur.com/SE2jHsz.png', // Ícone Grande (ao lado do texto)
+    badge: 'https://i.imgur.com/mQWcgnZ.png', // Ícone Pequeno (Silhueta para barra de status)
+    data: { 
+        url: payload.webpush?.fcm_options?.link || payload.data?.url || '/' 
+    }
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
+});
+
+// Evento de clique na notificação (Fundamental para abrir o PWA corretamente)
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+
+  // URL para abrir ao clicar — vem do campo data.url do payload
+  const urlToOpen = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      // 1. Se o app já estiver aberto, navega para a URL correta
+      for (let i = 0; i < windowClients.length; i++) {
+        const client = windowClients[i];
+        if ('focus' in client) {
+          return client.focus().then(c => {
+            if ('navigate' in c) return c.navigate(urlToOpen);
+          });
+        }
+      }
+      // 2. Se não estiver aberto, abre o PWA direto na URL com os parâmetros
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
 });

@@ -289,17 +289,21 @@ async function notifyPlayerQuizPosJogo(playerId, eventId, gameId, eventName, tea
         const fcmToken = userData.fcmToken;
         if (!fcmToken) return;
 
+        // ✅ CORREÇÃO DEEP LINK: A URL agora inclui os parâmetros do jogo.
+        // O App.tsx lê esses parâmetros ao abrir e abre o quiz automaticamente.
+        const deepLinkUrl = `/?action=review&gameId=${gameId}&eventId=${eventId}`;
+
         const message = {
             token: fcmToken,
             notification: {
                 title: "Partida encerrada! Avalie seus companheiros 🏆",
-                body: `${teamAName} ${scoreA} x ${scoreB} ${teamBName} — Abra o app para avaliar o time!`
+                body: `${teamAName} ${scoreA} x ${scoreB} ${teamBName} — Toque para avaliar o time!`
             },
             data: {
                 type: "peer_review",
                 eventId: eventId,
                 gameId: gameId,
-                url: "/"
+                url: deepLinkUrl
             },
             android: {
                 priority: "high",
@@ -313,7 +317,7 @@ async function notifyPlayerQuizPosJogo(playerId, eventId, gameId, eventName, tea
             },
             webpush: {
                 headers: { Urgency: "high" },
-                fcm_options: { link: "/" }
+                fcm_options: { link: deepLinkUrl } // ✅ Link correto para PWA
             }
         };
 
