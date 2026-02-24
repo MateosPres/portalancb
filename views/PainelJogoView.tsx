@@ -261,10 +261,20 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
     const handleFinishGame = async () => {
         if (!isAdmin) return;
         if (!window.confirm("Confirmar placar final e encerrar partida?")) return;
+        setIsProcessing(true);
         try {
+            // Atualiza o status do jogo para 'finalizado'.
+            // A Cloud Function 'onGameFinished' detecta essa mudança e
+            // envia automaticamente a notificação do quiz de avaliação
+            // para todos os jogadores escalados nos dois times.
             await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), { status: 'finalizado' });
             onBack();
-        } catch (e) { alert("Erro ao finalizar."); }
+        } catch (e) {
+            console.error("Erro ao finalizar jogo:", e);
+            alert("Erro ao finalizar partida. Tente novamente.");
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     // --- UI COMPONENTS ---
