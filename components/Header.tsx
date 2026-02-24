@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Menu, X, User, LogIn, ClipboardList, Home, Shield, Moon, Sun, LogOut, Bell } from 'lucide-react';
 import { NotificationItem } from '../types';
 
@@ -40,6 +40,32 @@ export const Header: React.FC<HeaderProps> = ({
 
   const isAdmin = user?.role === 'admin' || user?.role === 'super-admin';
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Detecta se a Prancheta está instalada como PWA
+  const [isPranchetaInstalled, setIsPranchetaInstalled] = useState(false);
+  useEffect(() => {
+    if ('getInstalledRelatedApps' in navigator) {
+      (navigator as any).getInstalledRelatedApps().then((apps: any[]) => {
+        const installed = apps.some(app => app.url?.includes('prancheta.ancb.app.br'));
+        setIsPranchetaInstalled(installed);
+      }).catch(() => {});
+    }
+    // Fallback: verifica se está rodando em standalone (própria janela de PWA)
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsPranchetaInstalled(true);
+    }
+  }, []);
+
+  const handlePranchetaClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isPranchetaInstalled) {
+      // Tenta abrir o app instalado — abre na própria aba sem _blank
+      window.location.href = PRANCHETA_URL;
+    } else {
+      window.open(PRANCHETA_URL, '_blank', 'noopener,noreferrer');
+    }
+    closeMenu();
+  };
 
   return (
     <>
@@ -161,9 +187,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* BOTÃO PRANCHETA */}
           <a 
             href={PRANCHETA_URL}
-            target="_blank" 
-            rel="noopener noreferrer"
-            onClick={closeMenu}
+            onClick={handlePranchetaClick}
             className="flex items-center gap-3 p-3 rounded-lg bg-gradient-to-r from-[#F27405]/20 to-transparent border border-[#F27405]/30 text-[#F27405] hover:bg-[#F27405] hover:text-white transition-all group my-1"
           >
             <div className="bg-[#F27405] text-white p-2 rounded-md group-hover:bg-white group-hover:text-[#F27405] transition-colors">
@@ -171,7 +195,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div>
               <span className="font-bold block leading-tight">Prancheta Tática</span>
-              <span className="text-[10px] opacity-80">App Offline</span>
+              <span className="text-[10px] opacity-80">{isPranchetaInstalled ? 'Abrir App' : 'App Offline'}</span>
             </div>
           </a>
 
