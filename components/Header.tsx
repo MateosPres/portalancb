@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Menu, X, User, LogIn, ClipboardList, Home, Shield, Moon, Sun, LogOut, Bell } from 'lucide-react';
 import { NotificationItem } from '../types';
 
-const PRANCHETA_URL = "https://mateospres.github.io/ancbprancheta/";
+const PRANCHETA_URL = "https://prancheta.ancb.app.br";
 const LOGO_URL = "https://i.imgur.com/sfO9ILj.png";
 
 interface HeaderProps {
