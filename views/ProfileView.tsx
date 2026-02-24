@@ -55,7 +55,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const [loading, setLoading] = useState(true);
     const [formData, setFormData] = useState<Partial<Player>>({});
     const [showEditModal, setShowEditModal] = useState(false);
-    const [newPassword, setNewPassword] = useState(''); 
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPasswordFields, setShowPasswordFields] = useState(false);
+    const [phoneDdd, setPhoneDdd] = useState('');
+    const [phoneNumber, setPhoneNumber] = useState('');
     const [matches, setMatches] = useState<MatchHistoryItem[]>([]);
     const [loadingMatches, setLoadingMatches] = useState(false);
     
@@ -290,7 +294,67 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         }
     };
 
-    const handleSave = async (e: React.FormEvent) => { e.preventDefault(); try { const dataToSave = { ...formData }; if (!dataToSave.id) dataToSave.id = playerDocId; await setDoc(doc(db, "jogadores", playerDocId), dataToSave, { merge: true }); if (newPassword && auth.currentUser) { if (newPassword.length < 6) { alert("A senha deve ter no mínimo 6 caracteres."); return; } try { await auth.currentUser.updatePassword(newPassword); alert("Senha alterada!"); } catch (passError: any) { alert("Erro ao alterar senha: " + passError.message); } } setShowEditModal(false); setNewPassword(''); alert("Perfil atualizado!"); } catch (error) { alert("Erro ao salvar."); } };
+    const handleOpenEditModal = () => {
+        // Pré-popula os campos de telefone ao abrir o modal
+        const tel = formData.telefone || '';
+        // Formato esperado: 5511999999999 → ddd=11, number=999999999
+        if (tel.startsWith('55') && tel.length >= 12) {
+            setPhoneDdd(tel.slice(2, 4));
+            setPhoneNumber(tel.slice(4));
+        } else if (tel.length >= 10) {
+            setPhoneDdd(tel.slice(0, 2));
+            setPhoneNumber(tel.slice(2));
+        } else {
+            setPhoneDdd('');
+            setPhoneNumber(tel);
+        }
+        setNewPassword('');
+        setConfirmPassword('');
+        setShowPasswordFields(false);
+        setShowEditModal(true);
+    };
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        // Validação de senha
+        if (showPasswordFields && newPassword) {
+            if (newPassword.length < 6) {
+                alert('A senha deve ter no mínimo 6 caracteres.');
+                return;
+            }
+            if (newPassword !== confirmPassword) {
+                alert('As senhas não coincidem.');
+                return;
+            }
+        }
+
+        try {
+            // Monta telefone completo: +55 (DD fixo) + DDD + número
+            const fullPhone = phoneDdd && phoneNumber ? `55${phoneDdd}${phoneNumber.replace(/\D/g, '')}` : formData.telefone || '';
+            const dataToSave = { ...formData, telefone: fullPhone };
+            if (!dataToSave.id) dataToSave.id = playerDocId;
+            await setDoc(doc(db, 'jogadores', playerDocId), dataToSave, { merge: true });
+
+            if (showPasswordFields && newPassword && auth.currentUser) {
+                try {
+                    await auth.currentUser.updatePassword(newPassword);
+                } catch (passError: any) {
+                    alert('Perfil salvo, mas erro ao alterar senha: ' + passError.message);
+                    setShowEditModal(false);
+                    return;
+                }
+            }
+
+            setShowEditModal(false);
+            setNewPassword('');
+            setConfirmPassword('');
+            setShowPasswordFields(false);
+            alert('Perfil atualizado!');
+        } catch (error) {
+            alert('Erro ao salvar.');
+        }
+    };
     const handleTogglePin = async (badgeId: string) => { if (!playerDocId) return; let currentPinned = formData.pinnedBadgeIds || []; if (currentPinned.includes(badgeId)) { currentPinned = currentPinned.filter(id => id !== badgeId); } else { if (currentPinned.length >= 3) { alert("Limite de 3 conquistas fixadas."); return; } currentPinned.push(badgeId); } setFormData({ ...formData, pinnedBadgeIds: currentPinned }); try { await setDoc(doc(db, "jogadores", playerDocId), { pinnedBadgeIds: currentPinned }, { merge: true }); } catch (e) { alert("Erro ao fixar."); } };
     const handleClaim = async (targetPlayer: Player) => { if (!userProfile || !userProfile.uid) return; setClaimingId(targetPlayer.id); try { await addDoc(collection(db, "solicitacoes_vinculo"), { userId: userProfile.uid, userName: userProfile.nome || 'Usuário Sem Nome', playerId: targetPlayer.id, playerName: targetPlayer.nome || 'Atleta Sem Nome', status: 'pending', timestamp: serverTimestamp() }); setClaimStatus('pending'); setShowClaimSection(false); alert("Solicitação enviada!"); } catch (e: any) { alert(`Erro: ${e.message}`); } finally { setClaimingId(null); } };
     const formatDate = (dateStr?: string) => dateStr ? dateStr.split('-').reverse().join('/') : '';
@@ -373,7 +437,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                             </div>
 
                             <button 
-                                onClick={() => setShowEditModal(true)}
+                                onClick={handleOpenEditModal}
                                 className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition-colors text-xs font-bold uppercase tracking-wider text-white mb-6"
                             >
                                 <LucideEdit2 size={14} /> Editar Perfil
@@ -502,25 +566,122 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
 
             {/* Modals ... (Keep Edit, Badge Detail, Gallery Modals same as before) */}
             <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Editar Perfil">
-                <form onSubmit={handleSave} className="space-y-4">
-                    <div><label className="text-xs font-bold text-gray-500 uppercase">Apelido</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={formData.apelido || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, apelido: e.target.value})} /></div>
-                    <div><label className="text-xs font-bold text-gray-500 uppercase">Posição</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={formData.posicao} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({...formData, posicao: e.target.value})}>{POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
-                    <div><label className="text-xs font-bold text-gray-500 uppercase">Número</label><input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={formData.numero_uniforme} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, numero_uniforme: Number(e.target.value)})} /></div>
-                    <div><label className="text-xs font-bold text-gray-500 uppercase">WhatsApp</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={formData.telefone || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, telefone: e.target.value})} placeholder="5511999999999" /></div>
-                    
-                    <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
-                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Alterar Senha</label>
-                        <input 
-                            type="password"
-                            className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" 
-                            value={newPassword} 
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)} 
-                            placeholder="Nova senha (deixe em branco para manter)" 
+                <form onSubmit={handleSave} className="space-y-5">
+
+                    {/* Apelido */}
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 block">Apelido</label>
+                        <input
+                            className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-orange focus:border-transparent outline-none transition"
+                            value={formData.apelido || ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, apelido: e.target.value})}
+                            placeholder="Como te chamam em quadra"
                         />
-                        <p className="text-[10px] text-gray-400 mt-1">Mínimo 6 caracteres.</p>
                     </div>
 
-                    <Button type="submit" className="w-full">Salvar Alterações</Button>
+                    {/* Posição */}
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 block">Posição</label>
+                        <select
+                            className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-orange focus:border-transparent outline-none transition"
+                            value={formData.posicao}
+                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData({...formData, posicao: e.target.value})}
+                        >
+                            {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                    </div>
+
+                    {/* Número */}
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 block">Número da Camisa</label>
+                        <input
+                            type="number"
+                            min="0"
+                            max="99"
+                            className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-orange focus:border-transparent outline-none transition"
+                            value={formData.numero_uniforme ?? ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, numero_uniforme: Number(e.target.value)})}
+                        />
+                    </div>
+
+                    {/* WhatsApp com prefixo +55 fixo */}
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 block">WhatsApp</label>
+                        <div className="flex gap-2 items-center">
+                            {/* Prefixo fixo */}
+                            <div className="flex items-center gap-1.5 px-3 py-3 bg-gray-100 dark:bg-gray-600 border border-gray-200 dark:border-gray-500 rounded-xl text-sm font-bold text-gray-500 dark:text-gray-300 shrink-0">
+                                🇧🇷 +55
+                            </div>
+                            {/* DDD */}
+                            <input
+                                type="text"
+                                maxLength={2}
+                                inputMode="numeric"
+                                className="w-20 p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-orange focus:border-transparent outline-none transition text-center font-bold tracking-widest"
+                                value={phoneDdd}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPhoneDdd(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                                placeholder="DDD"
+                            />
+                            {/* Número */}
+                            <input
+                                type="text"
+                                maxLength={9}
+                                inputMode="numeric"
+                                className="flex-1 p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-orange focus:border-transparent outline-none transition"
+                                value={phoneNumber}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 9))}
+                                placeholder="999999999"
+                            />
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1.5">
+                            Número completo: <span className="font-mono font-bold text-gray-500 dark:text-gray-300">
+                                {phoneDdd && phoneNumber ? `+55 (${phoneDdd}) ${phoneNumber}` : '—'}
+                            </span>
+                        </p>
+                    </div>
+
+                    {/* Alterar Senha */}
+                    <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                        {!showPasswordFields ? (
+                            <button
+                                type="button"
+                                onClick={() => setShowPasswordFields(true)}
+                                className="w-full py-2.5 px-4 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-500 dark:text-gray-400 hover:border-ancb-orange hover:text-ancb-orange dark:hover:border-ancb-orange dark:hover:text-ancb-orange transition-all flex items-center justify-center gap-2"
+                            >
+                                🔑 Alterar Senha
+                            </button>
+                        ) : (
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nova Senha</label>
+                                    <button type="button" onClick={() => { setShowPasswordFields(false); setNewPassword(''); setConfirmPassword(''); }} className="text-[10px] text-gray-400 hover:text-red-400 transition-colors">✕ Cancelar</button>
+                                </div>
+                                <input
+                                    type="password"
+                                    className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-orange focus:border-transparent outline-none transition"
+                                    value={newPassword}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
+                                    placeholder="Mínimo 6 caracteres"
+                                    autoFocus
+                                />
+                                <input
+                                    type="password"
+                                    className={`w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white focus:outline-none transition focus:ring-2 ${confirmPassword && newPassword !== confirmPassword ? 'border-red-400 dark:border-red-500 focus:ring-red-400' : 'dark:border-gray-600 focus:ring-ancb-orange focus:border-transparent'}`}
+                                    value={confirmPassword}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
+                                    placeholder="Confirmar nova senha"
+                                />
+                                {confirmPassword && newPassword !== confirmPassword && (
+                                    <p className="text-xs text-red-500 font-bold flex items-center gap-1">⚠ As senhas não coincidem</p>
+                                )}
+                                {confirmPassword && newPassword === confirmPassword && newPassword.length >= 6 && (
+                                    <p className="text-xs text-green-500 font-bold flex items-center gap-1">✓ Senhas coincidem</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <Button type="submit" className="w-full !py-3 text-base font-bold">Salvar Alterações</Button>
                 </form>
             </Modal>
 
