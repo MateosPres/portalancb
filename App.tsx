@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player } from './types';
 import firebase, { auth, db, requestFCMToken, onMessageListener } from './services/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
 import { Modal } from './components/Modal';
@@ -81,6 +81,7 @@ const App: React.FC = () => {
     const [showNotificationsView, setShowNotificationsView] = useState(false);
     const [showQuiz, setShowQuiz] = useState(false);
     const [reviewTargetGame, setReviewTargetGame] = useState<{ gameId: string, eventId: string, playersToReview: Player[] } | null>(null);
+    const [pendingReviewNotificationId, setPendingReviewNotificationId] = useState<string | null>(null); // ✅ ID da notificação a apagar após o quiz
     const [foregroundNotification, setForegroundNotification] = useState<{title: string, body: string, eventId?: string, type?: string} | null>(null);
     
     // Safe initialization for iOS/Safari where Notification might be undefined
@@ -437,7 +438,7 @@ const App: React.FC = () => {
     }, []);
 
 
-    const handleOpenReviewQuiz = async (gameId: string, eventId: string) => {
+    const handleOpenReviewQuiz = async (gameId: string, eventId: string, notificationId?: string) => {
         try {
             const playersSnap = await db.collection("jogadores").get();
             const allPlayers = playersSnap.docs.map(d => ({id: d.id, ...(d.data() as any)} as Player));
@@ -445,16 +446,12 @@ const App: React.FC = () => {
             if (!eventDoc.exists) { alert("Evento não encontrado."); return; }
             const eventData = eventDoc.data() as Evento;
 
-            // Busca o jogo para saber quais times jogaram
             const gameDoc = await db.collection("eventos").doc(eventId).collection("jogos").doc(gameId).get();
             const gameData = gameDoc.exists ? gameDoc.data() as Jogo : null;
 
             let ancbPlayerIds: string[] = [];
 
-            // ── NOVO SISTEMA: timesParticipantes com isANCB ──────────────────
-            // Verifica se o jogo envolve um time ANCB e pega apenas esses jogadores
             if (eventData.timesParticipantes && eventData.timesParticipantes.length > 0) {
-                // Se temos o jogo, filtra só os times que participaram dessa partida
                 if (gameData && (gameData.timeA_id || gameData.timeB_id)) {
                     const gameTeamIds = [gameData.timeA_id, gameData.timeB_id].filter(Boolean);
                     const ancbTeam = eventData.timesParticipantes.find(t => 
@@ -462,13 +459,10 @@ const App: React.FC = () => {
                     );
                     if (ancbTeam) ancbPlayerIds = ancbTeam.jogadores || [];
                 } else {
-                    // Sem ID de jogo: pega o time ANCB do evento
                     const ancbTeam = eventData.timesParticipantes.find(t => t.isANCB);
                     if (ancbTeam) ancbPlayerIds = ancbTeam.jogadores || [];
                 }
-            }
-            // ── SISTEMA LEGADO: jogadoresEscalados no evento ─────────────────
-            else if (eventData.jogadoresEscalados && eventData.jogadoresEscalados.length > 0) {
+            } else if (eventData.jogadoresEscalados && eventData.jogadoresEscalados.length > 0) {
                 ancbPlayerIds = (eventData.jogadoresEscalados as any[])
                     .map((e: any) => typeof e === 'string' ? e : e.id)
                     .filter(Boolean);
@@ -479,13 +473,13 @@ const App: React.FC = () => {
                 return;
             }
 
-            // Monta a lista de jogadores do time ANCB, excluindo o próprio avaliador
             const playersToReview = allPlayers.filter(p => 
                 ancbPlayerIds.includes(p.id) && p.id !== userProfile?.linkedPlayerId
             );
 
             if (playersToReview.length > 0) {
                 setReviewTargetGame({ gameId, eventId, playersToReview });
+                setPendingReviewNotificationId(notificationId || null); // ✅ Guarda o ID para apagar depois
                 setShowQuiz(true);
             } else {
                 alert("Não há outros jogadores ANCB para avaliar nesta partida.");
@@ -843,9 +837,9 @@ const App: React.FC = () => {
                     userProfile={userProfile} 
                     notificationPermissionStatus={notificationPermissionStatus}
                     onEnableNotifications={handleEnableNotifications}
-                    onStartEvaluation={(gameId, eventId) => {
+                    onStartEvaluation={(gameId, eventId, notificationId) => {
                         setShowNotificationsView(false);
-                        handleOpenReviewQuiz(gameId, eventId);
+                        handleOpenReviewQuiz(gameId, eventId, notificationId);
                     }}
                 />
             )}
@@ -867,7 +861,25 @@ const App: React.FC = () => {
                 </div>
             </Modal>
 
-            {reviewTargetGame && userProfile?.linkedPlayerId && <PeerReviewQuiz isOpen={showQuiz} onClose={() => setShowQuiz(false)} gameId={reviewTargetGame.gameId} eventId={reviewTargetGame.eventId} reviewerId={userProfile.linkedPlayerId} playersToReview={reviewTargetGame.playersToReview} />}
+            {reviewTargetGame && userProfile?.linkedPlayerId && <PeerReviewQuiz 
+                isOpen={showQuiz} 
+                onClose={async () => {
+                    setShowQuiz(false);
+                    // ✅ Apaga a notificação pending_review do Firestore ao fechar o quiz
+                    if (pendingReviewNotificationId) {
+                        try {
+                            await deleteDoc(doc(db, 'notifications', pendingReviewNotificationId));
+                        } catch (e) {
+                            console.warn("Não foi possível apagar notificação de review:", e);
+                        }
+                        setPendingReviewNotificationId(null);
+                    }
+                }} 
+                gameId={reviewTargetGame.gameId} 
+                eventId={reviewTargetGame.eventId} 
+                reviewerId={userProfile.linkedPlayerId} 
+                playersToReview={reviewTargetGame.playersToReview} 
+            />}
             
             <Modal isOpen={showLogin} onClose={() => setShowLogin(false)} title="Entrar">
                 <form onSubmit={async (e) => { e.preventDefault(); try { await auth.signInWithEmailAndPassword(authEmail, authPassword); setShowLogin(false); setAuthEmail(''); setAuthPassword(''); } catch (error) { setAuthError("Erro ao entrar. Verifique suas credenciais."); } }} className="space-y-4">
