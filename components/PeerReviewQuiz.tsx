@@ -1,9 +1,6 @@
-
-import React, { useState } from 'react';
-import { Modal } from './Modal';
-import { Button } from './Button';
+import React, { useState, useEffect } from 'react';
 import { Player, ReviewTagDefinition } from '../types';
-import { LucideChevronRight, LucideCheckCircle2, LucideHelpCircle } from 'lucide-react';
+import { LucideChevronRight, LucideCheckCircle2, LucideX, LucideStar } from 'lucide-react';
 import { db } from '../services/firebase';
 import { doc, updateDoc, increment, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
@@ -13,78 +10,88 @@ interface PeerReviewQuizProps {
     gameId: string;
     eventId: string;
     reviewerId: string;
-    playersToReview: Player[]; // List of players (excluding self)
+    playersToReview: Player[];
 }
 
-// --- DEFINIÇÃO DAS TAGS (ATUALIZADO PARA 5 ATRIBUTOS) ---
-// Atributos: Ataque, Defesa, Força, Velocidade, Visão
 const AVAILABLE_TAGS: ReviewTagDefinition[] = [
-    { id: 'muralha', label: 'Muralha', emoji: '🧱', type: 'positive', description: 'Defesa intransponível', impact: { defesa: 3, forca: 2 } },
-    { id: 'sniper', label: 'Sniper', emoji: '🎯', type: 'positive', description: 'Mão calibrada', impact: { ataque: 3 } },
-    { id: 'garcom', label: 'Garçom', emoji: '🤝', type: 'positive', description: 'Visão de jogo e assistências', impact: { visao: 3 } },
-    { id: 'flash', label: 'Flash', emoji: '⚡', type: 'positive', description: 'Velocidade e contra-ataque', impact: { velocidade: 3, ataque: 1 } },
-    { id: 'lider', label: 'Líder', emoji: '🧠', type: 'positive', description: 'Organiza o time', impact: { visao: 2, defesa: 1 } },
-    { id: 'guerreiro', label: 'Guerreiro', emoji: '🛡️', type: 'positive', description: 'Raça e rebotes', impact: { forca: 3, defesa: 1 } },
-    // Negativas/Zueira
-    { id: 'avenida', label: 'Avenida', emoji: '🛣️', type: 'negative', description: 'Defesa aberta', impact: { defesa: -2 } },
-    { id: 'fominha', label: 'Fominha', emoji: '🍽️', type: 'negative', description: 'Não passa a bola', impact: { visao: -3 } },
-    { id: 'tijoleiro', label: 'Pedreiro', emoji: '🏗️', type: 'negative', description: 'Errou muitos arremessos', impact: { ataque: -2 } },
-    { id: 'cone', label: 'Cone', emoji: '⚠️', type: 'negative', description: 'Parado em quadra', impact: { velocidade: -2, defesa: -1 } }
+    { id: 'muralha',   label: 'Muralha',   emoji: '🧱', type: 'positive', description: 'Defesa intransponível',       impact: { defesa: 3, forca: 2 } },
+    { id: 'sniper',    label: 'Sniper',    emoji: '🎯', type: 'positive', description: 'Mão calibrada',               impact: { ataque: 3 } },
+    { id: 'garcom',    label: 'Garçom',    emoji: '🤝', type: 'positive', description: 'Visão de jogo e assistências', impact: { visao: 3 } },
+    { id: 'flash',     label: 'Flash',     emoji: '⚡', type: 'positive', description: 'Velocidade e contra-ataque',  impact: { velocidade: 3, ataque: 1 } },
+    { id: 'lider',     label: 'Líder',     emoji: '🧠', type: 'positive', description: 'Organiza o time',             impact: { visao: 2, defesa: 1 } },
+    { id: 'guerreiro', label: 'Guerreiro', emoji: '🛡️', type: 'positive', description: 'Raça e rebotes',              impact: { forca: 3, defesa: 1 } },
+    { id: 'avenida',   label: 'Avenida',   emoji: '🛣️', type: 'negative', description: 'Defesa aberta',               impact: { defesa: -2 } },
+    { id: 'fominha',   label: 'Fominha',   emoji: '🍽️', type: 'negative', description: 'Não passa a bola',            impact: { visao: -3 } },
+    { id: 'tijoleiro', label: 'Pedreiro',  emoji: '🏗️', type: 'negative', description: 'Errou muitos arremessos',     impact: { ataque: -2 } },
+    { id: 'cone',      label: 'Cone',      emoji: '⚠️', type: 'negative', description: 'Parado em quadra',            impact: { velocidade: -2, defesa: -1 } },
 ];
 
-export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({ isOpen, onClose, gameId, eventId, reviewerId, playersToReview }) => {
+const POSITIVE_TAGS = AVAILABLE_TAGS.filter(t => t.type === 'positive');
+const NEGATIVE_TAGS = AVAILABLE_TAGS.filter(t => t.type === 'negative');
+
+export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({
+    isOpen, onClose, gameId, eventId, reviewerId, playersToReview
+}) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    
-    // Sort players to review randomly to avoid bias, or keeps original order
+    const [showFinish, setShowFinish] = useState(false);
+    const [animating, setAnimating] = useState(false);
+
     const currentPlayer = playersToReview[currentIndex];
-    const progress = ((currentIndex) / playersToReview.length) * 100;
+    const progressPct = (currentIndex / playersToReview.length) * 100;
+    const isLast = currentIndex === playersToReview.length - 1;
+
+    // Reset state when opening
+    useEffect(() => {
+        if (isOpen) {
+            setCurrentIndex(0);
+            setSelectedTags([]);
+            setShowFinish(false);
+            setAnimating(false);
+        }
+    }, [isOpen]);
 
     const toggleTag = (tagId: string) => {
         if (selectedTags.includes(tagId)) {
             setSelectedTags(prev => prev.filter(t => t !== tagId));
-        } else {
-            // Max 2 tags per player
-            if (selectedTags.length < 2) {
-                setSelectedTags(prev => [...prev, tagId]);
-            }
+        } else if (selectedTags.length < 2) {
+            setSelectedTags(prev => [...prev, tagId]);
         }
     };
 
-    const handleNext = async () => {
-        if (!currentPlayer) return;
-
+    const handleNext = async (skip = false) => {
+        if (!currentPlayer || isSubmitting) return;
         setIsSubmitting(true);
+
         try {
-            // 1. Save Log (Audit Trail)
+            const tags = skip ? [] : selectedTags;
+
             await addDoc(collection(db, "avaliacoes_gamified"), {
-                gameId,
-                eventId,
-                reviewerId,
+                gameId, eventId, reviewerId,
                 targetId: currentPlayer.id,
-                tags: selectedTags,
+                tags,
                 timestamp: serverTimestamp()
             });
 
-            // 2. Aggregate Stats on Player Document (Optimized Write)
-            if (selectedTags.length > 0) {
+            if (tags.length > 0) {
                 const updates: any = {};
-                selectedTags.forEach(tagId => {
-                    // Increment tag counter: stats_tags.muralha = increment(1)
-                    updates[`stats_tags.${tagId}`] = increment(1);
-                });
-                
+                tags.forEach(tagId => { updates[`stats_tags.${tagId}`] = increment(1); });
                 await updateDoc(doc(db, "jogadores", currentPlayer.id), updates);
             }
 
-            // Move Next
             setSelectedTags([]);
-            if (currentIndex < playersToReview.length - 1) {
-                setCurrentIndex(prev => prev + 1);
-            } else {
-                onClose(); // Finish
-            }
+
+            // Animate transition
+            setAnimating(true);
+            setTimeout(() => {
+                if (isLast) {
+                    setShowFinish(true);
+                } else {
+                    setCurrentIndex(prev => prev + 1);
+                }
+                setAnimating(false);
+            }, 300);
 
         } catch (error) {
             console.error("Error submitting review:", error);
@@ -93,65 +100,277 @@ export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({ isOpen, onClose,
         }
     };
 
-    if (!isOpen || !currentPlayer) return null;
+    if (!isOpen) return null;
 
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Avaliação Pós-Jogo">
-            <div className="flex flex-col h-full max-h-[80vh]">
-                {/* Progress Bar */}
-                <div className="w-full bg-gray-200 dark:bg-gray-700 h-1.5 rounded-full mb-4 overflow-hidden">
-                    <div className="bg-ancb-orange h-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
+    // ── TELA FINAL ────────────────────────────────────────────────────────────
+    if (showFinish) {
+        return (
+            <div className="fixed inset-0 z-[200] bg-[#040d1a] flex flex-col items-center justify-center overflow-hidden">
+                {/* Background stars */}
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    {[...Array(20)].map((_, i) => (
+                        <div
+                            key={i}
+                            className="absolute w-1 h-1 bg-white rounded-full opacity-30 animate-pulse"
+                            style={{
+                                left: `${Math.random() * 100}%`,
+                                top: `${Math.random() * 100}%`,
+                                animationDelay: `${Math.random() * 3}s`,
+                                animationDuration: `${2 + Math.random() * 3}s`
+                            }}
+                        />
+                    ))}
                 </div>
 
-                <div className="flex flex-col items-center mb-6">
-                    <div className="w-20 h-20 rounded-full border-4 border-ancb-blue bg-gray-200 dark:bg-gray-600 overflow-hidden mb-2 shadow-lg">
-                        {currentPlayer.foto ? (
-                            <img src={currentPlayer.foto} className="w-full h-full object-cover" />
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center font-bold text-gray-400">{currentPlayer.nome.charAt(0)}</div>
-                        )}
+                <div className="relative z-10 flex flex-col items-center text-center px-8">
+                    {/* Trophy icon */}
+                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#F27405] to-yellow-400 flex items-center justify-center mb-6 shadow-2xl shadow-orange-500/40">
+                        <span className="text-5xl">🏆</span>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">{currentPlayer.apelido || currentPlayer.nome.split(' ')[0]}</h3>
-                    <p className="text-xs text-gray-500">O que define a atuação dele hoje?</p>
-                </div>
 
-                {/* Tags Grid */}
-                <div className="grid grid-cols-2 gap-3 mb-6 overflow-y-auto custom-scrollbar p-1">
-                    {AVAILABLE_TAGS.map(tag => {
-                        const isSelected = selectedTags.includes(tag.id);
-                        return (
-                            <button
-                                key={tag.id}
-                                onClick={() => toggleTag(tag.id)}
-                                className={`
-                                    relative flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200
-                                    ${isSelected 
-                                        ? 'border-ancb-blue bg-blue-50 dark:bg-blue-900/40 shadow-md scale-[1.02]' 
-                                        : 'border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-200'}
-                                `}
-                            >
-                                <span className="text-2xl">{tag.emoji}</span>
-                                <div className="text-left">
-                                    <p className={`text-xs font-bold uppercase ${isSelected ? 'text-ancb-blue' : 'text-gray-600 dark:text-gray-300'}`}>
-                                        {tag.label}
-                                    </p>
-                                    <p className="text-[9px] text-gray-400 leading-tight">{tag.description}</p>
-                                </div>
-                                {isSelected && <LucideCheckCircle2 className="absolute top-2 right-2 text-ancb-blue" size={14} />}
-                            </button>
-                        );
-                    })}
-                </div>
+                    <h2 className="text-3xl font-black text-white mb-2 tracking-tight">
+                        Avaliações enviadas!
+                    </h2>
+                    <p className="text-gray-400 text-base mb-10 max-w-xs leading-relaxed">
+                        Obrigado por avaliar seus companheiros. O time fica mais forte com seu feedback!
+                    </p>
 
-                <div className="mt-auto">
-                    <Button onClick={handleNext} disabled={isSubmitting} className="w-full h-12 text-lg">
-                        {isSubmitting ? 'Salvando...' : (currentIndex === playersToReview.length - 1 ? 'Finalizar' : 'Próximo')} <LucideChevronRight />
-                    </Button>
-                    <button onClick={() => { setSelectedTags([]); handleNext(); }} className="w-full text-center text-xs text-gray-400 mt-3 py-2 hover:text-gray-600">
-                        Pular / Sem opinião
+                    {/* Stars decoration */}
+                    <div className="flex gap-2 mb-10">
+                        {[...Array(5)].map((_, i) => (
+                            <LucideStar
+                                key={i}
+                                size={28}
+                                className="text-[#F27405]"
+                                fill="#F27405"
+                                style={{ animationDelay: `${i * 0.1}s` }}
+                            />
+                        ))}
+                    </div>
+
+                    <button
+                        onClick={onClose}
+                        className="w-full max-w-xs bg-[#F27405] hover:bg-orange-500 text-white font-black text-lg py-4 rounded-2xl transition-all active:scale-95 shadow-xl shadow-orange-500/30"
+                    >
+                        Fechar
                     </button>
                 </div>
             </div>
-        </Modal>
+        );
+    }
+
+    if (!currentPlayer) return null;
+
+    const playerName = currentPlayer.apelido || currentPlayer.nome.split(' ')[0];
+    const playerInitial = currentPlayer.nome.charAt(0).toUpperCase();
+
+    // ── TELA PRINCIPAL ────────────────────────────────────────────────────────
+    return (
+        <div className="fixed inset-0 z-[200] bg-[#040d1a] flex flex-col overflow-hidden">
+
+            {/* ── BACKGROUND ATMOSPHERIC ── */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                {/* Top glow behind player */}
+                <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full bg-[#062553] opacity-60 blur-3xl" />
+                {/* Court lines subtle */}
+                <svg className="absolute bottom-0 left-0 w-full opacity-5" viewBox="0 0 400 200" preserveAspectRatio="none">
+                    <ellipse cx="200" cy="200" rx="180" ry="80" fill="none" stroke="white" strokeWidth="1"/>
+                    <line x1="200" y1="120" x2="200" y2="200" stroke="white" strokeWidth="1"/>
+                    <rect x="120" y="140" width="160" height="60" fill="none" stroke="white" strokeWidth="1"/>
+                </svg>
+            </div>
+
+            {/* ── HEADER: progress + close ── */}
+            <div className="relative z-10 px-5 pt-12 pb-4 shrink-0">
+                <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                        {currentIndex + 1} de {playersToReview.length}
+                    </span>
+                    <button
+                        onClick={onClose}
+                        className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/20 transition-all"
+                    >
+                        <LucideX size={16} />
+                    </button>
+                </div>
+
+                {/* Progress bar segmentada */}
+                <div className="flex gap-1">
+                    {playersToReview.map((_, i) => (
+                        <div
+                            key={i}
+                            className="h-1 flex-1 rounded-full overflow-hidden bg-white/10"
+                        >
+                            <div
+                                className="h-full rounded-full bg-[#F27405] transition-all duration-500"
+                                style={{ width: i < currentIndex ? '100%' : i === currentIndex ? '50%' : '0%' }}
+                            />
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* ── PLAYER CARD ── */}
+            <div
+                className={`relative z-10 flex flex-col items-center pt-6 pb-5 shrink-0 transition-all duration-300 ${animating ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}
+            >
+                {/* Avatar */}
+                <div className="relative mb-3">
+                    <div className="w-24 h-24 rounded-full overflow-hidden border-[3px] border-[#F27405] shadow-2xl shadow-orange-500/30">
+                        {currentPlayer.foto ? (
+                            <img src={currentPlayer.foto} className="w-full h-full object-cover" alt={playerName} />
+                        ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-[#062553] to-[#0a3a7a] flex items-center justify-center">
+                                <span className="text-3xl font-black text-white">{playerInitial}</span>
+                            </div>
+                        )}
+                    </div>
+                    {/* Ring glow */}
+                    <div className="absolute inset-0 rounded-full ring-4 ring-[#F27405]/20 scale-110" />
+                </div>
+
+                <h2 className="text-2xl font-black text-white tracking-tight mb-1">{playerName}</h2>
+                <p className="text-sm text-gray-400 font-medium">
+                    Escolha até <span className="text-[#F27405] font-bold">2 tags</span> que definem a atuação dele
+                </p>
+
+                {/* Selected tags counter */}
+                {selectedTags.length > 0 && (
+                    <div className="flex gap-2 mt-3">
+                        {selectedTags.map(tagId => {
+                            const tag = AVAILABLE_TAGS.find(t => t.id === tagId);
+                            return tag ? (
+                                <span
+                                    key={tagId}
+                                    className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-[#F27405]/20 text-[#F27405] border border-[#F27405]/40"
+                                >
+                                    {tag.emoji} {tag.label}
+                                </span>
+                            ) : null;
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* ── TAGS SCROLLABLE AREA ── */}
+            <div className={`relative z-10 flex-1 overflow-y-auto px-4 pb-2 transition-all duration-300 ${animating ? 'opacity-0' : 'opacity-100'}`}>
+
+                {/* Positivas */}
+                <div className="mb-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-green-400/70 mb-2 px-1">
+                        ✦ Destaques
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                        {POSITIVE_TAGS.map(tag => {
+                            const isSelected = selectedTags.includes(tag.id);
+                            const isDisabled = !isSelected && selectedTags.length >= 2;
+                            return (
+                                <button
+                                    key={tag.id}
+                                    onClick={() => toggleTag(tag.id)}
+                                    disabled={isDisabled}
+                                    className={`
+                                        relative flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left
+                                        ${isSelected
+                                            ? 'border-[#F27405] bg-[#F27405]/15 shadow-lg shadow-orange-500/20 scale-[1.02]'
+                                            : isDisabled
+                                                ? 'border-white/5 bg-white/3 opacity-30 cursor-not-allowed'
+                                                : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-95'
+                                        }
+                                    `}
+                                >
+                                    <span className="text-xl shrink-0">{tag.emoji}</span>
+                                    <div className="min-w-0">
+                                        <p className={`text-xs font-black uppercase tracking-wide truncate ${isSelected ? 'text-[#F27405]' : 'text-white'}`}>
+                                            {tag.label}
+                                        </p>
+                                        <p className="text-[10px] text-gray-500 leading-tight truncate">{tag.description}</p>
+                                    </div>
+                                    {isSelected && (
+                                        <LucideCheckCircle2 className="absolute top-2 right-2 text-[#F27405] shrink-0" size={14} />
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Negativas */}
+                <div className="mb-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-400/70 mb-2 px-1">
+                        ✦ Zueira
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                        {NEGATIVE_TAGS.map(tag => {
+                            const isSelected = selectedTags.includes(tag.id);
+                            const isDisabled = !isSelected && selectedTags.length >= 2;
+                            return (
+                                <button
+                                    key={tag.id}
+                                    onClick={() => toggleTag(tag.id)}
+                                    disabled={isDisabled}
+                                    className={`
+                                        relative flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left
+                                        ${isSelected
+                                            ? 'border-red-500 bg-red-500/15 shadow-lg shadow-red-500/20 scale-[1.02]'
+                                            : isDisabled
+                                                ? 'border-white/5 bg-white/3 opacity-30 cursor-not-allowed'
+                                                : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 active:scale-95'
+                                        }
+                                    `}
+                                >
+                                    <span className="text-xl shrink-0">{tag.emoji}</span>
+                                    <div className="min-w-0">
+                                        <p className={`text-xs font-black uppercase tracking-wide truncate ${isSelected ? 'text-red-400' : 'text-white'}`}>
+                                            {tag.label}
+                                        </p>
+                                        <p className="text-[10px] text-gray-500 leading-tight truncate">{tag.description}</p>
+                                    </div>
+                                    {isSelected && (
+                                        <LucideCheckCircle2 className="absolute top-2 right-2 text-red-400 shrink-0" size={14} />
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* ── FOOTER: actions ── */}
+            <div className="relative z-10 px-4 pt-3 pb-8 shrink-0 border-t border-white/5 bg-[#040d1a]">
+                <button
+                    onClick={() => handleNext(false)}
+                    disabled={isSubmitting}
+                    className={`
+                        w-full py-4 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all active:scale-95
+                        ${selectedTags.length > 0
+                            ? 'bg-[#F27405] hover:bg-orange-500 text-white shadow-xl shadow-orange-500/30'
+                            : 'bg-white/10 text-white/50 cursor-not-allowed'
+                        }
+                        ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}
+                    `}
+                >
+                    {isSubmitting ? (
+                        <span className="flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Salvando...
+                        </span>
+                    ) : (
+                        <>
+                            {isLast ? 'Finalizar' : 'Próximo'}
+                            <LucideChevronRight size={20} />
+                        </>
+                    )}
+                </button>
+
+                <button
+                    onClick={() => handleNext(true)}
+                    disabled={isSubmitting}
+                    className="w-full text-center text-xs text-gray-600 hover:text-gray-400 mt-3 py-2 transition-colors"
+                >
+                    Pular / Sem opinião
+                </button>
+            </div>
+        </div>
     );
 };
