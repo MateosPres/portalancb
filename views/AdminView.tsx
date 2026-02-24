@@ -508,8 +508,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{user.nome}</td>
                                                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{user.email}</td>
                                                 <td className="px-4 py-3">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.role === 'super-admin' ? 'bg-purple-100 text-purple-700' : user.role === 'admin' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>
-                                                        {user.role}
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.role === 'super-admin' ? 'bg-purple-600 text-white' : user.role === 'admin' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>
+                                                        {user.role === 'super-admin' ? 'DEV' : user.role}
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{user.linkedPlayerId ? <span className="text-green-600 flex items-center gap-1"><LucideCheck size={12}/> {activePlayers.find(p => p.id === user.linkedPlayerId)?.nome || 'ID: ' + user.linkedPlayerId}</span> : (suggestedPlayer ? <span className="text-orange-500 text-xs font-bold flex items-center gap-1"><LucideRefreshCw size={12} /> Sugestão: {suggestedPlayer.nome}</span> : <span className="text-red-400">Não vinculado</span>)}</td>

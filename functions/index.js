@@ -201,7 +201,8 @@ exports.adminResetPassword = functions.https.onCall(async (data, context) => {
     const targetUid = data.targetUid;
 
     const callerDoc = await admin.firestore().collection('usuarios').doc(callerUid).get();
-    if (!callerDoc.exists || callerDoc.data().role !== 'admin') {
+    const callerRole = callerDoc.exists ? callerDoc.data().role : null;
+    if (!callerDoc.exists || (callerRole !== 'admin' && callerRole !== 'super-admin')) {
         throw new functions.https.HttpsError('permission-denied', 'Apenas administradores podem resetar senhas.');
     }
 
