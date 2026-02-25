@@ -8,6 +8,7 @@ import { Modal } from './components/Modal';
 import { Feed } from './components/Feed';
 import { PeerReviewQuiz } from './components/PeerReviewQuiz';
 import { LiveEventHero } from './components/LiveEventHero';
+import { ApoiadoresCarousel } from './components/ApoiadoresCarousel';
 import { PublicGameView } from './views/PublicGameView';
 import { TeamManagerView } from './views/TeamManagerView';
 import { NotificationsView } from './views/NotificationsView';
@@ -18,6 +19,7 @@ import { RankingView } from './views/RankingView';
 import { AdminView } from './views/AdminView';
 import { PainelJogoView } from './views/PainelJogoView';
 import { ProfileView } from './views/ProfileView';
+import { ApoiadoresView } from './views/ApoiadoresView';
 import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare, LucideUserPlus, LucideRefreshCw, LucideBellRing, LucideSettings } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { Header } from './components/Header';
@@ -28,7 +30,6 @@ const VAPID_KEY = "BI9T9nLXUjdJHqOSZEoORZ7UDyWQoIMcrQ5Oz-7KeKif19LoGx_Db5AdY4zi0
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>('home');
     
-    // Updated Navigation History State: Stores the SPECIFIC ID to return to
     const [returnToEventId, setReturnToEventId] = useState<string | null>(null);
     const [returnToTeamId, setReturnToTeamId] = useState<string | null>(null);
     const [returnToTab, setReturnToTab] = useState<'jogos' | 'times' | 'classificacao'>('jogos');
@@ -52,7 +53,7 @@ const App: React.FC = () => {
     const [regName, setRegName] = useState('');
     const [regNickname, setRegNickname] = useState('');
     const [regEmail, setRegEmail] = useState('');
-    const [regPhone, setRegPhone] = useState(''); // Only DDD + Number
+    const [regPhone, setRegPhone] = useState('');
     const [regPassword, setRegPassword] = useState('');
     const [regCpf, setRegCpf] = useState('');
     const [regBirthDate, setRegBirthDate] = useState('');
@@ -69,7 +70,7 @@ const App: React.FC = () => {
     // Game Panel State
     const [panelGame, setPanelGame] = useState<Jogo | null>(null);
     const [panelEventId, setPanelEventId] = useState<string | null>(null);
-    const [panelIsEditable, setPanelIsEditable] = useState(false); // New state to control edit mode
+    const [panelIsEditable, setPanelIsEditable] = useState(false);
     const [selectedPublicGame, setSelectedPublicGame] = useState<{ game: Jogo, eventId: string } | null>(null);
 
     // Team Manager State
@@ -81,10 +82,9 @@ const App: React.FC = () => {
     const [showNotificationsView, setShowNotificationsView] = useState(false);
     const [showQuiz, setShowQuiz] = useState(false);
     const [reviewTargetGame, setReviewTargetGame] = useState<{ gameId: string, eventId: string, playersToReview: Player[] } | null>(null);
-    const [pendingReviewNotificationId, setPendingReviewNotificationId] = useState<string | null>(null); // ✅ ID da notificação a apagar após o quiz
+    const [pendingReviewNotificationId, setPendingReviewNotificationId] = useState<string | null>(null);
     const [foregroundNotification, setForegroundNotification] = useState<{title: string, body: string, eventId?: string, type?: string} | null>(null);
     
-    // Safe initialization for iOS/Safari where Notification might be undefined
     const [notificationPermissionStatus, setNotificationPermissionStatus] = useState<NotificationPermission>(
         (typeof Notification !== 'undefined') ? Notification.permission : 'default'
     );
@@ -170,7 +170,6 @@ const App: React.FC = () => {
     useEffect(() => {
         if (typeof Notification === 'undefined') return;
         if (userProfile?.uid && Notification.permission === 'granted') {
-            // Silent update of token if already granted
             requestFCMToken(VAPID_KEY).then(token => {
                 if (token && userProfile.fcmToken !== token) {
                     db.collection("usuarios").doc(userProfile.uid).update({ fcmToken: token });
@@ -187,28 +186,21 @@ const App: React.FC = () => {
                 navigator.serviceWorker.ready.then(registration => {
                     registration.showNotification(title, {
                         body: body,
-                        icon: 'https://i.imgur.com/SE2jHsz.png', // Ícone Grande (aparece ao lado do texto)
-                        badge: 'https://i.imgur.com/mQWcgnZ.png', // Ícone Pequeno (Silhueta para barra de status)
+                        icon: 'https://i.imgur.com/SE2jHsz.png',
+                        badge: 'https://i.imgur.com/mQWcgnZ.png',
                         vibrate: [200, 100, 200]
                     } as any);
                 }).catch((e) => {
                     console.warn("SW notification failed, falling back", e);
-                    new Notification(title, { 
-                        body: body, 
-                        icon: 'https://i.imgur.com/SE2jHsz.png'
-                    });
+                    new Notification(title, { body: body, icon: 'https://i.imgur.com/SE2jHsz.png' });
                 });
             } catch (e) {
                 console.error("Erro ao disparar notificação de sistema:", e);
-                new Notification(title, { 
-                    body: body, 
-                    icon: 'https://i.imgur.com/SE2jHsz.png' 
-                });
+                new Notification(title, { body: body, icon: 'https://i.imgur.com/SE2jHsz.png' });
             }
         }
     };
 
-    // 1. Monitoramento de Convocações e Eventos em Andamento
     useEffect(() => {
         const q = db.collection("eventos").where("status", "in", ["proximo", "andamento"]);
 
@@ -226,7 +218,6 @@ const App: React.FC = () => {
                         ongoing.push(fullEvent);
                     }
 
-                    // Check for roster notification
                     if (userProfile?.linkedPlayerId) {
                         const isRosterMember = eventData.jogadoresEscalados?.includes(userProfile.linkedPlayerId);
                         const isExternalTeamMember = eventData.type === 'torneio_externo' && eventData.timesParticipantes?.some(t => t.isANCB && t.jogadores?.includes(userProfile.linkedPlayerId!));
@@ -245,16 +236,13 @@ const App: React.FC = () => {
                 }
             });
             
-            // Update ongoing events state for Home View
             const currentOngoing = snapshot.docs
                 .map(doc => ({ id: doc.id, ...(doc.data() as any) } as Evento))
                 .filter(e => e.status === 'andamento');
             
-            // If no ongoing, maybe show next upcoming
             if (currentOngoing.length > 0) {
                 setOngoingEvents(currentOngoing);
             } else {
-                // Fallback to next upcoming
                 const upcoming = snapshot.docs
                     .map(doc => ({ id: doc.id, ...(doc.data() as any) } as Evento))
                     .filter(e => e.status === 'proximo')
@@ -264,7 +252,6 @@ const App: React.FC = () => {
         });
     }, [userProfile?.linkedPlayerId]);
 
-    // 2. Monitoramento de Notificações Diretas
     useEffect(() => {
         if (!user) return;
         const q = db.collection("notifications").where("targetUserId", "==", user.uid).orderBy("timestamp", "desc");
@@ -371,26 +358,20 @@ const App: React.FC = () => {
                 console.log("LOGIN DETECTADO. UID:", user.uid);
                 
                 try {
-                    // 1. Tenta achar na coleção 'usuarios'
                     let userRef = doc(db, "usuarios", user.uid);
                     let userSnap = await getDoc(userRef);
-                    let data = null;
 
-                    // 2. Se não achar em 'usuarios', tenta na coleção 'jogadores'
                     if (!userSnap.exists()) {
                         console.log("Não achou em 'usuarios', tentando 'jogadores'...");
                         userRef = doc(db, "jogadores", user.uid);
                         userSnap = await getDoc(userRef);
                     }
 
-                    // 3. Processa os dados se encontrou
                     if (userSnap.exists()) {
-                        data = userSnap.data();
+                        const data = userSnap.data();
                         
-                        // Busca foto (Prioridade: User -> Google -> Jogador Linkado)
                         let finalPhoto = data.foto || data.photoURL || data.avatar || null;
                         
-                        // Se não tem foto, mas tem link de jogador, busca lá
                         if (!finalPhoto && data.linkedPlayerId) {
                             try {
                                 const playerDoc = await getDoc(doc(db, "jogadores", data.linkedPlayerId));
@@ -401,26 +382,24 @@ const App: React.FC = () => {
                             } catch (e) { console.warn("Erro ao buscar link", e); }
                         }
 
-                        // Salva o perfil oficial
                         setUserProfile({
                             uid: user.uid,
-                            ...data, // Isso recupera o linkedPlayerId e todos os outros campos do banco!
+                            ...data,
                             nome: data.nome || data.apelido || "Usuário",
                             email: data.email,
-                            role: data.role || "jogador", // <--- MUDADO AQUI (Fallback para jogador)
+                            role: data.role || "jogador",
                             foto: finalPhoto,
                             status: data.status || "active"
                         } as UserProfile);
 
                     } else {
-                        // 4. FALLBACK DE EMERGÊNCIA (Se não tiver cadastro no banco)
                         console.warn("PERFIL NÃO EXISTE NO BANCO. USANDO DADOS TEMPORÁRIOS.");
                         
                         setUserProfile({
                             uid: user.uid,
                             nome: user.displayName || "Novo Usuário",
                             email: user.email || "",
-                            role: "jogador", // <--- MUDADO AQUI (Padrão agora é jogador)
+                            role: "jogador",
                             foto: user.photoURL,
                             status: "active"
                         } as UserProfile);
@@ -479,7 +458,7 @@ const App: React.FC = () => {
 
             if (playersToReview.length > 0) {
                 setReviewTargetGame({ gameId, eventId, playersToReview });
-                setPendingReviewNotificationId(notificationId || null); // ✅ Guarda o ID para apagar depois
+                setPendingReviewNotificationId(notificationId || null);
                 setShowQuiz(true);
             } else {
                 alert("Não há outros jogadores ANCB para avaliar nesta partida.");
@@ -508,7 +487,6 @@ const App: React.FC = () => {
         setCurrentView('evento-detalhe');
     };
 
-    // Updated Navigation Handler to support event-specific history
     const handleOpenPlayerDetail = (playerId: string, fromEventId?: string, fromTeamId?: string) => {
         setTargetPlayerId(playerId);
         setReturnToEventId(fromEventId || null);
@@ -525,7 +503,6 @@ const App: React.FC = () => {
                     await registration.update();
                     setTimeout(() => {
                         setIsUpdating(false);
-                        // Try to reload, but also warn user
                         window.location.reload(); 
                         alert("Atualização pronta! Por favor, reinicie o aplicativo para aplicar as mudanças.");
                     }, 2000);
@@ -595,19 +572,6 @@ const App: React.FC = () => {
         }
     };
 
-    const renderHeader = () => (
-        <Header 
-            user={headerUser} 
-            isDarkMode={isDarkMode}
-            onToggleTheme={handleToggleTheme}
-            onLogin={handleLogin} 
-            onLogout={handleLogout}
-            onProfileClick={handleProfileClick}
-            onAdminClick={handleAdminClick}
-            onHomeClick={handleHomeClick}
-        />
-    );
-
     const renderContent = () => {
         switch (currentView) {
             case 'home': return (
@@ -622,6 +586,10 @@ const App: React.FC = () => {
                             }}
                         />
                     )}
+
+                    {/* ✅ Carrossel de Apoiadores — entre o hero e os cards */}
+                    <ApoiadoresCarousel onVerTodos={() => setCurrentView('apoiadores')} />
+
                     <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <Card onClick={() => setCurrentView('eventos')} className="cursor-pointer group hover:border-blue-300 transition-colors" emoji="📅">
                             <div className="flex flex-col h-full">
@@ -688,8 +656,7 @@ const App: React.FC = () => {
                     setTargetPlayerId(null);
                     if (returnToEventId) {
                         handleOpenEventDetail(returnToEventId);
-                        setReturnToEventId(null); // Reset after using
-                        // Note: We do NOT reset returnToTeamId here, because it needs to be passed to EventoDetalheView
+                        setReturnToEventId(null);
                     } else {
                         setCurrentView('home');
                         setReturnToTeamId(null);
@@ -704,17 +671,12 @@ const App: React.FC = () => {
             case 'public-game': return selectedPublicGame ? <PublicGameView game={selectedPublicGame.game} eventId={selectedPublicGame.eventId} onBack={() => setCurrentView('home')} /> : <div>Jogo não encontrado</div>;
             case 'profile': return userProfile ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} onOpenReview={handleOpenReviewQuiz} onOpenEvent={handleOpenEventDetail} /> : null;
             case 'team-manager': return teamManagerEventId ? <TeamManagerView eventId={teamManagerEventId} teamId={teamManagerTeamId} onBack={() => { setCurrentView('evento-detalhe'); }} userProfile={userProfile} /> : null;
+            case 'apoiadores': return <ApoiadoresView onBack={() => setCurrentView('home')} />;
             default: return <div>404</div>;
         }
     };
-// ========================================================================
 
-// ========================================================================
-    // LÓGICA DO HEADER (VERSÃO FINAL CORRIGIDA)
-    // Cole isto EXATAMENTE acima da linha: if (loading) return
-    // ========================================================================
-
-    // 1. Funções de Ação
+    // LÓGICA DO HEADER
     const handleLogin = () => setShowLogin(true);
     const handleLogout = () => auth.signOut();
     
@@ -725,7 +687,6 @@ const App: React.FC = () => {
         localStorage.setItem('theme', newMode ? 'dark' : 'light');
     };
 
-    // 2. Funções de Navegação
     const handleProfileClick = () => setCurrentView('profile');
     const handleAdminClick = () => setCurrentView('admin');
     const handleHomeClick = () => {
@@ -733,22 +694,14 @@ const App: React.FC = () => {
         setReturnToEventId(null);
     };
 
-    // 3. Função segura para tratar a FOTO
     const getSafePhoto = (profile: any) => {
         if (!profile) return null;
-        
-        // Tenta pegar foto ou photoURL e remove espaços
         let raw = (profile.foto || profile.photoURL || '').trim();
         if (!raw) return null;
-
-        // Se já for link web ou base64 completo, retorna
         if (raw.startsWith('http') || raw.startsWith('data:')) return raw;
-
-        // Se for código cru, adiciona o cabeçalho JPG
         return `data:image/jpeg;base64,${raw}`;
     };
 
-    // 4. Prepara o objeto para o Header
     const headerUser = userProfile ? {
         name: userProfile.nome,
         photo: getSafePhoto(userProfile), 
@@ -756,10 +709,7 @@ const App: React.FC = () => {
         email: userProfile.email
     } : null;
 
-    // DEBUG: Veja no console (F12) se a foto está aparecendo agora
     console.log("DADOS DO HEADER:", headerUser);
-
-// ========================================================================
 
     if (loading) return (
         <div className="fixed inset-0 bg-[#062553] flex flex-col items-center justify-center z-[9999]">
@@ -774,7 +724,6 @@ const App: React.FC = () => {
     return (
         <div className="min-h-screen flex flex-col font-sans text-ancb-black dark:text-gray-100 bg-gray-50 dark:bg-gray-900 transition-colors">
             
-            {/* AQUI: Trocamos {renderHeader()} pelo novo componente */}
             <Header 
                 user={headerUser} 
                 isDarkMode={isDarkMode}
@@ -791,7 +740,7 @@ const App: React.FC = () => {
             <main className={`flex-grow ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
                 {renderContent()}
             </main>
-            {/* ... Notifications and Footer (kept same as before) ... */}
+
             {foregroundNotification && (
                 <div 
                     onClick={() => {
@@ -829,8 +778,6 @@ const App: React.FC = () => {
                 </footer>
             )}
 
-
-
             {showNotificationsView && userProfile && (
                 <NotificationsView 
                     onBack={() => setShowNotificationsView(false)} 
@@ -865,7 +812,6 @@ const App: React.FC = () => {
                 isOpen={showQuiz} 
                 onClose={async () => {
                     setShowQuiz(false);
-                    // ✅ Apaga a notificação pending_review do Firestore ao fechar o quiz
                     if (pendingReviewNotificationId) {
                         try {
                             await deleteDoc(doc(db, 'notifications', pendingReviewNotificationId));

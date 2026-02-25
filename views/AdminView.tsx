@@ -4,7 +4,7 @@ import firebase, { db, auth, functions } from '../services/firebase';
 import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player, Time, Cesta, UserProfile, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing, LucideBellOff, LucideSend, LucideKeyRound, LucideCrown, LucideShield, LucideSiren, LucideDatabase, LucideHistory, LucideSave, LucideArrowRight, LucideZap, LucideEdit2 } from 'lucide-react';
+import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing, LucideBellOff, LucideSend, LucideKeyRound, LucideCrown, LucideShield, LucideSiren, LucideDatabase, LucideHistory, LucideSave, LucideArrowRight, LucideZap, LucideEdit2, LucideHeart } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 interface AdminViewProps {
@@ -14,7 +14,7 @@ interface AdminViewProps {
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, userProfile }) => {
-    const [adminTab, setAdminTab] = useState<'general' | 'users'>('general');
+    const [adminTab, setAdminTab] = useState<'general' | 'users' | 'apoiadores'>('general');
     const [events, setEvents] = useState<Evento[]>([]);
     
     // Forms
@@ -52,6 +52,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
     const [linkPlayerId, setLinkPlayerId] = useState('');
 
+    // --- APOIADORES STATE ---
+    const [apoiadores, setApoiadores] = useState<any[]>([]);
+    const [showApoiadorForm, setShowApoiadorForm] = useState(false);
+    const [apoiadorNome, setApoiadorNome] = useState('');
+    const [apoiadorSite, setApoiadorSite] = useState('');
+    const [apoiadorDescricao, setApoiadorDescricao] = useState('');
+    const [apoiadorDestaque, setApoiadorDestaque] = useState(false);
+    const [apoiadorLogoFile, setApoiadorLogoFile] = useState<File | null>(null);
+    const [apoiadorLogoPreview, setApoiadorLogoPreview] = useState<string | null>(null);
+    const [isSavingApoiador, setIsSavingApoiador] = useState(false);
+
     const isSuperAdmin = userProfile?.role === 'super-admin';
 
     useEffect(() => {
@@ -72,12 +83,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
         });
 
+        const unsubApoiadores = db.collection('apoiadores').orderBy('nome').onSnapshot(snap => {
+            setApoiadores(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        });
+
         return () => {
-            unsubEvents(); unsubActivePlayers(); unsubUsers();
+            unsubEvents(); unsubActivePlayers(); unsubUsers(); unsubApoiadores();
         };
     }, []);
 
-    // ... (Keep generic functions: compressImage, fileToBase64, createPost, handleImageSelect, resetPostForm) ...
     const compressImage = async (file: File): Promise<File> => { const options = { maxSizeMB: 0.1, maxWidthOrHeight: 800, useWebWorker: true, fileType: 'image/webp' }; try { return await imageCompression(file, options); } catch (error) { return file; } };
     const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
     const createPost = async (e: React.FormEvent) => { 
@@ -95,6 +109,71 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     };
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; setPostImageFile(file); setImagePreview(URL.createObjectURL(file)); } };
     const resetPostForm = () => { setPostType('noticia'); setPostTitle(''); setPostBody(''); setPostScoreAncb(''); setPostScoreAdv(''); setPostTeamAdv(''); setPostVideoLink(''); setPostImageFile(null); setImagePreview(null); };
+
+    // --- APOIADORES FUNCTIONS ---
+    const compressLogoAgressivo = async (file: File): Promise<string> => {
+        const options = {
+            maxSizeMB: 0.05,
+            maxWidthOrHeight: 300,
+            useWebWorker: true,
+            fileType: 'image/webp' as const,
+            initialQuality: 0.7,
+        };
+        try {
+            const compressed = await imageCompression(file, options);
+            return await fileToBase64(compressed);
+        } catch {
+            return await fileToBase64(file);
+        }
+    };
+
+    const handleApoiadorLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setApoiadorLogoFile(file);
+            setApoiadorLogoPreview(URL.createObjectURL(file));
+        }
+    };
+
+    const handleSalvarApoiador = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!apoiadorLogoFile) {
+            alert('Selecione uma logo para o apoiador.');
+            return;
+        }
+        setIsSavingApoiador(true);
+        try {
+            const logoBase64 = await compressLogoAgressivo(apoiadorLogoFile);
+            await db.collection('apoiadores').add({
+                nome: apoiadorNome,
+                site: apoiadorSite,
+                descricao: apoiadorDescricao,
+                destaque: apoiadorDestaque,
+                logoBase64,
+                criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+            setApoiadorNome('');
+            setApoiadorSite('');
+            setApoiadorDescricao('');
+            setApoiadorDestaque(false);
+            setApoiadorLogoFile(null);
+            setApoiadorLogoPreview(null);
+            setShowApoiadorForm(false);
+        } catch {
+            alert('Erro ao salvar apoiador.');
+        } finally {
+            setIsSavingApoiador(false);
+        }
+    };
+
+    const handleDeleteApoiador = async (id: string, nome: string) => {
+        if (!window.confirm(`Remover apoiador "${nome}"?`)) return;
+        await db.collection('apoiadores').doc(id).delete();
+    };
+
+    const handleToggleDestaque = async (id: string, atual: boolean) => {
+        await db.collection('apoiadores').doc(id).update({ destaque: !atual });
+    };
 
     // Super Admin Functions
     const handlePromoteUser = async (user: UserProfile) => {
@@ -126,7 +205,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         }
     };
 
-    // ... (Keep existing User management functions) ...
     const handleResetPassword = async (user: UserProfile) => {
         if (!window.confirm(`Tem certeza que deseja resetar a senha de ${user.nome} para "ancb1234"?`)) return;
         try {
@@ -156,42 +234,25 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const loadReviews = async () => { setLoadingReviews(true); try { const snap = await db.collection("avaliacoes_gamified").orderBy("timestamp", "desc").limit(50).get(); const enriched = snap.docs.map(doc => { const data = doc.data() as any; const reviewer = activePlayers.find(p => p.id === data.reviewerId); const target = activePlayers.find(p => p.id === data.targetId); return { id: doc.id, ...data, reviewerName: reviewer?.nome || 'Desconhecido', targetName: target?.nome || 'Desconhecido' }; }); setReviews(enriched); setShowReviewsModal(true); } catch (e) { alert("Erro ao carregar avaliações."); } finally { setLoadingReviews(false); } };
     const handleDeleteReview = async (review: any) => { if (!window.confirm("Excluir?")) return; try { const updates: any = {}; if (review.tags && Array.isArray(review.tags)) { review.tags.forEach((tag: string) => { updates[`stats_tags.${tag}`] = firebase.firestore.FieldValue.increment(-1); }); await db.collection("jogadores").doc(review.targetId).update(updates); } await db.collection("avaliacoes_gamified").doc(review.id).delete(); setReviews(prev => prev.filter(r => r.id !== review.id)); } catch (e) { alert("Erro."); } };
     
-    // EMERGENCY SYNC
     const handleEmergencySync = async () => { 
         if (!window.confirm("Isso irá verificar TODOS os jogos e garantir que os placares apareçam, copiando os dados existentes. Confirmar?")) return;
-        
         setIsRecovering(true);
         setRecoveringStatus("Analisando Banco de Dados...");
-
         try {
             const eventsSnap = await db.collection('eventos').get();
             let fixedCount = 0;
-
             for (const eventDoc of eventsSnap.docs) {
                 const gamesSnap = await eventDoc.ref.collection('jogos').get();
-                
                 for (const gameDoc of gamesSnap.docs) {
                     const data = gameDoc.data() as any;
-                    
-                    // Legacy Fields vs New Fields Logic
                     const oldA = Number(data.placarANCB_final) || 0;
                     const newA = Number(data.placarTimeA_final) || 0;
                     const oldB = Number(data.placarAdversario_final) || 0;
                     const newB = Number(data.placarTimeB_final) || 0;
-
-                    // Take the HIGHEST value found (assuming non-zero is correct)
                     const correctA = Math.max(oldA, newA);
                     const correctB = Math.max(oldB, newB);
-
-                    // If we have a discrepancy or zero where there should be data, Fix it.
                     if ((correctA > 0 || correctB > 0) && (newA !== correctA || newB !== correctB || oldA !== correctA || oldB !== correctB)) {
-                        await gameDoc.ref.update({
-                            placarTimeA_final: correctA,
-                            placarTimeB_final: correctB,
-                            placarANCB_final: correctA, 
-                            placarAdversario_final: correctB,
-                            status: 'finalizado'
-                        });
+                        await gameDoc.ref.update({ placarTimeA_final: correctA, placarTimeB_final: correctB, placarANCB_final: correctA, placarAdversario_final: correctB, status: 'finalizado' });
                         fixedCount++;
                     }
                 }
@@ -206,81 +267,41 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         }
     };
 
-    // ADVANCED RECOVERY / AUDIT
     const openAdvancedRecovery = async () => {
         setShowAdvancedRecovery(true);
         setRecoveringStatus("Carregando tudo...");
         setIsRecovering(true);
-
         try {
-            // 1. Load Feed (Backup Source)
             const feedSnap = await db.collection('feed_posts').where('type', '==', 'placar').orderBy('timestamp', 'desc').get();
             const posts = feedSnap.docs.map(d => ({id: d.id, ...d.data(), date: d.data().timestamp?.toDate()}));
             setFeedPlacares(posts);
-
-            // 2. Find ALL Games (Internal + External)
-            // Fix: Include internal tournaments in audit
             const eventsSnap = await db.collection('eventos').get();
             const auditList: any[] = [];
-            
             for (const ev of eventsSnap.docs) {
                 const games = await ev.ref.collection('jogos').get();
                 const eventData = ev.data();
-                
                 games.forEach(g => {
                     const data = g.data();
-                    
-                    // SMART DISPLAY: Prefer whatever has value
                     const sA = data.placarTimeA_final || data.placarANCB_final || 0;
                     const sB = data.placarTimeB_final || data.placarAdversario_final || 0;
-                    
-                    // Correct names based on event type
                     const isInternal = eventData.type === 'torneio_interno';
                     const teamA = isInternal ? (data.timeA_nome || 'Time A') : 'ANCB';
                     const teamB = isInternal ? (data.timeB_nome || 'Time B') : (data.adversario || 'Adversário');
-
-                    auditList.push({
-                        gameId: g.id,
-                        eventId: ev.id,
-                        eventName: eventData.nome,
-                        eventType: eventData.type,
-                        gameDate: data.dataJogo || eventData.data,
-                        teamAName: teamA,
-                        teamBName: teamB,
-                        currentScoreA: sA,
-                        currentScoreB: sB,
-                        manualScoreA: sA, // Init for manual edit
-                        manualScoreB: sB, // Init for manual edit
-                        data: data
-                    });
+                    auditList.push({ gameId: g.id, eventId: ev.id, eventName: eventData.nome, eventType: eventData.type, gameDate: data.dataJogo || eventData.data, teamAName: teamA, teamBName: teamB, currentScoreA: sA, currentScoreB: sB, manualScoreA: sA, manualScoreB: sB, data: data });
                 });
             }
-            
-            // Sort by date desc
             auditList.sort((a, b) => b.gameDate.localeCompare(a.gameDate));
-
-            // Initial auto-match with stronger heuristics
             const initialMap: Record<string, string> = {};
-            
             auditList.forEach(game => {
                 const gameDateStr = game.gameDate;
                 if (gameDateStr) {
                     const gameDate = new Date(gameDateStr);
-                    const bestMatch = posts.find((p: any) => {
-                        if (!p.date) return false;
-                        const diffTime = Math.abs(p.date.getTime() - gameDate.getTime());
-                        const diffDays = diffTime / (1000 * 60 * 60 * 24);
-                        return diffDays <= 2;
-                    });
-                    if (bestMatch) {
-                        initialMap[game.gameId] = bestMatch.id;
-                    }
+                    const bestMatch = posts.find((p: any) => { if (!p.date) return false; const diffTime = Math.abs(p.date.getTime() - gameDate.getTime()); const diffDays = diffTime / (1000 * 60 * 60 * 24); return diffDays <= 2; });
+                    if (bestMatch) { initialMap[game.gameId] = bestMatch.id; }
                 }
             });
-
             setAuditGames(auditList);
             setSelectedFeedMapping(initialMap);
-
         } catch (e) {
             console.error(e);
             alert("Erro ao analisar dados.");
@@ -291,183 +312,76 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     };
 
     const updateAuditGameScore = (gameId: string, field: 'manualScoreA' | 'manualScoreB', value: string) => {
-        setAuditGames(prev => prev.map(g => {
-            if (g.gameId === gameId) {
-                return { ...g, [field]: Number(value) };
-            }
-            return g;
-        }));
+        setAuditGames(prev => prev.map(g => g.gameId === gameId ? { ...g, [field]: Number(value) } : g));
     };
 
     const handleManualSave = async (game: any) => {
-         if(!window.confirm(`Salvar manualmente: ${game.manualScoreA} x ${game.manualScoreB}?`)) return;
-         try {
-             await db.collection("eventos").doc(game.eventId).collection("jogos").doc(game.gameId).update({
-                 placarTimeA_final: Number(game.manualScoreA),
-                 placarTimeB_final: Number(game.manualScoreB),
-                 placarANCB_final: Number(game.manualScoreA), // Legacy sync
-                 placarAdversario_final: Number(game.manualScoreB), // Legacy sync
-                 status: 'finalizado'
-             });
-             // Update "Current" to reflect saved
-             setAuditGames(prev => prev.map(g => g.gameId === game.gameId ? { ...g, currentScoreA: g.manualScoreA, currentScoreB: g.manualScoreB } : g));
-             alert("Salvo com sucesso!");
-         } catch(e) {
-             alert("Erro ao salvar.");
-         }
+        if(!window.confirm(`Salvar manualmente: ${game.manualScoreA} x ${game.manualScoreB}?`)) return;
+        try {
+            await db.collection("eventos").doc(game.eventId).collection("jogos").doc(game.gameId).update({ placarTimeA_final: Number(game.manualScoreA), placarTimeB_final: Number(game.manualScoreB), placarANCB_final: Number(game.manualScoreA), placarAdversario_final: Number(game.manualScoreB), status: 'finalizado' });
+            setAuditGames(prev => prev.map(g => g.gameId === game.gameId ? { ...g, currentScoreA: g.manualScoreA, currentScoreB: g.manualScoreB } : g));
+            alert("Salvo com sucesso!");
+        } catch(e) { alert("Erro ao salvar."); }
     };
 
     const handleRecalculateInternalScore = async (gameItem: any) => {
         if(!window.confirm("Isso irá recalcular os pontos considerando:\n1. Jogadores no elenco\n2. Cestas 'anônimas' contra times convidados.\n\nContinuar?")) return;
-
         try {
-            // 1. Get Event Data (Times)
             const eventDoc = await db.collection("eventos").doc(gameItem.eventId).get();
             const eventData = eventDoc.data() as Evento;
-
-            if (!eventData.times || eventData.times.length === 0) {
-                alert("Erro: Este evento não possui times cadastrados.");
-                return;
-            }
-
+            if (!eventData.times || eventData.times.length === 0) { alert("Erro: Este evento não possui times cadastrados."); return; }
             const gameData = gameItem.data;
             const teamA = eventData.times.find(t => t.id === gameData.timeA_id);
             const teamB = eventData.times.find(t => t.id === gameData.timeB_id);
-
-            if (!teamA || !teamB) {
-                alert("Erro: Não foi possível identificar os times A e B neste jogo.");
-                return;
-            }
-
-            // 2. Get Cestas
+            if (!teamA || !teamB) { alert("Erro: Não foi possível identificar os times A e B neste jogo."); return; }
             const cestasSnap = await db.collection("eventos").doc(gameItem.eventId).collection("jogos").doc(gameItem.gameId).collection("cestas").get();
-            
-            let sA = 0;
-            let sB = 0;
-
+            let sA = 0; let sB = 0;
             const normalize = (str: string) => str ? str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
             const nameA = normalize(teamA.nomeTime);
             const nameB = normalize(teamB.nomeTime);
-
             cestasSnap.forEach(doc => {
-                const cesta = doc.data();
-                const points = Number(cesta.pontos);
-                let assigned = false;
-
-                // Priority 1: Explicit Time ID (Legacy or New)
-                if (cesta.timeId) {
-                    if (cesta.timeId === teamA.id || cesta.timeId === 'A') {
-                        sA += points;
-                        assigned = true;
-                    } else if (cesta.timeId === teamB.id || cesta.timeId === 'B') {
-                        sB += points;
-                        assigned = true;
-                    }
-                }
-
-                // Priority 2: Roster Match (If Player ID exists)
-                if (!assigned && cesta.jogadorId) {
-                    if (teamA.jogadores.includes(cesta.jogadorId)) {
-                        sA += points;
-                        assigned = true;
-                    } else if (teamB.jogadores.includes(cesta.jogadorId)) {
-                        sB += points;
-                        assigned = true;
-                    }
-                }
-
-                // Priority 3: Name Match (If "Anonymous" basket matches Team Name)
-                if (!assigned && cesta.nomeJogador) {
-                    const label = normalize(cesta.nomeJogador);
-                    if (label.includes(nameA)) {
-                        sA += points;
-                        assigned = true;
-                    } else if (label.includes(nameB)) {
-                        sB += points;
-                        assigned = true;
-                    }
-                }
-
-                // Priority 4: Guest Team Logic (Fallthrough)
-                // If Team A has players (ANCB) and Team B has NO players (Invited), 
-                // and the basket has NO player ID -> Assign to Team B (The guest).
-                if (!assigned && !cesta.jogadorId) {
-                    const teamAHasPlayers = teamA.jogadores && teamA.jogadores.length > 0;
-                    const teamBHasPlayers = teamB.jogadores && teamB.jogadores.length > 0;
-
-                    if (teamAHasPlayers && !teamBHasPlayers) {
-                        sB += points; // Assume guest scored
-                        assigned = true;
-                    } else if (!teamAHasPlayers && teamBHasPlayers) {
-                        sA += points; // Assume guest scored
-                        assigned = true;
-                    }
-                }
+                const cesta = doc.data(); const points = Number(cesta.pontos); let assigned = false;
+                if (cesta.timeId) { if (cesta.timeId === teamA.id || cesta.timeId === 'A') { sA += points; assigned = true; } else if (cesta.timeId === teamB.id || cesta.timeId === 'B') { sB += points; assigned = true; } }
+                if (!assigned && cesta.jogadorId) { if (teamA.jogadores.includes(cesta.jogadorId)) { sA += points; assigned = true; } else if (teamB.jogadores.includes(cesta.jogadorId)) { sB += points; assigned = true; } }
+                if (!assigned && cesta.nomeJogador) { const label = normalize(cesta.nomeJogador); if (label.includes(nameA)) { sA += points; assigned = true; } else if (label.includes(nameB)) { sB += points; assigned = true; } }
+                if (!assigned && !cesta.jogadorId) { const teamAHasPlayers = teamA.jogadores && teamA.jogadores.length > 0; const teamBHasPlayers = teamB.jogadores && teamB.jogadores.length > 0; if (teamAHasPlayers && !teamBHasPlayers) { sB += points; assigned = true; } else if (!teamAHasPlayers && teamBHasPlayers) { sA += points; assigned = true; } }
             });
-
-            // 3. Update Doc
-            await db.collection("eventos").doc(gameItem.eventId).collection("jogos").doc(gameItem.gameId).update({
-                 placarTimeA_final: sA,
-                 placarTimeB_final: sB,
-                 placarANCB_final: sA, 
-                 placarAdversario_final: sB,
-            });
-
+            await db.collection("eventos").doc(gameItem.eventId).collection("jogos").doc(gameItem.gameId).update({ placarTimeA_final: sA, placarTimeB_final: sB, placarANCB_final: sA, placarAdversario_final: sB });
             setAuditGames(prev => prev.map(g => g.gameId === gameItem.gameId ? { ...g, currentScoreA: sA, currentScoreB: sB, manualScoreA: sA, manualScoreB: sB } : g));
             alert(`Recalculado! A: ${sA}, B: ${sB}`);
-
-        } catch (e) {
-            console.error(e);
-            alert("Erro ao recalcular.");
-        }
+        } catch (e) { console.error(e); alert("Erro ao recalcular."); }
     };
 
     const handleRestoreGameFromFeed = async (gameItem: any) => {
         const postId = selectedFeedMapping[gameItem.gameId];
-        if(!postId) {
-            alert("Selecione um placar do feed para vincular.");
-            return;
-        }
-
+        if(!postId) { alert("Selecione um placar do feed para vincular."); return; }
         const postItem = feedPlacares.find((p: any) => p.id === postId);
         if (!postItem) return;
-
         if(!window.confirm(`Restaurar este placar do Backup?\n\nBackup do Feed: ANCB ${postItem.content.placar_ancb} x ${postItem.content.placar_adv}\n\nIsso corrigirá o banco de dados permanentemente.`)) return;
-
         try {
-             const newA = Number(postItem.content.placar_ancb);
-             const newB = Number(postItem.content.placar_adv);
-
-             await db.collection("eventos").doc(gameItem.eventId).collection("jogos").doc(gameItem.gameId).update({
-                 placarTimeA_final: newA,
-                 placarTimeB_final: newB,
-                 placarANCB_final: newA, // Sync Legacy
-                 placarAdversario_final: newB, // Sync Legacy
-                 status: 'finalizado'
-             });
-             
-             // Update local list to reflect change
-             setAuditGames(prev => prev.map(g => g.gameId === gameItem.gameId ? { ...g, currentScoreA: newA, currentScoreB: newB, manualScoreA: newA, manualScoreB: newB } : g));
-             alert("Placar restaurado com sucesso!");
-        } catch(e) { 
-            console.error(e);
-            alert("Erro ao restaurar."); 
-        }
+            const newA = Number(postItem.content.placar_ancb); const newB = Number(postItem.content.placar_adv);
+            await db.collection("eventos").doc(gameItem.eventId).collection("jogos").doc(gameItem.gameId).update({ placarTimeA_final: newA, placarTimeB_final: newB, placarANCB_final: newA, placarAdversario_final: newB, status: 'finalizado' });
+            setAuditGames(prev => prev.map(g => g.gameId === gameItem.gameId ? { ...g, currentScoreA: newA, currentScoreB: newB, manualScoreA: newA, manualScoreB: newB } : g));
+            alert("Placar restaurado com sucesso!");
+        } catch(e) { console.error(e); alert("Erro ao restaurar."); }
     };
 
     const filteredUsers = users.filter(u => (u.nome || '').toLowerCase().includes(userSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(userSearch.toLowerCase()));
 
     return (
         <div className="animate-fadeIn">
-            {/* Header ... */}
+            {/* Header */}
             <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
                 <div className="flex items-center gap-3 self-start md:self-center">
                     <Button variant="secondary" size="sm" onClick={onBack} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"><LucideArrowLeft size={18} /></Button>
                     <h2 className="text-2xl font-bold text-ancb-blue dark:text-blue-400">Painel Administrativo</h2>
                 </div>
-                <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg self-stretch md:self-auto">
+                <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg self-stretch md:self-auto gap-1">
                     <button onClick={() => setAdminTab('general')} className={`flex-1 px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${adminTab === 'general' ? 'bg-white dark:bg-gray-600 shadow text-ancb-blue dark:text-white' : 'text-gray-500'}`}>Geral</button>
                     <button onClick={() => setAdminTab('users')} className={`flex-1 px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${adminTab === 'users' ? 'bg-white dark:bg-gray-600 shadow text-ancb-blue dark:text-white' : 'text-gray-500'}`}>Usuários</button>
+                    <button onClick={() => setAdminTab('apoiadores')} className={`flex-1 px-4 py-1.5 rounded-md text-sm font-bold transition-colors flex items-center justify-center gap-1 ${adminTab === 'apoiadores' ? 'bg-white dark:bg-gray-600 shadow text-ancb-orange dark:text-orange-400' : 'text-gray-500'}`}>
+                        <LucideHeart size={13} /> Apoiadores
+                    </button>
                 </div>
                 <div className="flex gap-2 self-end md:self-auto">
                     <Button onClick={() => setShowAddPost(true)} variant="secondary" className="!bg-blue-600 !text-white border-none"><LucideNewspaper size={18} /> <span className="hidden sm:inline">Postar</span></Button>
@@ -487,7 +401,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                 </div>
             )}
 
-            {/* TAB CONTENT: USERS */}
+            {/* TAB: USERS */}
             {adminTab === 'users' && (
                 <div className="animate-fadeIn">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
@@ -534,7 +448,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                 </div>
             )}
 
-            {/* TAB CONTENT: GENERAL (Reorganized Grid) */}
+            {/* TAB: GENERAL */}
             {adminTab === 'general' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-orange-200 dark:border-orange-900/50 flex flex-col gap-3 h-fit">
@@ -574,15 +488,178 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                 </div>
             )}
 
+            {/* TAB: APOIADORES */}
+            {adminTab === 'apoiadores' && (
+                <div className="animate-fadeIn space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-lg font-black text-gray-900 dark:text-white">Apoiadores</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{apoiadores.length} cadastrado(s)</p>
+                        </div>
+                        <button
+                            onClick={() => setShowApoiadorForm(true)}
+                            className="flex items-center gap-1.5 bg-ancb-orange text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-orange-600 transition-all shadow-sm shadow-orange-200 dark:shadow-none"
+                        >
+                            <LucidePlus size={16} /> Novo Apoiador
+                        </button>
+                    </div>
+
+                    {/* Lista */}
+                    <div className="space-y-2">
+                        {apoiadores.length === 0 && (
+                            <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
+                                <LucideHeart size={36} className="mx-auto text-gray-300 mb-3" />
+                                <p className="text-gray-400 text-sm font-medium">Nenhum apoiador cadastrado ainda.</p>
+                                <p className="text-gray-400 text-xs mt-1">Clique em "Novo Apoiador" para começar.</p>
+                            </div>
+                        )}
+                        {apoiadores.map((a: any) => (
+                            <div key={a.id} className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 shadow-sm hover:shadow-md transition-shadow">
+                                <div className="w-14 h-14 rounded-xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-100 dark:border-gray-600">
+                                    <img src={a.logoBase64} alt={a.nome} className="w-12 h-12 object-contain" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <p className="font-bold text-sm text-gray-900 dark:text-white">{a.nome}</p>
+                                        {a.destaque && (
+                                            <span className="text-[9px] font-black bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                                                ⭐ Destaque
+                                            </span>
+                                        )}
+                                    </div>
+                                    {a.site && <p className="text-[11px] text-ancb-blue dark:text-blue-400 truncate">{a.site}</p>}
+                                    {a.descricao && <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{a.descricao}</p>}
+                                </div>
+                                <div className="flex gap-1.5 flex-shrink-0">
+                                    <button
+                                        onClick={() => handleToggleDestaque(a.id, a.destaque)}
+                                        title={a.destaque ? 'Remover destaque' : 'Marcar como destaque'}
+                                        className={`p-2 rounded-lg text-sm transition-all ${a.destaque ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 hover:text-yellow-500'}`}
+                                    >
+                                        ⭐
+                                    </button>
+                                    <button
+                                        onClick={() => handleDeleteApoiador(a.id, a.nome)}
+                                        className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 transition-all"
+                                    >
+                                        <LucideTrash2 size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Modal Novo Apoiador */}
+                    {showApoiadorForm && (
+                        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4 animate-fadeIn">
+                            <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl">
+                                <div className="p-5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <LucideHeart size={18} className="text-ancb-orange" fill="currentColor" />
+                                        <h4 className="font-black text-gray-900 dark:text-white">Novo Apoiador</h4>
+                                    </div>
+                                    <button onClick={() => setShowApoiadorForm(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-all text-xl font-bold">×</button>
+                                </div>
+                                <form onSubmit={handleSalvarApoiador} className="p-5 space-y-4">
+                                    {/* Upload Logo */}
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">
+                                            Logo do Apoiador *
+                                        </label>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden bg-gray-50 dark:bg-gray-800 flex-shrink-0">
+                                                {apoiadorLogoPreview
+                                                    ? <img src={apoiadorLogoPreview} alt="preview" className="w-18 h-18 object-contain p-1" />
+                                                    : <span className="text-3xl">🏢</span>
+                                                }
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="cursor-pointer inline-flex items-center gap-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs font-bold px-3 py-2.5 rounded-lg transition-all">
+                                                    📁 Escolher Logo
+                                                    <input type="file" accept="image/*" onChange={handleApoiadorLogoSelect} className="hidden" />
+                                                </label>
+                                                <p className="text-[10px] text-gray-400 mt-1.5 leading-tight">
+                                                    PNG, JPG ou WebP.<br />
+                                                    Comprimida automaticamente para &lt;50KB em WebP.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Nome */}
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nome *</label>
+                                        <input
+                                            required
+                                            className="w-full p-3 border rounded-xl dark:bg-gray-800 dark:text-white dark:border-gray-600 text-sm focus:ring-2 focus:ring-ancb-orange outline-none transition-all"
+                                            placeholder="Ex: Farmácia Central"
+                                            value={apoiadorNome}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setApoiadorNome(e.target.value)}
+                                        />
+                                    </div>
+
+                                    {/* Site */}
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Site / Link (opcional)</label>
+                                        <input
+                                            className="w-full p-3 border rounded-xl dark:bg-gray-800 dark:text-white dark:border-gray-600 text-sm focus:ring-2 focus:ring-ancb-orange outline-none transition-all"
+                                            placeholder="https://..."
+                                            value={apoiadorSite}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setApoiadorSite(e.target.value)}
+                                        />
+                                    </div>
+
+                                    {/* Descrição */}
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Descrição (opcional)</label>
+                                        <textarea
+                                            className="w-full p-3 border rounded-xl dark:bg-gray-800 dark:text-white dark:border-gray-600 text-sm focus:ring-2 focus:ring-ancb-orange outline-none resize-none transition-all"
+                                            placeholder="Uma frase curta sobre este apoiador..."
+                                            rows={2}
+                                            value={apoiadorDescricao}
+                                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setApoiadorDescricao(e.target.value)}
+                                        />
+                                    </div>
+
+                                    {/* Destaque */}
+                                    <label className="flex items-center gap-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-3 border border-yellow-200 dark:border-yellow-800 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={apoiadorDestaque}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setApoiadorDestaque(e.target.checked)}
+                                            className="w-4 h-4 accent-yellow-500"
+                                        />
+                                        <div>
+                                            <span className="text-sm font-bold text-yellow-700 dark:text-yellow-400">⭐ Marcar como Destaque</span>
+                                            <p className="text-[10px] text-yellow-600 dark:text-yellow-500">Aparece com card grande na página de apoiadores</p>
+                                        </div>
+                                    </label>
+
+                                    <button
+                                        type="submit"
+                                        disabled={isSavingApoiador}
+                                        className="w-full py-3.5 bg-ancb-orange text-white font-black rounded-xl hover:bg-orange-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-orange-200 dark:shadow-none"
+                                    >
+                                        {isSavingApoiador ? (
+                                            <><span className="animate-spin inline-block">⏳</span> Comprimindo e salvando...</>
+                                        ) : (
+                                            <><LucideHeart size={16} fill="white" /> Salvar Apoiador</>
+                                        )}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* MODALS */}
-            {/* ADVANCED RECOVERY MODAL */}
             <Modal isOpen={showAdvancedRecovery} onClose={() => setShowAdvancedRecovery(false)} title="Restaurar do Histórico (Backup)">
                 <div className="space-y-4">
                     <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-sm text-blue-800 dark:text-blue-300">
                         <p className="font-bold flex items-center gap-2"><LucideHistory size={16}/> Resgate Inteligente</p>
                         <p className="mt-1 text-xs">Você pode <strong>vincular um post do feed</strong>, <strong>digitar manualmente</strong> ou, para torneios internos, <strong>recalcular via cestas</strong>.</p>
                     </div>
-
                     {auditGames.length === 0 ? (
                         <div className="text-center py-8 text-gray-500">
                             <LucideCheck size={48} className="mx-auto mb-2 text-green-500 opacity-50" />
@@ -591,103 +668,62 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                     ) : (
                         <div className="max-h-[60vh] overflow-y-auto custom-scrollbar space-y-4">
                             {auditGames.map(game => {
-                                // Smart Sorting: Put closest date matches at the TOP
                                 const gameDate = new Date(game.gameDate);
                                 const sortedFeedOptions = [...feedPlacares].sort((a, b) => {
                                     const diffA = Math.abs(a.date.getTime() - gameDate.getTime());
                                     const diffB = Math.abs(b.date.getTime() - gameDate.getTime());
                                     return diffA - diffB;
                                 });
-
                                 return (
                                     <div key={game.gameId} className={`border rounded-lg p-3 bg-white dark:bg-gray-800 ${game.currentScoreA === 0 && game.currentScoreB === 0 ? 'border-red-300 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-700'}`}>
                                         <div className="mb-2 pb-2 border-b border-gray-100 dark:border-gray-700 flex justify-between items-start">
                                             <div>
-                                                <p className="font-bold text-sm text-gray-800 dark:text-gray-200">
-                                                    {game.gameDate} - {game.eventName}
-                                                </p>
+                                                <p className="font-bold text-sm text-gray-800 dark:text-gray-200">{game.gameDate} - {game.eventName}</p>
                                                 <p className="text-xs text-gray-500 dark:text-gray-400">{game.teamAName} vs {game.teamBName}</p>
                                                 {game.eventType === 'torneio_interno' && <span className="text-[9px] bg-blue-100 text-blue-800 px-1 rounded uppercase font-bold">Interno</span>}
                                             </div>
                                             <div className="text-right">
                                                 <span className="block text-[10px] uppercase font-bold text-gray-400">No Banco</span>
-                                                <span className="font-mono font-bold text-lg text-ancb-blue">
-                                                    {game.currentScoreA} x {game.currentScoreB}
-                                                </span>
+                                                <span className="font-mono font-bold text-lg text-ancb-blue">{game.currentScoreA} x {game.currentScoreB}</span>
                                             </div>
                                         </div>
-                                        
                                         <div className="flex flex-col gap-3">
-                                            {/* MANUAL EDIT SECTION */}
                                             <div className="bg-gray-50 dark:bg-gray-700/30 p-2 rounded-lg border border-gray-100 dark:border-gray-600">
                                                 <label className="text-[10px] font-bold text-gray-500 block mb-1 uppercase"><LucideEdit2 size={10} className="inline mr-1"/> Correção Manual Direta</label>
                                                 <div className="flex items-center gap-2">
                                                     <div className="flex-1">
                                                         <label className="text-[9px] font-bold text-gray-400 text-center block truncate">{game.teamAName}</label>
-                                                        <input 
-                                                            type="number" 
-                                                            className="w-full p-1 border rounded text-center font-bold text-sm dark:bg-gray-700 dark:text-white" 
-                                                            value={game.manualScoreA}
-                                                            onChange={(e) => updateAuditGameScore(game.gameId, 'manualScoreA', e.target.value)}
-                                                        />
+                                                        <input type="number" className="w-full p-1 border rounded text-center font-bold text-sm dark:bg-gray-700 dark:text-white" value={game.manualScoreA} onChange={(e) => updateAuditGameScore(game.gameId, 'manualScoreA', e.target.value)} />
                                                     </div>
                                                     <span className="font-bold text-gray-400 mt-3">X</span>
                                                     <div className="flex-1">
                                                         <label className="text-[9px] font-bold text-gray-400 text-center block truncate">{game.teamBName}</label>
-                                                        <input 
-                                                            type="number" 
-                                                            className="w-full p-1 border rounded text-center font-bold text-sm dark:bg-gray-700 dark:text-white" 
-                                                            value={game.manualScoreB}
-                                                            onChange={(e) => updateAuditGameScore(game.gameId, 'manualScoreB', e.target.value)}
-                                                        />
+                                                        <input type="number" className="w-full p-1 border rounded text-center font-bold text-sm dark:bg-gray-700 dark:text-white" value={game.manualScoreB} onChange={(e) => updateAuditGameScore(game.gameId, 'manualScoreB', e.target.value)} />
                                                     </div>
-                                                    <button 
-                                                        onClick={() => handleManualSave(game)} 
-                                                        className="h-full mt-3 px-3 py-1 rounded bg-green-600 hover:bg-green-700 text-white shadow-md flex items-center justify-center transition-colors"
-                                                        title="Salvar Manualmente"
-                                                    >
-                                                        <LucideSave size={14} />
-                                                    </button>
+                                                    <button onClick={() => handleManualSave(game)} className="h-full mt-3 px-3 py-1 rounded bg-green-600 hover:bg-green-700 text-white shadow-md flex items-center justify-center transition-colors" title="Salvar Manualmente"><LucideSave size={14} /></button>
                                                 </div>
-                                                
-                                                {/* INTERNAL RECALCULATE */}
                                                 {game.eventType === 'torneio_interno' && (
-                                                    <button 
-                                                        onClick={() => handleRecalculateInternalScore(game)} 
-                                                        className="w-full mt-2 py-2 rounded text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors shadow-sm"
-                                                    >
+                                                    <button onClick={() => handleRecalculateInternalScore(game)} className="w-full mt-2 py-2 rounded text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors shadow-sm">
                                                         <LucideRefreshCw size={12} /> Recalcular via Elenco
                                                     </button>
                                                 )}
                                             </div>
-
                                             <div className="relative flex items-center py-1">
                                                 <div className="flex-grow border-t border-gray-200 dark:border-gray-600"></div>
                                                 <span className="flex-shrink-0 mx-2 text-[10px] text-gray-400 uppercase">OU Usar Feed</span>
                                                 <div className="flex-grow border-t border-gray-200 dark:border-gray-600"></div>
                                             </div>
-
                                             <div>
                                                 <div className="flex gap-2">
-                                                    <select 
-                                                        className="flex-1 p-2 text-xs border rounded bg-gray-50 dark:bg-gray-700 dark:text-white max-w-full"
-                                                        value={selectedFeedMapping[game.gameId] || ''}
-                                                        onChange={(e) => setSelectedFeedMapping({...selectedFeedMapping, [game.gameId]: e.target.value})}
-                                                    >
+                                                    <select className="flex-1 p-2 text-xs border rounded bg-gray-50 dark:bg-gray-700 dark:text-white max-w-full" value={selectedFeedMapping[game.gameId] || ''} onChange={(e) => setSelectedFeedMapping({...selectedFeedMapping, [game.gameId]: e.target.value})}>
                                                         <option value="">-- Buscar no Feed --</option>
-                                                        {sortedFeedOptions.map((p: any, idx) => {
+                                                        {sortedFeedOptions.map((p: any) => {
                                                             const dateStr = p.date ? new Intl.DateTimeFormat('pt-BR').format(p.date) : '??/??';
                                                             const isRecommended = Math.abs(p.date.getTime() - gameDate.getTime()) / (1000 * 60 * 60 * 24) <= 2;
-                                                            return (
-                                                                <option key={p.id} value={p.id}>
-                                                                    {isRecommended ? '⭐ ' : ''}{dateStr} | ANCB {p.content.placar_ancb} x {p.content.placar_adv} ({p.content.time_adv})
-                                                                </option>
-                                                            )
+                                                            return (<option key={p.id} value={p.id}>{isRecommended ? '⭐ ' : ''}{dateStr} | ANCB {p.content.placar_ancb} x {p.content.placar_adv} ({p.content.time_adv})</option>);
                                                         })}
                                                     </select>
-                                                    <Button size="sm" variant="secondary" onClick={() => handleRestoreGameFromFeed(game)} disabled={!selectedFeedMapping[game.gameId]} className="whitespace-nowrap">
-                                                        <LucideRefreshCw size={14} />
-                                                    </Button>
+                                                    <Button size="sm" variant="secondary" onClick={() => handleRestoreGameFromFeed(game)} disabled={!selectedFeedMapping[game.gameId]} className="whitespace-nowrap"><LucideRefreshCw size={14} /></Button>
                                                 </div>
                                             </div>
                                         </div>
@@ -701,18 +737,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
 
             <Modal isOpen={showUserEditModal} onClose={() => setShowUserEditModal(false)} title="Editar Usuário">
                 <div className="space-y-4">
-                    <p className="text-sm text-gray-500">
-                        Vincular <strong>{selectedUser?.nome}</strong> a um perfil de jogador existente.
-                    </p>
-                    <select 
-                        className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white"
-                        value={linkPlayerId}
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLinkPlayerId(e.target.value)}
-                    >
+                    <p className="text-sm text-gray-500">Vincular <strong>{selectedUser?.nome}</strong> a um perfil de jogador existente.</p>
+                    <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={linkPlayerId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLinkPlayerId(e.target.value)}>
                         <option value="">Selecione um Atleta</option>
-                        {activePlayers.map(p => (
-                            <option key={p.id} value={p.id}>{p.nome}</option>
-                        ))}
+                        {activePlayers.map(p => (<option key={p.id} value={p.id}>{p.nome}</option>))}
                     </select>
                     <Button onClick={handleLinkPlayerToUser} className="w-full">Salvar Vínculo</Button>
                 </div>
