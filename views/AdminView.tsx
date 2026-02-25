@@ -1,11 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
 import firebase, { db, auth, functions } from '../services/firebase';
 import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player, Time, Cesta, UserProfile, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing, LucideBellOff, LucideSend, LucideKeyRound, LucideCrown, LucideShield, LucideSiren, LucideDatabase, LucideHistory, LucideSave, LucideArrowRight, LucideZap, LucideEdit2, LucideHeart } from 'lucide-react';
+import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing, LucideBellOff, LucideSend, LucideKeyRound, LucideCrown, LucideShield, LucideSiren, LucideDatabase, LucideHistory, LucideSave, LucideArrowRight, LucideZap, LucideEdit2, LucideHeart, LucideArrowUp, LucideArrowDown, LucideGripVertical } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
+import { ApoiadoresManager } from '../components/ApoiadoresManager';
 
 interface AdminViewProps {
     onBack: () => void;
@@ -62,6 +62,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [apoiadorLogoFile, setApoiadorLogoFile] = useState<File | null>(null);
     const [apoiadorLogoPreview, setApoiadorLogoPreview] = useState<string | null>(null);
     const [isSavingApoiador, setIsSavingApoiador] = useState(false);
+    const [draggedApoiador, setDraggedApoiador] = useState<string | null>(null);
 
     const isSuperAdmin = userProfile?.role === 'super-admin';
 
@@ -83,8 +84,33 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
         });
 
-        const unsubApoiadores = db.collection('apoiadores').orderBy('nome').onSnapshot(snap => {
-            setApoiadores(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const unsubApoiadores = db.collection('apoiadores').onSnapshot(async snap => {
+            const docsData = snap.docs.map((doc, index) => ({ 
+                id: doc.id, 
+                ...doc.data(),
+            } as any));
+
+            // Verificar se algum documento não tem 'ordem'
+            const needsMigration = docsData.some(doc => (doc as any).ordem === undefined);
+            
+            if (needsMigration) {
+                // Migrar: adicionar campo 'ordem' aos documentos que não têm
+                const updates = docsData
+                    .filter(doc => doc.ordem === undefined)
+                    .map((doc, idx) => 
+                        db.collection('apoiadores').doc(doc.id).update({ 
+                            ordem: docsData.findIndex(d => d.id === doc.id) 
+                        })
+                    );
+                    
+                if (updates.length > 0) {
+                    await Promise.all(updates);
+                }
+            }
+
+            // Ordenar por 'ordem' ou by index se não existir
+            const sorted = docsData.sort((a, b) => (a.ordem ?? 999) - (b.ordem ?? 999));
+            setApoiadores(sorted);
         });
 
         return () => {
@@ -144,12 +170,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         setIsSavingApoiador(true);
         try {
             const logoBase64 = await compressLogoAgressivo(apoiadorLogoFile);
+            const proximaOrdem = apoiadores.length;
             await db.collection('apoiadores').add({
                 nome: apoiadorNome,
                 site: apoiadorSite,
                 descricao: apoiadorDescricao,
                 destaque: apoiadorDestaque,
                 logoBase64,
+                ordem: proximaOrdem,
                 criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
             });
             setApoiadorNome('');
@@ -173,6 +201,43 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
 
     const handleToggleDestaque = async (id: string, atual: boolean) => {
         await db.collection('apoiadores').doc(id).update({ destaque: !atual });
+    };
+
+    const handleDragStartApoiador = (id: string) => {
+        setDraggedApoiador(id);
+    };
+
+    const handleDragOverApoiador = (e: React.DragEvent) => {
+        e.preventDefault();
+    };
+
+    const handleDropApoiador = (targetIndex: number) => {
+        if (!draggedApoiador) return;
+        const draggedIndex = apoiadores.findIndex((a: any) => a.id === draggedApoiador);
+        if (draggedIndex === targetIndex) {
+            setDraggedApoiador(null);
+            return;
+        }
+        const newOrder = [...apoiadores];
+        const [draggedItem] = newOrder.splice(draggedIndex, 1);
+        newOrder.splice(targetIndex, 0, draggedItem);
+        
+        // Update order in Firestore
+        Promise.all(newOrder.map((a, idx) => 
+            db.collection('apoiadores').doc(a.id).update({ ordem: idx })
+        )).catch(() => alert('Erro ao reordenar'));
+        
+        setDraggedApoiador(null);
+    };
+
+    const moveApoiadorUp = (index: number) => {
+        if (index === 0) return;
+        handleDropApoiador(index - 1);
+    };
+
+    const moveApoiadorDown = (index: number) => {
+        if (index === apoiadores.length - 1) return;
+        handleDropApoiador(index + 1);
     };
 
     // Super Admin Functions
@@ -494,7 +559,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                     <div className="flex items-center justify-between">
                         <div>
                             <h3 className="text-lg font-black text-gray-900 dark:text-white">Apoiadores</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{apoiadores.length} cadastrado(s)</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{apoiadores.length} cadastrado(s) • Arraste para reordenar</p>
                         </div>
                         <button
                             onClick={() => setShowApoiadorForm(true)}
@@ -504,7 +569,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                         </button>
                     </div>
 
-                    {/* Lista */}
+                    {/* Lista com Drag & Drop */}
                     <div className="space-y-2">
                         {apoiadores.length === 0 && (
                             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
@@ -513,11 +578,34 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                 <p className="text-gray-400 text-xs mt-1">Clique em "Novo Apoiador" para começar.</p>
                             </div>
                         )}
-                        {apoiadores.map((a: any) => (
-                            <div key={a.id} className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 shadow-sm hover:shadow-md transition-shadow">
-                                <div className="w-14 h-14 rounded-xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-100 dark:border-gray-600">
-                                    <img src={a.logoBase64} alt={a.nome} className="w-12 h-12 object-contain" />
+                        {apoiadores.map((a: any, index: number) => (
+                            <div
+                                key={a.id}
+                                draggable
+                                onDragStart={() => handleDragStartApoiador(a.id)}
+                                onDragOver={handleDragOverApoiador}
+                                onDrop={() => handleDropApoiador(index)}
+                                className={`flex items-center gap-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 shadow-sm hover:shadow-md transition-all ${
+                                    draggedApoiador === a.id ? 'opacity-50 scale-95' : ''
+                                }`}
+                            >
+                                {/* Grip Handle */}
+                                <div className="cursor-grab active:cursor-grabbing flex-shrink-0">
+                                    <LucideGripVertical size={20} className="text-gray-400" />
                                 </div>
+
+                                {/* Logo */}
+                                <div
+            className="w-14 h-14 rounded-xl bg-transparent flex items-center justify-center flex-shrink-0"
+            style={{
+                backgroundImage: `url('${a.logoBase64}')`,
+                backgroundSize: 'contain',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat'
+            }}
+        />
+
+                                {/* Info */}
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-1.5 flex-wrap">
                                         <p className="font-bold text-sm text-gray-900 dark:text-white">{a.nome}</p>
@@ -530,17 +618,38 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                     {a.site && <p className="text-[11px] text-ancb-blue dark:text-blue-400 truncate">{a.site}</p>}
                                     {a.descricao && <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{a.descricao}</p>}
                                 </div>
+
+                                {/* Ações */}
                                 <div className="flex gap-1.5 flex-shrink-0">
                                     <button
-                                        onClick={() => handleToggleDestaque(a.id, a.destaque)}
+                                        onClick={() => moveApoiadorUp(index)}
+                                        disabled={index === 0}
+                                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                        title="Mover para cima"
+                                    >
+                                        <LucideArrowUp size={18} className="text-gray-700 dark:text-gray-300" />
+                                    </button>
+
+                                    <button
+                                        onClick={() => moveApoiadorDown(index)}
+                                        disabled={index === apoiadores.length - 1}
+                                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                        title="Mover para baixo"
+                                    >
+                                        <LucideArrowDown size={18} className="text-gray-700 dark:text-gray-300" />
+                                    </button>
+
+                                    <button
+                                        onClick={() => handleToggleDestaque(a.id, a.destaque || false)}
                                         title={a.destaque ? 'Remover destaque' : 'Marcar como destaque'}
                                         className={`p-2 rounded-lg text-sm transition-all ${a.destaque ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 hover:text-yellow-500'}`}
                                     >
                                         ⭐
                                     </button>
+
                                     <button
                                         onClick={() => handleDeleteApoiador(a.id, a.nome)}
-                                        className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 transition-all"
+                                        className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 transition-all"
                                     >
                                         <LucideTrash2 size={14} />
                                     </button>

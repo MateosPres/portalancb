@@ -10,6 +10,7 @@ interface Apoiador {
     site?: string;
     descricao?: string;
     destaque?: boolean;
+    ordem?: number;
 }
 
 interface ApoiadoresViewProps {
@@ -30,8 +31,12 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack }) => {
     }, []);
 
     useEffect(() => {
-        const unsub = db.collection('apoiadores').orderBy('nome').onSnapshot(snap => {
-            setApoiadores(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Apoiador)));
+        const unsub = db.collection('apoiadores').orderBy('ordem', 'asc').onSnapshot(snap => {
+            setApoiadores(snap.docs.map(doc => ({ 
+                id: doc.id, 
+                ...doc.data(),
+                ordem: doc.data().ordem ?? 999
+            } as Apoiador)));
             setLoading(false);
         });
         return () => unsub();
@@ -44,6 +49,7 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack }) => {
 
     const logoOpacity = isDark ? '0.65' : '0.6';
 
+    // Manter a lógica de destacados, mas já ordenado por 'ordem'
     const destacados = apoiadores.filter(a => a.destaque);
     const demais = apoiadores.filter(a => !a.destaque);
     const todosParaExibir = [...destacados, ...demais];
@@ -175,6 +181,78 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack }) => {
                     <LucideHeart size={15} fill="currentColor" />
                     Quero Apoiar
                 </a>
+            </div>
+
+            {/* Cards de Destaque */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                {destacados.map((apoiador) => (
+                    <div
+                        key={apoiador.id}
+                        onClick={apoiador.site ? () => window.open(apoiador.site, '_blank') : undefined}
+                        className={`bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 shadow-md hover:shadow-lg transition-all ${apoiador.site ? 'cursor-pointer' : ''}`}
+                    >
+                        <div className="flex items-center gap-4 mb-3">
+                            <div className="w-20 h-20 rounded-xl bg-transparent flex items-center justify-center flex-shrink-0">
+                                <img
+                                    src={apoiador.logoBase64}
+                                    alt={apoiador.nome}
+                                    className="h-full w-full object-contain object-center"
+                                    style={{ 
+                                        opacity: logoOpacity,
+                                        filter: logoStyle.filter
+                                    }}
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="font-bold text-gray-900 dark:text-white line-clamp-2">{apoiador.nome}</h3>
+                                {apoiador.descricao && (
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{apoiador.descricao}</p>
+                                )}
+                            </div>
+                        </div>
+                        {apoiador.site && (
+                            <a
+                                href={apoiador.site}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-ancb-blue dark:text-blue-400 hover:underline truncate block"
+                            >
+                                {apoiador.site}
+                            </a>
+                        )}
+                    </div>
+                ))}
+            </div>
+
+            {/* Carrossel para os demais */}
+            <div
+                className="flex items-end gap-6 overflow-x-auto pb-1"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+                {demais.map((apoiador) => (
+                    <div
+                        key={apoiador.id}
+                        onClick={apoiador.site ? () => window.open(apoiador.site, '_blank') : undefined}
+                        className={`flex-shrink-0 flex flex-col items-center gap-2 group w-24 ${apoiador.site ? 'cursor-pointer' : ''}`}
+                    >
+                        <div className="h-16 w-20 rounded-lg transition-all duration-300 group-hover:scale-105 flex items-center justify-center bg-transparent flex-shrink-0">
+                            <img
+                                src={apoiador.logoBase64}
+                                alt={apoiador.nome}
+                                className="h-full w-full object-contain object-center"
+                                style={{ 
+                                    opacity: logoOpacity,
+                                    filter: logoStyle.filter
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                                onMouseLeave={e => (e.currentTarget.style.opacity = logoOpacity)}
+                            />
+                        </div>
+                        <span className="text-[9px] font-semibold text-gray-400 dark:text-gray-600 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors uppercase tracking-wide text-center leading-tight w-full line-clamp-2 px-1 mt-auto">
+                            {apoiador.nome}
+                        </span>
+                    </div>
+                ))}
             </div>
         </div>
     );

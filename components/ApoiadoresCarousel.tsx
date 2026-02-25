@@ -7,6 +7,7 @@ interface Apoiador {
     nome: string;
     logoBase64: string;
     site?: string;
+    ordem: number;
 }
 
 interface ApoiadoresCarouselProps {
@@ -26,7 +27,7 @@ export const ApoiadoresCarousel: React.FC<ApoiadoresCarouselProps> = ({ onVerTod
     }, []);
 
     useEffect(() => {
-        const unsub = db.collection('apoiadores').orderBy('nome').onSnapshot(snap => {
+        const unsub = db.collection('apoiadores').orderBy('ordem', 'asc').onSnapshot(snap => {
             setApoiadores(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Apoiador)));
         });
         return () => unsub();
@@ -69,15 +70,20 @@ export const ApoiadoresCarousel: React.FC<ApoiadoresCarouselProps> = ({ onVerTod
                         onClick={apoiador.site ? () => window.open(apoiador.site, '_blank') : undefined}
                         className={`flex-shrink-0 flex flex-col items-center gap-2 group w-24 ${apoiador.site ? 'cursor-pointer' : ''}`}
                     >
-                        <img
-                            src={apoiador.logoBase64}
-                            alt={apoiador.nome}
-                            className="h-16 w-20 object-contain transition-all duration-300 group-hover:scale-105"
-                            style={{ ...logoStyle, opacity: logoOpacity }}
-                            onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-                            onMouseLeave={e => (e.currentTarget.style.opacity = logoOpacity)}
-                        />
-                        <span className="text-[9px] font-semibold text-gray-400 dark:text-gray-600 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors uppercase tracking-wide text-center leading-tight w-full line-clamp-2 px-1">
+                        <div className="h-16 w-20 rounded-lg transition-all duration-300 group-hover:scale-105 flex items-center justify-center bg-transparent flex-shrink-0">
+                            <img
+                                src={apoiador.logoBase64}
+                                alt={apoiador.nome}
+                                className="h-full w-full object-contain object-center"
+                                style={{ 
+                                    opacity: logoOpacity,
+                                    filter: logoStyle.filter
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                                onMouseLeave={e => (e.currentTarget.style.opacity = logoOpacity)}
+                            />
+                        </div>
+                        <span className="text-[9px] font-semibold text-gray-400 dark:text-gray-600 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors uppercase tracking-wide text-center leading-tight w-full line-clamp-2 px-1 mt-auto">
                             {apoiador.nome}
                         </span>
                     </div>
