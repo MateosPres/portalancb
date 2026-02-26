@@ -3,9 +3,10 @@ import firebase, { db, auth, functions } from '../services/firebase';
 import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player, Time, Cesta, UserProfile, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing, LucideBellOff, LucideSend, LucideKeyRound, LucideCrown, LucideShield, LucideSiren, LucideDatabase, LucideHistory, LucideSave, LucideArrowRight, LucideZap, LucideEdit2, LucideHeart, LucideArrowUp, LucideArrowDown, LucideGripVertical } from 'lucide-react';
+import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideRadio, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing, LucideBellOff, LucideSend, LucideKeyRound, LucideCrown, LucideShield, LucideSiren, LucideDatabase, LucideHistory, LucideSave, LucideArrowRight, LucideZap, LucideEdit2, LucideHeart, LucideArrowUp, LucideArrowDown, LucideGripVertical } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { ApoiadoresManager } from '../components/ApoiadoresManager';
+import { LiveStreamAdmin } from '../components/LiveStreamAdmin';
 
 interface AdminViewProps {
     onBack: () => void;
@@ -14,7 +15,7 @@ interface AdminViewProps {
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, userProfile }) => {
-    const [adminTab, setAdminTab] = useState<'general' | 'users' | 'apoiadores'>('general');
+    const [adminTab, setAdminTab] = useState<'general' | 'users' | 'apoiadores' | 'live'>('general');
     const [events, setEvents] = useState<Evento[]>([]);
     
     // Forms
@@ -447,6 +448,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                     <button onClick={() => setAdminTab('apoiadores')} className={`flex-1 px-4 py-1.5 rounded-md text-sm font-bold transition-colors flex items-center justify-center gap-1 ${adminTab === 'apoiadores' ? 'bg-white dark:bg-gray-600 shadow text-ancb-orange dark:text-orange-400' : 'text-gray-500'}`}>
                         <LucideHeart size={13} /> Apoiadores
                     </button>
+                    <button onClick={() => setAdminTab('live')} className={`flex-1 px-4 py-1.5 rounded-md text-sm font-bold transition-colors flex items-center justify-center gap-1 ${adminTab === 'live' ? 'bg-white dark:bg-gray-600 shadow text-red-600 dark:text-red-400' : 'text-gray-500'}`}>
+                        <LucideRadio size={13} /> Live
+                    </button>
                 </div>
                 <div className="flex gap-2 self-end md:self-auto">
                     <Button onClick={() => setShowAddPost(true)} variant="secondary" className="!bg-blue-600 !text-white border-none"><LucideNewspaper size={18} /> <span className="hidden sm:inline">Postar</span></Button>
@@ -550,6 +554,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                             ))}
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* TAB: LIVE STREAM */}
+            {adminTab === 'live' && (
+                <div className="animate-fadeIn">
+                    <LiveStreamAdmin />
                 </div>
             )}
 

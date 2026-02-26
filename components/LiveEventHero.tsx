@@ -4,6 +4,8 @@ import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestor
 import { db } from '../services/firebase';
 import { Evento, Jogo, Cesta } from '../types';
 import { LucideMapPin, LucideCalendar, LucideChevronRight, LucideTrophy, LucideActivity, LucideClock } from 'lucide-react';
+import { useLiveStream } from '../hooks/useLiveStream';
+import { LiveYouTubePlayer } from './LiveYouTubePlayer';
 
 interface LiveEventHeroProps {
     event: Evento;
@@ -17,6 +19,11 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
     const [nextGame, setNextGame] = useState<Jogo | null>(null);
     const [liveScore, setLiveScore] = useState({ scoreA: 0, scoreB: 0 });
     const [feedItems, setFeedItems] = useState<Cesta[]>([]);
+    const [showPlayer, setShowPlayer] = useState(true);
+    
+    // Live stream config from Firebase
+    const { config: streamConfig, game: streamGame } = useLiveStream();
+    const hasLiveStream = !!(streamConfig?.active && streamConfig.videoId && streamGame);
 
     // 1. Fetch Games
     useEffect(() => {
@@ -97,9 +104,21 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
     // RENDER: SCENARIO 1 - GAME IS LIVE (BLUE SCOREBOARD)
     if (activeGame) {
         return (
+            <div className="w-full mb-8 space-y-4">
+                {/* YouTube Live Player — shown only when admin activates it */}
+                {hasLiveStream && streamGame && streamConfig && showPlayer && (
+                    <LiveYouTubePlayer
+                        videoId={streamConfig.videoId}
+                        game={streamGame}
+                        eventId={streamConfig.eventId}
+                        delaySeconds={streamConfig.delaySeconds}
+                        onClose={() => setShowPlayer(false)}
+                    />
+                )}
+
             <div 
                 onClick={() => onOpenLiveGame ? onOpenLiveGame(activeGame) : onClick()}
-                className="w-full bg-gradient-to-r from-[#062553] to-blue-900 rounded-2xl shadow-xl overflow-hidden cursor-pointer relative group border border-blue-800 transition-all hover:shadow-2xl hover:scale-[1.01] mb-8"
+                className="w-full bg-gradient-to-r from-[#062553] to-blue-900 rounded-2xl shadow-xl overflow-hidden cursor-pointer relative group border border-blue-800 transition-all hover:shadow-2xl hover:scale-[1.01]"
             >
                 {/* Background Pattern */}
                 <div className="absolute top-0 right-0 opacity-10 pointer-events-none">
@@ -188,6 +207,7 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
         );
     }
