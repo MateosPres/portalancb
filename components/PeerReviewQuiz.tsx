@@ -266,7 +266,7 @@ export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({
                                 <button key={tag.id} onClick={() => toggleTag(tag.id)} disabled={isDisabled}
                                     className={`relative flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left
                                         ${isSelected
-                                            ? 'border-green-500 bg-green-500/15 shadow-lg shadow-green-500/20 scale-[1.02]'
+                                            ? 'border-green-500 bg-green-500/15 shadow-lg shadow-green-500/20'
                                             : isDisabled
                                                 ? 'border-white/5 bg-white/3 opacity-30 cursor-not-allowed'
                                                 : 'border-white/10 bg-white/5 hover:border-green-500/30 hover:bg-green-500/5 active:scale-95'
@@ -296,7 +296,7 @@ export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({
                                 <button key={tag.id} onClick={() => toggleTag(tag.id)} disabled={isDisabled}
                                     className={`relative flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left
                                         ${isSelected
-                                            ? 'border-red-500 bg-red-500/15 shadow-lg shadow-red-500/20 scale-[1.02]'
+                                            ? 'border-red-500 bg-red-500/15 shadow-lg shadow-red-500/20'
                                             : isDisabled
                                                 ? 'border-white/5 bg-white/3 opacity-30 cursor-not-allowed'
                                                 : 'border-white/10 bg-white/5 hover:border-red-500/30 hover:bg-red-500/5 active:scale-95'

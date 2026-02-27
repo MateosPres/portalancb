@@ -1,0 +1,261 @@
+{
+  "exemplo_evento_com_chaveamento": {
+    "id": "evento_chaveamento_2024",
+    "nome": "Campeonato ANCB 2024 - Com Chaves",
+    "data": "2024-05-15",
+    "modalidade": "5x5",
+    "type": "torneio_externo",
+    "status": "andamento",
+    "formato": "chaveamento",
+    "timesParticipantes": [
+      {
+        "id": "time_001",
+        "nomeTime": "Team Alpha",
+        "logoUrl": "https://example.com/logo-alpha.png",
+        "jogadores": ["jogador1", "jogador2", "jogador3", "jogador4", "jogador5"],
+        "grupo": "Chave A",
+        "isANCB": false
+      },
+      {
+        "id": "time_002",
+        "nomeTime": "Team Beta",
+        "logoUrl": "https://example.com/logo-beta.png",
+        "jogadores": ["jogador6", "jogador7", "jogador8", "jogador9", "jogador10"],
+        "grupo": "Chave A",
+        "isANCB": true
+      },
+      {
+        "id": "time_003",
+        "nomeTime": "Team Gamma",
+        "logoUrl": "https://example.com/logo-gamma.png",
+        "jogadores": ["jogador11", "jogador12", "jogador13", "jogador14", "jogador15"],
+        "grupo": "Chave A",
+        "isANCB": false
+      },
+      {
+        "id": "time_004",
+        "nomeTime": "Team Delta",
+        "logoUrl": "https://example.com/logo-delta.png",
+        "jogadores": ["jogador16", "jogador17", "jogador18", "jogador19", "jogador20"],
+        "grupo": "Chave A",
+        "isANCB": false
+      },
+      {
+        "id": "time_005",
+        "nomeTime": "Team Omega",
+        "logoUrl": "https://example.com/logo-omega.png",
+        "jogadores": ["jogador21", "jogador22", "jogador23", "jogador24", "jogador25"],
+        "grupo": "Chave B",
+        "isANCB": false
+      },
+      {
+        "id": "time_006",
+        "nomeTime": "Team Sigma",
+        "logoUrl": "https://example.com/logo-sigma.png",
+        "jogadores": ["jogador26", "jogador27", "jogador28", "jogador29", "jogador30"],
+        "grupo": "Chave B",
+        "isANCB": false
+      },
+      {
+        "id": "time_007",
+        "nomeTime": "Team Tau",
+        "logoUrl": "https://example.com/logo-tau.png",
+        "jogadores": ["jogador31", "jogador32", "jogador33", "jogador34", "jogador35"],
+        "grupo": "Chave B",
+        "isANCB": false
+      },
+      {
+        "id": "time_008",
+        "nomeTime": "Team Kappa",
+        "logoUrl": "https://example.com/logo-kappa.png",
+        "jogadores": ["jogador36", "jogador37", "jogador38", "jogador39", "jogador40"],
+        "grupo": "Chave B",
+        "isANCB": false
+      }
+    ],
+    "jogos": [
+      {
+        "id": "jogo_001",
+        "dataJogo": "2024-05-15T10:00:00Z",
+        "status": "finalizado",
+        "timeA_id": "time_001",
+        "timeA_nome": "Team Alpha",
+        "timeB_id": "time_002",
+        "timeB_nome": "Team Beta",
+        "placarTimeA_final": 75,
+        "placarTimeB_final": 68,
+        "fase": "grupos"
+      },
+      {
+        "id": "jogo_002",
+        "dataJogo": "2024-05-15T11:00:00Z",
+        "status": "finalizado",
+        "timeA_id": "time_003",
+        "timeA_nome": "Team Gamma",
+        "timeB_id": "time_004",
+        "timeB_nome": "Team Delta",
+        "placarTimeA_final": 70,
+        "placarTimeB_final": 60,
+        "fase": "grupos"
+      },
+      {
+        "id": "jogo_003",
+        "dataJogo": "2024-05-15T14:00:00Z",
+        "status": "finalizado",
+        "timeA_id": "time_001",
+        "timeA_nome": "Team Alpha",
+        "timeB_id": "time_003",
+        "timeB_nome": "Team Gamma",
+        "placarTimeA_final": 80,
+        "placarTimeB_final": 65,
+        "fase": "grupos"
+      },
+      {
+        "id": "jogo_004",
+        "dataJogo": "2024-05-15T15:00:00Z",
+        "status": "finalizado",
+        "timeA_id": "time_002",
+        "timeA_nome": "Team Beta",
+        "timeB_id": "time_004",
+        "timeB_nome": "Team Delta",
+        "placarTimeA_final": 72,
+        "placarTimeB_final": 55,
+        "fase": "grupos"
+      },
+      {
+        "id": "jogo_005",
+        "dataJogo": "2024-05-15T12:00:00Z",
+        "status": "finalizado",
+        "timeA_id": "time_005",
+        "timeA_nome": "Team Omega",
+        "timeB_id": "time_006",
+        "timeB_nome": "Team Sigma",
+        "placarTimeA_final": 85,
+        "placarTimeB_final": 78,
+        "fase": "grupos"
+      },
+      {
+        "id": "jogo_006",
+        "dataJogo": "2024-05-15T13:00:00Z",
+        "status": "finalizado",
+        "timeA_id": "time_007",
+        "timeA_nome": "Team Tau",
+        "timeB_id": "time_008",
+        "timeB_nome": "Team Kappa",
+        "placarTimeA_final": 73,
+        "placarTimeB_final": 58,
+        "fase": "grupos"
+      }
+    ]
+  },
+  "resultado_classificacao_esperado": {
+    "Chave A": [
+      {
+        "posicao": 1,
+        "time": "Team Alpha",
+        "jogosJogados": 2,
+        "vitorias": 2,
+        "empates": 0,
+        "derrotas": 0,
+        "pontosPro": 155,
+        "pontosContra": 133,
+        "saldo": 22,
+        "pontos": 4,
+        "qualifica": true
+      },
+      {
+        "posicao": 2,
+        "time": "Team Beta",
+        "jogosJogados": 2,
+        "vitorias": 1,
+        "empates": 0,
+        "derrotas": 1,
+        "pontosPro": 140,
+        "pontosContra": 140,
+        "saldo": 0,
+        "pontos": 2,
+        "qualifica": true
+      },
+      {
+        "posicao": 3,
+        "time": "Team Gamma",
+        "jogosJogados": 2,
+        "vitorias": 1,
+        "empates": 0,
+        "derrotas": 1,
+        "pontosPro": 135,
+        "pontosContra": 152,
+        "saldo": -17,
+        "pontos": 2,
+        "qualifica": false
+      },
+      {
+        "posicao": 4,
+        "time": "Team Delta",
+        "jogosJogados": 2,
+        "vitorias": 0,
+        "empates": 0,
+        "derrotas": 2,
+        "pontosPro": 115,
+        "pontosContra": 152,
+        "saldo": -37,
+        "pontos": 0,
+        "qualifica": false
+      }
+    ],
+    "Chave B": [
+      {
+        "posicao": 1,
+        "time": "Team Omega",
+        "jogosJogados": 1,
+        "vitorias": 1,
+        "empates": 0,
+        "derrotas": 0,
+        "pontosPro": 85,
+        "pontosContra": 78,
+        "saldo": 7,
+        "pontos": 2,
+        "qualifica": true
+      },
+      {
+        "posicao": 2,
+        "time": "Team Sigma",
+        "jogosJogados": 1,
+        "vitorias": 0,
+        "empates": 0,
+        "derrotas": 1,
+        "pontosPro": 78,
+        "pontosContra": 85,
+        "saldo": -7,
+        "pontos": 0,
+        "qualifica": true
+      },
+      {
+        "posicao": 3,
+        "time": "Team Tau",
+        "jogosJogados": 1,
+        "vitorias": 1,
+        "empates": 0,
+        "derrotas": 0,
+        "pontosPro": 73,
+        "pontosContra": 58,
+        "saldo": 15,
+        "pontos": 2,
+        "qualifica": false
+      },
+      {
+        "posicao": 4,
+        "time": "Team Kappa",
+        "jogosJogados": 1,
+        "vitorias": 0,
+        "empates": 0,
+        "derrotas": 1,
+        "pontosPro": 58,
+        "pontosContra": 73,
+        "saldo": -15,
+        "pontos": 0,
+        "qualifica": false
+      }
+    ]
+  }
+}

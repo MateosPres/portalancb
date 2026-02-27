@@ -97,7 +97,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             if (rosterArray.length > 0) {
                 const batch = writeBatch(db);
                 rosterArray.forEach(p => {
-                    const rosterRef = eventDocRef.collection('roster').doc(p.id);
+                    const rosterRef = eventDocRef.collection('roster').doc(p.id) as any;
                     batch.set(rosterRef, { 
                         playerId: p.id, 
                         status: 'pendente', // Force pending on creation

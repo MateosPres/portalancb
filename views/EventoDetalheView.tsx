@@ -12,11 +12,13 @@ import {
     LucideUsers, LucideCheckCircle2, LucideXCircle, LucideClock, 
     LucidePlus, LucideTrash2, LucideGamepad2, LucidePlayCircle, LucideEdit, LucideCheckSquare, LucideSquare,
     LucideLoader2, LucideStar, LucideChevronRight, LucideEdit2, LucideChevronDown, LucideChevronUp, LucideShield, LucidePlay, LucideUpload, LucideSave, LucideSearch, LucideX, LucideShare2, LucideMoreVertical,
-    LucideRotateCcw, LucideList, LucideNetwork, LucideMedal
+    LucideRotateCcw, LucideList, LucideNetwork, LucideMedal, LucideAward
 } from 'lucide-react';
 import { collection, doc, onSnapshot, updateDoc, setDoc, serverTimestamp, query, getDocs, addDoc, deleteDoc, where } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
 import { SimpleScorePanel } from '../components/SimpleScorePanel';
+import { GroupStandings } from '../components/GroupStandings';
+import { ChaaveConfigurator } from '../components/ChaaveConfigurator';
 
 interface EventoDetalheViewProps {
     eventId: string;
@@ -102,6 +104,9 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const [editStatus, setEditStatus] = useState<Evento['status']>('proximo');
     const [editType, setEditType] = useState<Evento['type']>('amistoso');
 
+    // Chave Configurator Modal State
+    const [showChaaveConfigurator, setShowChaaveConfigurator] = useState(false);
+
     // Add Game Modal State
     const [showAddGame, setShowAddGame] = useState(false);
     const [newGameDate, setNewGameDate] = useState('');
@@ -109,6 +114,10 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const [newGameTimeB, setNewGameTimeB] = useState('');
     const [newGameLocation, setNewGameLocation] = useState('');
     const [newGamePhase, setNewGamePhase] = useState<'fase_grupos' | 'oitavas' | 'quartas' | 'semi' | 'final'>('fase_grupos');
+
+    // Edit Game Phase Modal State
+    const [editPhaseGame, setEditPhaseGame] = useState<Jogo | null>(null);
+    const [editPhaseValue, setEditPhaseValue] = useState<'fase_grupos' | 'oitavas' | 'quartas' | 'semi' | 'final'>('fase_grupos');
 
     // Share Modal
     const [showShareModal, setShowShareModal] = useState(false);
@@ -169,6 +178,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const handleStartGame = async (game: Jogo) => { if (!isAdmin) return; try { await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), { status: 'andamento' }); if (event?.status !== 'andamento') { await updateDoc(doc(db, "eventos", eventId), { status: 'andamento' }); } onOpenGamePanel({ ...game, status: 'andamento' }, eventId); } catch (e) { alert("Erro ao iniciar jogo"); } };
     const handleOpenScoreEdit = (game: Jogo) => { setEditScoreGame(game); setEditScoreA(String(resolveScore(game.placarTimeA_final, game.placarANCB_final))); setEditScoreB(String(resolveScore(game.placarTimeB_final, game.placarAdversario_final))); };
     const handleSaveScore = async () => { if (!editScoreGame) return; try { const sA = parseInt(editScoreA) || 0; const sB = parseInt(editScoreB) || 0; await updateDoc(doc(db, "eventos", eventId, "jogos", editScoreGame.id), { placarTimeA_final: sA, placarTimeB_final: sB, placarANCB_final: sA, placarAdversario_final: sB, status: 'finalizado' }); setEditScoreGame(null); } catch (e) { console.error(e); alert("Erro ao atualizar placar."); } };
+    const handleSavePhase = async () => { if (!editPhaseGame) return; try { await updateDoc(doc(db, "eventos", eventId, "jogos", editPhaseGame.id), { fase: editPhaseValue }); setEditPhaseGame(null); } catch (e) { console.error(e); alert("Erro ao atualizar fase."); } };
     const resolveScore = (valNew?: number, valLegacy?: number) => { if (valNew && valNew > 0) return valNew; if (valLegacy && valLegacy > 0) return valLegacy; return valNew ?? valLegacy ?? 0; };
     
     // Corrected normalizePosition function
@@ -279,8 +289,8 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                 const notificationsPromises = newPlayers.map(playerId => {
                     const player = allPlayers.find(p => p.id === playerId);
                     if (player && player.userId) {
-                        return addDoc(collection(db, "notificacoes"), {
-                            userId: player.userId,
+                        return addDoc(collection(db, "notifications"), {
+                            targetUserId: player.userId,
                             title: "Convocação!",
                             message: `Você foi escalado para o time ${editingTeam.nomeTime} no evento ${event.nome}.`,
                             read: false,
@@ -370,6 +380,11 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                 placarAdversario_final: 0,
                 localizacao: newGameLocation || 'Quadra Municipal'
             };
+
+            // Add phase field for bracket tournaments
+            if (event.formato === 'chaveamento') {
+                gameData.fase = newGamePhase;
+            }
 
             if (event.type === 'torneio_interno') {
                 const teamA = event.times?.find(t => t.id === newGameTimeA);
@@ -833,6 +848,15 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                             <LucideEdit size={18} />
                         </button>
                     )}
+                    {isAdmin && event.type === 'torneio_externo' && (
+                        <button 
+                            onClick={() => setShowChaaveConfigurator(true)}
+                            className="bg-yellow-500/80 hover:bg-yellow-500 text-white p-2 rounded-lg transition-colors backdrop-blur-sm"
+                            title="Configurar Chaves"
+                        >
+                            <LucideNetwork size={18} />
+                        </button>
+                    )}
                 </div>
                 
                 <div className="relative z-10 max-w-4xl mx-auto">
@@ -943,6 +967,14 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                                     >
                                                                         <LucideEdit2 size={16} /> Editar Placar
                                                                     </button>
+                                                                    {event?.formato === 'chaveamento' && (
+                                                                        <button 
+                                                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-amber-600 dark:text-amber-500"
+                                                                            onClick={(e) => { e.stopPropagation(); setEditPhaseGame(game); setEditPhaseValue((game as any).fase || 'fase_grupos'); setActiveMenuGameId(null); }}
+                                                                        >
+                                                                            <LucideEdit2 size={16} /> Editar Fase
+                                                                        </button>
+                                                                    )}
                                                                     <button 
                                                                         className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm flex items-center gap-2 text-red-600"
                                                                         onClick={(e) => { e.stopPropagation(); handleDeleteGame(game.id); }}
@@ -1075,110 +1107,236 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
                             {/* Bracket or Table */}
                             {event.formato === 'chaveamento' ? (
-                                <div className="overflow-x-auto pb-4">
-                                    <div className="flex gap-8 min-w-[800px]">
-                                        {/* Quartas */}
-                                        <div className="flex-1 space-y-4">
-                                            <h5 className="text-center font-bold text-gray-500 uppercase text-xs mb-4">Quartas de Final</h5>
-                                            {games.filter(g => (g as any).fase === 'quartas').map(game => (
-                                                <div key={game.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm relative">
-                                                    <div className="flex justify-between items-center mb-1">
-                                                        <span className="text-xs font-bold truncate w-24">{game.timeA_nome}</span>
-                                                        <span className="font-mono font-bold">{game.placarTimeA_final || 0}</span>
-                                                    </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-xs font-bold truncate w-24">{game.timeB_nome}</span>
-                                                        <span className="font-mono font-bold">{game.placarTimeB_final || 0}</span>
-                                                    </div>
-                                                    {/* Connector Line */}
-                                                    <div className="absolute top-1/2 -right-4 w-4 h-px bg-gray-300 dark:bg-gray-600"></div>
-                                                </div>
-                                            ))}
-                                            {games.filter(g => (g as any).fase === 'quartas').length === 0 && <p className="text-center text-xs text-gray-400">A definir</p>}
-                                        </div>
+                                <>
+                                    {(() => {
+                                        // Detect which phase the championship is in
+                                        // Show a phase as soon as games are created for it, even if not finished
+                                        const semiGames = games.filter(g => (g as any).fase === 'semi');
+                                        const finalGames = games.filter(g => (g as any).fase === 'final');
+                                        
+                                        console.log('DEBUG: All games:', games.map(g => ({ id: g.id, fase: (g as any).fase, timeA: g.timeA_nome, timeB: g.timeB_nome })));
+                                        console.log('DEBUG: Semi games found:', semiGames.length);
+                                        console.log('DEBUG: Final games found:', finalGames.length);
+                                        
+                                        let currentPhase: 'grupos' | 'semis' | 'final' = 'grupos';
+                                        if (semiGames.length > 0) currentPhase = 'semis';
+                                        if (finalGames.length > 0) currentPhase = 'final';
 
-                                        {/* Semi */}
-                                        <div className="flex-1 space-y-8 mt-8">
-                                            <h5 className="text-center font-bold text-gray-500 uppercase text-xs mb-4">Semi-Final</h5>
-                                            {games.filter(g => (g as any).fase === 'semi').map(game => (
-                                                <div key={game.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm relative">
-                                                    <div className="absolute top-1/2 -left-4 w-4 h-px bg-gray-300 dark:bg-gray-600"></div>
-                                                    <div className="flex justify-between items-center mb-1">
-                                                        <span className="text-xs font-bold truncate w-24">{game.timeA_nome}</span>
-                                                        <span className="font-mono font-bold">{game.placarTimeA_final || 0}</span>
+                                        return (
+                                            <div className="space-y-8">
+                                                {/* FINAL - MOST PROMINENT */}
+                                                {finalGames.length > 0 && currentPhase === 'final' && (
+                                                    <div className="bg-gradient-to-br from-yellow-400/20 to-orange-400/20 border-2 border-yellow-400 dark:border-yellow-500 rounded-2xl p-8 shadow-lg">
+                                                        <div className="flex items-center justify-center gap-3 mb-6">
+                                                            <LucideTrophy className="text-yellow-500 animate-bounce" size={32} />
+                                                            <h4 className="text-3xl font-black text-yellow-600 dark:text-yellow-400 uppercase tracking-widest">Grande Final</h4>
+                                                            <LucideTrophy className="text-yellow-500 animate-bounce" size={32} />
+                                                        </div>
+                                                        <div className="space-y-4">
+                                                            {finalGames.map(game => (
+                                                                <div key={game.id} className="bg-white dark:bg-gray-800 border-2 border-yellow-300 dark:border-yellow-600 rounded-xl p-6 shadow-md">
+                                                                    <div className="flex justify-between items-center mb-3">
+                                                                        <span className="text-lg font-black text-center flex-1">{game.timeA_nome}</span>
+                                                                        <span className="font-mono font-black text-2xl text-yellow-600 mx-4">{game.placarTimeA_final || 0}</span>
+                                                                        <span className="text-xs text-gray-400">x</span>
+                                                                        <span className="font-mono font-black text-2xl text-yellow-600 mx-4">{game.placarTimeB_final || 0}</span>
+                                                                        <span className="text-lg font-black text-center flex-1">{game.timeB_nome}</span>
+                                                                    </div>
+                                                                    {game.placarTimeA_final !== undefined && game.placarTimeB_final !== undefined && (
+                                                                        <div className="text-center text-sm font-bold text-yellow-600 dark:text-yellow-400">
+                                                                            {game.placarTimeA_final > game.placarTimeB_final
+                                                                                ? `✓ ${game.timeA_nome} venceu!`
+                                                                                : game.placarTimeB_final > game.placarTimeA_final
+                                                                                ? `✓ ${game.timeB_nome} venceu!`
+                                                                                : 'Empate'}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-xs font-bold truncate w-24">{game.timeB_nome}</span>
-                                                        <span className="font-mono font-bold">{game.placarTimeB_final || 0}</span>
-                                                    </div>
-                                                    <div className="absolute top-1/2 -right-4 w-4 h-px bg-gray-300 dark:bg-gray-600"></div>
-                                                </div>
-                                            ))}
-                                            {games.filter(g => (g as any).fase === 'semi').length === 0 && <p className="text-center text-xs text-gray-400">A definir</p>}
-                                        </div>
+                                                )}
 
-                                        {/* Final */}
-                                        <div className="flex-1 space-y-4 mt-16">
-                                            <h5 className="text-center font-bold text-yellow-500 uppercase text-xs mb-4">Grande Final</h5>
-                                            {games.filter(g => (g as any).fase === 'final').map(game => (
-                                                <div key={game.id} className="bg-white dark:bg-gray-800 border-2 border-yellow-400 rounded-lg p-4 shadow-md relative">
-                                                    <div className="absolute top-1/2 -left-4 w-4 h-px bg-gray-300 dark:bg-gray-600"></div>
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <span className="text-sm font-black truncate w-24">{game.timeA_nome}</span>
-                                                        <span className="font-mono font-black text-lg">{game.placarTimeA_final || 0}</span>
+                                                {/* SEMICADASTRO - SECONDARY HIGHLIGHT */}
+                                                {semiGames.length > 0 && currentPhase !== 'grupos' && (
+                                                    <div className="bg-gradient-to-br from-blue-400/20 to-cyan-400/20 border-2 border-blue-400 dark:border-blue-500 rounded-2xl p-8 shadow-lg">
+                                                        <div className="flex items-center justify-center gap-3 mb-6">
+                                                            <LucideAward className="text-blue-500" size={28} />
+                                                            <h4 className="text-2xl font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Semi-Final</h4>
+                                                            <LucideAward className="text-blue-500" size={28} />
+                                                        </div>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            {semiGames.map(game => (
+                                                                <div key={game.id} className="bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-600 rounded-lg p-5 shadow-sm">
+                                                                    <div className="flex justify-between items-end mb-2">
+                                                                        <span className="text-sm font-bold truncate w-24">{game.timeA_nome}</span>
+                                                                        <span className="font-mono font-bold text-lg text-blue-600 mx-2">{game.placarTimeA_final || 0}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-end mb-3">
+                                                                        <span className="text-sm font-bold truncate w-24">{game.timeB_nome}</span>
+                                                                        <span className="font-mono font-bold text-lg text-blue-600 mx-2">{game.placarTimeB_final || 0}</span>
+                                                                    </div>
+                                                                    {game.placarTimeA_final !== undefined && game.placarTimeB_final !== undefined && (
+                                                                        <div className="text-xs font-bold text-blue-600 dark:text-blue-400 text-center">
+                                                                            {game.placarTimeA_final > game.placarTimeB_final
+                                                                                ? `✓ ${game.timeA_nome}`
+                                                                                : game.placarTimeB_final > game.placarTimeA_final
+                                                                                ? `✓ ${game.timeB_nome}`
+                                                                                : 'Empate'}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-sm font-black truncate w-24">{game.timeB_nome}</span>
-                                                        <span className="font-mono font-black text-lg">{game.placarTimeB_final || 0}</span>
+                                                )}
+
+                                                {/* GROUP PHASE - ALWAYS SHOW */}
+                                                <GroupStandings
+                                                    timesParticipantes={event.timesParticipantes || []}
+                                                    games={games}
+                                                    format={event.formato || 'chaveamento'}
+                                                    qualifiersPerGroup={2}
+                                                />
+
+                                                {/* QUARTERS - ONLY IF NO SEMIS */}
+                                                {games.filter(g => (g as any).fase === 'quartas').length > 0 && semiGames.length === 0 && (
+                                                    <div className="overflow-x-auto pb-4 border-t border-gray-200 dark:border-gray-700 pt-8">
+                                                        <h5 className="text-center font-bold text-gray-500 uppercase text-sm mb-4">Quartas de Final</h5>
+                                                        <div className="flex gap-4 min-w-max">
+                                                            {games.filter(g => (g as any).fase === 'quartas').map(game => (
+                                                                <div
+                                                                    key={game.id}
+                                                                    className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm flex-shrink-0 w-40"
+                                                                >
+                                                                    <div className="flex justify-between items-center mb-1">
+                                                                        <span className="text-xs font-bold truncate">{game.timeA_nome}</span>
+                                                                        <span className="font-mono font-bold">{game.placarTimeA_final || 0}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-xs font-bold truncate">{game.timeB_nome}</span>
+                                                                        <span className="font-mono font-bold">{game.placarTimeB_final || 0}</span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                    <LucideTrophy className="absolute -top-3 -right-3 text-yellow-500 bg-white dark:bg-gray-800 rounded-full p-1 border border-yellow-200" size={24} />
-                                                </div>
-                                            ))}
-                                            {games.filter(g => (g as any).fase === 'final').length === 0 && <p className="text-center text-xs text-gray-400">A definir</p>}
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : (
-                                /* Simple Standings Table */
-                                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-300 font-bold uppercase text-xs">
-                                            <tr>
-                                                <th className="p-3">Time</th>
-                                                <th className="p-3 text-center">J</th>
-                                                <th className="p-3 text-center">V</th>
-                                                <th className="p-3 text-center">D</th>
-                                                <th className="p-3 text-center">Pts</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                            {event.timesParticipantes?.map(team => {
-                                                // Calculate stats on the fly
-                                                const teamGames = games.filter(g => g.status === 'finalizado' && (g.timeA_id === team.id || g.timeB_id === team.id));
-                                                const wins = teamGames.filter(g => {
-                                                    const sA = g.placarTimeA_final || 0;
-                                                    const sB = g.placarTimeB_final || 0;
-                                                    if (g.timeA_id === team.id) return sA > sB;
-                                                    return sB > sA;
-                                                }).length;
-                                                const losses = teamGames.length - wins;
-                                                
-                                                return (
-                                                    <tr key={team.id} className="hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
-                                                        <td className="p-3 font-bold text-gray-800 dark:text-gray-200">{team.nomeTime}</td>
-                                                        <td className="p-3 text-center">{teamGames.length}</td>
-                                                        <td className="p-3 text-center text-green-600 font-bold">{wins}</td>
-                                                        <td className="p-3 text-center text-red-500">{losses}</td>
-                                                        <td className="p-3 text-center font-black">{wins * 2 + losses}</td>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                </>
+                    ) : (
+                                /* Group Standings or Simple Table */
+                                (() => {
+                                    // Check if there are teams with groups defined
+                                    const hasGroupsData = event.timesParticipantes?.some(t => t.grupo && t.grupo.trim());
+                                    
+                                    if (hasGroupsData) {
+                                        return (
+                                            <GroupStandings
+                                                timesParticipantes={event.timesParticipantes || []}
+                                                games={games}
+                                                format={event.formato || 'grupo_unico'}
+                                                qualifiersPerGroup={2}
+                                            />
+                                        );
+                                    }
+                                    
+                                    // Fallback to simple standings table
+                                    return (
+                                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-300 font-bold uppercase text-xs">
+                                                    <tr>
+                                                        <th className="p-3">Pos</th>
+                                                        <th className="p-3">Time</th>
+                                                        <th className="p-3 text-center">J</th>
+                                                        <th className="p-3 text-center">V</th>
+                                                        <th className="p-3 text-center">D</th>
+                                                        <th className="p-3 text-center">Saldo</th>
+                                                        <th className="p-3 text-center font-black">Pts</th>
                                                     </tr>
-                                                );
-                                            })}
-                                            {(!event.timesParticipantes || event.timesParticipantes.length === 0) && (
-                                                <tr><td colSpan={5} className="p-4 text-center text-gray-500">Sem dados.</td></tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                    {event.timesParticipantes && event.timesParticipantes.length > 0 ? (
+                                                        (() => {
+                                                            // Calculate standings for all teams
+                                                            const standings = event.timesParticipantes.map(team => {
+                                                                const teamGames = games.filter(g => g.status === 'finalizado' && (g.timeA_id === team.id || g.timeB_id === team.id));
+                                                                
+                                                                let wins = 0;
+                                                                let losses = 0;
+                                                                let draws = 0;
+                                                                let pointsFor = 0;
+                                                                let pointsAgainst = 0;
+
+                                                                teamGames.forEach(g => {
+                                                                    const sA = g.placarTimeA_final || 0;
+                                                                    const sB = g.placarTimeB_final || 0;
+
+                                                                    if (g.timeA_id === team.id) {
+                                                                        pointsFor += sA;
+                                                                        pointsAgainst += sB;
+                                                                        if (sA > sB) wins++;
+                                                                        else if (sA < sB) losses++;
+                                                                        else draws++;
+                                                                    } else {
+                                                                        pointsFor += sB;
+                                                                        pointsAgainst += sA;
+                                                                        if (sB > sA) wins++;
+                                                                        else if (sB < sA) losses++;
+                                                                        else draws++;
+                                                                    }
+                                                                });
+
+                                                                const pointBalance = pointsFor - pointsAgainst;
+                                                                // Points: Win = 2, Draw = 1, Loss = 0 (or configure as needed)
+                                                                const totalPoints = wins * 2 + draws * 1;
+
+                                                                return {
+                                                                    team,
+                                                                    gamesPlayed: teamGames.length,
+                                                                    wins,
+                                                                    losses,
+                                                                    pointsFor,
+                                                                    pointsAgainst,
+                                                                    pointBalance,
+                                                                    totalPoints
+                                                                };
+                                                            })
+                                                            // Sort by: Total Points (desc) > Point Balance (desc)
+                                                            .sort((a, b) => {
+                                                                if (b.totalPoints !== a.totalPoints) {
+                                                                    return b.totalPoints - a.totalPoints;
+                                                                }
+                                                                return b.pointBalance - a.pointBalance;
+                                                            });
+
+                                                            return standings.map((standing, idx) => (
+                                                                <tr key={standing.team.id} className="hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
+                                                                    <td className="p-3 font-black text-center text-ancb-orange">{idx + 1}º</td>
+                                                                    <td className="p-3 font-bold text-gray-800 dark:text-gray-200">{standing.team.nomeTime}</td>
+                                                                    <td className="p-3 text-center">{standing.gamesPlayed}</td>
+                                                                    <td className="p-3 text-center text-green-600 font-bold">{standing.wins}</td>
+                                                                    <td className="p-3 text-center text-red-600 font-bold">{standing.losses}</td>
+                                                                    <td className="p-3 text-center font-semibold">
+                                                                        <span className={standing.pointBalance >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                                                            {standing.pointBalance >= 0 ? '+' : ''}{standing.pointBalance}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="p-3 text-center font-black text-ancb-blue">{standing.totalPoints}</td>
+                                                                </tr>
+                                                            ));
+                                                        })()
+                                                    ) : (
+                                                        <tr><td colSpan={7} className="p-4 text-center text-gray-500">Sem dados.</td></tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    );
+                                })()
                             )}
                         </div>
                     )}
@@ -1247,6 +1405,26 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                         onClose={() => setShowSimpleScorePanel(false)}
                         onSave={() => {
                             // Refresh logic if needed, snapshot handles it
+                        }}
+                    />
+                )}
+
+                {/* Chave Configurator Modal */}
+                {event && (
+                    <ChaaveConfigurator
+                        isOpen={showChaaveConfigurator}
+                        onClose={() => setShowChaaveConfigurator(false)}
+                        event={event}
+                        onSave={async (updatedEvent) => {
+                            try {
+                                await updateDoc(doc(db, "eventos", eventId), {
+                                    formato: updatedEvent.formato,
+                                    timesParticipantes: updatedEvent.timesParticipantes
+                                });
+                            } catch (error) {
+                                console.error('Erro ao atualizar evento:', error);
+                                throw error;
+                            }
                         }}
                     />
                 )}
@@ -1539,6 +1717,34 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                             autoFocus
                         />
                         <Button className="w-full" onClick={handleSaveNumber}>Salvar</Button>
+                    </div>
+                )}
+            </Modal>
+
+            {/* Edit Game Phase Modal */}
+            <Modal isOpen={!!editPhaseGame} onClose={() => setEditPhaseGame(null)} title="Editar Fase do Jogo">
+                {editPhaseGame && (
+                    <div className="space-y-4">
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                            <strong>{editPhaseGame.timeA_nome}</strong> vs <strong>{editPhaseGame.timeB_nome || editPhaseGame.adversario}</strong>
+                        </p>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Fase do Torneio</label>
+                            <select 
+                                className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none"
+                                value={editPhaseValue}
+                                onChange={(e) => setEditPhaseValue(e.target.value as any)}
+                            >
+                                <option value="fase_grupos">Fase de Grupos</option>
+                                <option value="oitavas">Oitavas de Final</option>
+                                <option value="quartas">Quartas de Final</option>
+                                <option value="semi">Semi-Final</option>
+                                <option value="final">Final</option>
+                            </select>
+                        </div>
+                        <Button className="w-full mt-4" onClick={handleSavePhase}>
+                            Salvar Fase
+                        </Button>
                     </div>
                 )}
             </Modal>

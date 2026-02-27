@@ -178,8 +178,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                 const batch = db.batch();
                 
                 // We need to find the UserProfile for each player
-                // This is tricky because 'allPlayers' has 'userId' but we need to query 'notificacoes'
-                // We can just add to 'notificacoes' collection.
+                // Send notification to each player with their userId
                 
                 newPlayers.forEach(playerId => {
                     const player = allPlayers.find(p => p.id === playerId);

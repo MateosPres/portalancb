@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Jogo, Cesta } from '../types';
-import { LucideMaximize2, LucideMinimize2, LucideActivity, LucideX, LucideClock, LucidePlay } from 'lucide-react';
+import { LucideMaximize2, LucideMinimize2, LucideActivity, LucideX, LucideClock, LucidePlay, LucideHeart } from 'lucide-react';
 
 interface LiveYouTubePlayerProps {
   videoId: string;
@@ -22,6 +22,16 @@ interface DelayedCesta extends Cesta {
   scheduledAt: number;
 }
 
+interface Apoiador {
+  id: string;
+  nome: string;
+  logoBase64: string;
+  site?: string;
+  descricao?: string;
+  destaque?: boolean;
+  ordem?: number;
+}
+
 export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
   videoId,
   game,
@@ -37,12 +47,15 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
   const [feedItems, setFeedItems] = useState<Cesta[]>([]);
   const [pendingScores, setPendingScores] = useState<DelayedScore[]>([]);
   const [pendingLances, setPendingLances] = useState<DelayedCesta[]>([]);
-  const [playerActive, setPlayerActive] = useState(false); // controls play overlay & autoplay behaviour
+  const [playerActive, setPlayerActive] = useState(true); // start live automatically on page load
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('landscape');
+  const [apoiadores, setApoiadores] = useState<Apoiador[]>([]);
+  const [currentApoiadorIndex, setCurrentApoiadorIndex] = useState(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const scoreIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const cestasIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const apoiadorIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const teamAName = game.timeA_nome || 'ANCB';
   const teamBName = game.timeB_nome || game.adversario || 'ADV';
@@ -63,6 +76,35 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
       window.removeEventListener('resize', handleOrientationChange);
     };
   }, []);
+
+  // Load Apoiadores for carousel
+  useEffect(() => {
+    const unsub = (db.collection?.('apoiadores') as any)
+      .orderBy('ordem', 'asc')
+      .onSnapshot((snap: any) => {
+        const loaded = snap.docs.map((doc: any) => ({ 
+          id: doc.id, 
+          ...doc.data()
+        } as Apoiador));
+        setApoiadores(loaded);
+        setCurrentApoiadorIndex(0);
+      });
+
+    return () => unsub?.();
+  }, []);
+
+  // Rotate Apoiadores every 4 seconds
+  useEffect(() => {
+    if (apoiadores.length === 0) return;
+
+    apoiadorIntervalRef.current = setInterval(() => {
+      setCurrentApoiadorIndex(prev => (prev + 1) % apoiadores.length);
+    }, 4000);
+
+    return () => {
+      if (apoiadorIntervalRef.current) clearInterval(apoiadorIntervalRef.current);
+    };
+  }, [apoiadores.length]);
 
   // Watch cestas in real time with delay
   useEffect(() => {
@@ -150,6 +192,34 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
     };
   }, [pendingLances.length]);
 
+  // Helper to rendering team avatar
+  const TeamAvatar = ({ name, logoUrl, size = 24 }: { name: string; logoUrl?: string; size?: number }) => {
+    if (logoUrl) {
+      return (
+        <img
+          src={logoUrl}
+          alt={name}
+          className="rounded-full object-cover"
+          style={{ width: size, height: size }}
+        />
+      );
+    }
+    return (
+      <div
+        className="rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-black"
+        style={{ width: size, height: size, fontSize: size * 0.4 }}
+      >
+        {name.charAt(0).toUpperCase()}
+      </div>
+    );
+  };
+
+  // Get display name: if multi-word, use last word to save space
+  const getShortName = (name: string) => {
+    const parts = name.trim().split(' ');
+    return parts.length > 1 ? parts[parts.length - 1] : name;
+  };
+
   // Fullscreen: lock to landscape on mobile
   const handleFullscreen = () => {
     if (!isFullscreen) {
@@ -175,48 +245,59 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
   const isPortrait = orientation === 'portrait';
 
   const scoreOverlay = (
-    <div
-      className="flex items-stretch w-full rounded-xl overflow-hidden shadow-2xl"
-      style={{
-        background: 'linear-gradient(135deg, #03112b 0%, #062553 60%, #0a3880 100%)',
-        border: '1.5px solid rgba(242,116,5,0.6)',
-        boxShadow: '0 4px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(242,116,5,0.2)',
-        minHeight: isPortrait ? '40px' : '48px',
-        backdropFilter: 'blur(8px)',
-        gap: isPortrait ? '4px' : '12px',
-      }}
-    >
+    <div className="w-full">
+      {/* Main score bar */}
+      <div
+        className="flex items-stretch w-full rounded-xl overflow-hidden shadow-2xl"
+        style={{
+          background: 'linear-gradient(135deg, #03112b 0%, #062553 60%, #0a3880 100%)',
+          border: '1.5px solid rgba(242,116,5,0.6)',
+          boxShadow: '0 4px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(242,116,5,0.2)',
+          minHeight: isPortrait ? '40px' : '56px',
+          backdropFilter: 'blur(8px)',
+          gap: isPortrait ? '4px' : '8px',
+          padding: isPortrait ? '6px 8px' : '8px 12px',
+        }}
+      >
         {/* LIVE pill */}
-        <div className={`flex items-center shrink-0 border-r border-white/10 ${isPortrait ? 'px-2' : 'px-3'}`}>
-          <div className={`flex items-center gap-1.5 bg-red-600 rounded-sm ${isPortrait ? 'px-1.5 py-0.5' : 'px-2 py-0.5'}`}>
+        <div className={`flex items-center shrink-0 border-r border-white/10 ${isPortrait ? 'px-1.5' : 'px-3'}`}>
+          <div className={`flex items-center gap-1 bg-red-600 rounded-sm ${isPortrait ? 'px-1 py-0.5' : 'px-2 py-0.5'}`}>
             <span className={`rounded-full bg-white animate-pulse ${isPortrait ? 'w-1 h-1' : 'w-1.5 h-1.5'}`} />
-            <span className={`font-black text-white tracking-widest uppercase ${isPortrait ? 'text-[8px]' : 'text-[10px]'}`}>Live</span>
+            <span className={`font-black text-white tracking-widest uppercase ${isPortrait ? 'text-[8px]' : 'text-[9px]'}`}>Live</span>
           </div>
         </div>
 
-        {/* Team A */}
-        <div className={`flex items-center gap-2 shrink-0 border-r border-white/10 ${isPortrait ? 'px-2' : 'px-4'}`}>
-          <span className={`font-bold text-blue-200 uppercase tracking-wider max-w-[50px] truncate ${isPortrait ? 'text-[8px]' : 'text-[11px]'}`}>{teamAName}</span>
-          <span className={`font-black text-white tabular-nums leading-none ${isPortrait ? 'text-xl' : 'text-3xl'}`}>{liveScore.scoreA}</span>
+        {/* Team A with Logo */}
+        <div className={`flex items-center gap-1.5 shrink-0 ${isPortrait ? 'px-1' : 'px-3'}`}>
+          <TeamAvatar name={teamAName} size={isPortrait ? 20 : 28} />
+          <div className="flex flex-col items-start gap-0">
+            <span className={`font-bold text-blue-200 uppercase tracking-wider truncate ${isPortrait ? 'text-[7px]' : 'text-[10px]'}`} style={{maxWidth: '45px'}}>{getShortName(teamAName)}</span>
+            <span className={`font-black text-white tabular-nums leading-none ${isPortrait ? 'text-lg' : 'text-2xl'}`}>{liveScore.scoreA}</span>
+          </div>
         </div>
 
         {/* VS separator */}
-        <div className={`flex items-center shrink-0 border-r border-white/10 ${isPortrait ? 'px-1.5' : 'px-3'}`}>
-          <span className={`font-bold text-white/30 tracking-widest ${isPortrait ? 'text-[8px]' : 'text-[10px]'}`}>VS</span>
+        <div className={`relative shrink-0 ${isPortrait ? 'w-8' : 'w-10'}`}>
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-px bg-white/10" />
+          <span className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-extrabold italic text-orange-400 leading-none ${isPortrait ? 'text-[10px]' : 'text-[13px]'}`}>VS</span>
+          <span className="absolute right-0 top-1/2 -translate-y-1/2 h-5 w-px bg-white/10" />
         </div>
 
-        {/* Team B */}
-        <div className={`flex items-center gap-2 shrink-0 border-r border-white/10 ${isPortrait ? 'px-2' : 'px-4'}`}>
-          <span className={`font-black text-white tabular-nums leading-none ${isPortrait ? 'text-xl' : 'text-3xl'}`}>{liveScore.scoreB}</span>
-          <span className={`font-bold text-blue-200 uppercase tracking-wider max-w-[50px] truncate ${isPortrait ? 'text-[8px]' : 'text-[11px]'}`}>{teamBName}</span>
+        {/* Team B with Logo */}
+        <div className={`flex items-center gap-1.5 shrink-0 border-r border-white/10 ${isPortrait ? 'px-1' : 'px-3'}`}>
+          <div className="flex flex-col items-end gap-0">
+            <span className={`font-bold text-blue-200 uppercase tracking-wider truncate ${isPortrait ? 'text-[7px]' : 'text-[10px]'}`} style={{maxWidth: '45px'}}>{getShortName(teamBName)}</span>
+            <span className={`font-black text-white tabular-nums leading-none ${isPortrait ? 'text-lg' : 'text-2xl'}`}>{liveScore.scoreB}</span>
+          </div>
+          <TeamAvatar name={teamBName} size={isPortrait ? 20 : 28} />
         </div>
 
         {/* Last plays feed — hidden on portrait mode */}
         {!isPortrait && (
-          <div className="flex-1 flex items-center gap-0 overflow-hidden px-3 border-r border-white/10 min-w-0">
+          <div className="flex-1 flex items-center gap-0 overflow-hidden px-3 min-w-0">
             <div className="flex items-center gap-1.5 text-[9px] font-bold text-blue-400 uppercase tracking-widest shrink-0 mr-3">
               <LucideActivity size={10} />
-              <span className="hidden sm:inline">Lances</span>
+              <span>Lances</span>
             </div>
             <div className="flex items-center gap-2 overflow-hidden">
               {overlayFeed.length === 0 ? (
@@ -240,16 +321,45 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
           </div>
         )}
 
-        {/* Delay badge */}
-        {delaySeconds > 0 && (
-          <div className={`flex items-center shrink-0 ${isPortrait ? 'px-1.5' : 'px-3'}`}>
+        {/* Right cap (keeps horizontal balance) */}
+        <div className={`flex items-center shrink-0 border-l border-white/10 ${isPortrait ? 'px-1.5' : 'px-3'}`}>
+          {delaySeconds > 0 && (
             <div className={`flex items-center gap-1 text-white/40 ${isPortrait ? 'text-[8px]' : 'text-[9px]'}`}>
               <LucideClock size={9} />
               <span>{delaySeconds}s</span>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+    </div>
+  );
+
+  // Overlay showing rotating supporters in top-right corner
+  const supportersOverlay = (
+    apoiadores.length > 0 && (
+      <div className="absolute" style={{ top: '14px', right: '14px', zIndex: 30 }}>
+        <div className="grid justify-items-center content-start" style={{ rowGap: '1px' }}>
+          <div className="flex items-center justify-center gap-1 text-[#F27405] leading-none">
+            <LucideHeart size={isPortrait ? 12 : 16} fill="#F27405" />
+            <span className="font-black text-xs text-white text-center">Obrigado!</span>
+          </div>
+          <div className="rounded-full shadow-lg p-1" style={{ margin: '0 auto', transform: 'translateY(-1px)' }}>
+            {apoiadores[currentApoiadorIndex]?.logoBase64 && (
+              <img
+                src={apoiadores[currentApoiadorIndex].logoBase64}
+                alt={apoiadores[currentApoiadorIndex].nome}
+                className="object-contain"
+                style={{
+                  width: isPortrait ? '56px' : '80px',
+                  height: isPortrait ? '56px' : '80px',
+                  filter: 'brightness(0) invert(1)',
+                }}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    )
   );
 
   return (
@@ -270,7 +380,7 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
         {/* Video wrapper — 16:9 ratio, overlay floats inside */}
         <div className="relative w-full overflow-hidden" style={isFullscreen ? { flex: 1 } : { paddingBottom: '56.25%' }}>
           <iframe
-            src={`https://www.youtube.com/embed/${videoId}?autoplay=${playerActive ? 1 : 0}&mute=${playerActive ? 0 : 1}&rel=0&modestbranding=1&fs=0&controls=0`}
+            src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&rel=0&modestbranding=1&fs=0&controls=0`}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen={false}
             className={`absolute left-0 w-full border-0 ${playerActive ? '' : 'pointer-events-none'}`}
@@ -295,6 +405,9 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
           <div className="absolute bottom-10 left-0 right-0 z-10 pointer-events-none select-none px-4">
             {scoreOverlay}
           </div>
+
+          {/* Supporters carousel top-right */}
+          {supportersOverlay}
 
           {/* Controls */}
           <div className="absolute bottom-2 right-2 z-20 flex gap-1.5 pointer-events-auto">

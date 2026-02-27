@@ -115,6 +115,7 @@ export interface Jogo {
     adversario?: string; // Para externo/amistoso
     localizacao?: string; // Novo campo para local do jogo
     jogadoresEscalados?: string[]; // Lista de IDs de jogadores que jogaram
+    fase?: 'fase_grupos' | 'oitavas' | 'quartas' | 'semi' | 'final'; // Fase do torneio (para chaveamento)
     
     // Placar Externo
     placarANCB_final?: number;

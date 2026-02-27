@@ -68,6 +68,10 @@ exports.sendRosterNotification = functions.firestore
 // O quiz só é enviado para jogadores do time ANCB — eles avaliam
 // apenas os colegas do próprio time. Times adversários externos
 // não têm jogadores cadastrados e são ignorados.
+//
+// PROTEÇÃO CONTRA DUPLICATAS: Usa um timestamp 'notificationSentAt'
+// para garantir que notificações sejam enviadas apenas uma vez,
+// mesmo que o documento seja atualizado múltiplas vezes.
 // ─────────────────────────────────────────────────────────────
 exports.onGameFinished = functions.firestore
     .document('eventos/{eventId}/jogos/{gameId}')
@@ -76,6 +80,13 @@ exports.onGameFinished = functions.firestore
         const oldData = change.before.data();
 
         if (!newData || !oldData) return null;
+
+        // PROTEÇÃO: Se já foi enviada notificação, não reenviar
+        // Verifica se o campo 'notificationSentAt' já existe
+        if (newData.notificationSentAt) {
+            console.log(`Notificações já foram enviadas para o jogo ${context.params.gameId}. Pulando.`);
+            return null;
+        }
 
         // Dispara APENAS na transição → finalizado
         const justFinished = oldData.status !== 'finalizado' && newData.status === 'finalizado';
@@ -151,7 +162,13 @@ exports.onGameFinished = functions.firestore
             notifyPlayerQuizPosJogo(playerId, eventId, gameId, eventName, teamAName, scoreA, teamBName, scoreB)
         );
 
-        return Promise.all(promises);
+        await Promise.all(promises);
+
+        // MARCA QUE NOTIFICAÇÕES FORAM ENVIADAS - Previne reenvios
+        await admin.firestore().collection('eventos').doc(eventId).collection('jogos').doc(gameId)
+            .update({ notificationSentAt: admin.firestore.FieldValue.serverTimestamp() });
+
+        return null;
     });
 
 // ─────────────────────────────────────────────────────────────
@@ -321,19 +338,18 @@ async function notifyPlayerQuizPosJogo(playerId, eventId, gameId, eventName, tea
         // independente de FCM, token ou estado do app.
         // ─────────────────────────────────────────────────────────────
 
-        // Evita duplicatas: só cria se não existir notificação para este jogo
-        const existingQuery = await admin.firestore().collection('notifications')
-            .where('targetUserId', '==', targetUserId)
-            .where('type', '==', 'pending_review')
-            .where('data.gameId', '==', gameId)
-            .get();
-
-        if (!existingQuery.empty) {
+        // Evita duplicatas: usa ID único em vez de query composta
+        // Formato: pending_review_{userId}_{gameId}
+        const deduplicationKey = `pending_review_${targetUserId}_${gameId}`;
+        const notificationRef = admin.firestore().collection('notifications').doc(deduplicationKey);
+        
+        const existingDoc = await notificationRef.get();
+        if (existingDoc.exists) {
             console.log(`Notificação de review já existe para jogador ${playerId} no jogo ${gameId}. Pulando.`);
             return;
         }
 
-        await admin.firestore().collection('notifications').add({
+        await notificationRef.set({
             targetUserId: targetUserId,
             type: 'pending_review',
             title: notifTitle,
@@ -343,7 +359,8 @@ async function notifyPlayerQuizPosJogo(playerId, eventId, gameId, eventName, tea
                 gameId: gameId,
             },
             read: false,
-            timestamp: admin.firestore.FieldValue.serverTimestamp()
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            deduplicationKey: deduplicationKey
         });
 
         console.log(`✅ Notificação pending_review criada no Firestore para ${userData.nome}`);
