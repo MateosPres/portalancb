@@ -51,6 +51,7 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('landscape');
   const [apoiadores, setApoiadores] = useState<Apoiador[]>([]);
   const [currentApoiadorIndex, setCurrentApoiadorIndex] = useState(0);
+  const [trimmedLogoMap, setTrimmedLogoMap] = useState<Record<string, string>>({});
 
   const containerRef = useRef<HTMLDivElement>(null);
   const scoreIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -244,6 +245,89 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
   // Responsive overlay sizes for mobile portrait
   const isPortrait = orientation === 'portrait';
 
+  const trimLogoAlpha = (src: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = image.width;
+          canvas.height = image.height;
+          const context = canvas.getContext('2d');
+          if (!context) {
+            resolve(src);
+            return;
+          }
+
+          context.drawImage(image, 0, 0);
+          const { data, width, height } = context.getImageData(0, 0, canvas.width, canvas.height);
+
+          let minX = width;
+          let minY = height;
+          let maxX = -1;
+          let maxY = -1;
+
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const alpha = data[(y * width + x) * 4 + 3];
+              if (alpha > 8) {
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+              }
+            }
+          }
+
+          if (maxX < minX || maxY < minY) {
+            resolve(src);
+            return;
+          }
+
+          const cropWidth = maxX - minX + 1;
+          const cropHeight = maxY - minY + 1;
+          const trimmedCanvas = document.createElement('canvas');
+          trimmedCanvas.width = cropWidth;
+          trimmedCanvas.height = cropHeight;
+
+          const trimmedContext = trimmedCanvas.getContext('2d');
+          if (!trimmedContext) {
+            resolve(src);
+            return;
+          }
+
+          trimmedContext.drawImage(canvas, minX, minY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+          resolve(trimmedCanvas.toDataURL('image/png'));
+        } catch (_) {
+          resolve(src);
+        }
+      };
+
+      image.onerror = () => resolve(src);
+      image.src = src;
+    });
+  };
+
+  const currentLogoRaw = apoiadores[currentApoiadorIndex]?.logoBase64;
+  const currentLogo = currentLogoRaw ? (trimmedLogoMap[currentLogoRaw] ?? currentLogoRaw) : undefined;
+
+  useEffect(() => {
+    if (!currentLogoRaw || trimmedLogoMap[currentLogoRaw]) return;
+    let cancelled = false;
+
+    trimLogoAlpha(currentLogoRaw).then((trimmed) => {
+      if (cancelled) return;
+      setTrimmedLogoMap(prev => {
+        if (prev[currentLogoRaw]) return prev;
+        return { ...prev, [currentLogoRaw]: trimmed };
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentLogoRaw, trimmedLogoMap]);
+
   const scoreOverlay = (
     <div className="w-full">
       {/* Main score bar */}
@@ -322,7 +406,7 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
         )}
 
         {/* Right cap (keeps horizontal balance) */}
-        <div className={`flex items-center shrink-0 border-l border-white/10 ${isPortrait ? 'px-1.5' : 'px-3'}`}>
+        <div className={`flex items-center shrink-0 border-l border-white/10 ${isPortrait ? 'px-1.5 ml-auto' : 'px-3'}`}>
           {delaySeconds > 0 && (
             <div className={`flex items-center gap-1 text-white/40 ${isPortrait ? 'text-[8px]' : 'text-[9px]'}`}>
               <LucideClock size={9} />
@@ -338,21 +422,35 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
   const supportersOverlay = (
     apoiadores.length > 0 && (
       <div className="absolute" style={{ top: '14px', right: '14px', zIndex: 30 }}>
-        <div className="grid justify-items-center content-start" style={{ rowGap: '1px' }}>
-          <div className="flex items-center justify-center gap-1 text-[#F27405] leading-none">
-            <LucideHeart size={isPortrait ? 12 : 16} fill="#F27405" />
-            <span className="font-black text-xs text-white text-center">Obrigado!</span>
+        <div className="flex flex-col items-end" style={{ gap: '1px' }}>
+          <div
+            className="flex items-center justify-center gap-1 text-[#F27405] leading-none"
+            style={{
+              filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.7)) drop-shadow(0 0 8px rgba(0,0,0,0.45))',
+            }}
+          >
+            <LucideHeart
+              size={isPortrait ? 12 : 16}
+              fill="#F27405"
+              style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.65))' }}
+            />
+            <span
+              className="font-black text-xs text-white text-center"
+              style={{ textShadow: '0 1px 2px rgba(0,0,0,0.75), 0 0 8px rgba(0,0,0,0.5)' }}
+            >
+              Obrigado!
+            </span>
           </div>
-          <div className="rounded-full shadow-lg p-1" style={{ margin: '0 auto', transform: 'translateY(-1px)' }}>
-            {apoiadores[currentApoiadorIndex]?.logoBase64 && (
+          <div className="flex items-center justify-end" style={{ transform: 'translateY(-4px)' }}>
+            {currentLogo && (
               <img
-                src={apoiadores[currentApoiadorIndex].logoBase64}
+                src={currentLogo}
                 alt={apoiadores[currentApoiadorIndex].nome}
-                className="object-contain"
+                className="object-contain drop-shadow-xl"
                 style={{
                   width: isPortrait ? '56px' : '80px',
                   height: isPortrait ? '56px' : '80px',
-                  filter: 'brightness(0) invert(1)',
+                  filter: 'brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.8)) drop-shadow(0 0 12px rgba(0,0,0,0.55))',
                 }}
               />
             )}
@@ -429,14 +527,6 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
             )}
           </div>
 
-          {isFullscreen && (
-            <button
-              onClick={handleFullscreen}
-              className="absolute top-3 right-3 z-20 bg-black/60 hover:bg-black/80 text-white p-2 rounded-xl backdrop-blur-sm transition-all"
-            >
-              <LucideMinimize2 size={18} />
-            </button>
-          )}
         </div>
 
 
