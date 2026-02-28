@@ -38,6 +38,13 @@ export interface Player {
     emailContato?: string;
     // New Gamification Stats
     stats_tags?: Record<string, number>; // e.g. { 'muralha': 10, 'sniper': 5 }
+    stats_atributos?: {
+        ataque?: number;
+        defesa?: number;
+        velocidade?: number;
+        forca?: number;
+        visao?: number;
+    };
     badges?: Badge[]; // Conquistas acumuladas
     pinnedBadgeIds?: string[]; // IDs das conquistas fixadas no perfil
     reputation?: number; // Score de Fair Play/Reputação

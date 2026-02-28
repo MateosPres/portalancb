@@ -107,47 +107,62 @@ exports.onGameFinished = functions.firestore
         await upsertAutoGameFeedPost(eventId, gameId, eventData, newData, teamAName, scoreA, teamBName, scoreB);
 
         let ancbPlayerIds = [];
+        const gameTeamIds = [newData.timeA_id, newData.timeB_id].filter(Boolean);
 
-        // ── NOVO SISTEMA: timesParticipantes com flag isANCB ─────────────
-        // Só notifica jogadores do time ANCB — eles avaliam os próprios colegas.
-        // Times adversários não têm jogadores cadastrados no sistema.
+        // 1) Modelo novo (torneio_externo e internos evoluídos): timesParticipantes + isANCB
         if (eventData.timesParticipantes && eventData.timesParticipantes.length > 0) {
-            // Se o jogo tem IDs de times, filtra apenas o time ANCB que participou
-            if (newData.timeA_id || newData.timeB_id) {
-                const gameTeamIds = [newData.timeA_id, newData.timeB_id].filter(Boolean);
-                const ancbTeam = eventData.timesParticipantes.find(t =>
-                    t.isANCB && gameTeamIds.includes(t.id)
-                );
-                if (ancbTeam) {
-                    ancbPlayerIds = ancbTeam.jogadores || [];
-                    console.log(`Torneio externo (novo sistema): time ANCB "${ancbTeam.nomeTime}" com ${ancbPlayerIds.length} jogadores.`);
-                } else {
-                    console.log(`Jogo ${gameId} não envolve time ANCB. Quiz não enviado.`);
-                    return null;
-                }
+            const participantTeams = gameTeamIds.length > 0
+                ? eventData.timesParticipantes.filter(t => gameTeamIds.includes(t.id))
+                : eventData.timesParticipantes;
+
+            // Mantém a regra atual do externo e habilita múltiplos times ANCB/parceiros
+            // para interno quando aplicável.
+            const ancbTeams = participantTeams.filter(t => t.isANCB);
+
+            if (ancbTeams.length === 0) {
+                console.log(`Jogo ${gameId} sem time ANCB participante. Quiz não enviado.`);
+                return null;
+            }
+
+            ancbTeams.forEach(team => {
+                ancbPlayerIds.push(...(team.jogadores || []));
+            });
+
+            console.log(`Modelo timesParticipantes: ${ancbTeams.length} time(s) ANCB, ${ancbPlayerIds.length} jogador(es).`);
+        }
+        // 2) Modelo legado interno: times
+        else if (eventData.times && eventData.times.length > 0) {
+            if (gameTeamIds.length > 0) {
+                const participantTeams = eventData.times.filter(t => gameTeamIds.includes(t.id));
+                participantTeams.forEach(team => ancbPlayerIds.push(...(team.jogadores || [])));
+                console.log(`Torneio interno (times): ${ancbPlayerIds.length} jogador(es) dos times da partida.`);
             } else {
-                // Sem ID de time no jogo — pega o único time ANCB do evento
-                const ancbTeam = eventData.timesParticipantes.find(t => t.isANCB);
-                if (ancbTeam) {
-                    ancbPlayerIds = ancbTeam.jogadores || [];
-                    console.log(`Time ANCB (fallback): ${ancbPlayerIds.length} jogadores.`);
-                }
+                // fallback seguro
+                eventData.times.forEach(team => ancbPlayerIds.push(...(team.jogadores || [])));
+                console.log(`Torneio interno (fallback): ${ancbPlayerIds.length} jogador(es).`);
             }
         }
-        // ── SISTEMA LEGADO: torneio interno com 'times' ──────────────────
-        else if (eventData.times && eventData.times.length > 0 && newData.timeA_id && newData.timeB_id) {
-            const timeA = eventData.times.find(t => t.id === newData.timeA_id);
-            const timeB = eventData.times.find(t => t.id === newData.timeB_id);
-            if (timeA) ancbPlayerIds.push(...(timeA.jogadores || []));
-            if (timeB) ancbPlayerIds.push(...(timeB.jogadores || []));
-            console.log(`Torneio interno (legado): ${ancbPlayerIds.length} jogadores dos dois times.`);
-        }
-        // ── SISTEMA LEGADO: amistoso com jogadoresEscalados ──────────────
+        // 3) Modelo amistoso/legado: roster por jogo ou por evento
         else {
             const gameRoster = (newData.jogadoresEscalados || []).map(extractPlayerId).filter(Boolean);
             const eventRoster = (eventData.jogadoresEscalados || []).map(extractPlayerId).filter(Boolean);
             ancbPlayerIds = gameRoster.length > 0 ? gameRoster : eventRoster;
-            console.log(`Amistoso (legado): ${ancbPlayerIds.length} jogadores.`);
+
+            // Fallback robusto: roster em subcoleção (com status) quando arrays legados estiverem vazios
+            if (ancbPlayerIds.length === 0) {
+                const rosterSnap = await admin.firestore().collection('eventos').doc(eventId).collection('roster').get();
+                if (!rosterSnap.empty) {
+                    ancbPlayerIds = rosterSnap.docs
+                        .filter(d => {
+                            const status = d.data()?.status;
+                            return status !== 'recusado';
+                        })
+                        .map(d => d.id)
+                        .filter(Boolean);
+                }
+            }
+
+            console.log(`Amistoso/legado: ${ancbPlayerIds.length} jogador(es) no roster.`);
         }
 
         ancbPlayerIds = [...new Set(ancbPlayerIds.filter(Boolean))];
@@ -362,8 +377,24 @@ async function notifyPlayerConvocado(playerId, eventName, eventId) {
 
         const userDoc = querySnapshot.docs[0];
         const userData = userDoc.data();
+        const targetUserId = userDoc.id;
         const fcmToken = userData.fcmToken;
-        if (!fcmToken) return;
+
+        const notifId = `roster_alert_${targetUserId}_${eventId}`;
+        await admin.firestore().collection('notifications').doc(notifId).set({
+            targetUserId,
+            type: 'roster_alert',
+            title: 'Você foi convocado! 🏀',
+            message: `Sua presença é aguardada no evento: ${eventName}`,
+            data: { eventId },
+            read: false,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        if (!fcmToken) {
+            console.log(`Jogador ${userData.nome} sem token FCM — convocação registrada no painel.`);
+            return;
+        }
 
         const message = {
             token: fcmToken,

@@ -6,17 +6,21 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { ShareModal } from '../components/ShareModal';
+import { GameSummaryModal } from '../components/GameSummaryModal';
 import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucideTrash2, LucideStar, LucideMessageSquare, LucidePlayCircle, LucideShield, LucideCamera, LucideLoader2, LucideCalendar, LucideMapPin, LucideShare2, LucideSearch } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
-import { collection, doc, getDocs, getDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, writeBatch, updateDoc, addDoc, serverTimestamp, setDoc, query, where, limit } from 'firebase/firestore';
 
 interface EventosViewProps {
     onBack: () => void;
     userProfile?: UserProfile | null;
     onSelectEvent: (eventId: string) => void;
+    onOpenFriendlyAdminPanel?: (eventId: string, game: Jogo) => void;
+    initialFriendlyEventId?: string | null;
+    onFriendlySummaryOpened?: () => void;
 }
 
-export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, onSelectEvent }) => {
+export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, onSelectEvent, onOpenFriendlyAdminPanel, initialFriendlyEventId, onFriendlySummaryOpened }) => {
     const [events, setEvents] = useState<Evento[]>([]);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<'proximos' | 'finalizados'>('proximos');
@@ -25,6 +29,19 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     // Share State
     const [showShareModal, setShowShareModal] = useState(false);
     const [shareData, setShareData] = useState<any>(null);
+    const [friendlyGamesMap, setFriendlyGamesMap] = useState<Record<string, Jogo>>({});
+    const [selectedFriendlySummary, setSelectedFriendlySummary] = useState<{ eventId: string; game: Jogo } | null>(null);
+
+    const [showFriendlyEditModal, setShowFriendlyEditModal] = useState(false);
+    const [editingFriendlyEventId, setEditingFriendlyEventId] = useState<string | null>(null);
+    const [editFriendlyName, setEditFriendlyName] = useState('');
+    const [editFriendlyDate, setEditFriendlyDate] = useState('');
+    const [editFriendlyHour, setEditFriendlyHour] = useState('');
+    const [editFriendlyMode, setEditFriendlyMode] = useState<'3x3'|'5x5'>('5x5');
+    const [editFriendlyStatus, setEditFriendlyStatus] = useState<'proximo'|'andamento'|'finalizado'>('proximo');
+    const [editFriendlyOpponent, setEditFriendlyOpponent] = useState('');
+    const [editFriendlyRosterMap, setEditFriendlyRosterMap] = useState<Record<string, number>>({});
+    const [editFriendlyRosterSearch, setEditFriendlyRosterSearch] = useState('');
     
     // For admin creating events only
     const [showEventForm, setShowEventForm] = useState(false);
@@ -56,6 +73,242 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         };
         fetchPlayers();
     }, []);
+
+    useEffect(() => {
+        const loadFriendlyGames = async () => {
+            const friendlyEvents = events.filter(e => e.type === 'amistoso');
+            if (friendlyEvents.length === 0) {
+                setFriendlyGamesMap({});
+                return;
+            }
+
+            const entries = await Promise.all(
+                friendlyEvents.map(async (event) => {
+                    const gamesSnap = await getDocs(collection(db, "eventos", event.id, "jogos"));
+                    const games = gamesSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Jogo));
+                    if (games.length === 0) return [event.id, null] as const;
+
+                    const sorted = [...games].sort((a, b) => {
+                        const keyA = `${a.dataJogo || ''}T${a.horaJogo || '00:00'}`;
+                        const keyB = `${b.dataJogo || ''}T${b.horaJogo || '00:00'}`;
+                        return keyA.localeCompare(keyB);
+                    });
+
+                    return [event.id, sorted[0]] as const;
+                })
+            );
+
+            const gameMap: Record<string, Jogo> = {};
+            entries.forEach(([eventId, game]) => {
+                if (game) gameMap[eventId] = game;
+            });
+            setFriendlyGamesMap(gameMap);
+        };
+
+        loadFriendlyGames();
+    }, [events]);
+
+    useEffect(() => {
+        if (!initialFriendlyEventId) return;
+        const game = friendlyGamesMap[initialFriendlyEventId];
+        if (!game) return;
+
+        setSelectedFriendlySummary({ eventId: initialFriendlyEventId, game });
+        if (onFriendlySummaryOpened) onFriendlySummaryOpened();
+    }, [initialFriendlyEventId, friendlyGamesMap, onFriendlySummaryOpened]);
+
+    const handleEventCardClick = (evento: Evento) => {
+        if (evento.type === 'amistoso') {
+            const game = friendlyGamesMap[evento.id];
+            if (game) {
+                setSelectedFriendlySummary({ eventId: evento.id, game });
+                return;
+            }
+        }
+
+        onSelectEvent(evento.id);
+    };
+
+    const toggleFriendlyEditRosterPlayer = (player: Player) => {
+        setEditFriendlyRosterMap(prev => {
+            const next = { ...prev };
+            if (next[player.id] !== undefined) {
+                delete next[player.id];
+            } else {
+                next[player.id] = player.numero_uniforme || 0;
+            }
+            return next;
+        });
+    };
+
+    const updateFriendlyEditRosterNumber = (playerId: string, number: string) => {
+        setEditFriendlyRosterMap(prev => ({
+            ...prev,
+            [playerId]: Number(number)
+        }));
+    };
+
+    const handleOpenFriendlyEdit = (evento: Evento) => {
+        const game = friendlyGamesMap[evento.id];
+        setEditingFriendlyEventId(evento.id);
+        setEditFriendlyName(evento.nome || '');
+        setEditFriendlyDate(evento.data || '');
+        setEditFriendlyMode(evento.modalidade || '5x5');
+        setEditFriendlyStatus(evento.status || 'proximo');
+        setEditFriendlyOpponent(game?.adversario || game?.timeB_nome || '');
+        setEditFriendlyHour(game?.horaJogo || '');
+
+        const rosterMap: Record<string, number> = {};
+        (evento.jogadoresEscalados || []).forEach(entry => {
+            if (typeof entry === 'string') {
+                const player = allPlayers.find(p => p.id === entry);
+                rosterMap[entry] = player?.numero_uniforme || 0;
+            } else {
+                rosterMap[entry.id] = Number(entry.numero || 0);
+            }
+        });
+
+        setEditFriendlyRosterMap(rosterMap);
+        setEditFriendlyRosterSearch('');
+        setShowFriendlyEditModal(true);
+    };
+
+    const handleSaveFriendlyEdit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingFriendlyEventId) return;
+
+        try {
+            const rosterArray: EscaladoInfo[] = Object.entries(editFriendlyRosterMap).map(([id, num]) => ({
+                id,
+                numero: Number(num)
+            }));
+
+            await updateDoc(doc(db, "eventos", editingFriendlyEventId), {
+                nome: editFriendlyName,
+                data: editFriendlyDate,
+                modalidade: editFriendlyMode,
+                status: editFriendlyStatus,
+                jogadoresEscalados: rosterArray
+            });
+
+            const existingGame = friendlyGamesMap[editingFriendlyEventId];
+            if (existingGame?.id) {
+                await updateDoc(doc(db, "eventos", editingFriendlyEventId, "jogos", existingGame.id), {
+                    dataJogo: editFriendlyDate,
+                    horaJogo: editFriendlyHour,
+                    timeA_nome: 'ANCB',
+                    timeB_nome: editFriendlyOpponent,
+                    adversario: editFriendlyOpponent,
+                });
+            } else {
+                await addDoc(collection(db, "eventos", editingFriendlyEventId, "jogos"), {
+                    dataJogo: editFriendlyDate,
+                    horaJogo: editFriendlyHour,
+                    status: editFriendlyStatus === 'finalizado' ? 'finalizado' : 'agendado',
+                    timeA_nome: 'ANCB',
+                    timeB_nome: editFriendlyOpponent,
+                    adversario: editFriendlyOpponent,
+                    placarTimeA_final: 0,
+                    placarTimeB_final: 0,
+                    placarANCB_final: 0,
+                    placarAdversario_final: 0
+                });
+            }
+
+            const rosterSnap = await getDocs(collection(db, "eventos", editingFriendlyEventId, "roster"));
+            const existingRosterMap: Record<string, any> = {};
+            rosterSnap.forEach(d => {
+                existingRosterMap[d.id] = d.data();
+            });
+
+            const desiredIds = Object.keys(editFriendlyRosterMap);
+            const newInvitePlayerIds = desiredIds.filter(playerId => !existingRosterMap[playerId]);
+            const batch = writeBatch(db);
+
+            desiredIds.forEach(playerId => {
+                const existingData = existingRosterMap[playerId] || {};
+                batch.set(doc(db, "eventos", editingFriendlyEventId, "roster", playerId), {
+                    playerId,
+                    status: existingData.status || 'pendente',
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+            });
+
+            Object.keys(existingRosterMap)
+                .filter(playerId => !desiredIds.includes(playerId))
+                .forEach(playerId => {
+                    batch.delete(doc(db, "eventos", editingFriendlyEventId, "roster", playerId));
+                });
+
+            await batch.commit();
+
+            if (newInvitePlayerIds.length > 0) {
+                await sendFriendlyRosterInvites(editingFriendlyEventId, editFriendlyName, newInvitePlayerIds);
+            }
+
+            setShowFriendlyEditModal(false);
+            setEditingFriendlyEventId(null);
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao atualizar amistoso.");
+        }
+    };
+
+    const handleDeleteFriendlyEvent = async () => {
+        if (!editingFriendlyEventId) return;
+        if (!window.confirm("Deseja excluir este evento amistoso? Esta ação não pode ser desfeita.")) return;
+
+        try {
+            const rosterSnap = await getDocs(collection(db, "eventos", editingFriendlyEventId, "roster"));
+            const gamesSnap = await getDocs(collection(db, "eventos", editingFriendlyEventId, "jogos"));
+
+            const batch = writeBatch(db);
+            rosterSnap.forEach(d => batch.delete(d.ref));
+            gamesSnap.forEach(d => batch.delete(d.ref));
+            batch.delete(doc(db, "eventos", editingFriendlyEventId));
+            await batch.commit();
+
+            setShowFriendlyEditModal(false);
+            setEditingFriendlyEventId(null);
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao excluir evento amistoso.");
+        }
+    };
+
+    const sendFriendlyRosterInvites = async (eventId: string, eventName: string, playerIds: string[]) => {
+        const uniquePlayerIds = Array.from(new Set(playerIds.filter(Boolean)));
+        for (const playerId of uniquePlayerIds) {
+            try {
+                const player = allPlayers.find(p => p.id === playerId);
+                let targetUserId = player?.userId || '';
+
+                if (!targetUserId) {
+                    const userSnap = await getDocs(query(collection(db, 'usuarios'), where('linkedPlayerId', '==', playerId), limit(1)));
+                    if (!userSnap.empty) {
+                        targetUserId = userSnap.docs[0].id;
+                    }
+                }
+
+                if (!targetUserId) continue;
+
+                const notifId = `roster_invite_${targetUserId}_${eventId}_${playerId}`;
+                await setDoc(doc(db, 'notifications', notifId), {
+                    type: 'roster_invite',
+                    title: 'Convocação!',
+                    message: `Você foi convocado para o amistoso ${eventName}.`,
+                    data: { eventId, playerId, inviteContext: 'friendly' },
+                    playerId,
+                    targetUserId,
+                    read: false,
+                    timestamp: serverTimestamp(),
+                    status: 'pending'
+                }, { merge: true });
+            } catch (err) {
+                console.error('Erro ao criar roster_invite de amistoso:', err);
+            }
+        }
+    };
 
     const toggleRosterPlayer = (player: Player) => {
         setSelectedRosterMap(prev => {
@@ -106,6 +359,10 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     });
                 });
                 await batch.commit();
+            }
+
+            if (formType === 'amistoso' && rosterArray.length > 0) {
+                await sendFriendlyRosterInvites(eventDocRef.id, formName, rosterArray.map(p => p.id));
             }
 
             // If Amistoso, automatically create the single match
@@ -209,6 +466,11 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         (p.apelido || '').toLowerCase().includes(rosterSearch.toLowerCase())
     );
 
+    const filteredEditFriendlyRosterPlayers = allPlayers.filter(p => 
+        (p.nome || '').toLowerCase().includes(editFriendlyRosterSearch.toLowerCase()) || 
+        (p.apelido || '').toLowerCase().includes(editFriendlyRosterSearch.toLowerCase())
+    );
+
     return (
         <div className="animate-fadeIn pb-10">
             <div className="flex items-center justify-between mb-6">
@@ -237,11 +499,11 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             {loading ? (
                 <div className="flex justify-center py-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ancb-blue"></div></div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
                     {displayEvents.length > 0 ? displayEvents.map(evento => (
                         <Card 
                             key={evento.id} 
-                            onClick={() => onSelectEvent(evento.id)} 
+                            onClick={() => handleEventCardClick(evento)} 
                             className={`flex flex-col h-full hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden ${getCardStyle(evento.type)}`}
                         >
                             {/* Decorative Background Icon */}
@@ -255,6 +517,15 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                     <span className="block text-2xl font-black leading-none">{evento.data.split('-')[2] || 'DIA'}</span>
                                 </div>
                                 <div className="flex gap-2">
+                                    {(userProfile?.role === 'admin' || userProfile?.role === 'super-admin') && evento.type === 'amistoso' && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleOpenFriendlyEdit(evento); }}
+                                            className="p-1.5 rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors backdrop-blur-md border border-white/10"
+                                            title="Editar evento"
+                                        >
+                                            <LucideEdit size={16} />
+                                        </button>
+                                    )}
                                     <button 
                                         onClick={(e) => handleShareEvent(e, evento)}
                                         className="p-1.5 rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors backdrop-blur-md border border-white/10"
@@ -269,7 +540,18 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                             </div>
                             
                             <div className="flex-grow mb-4 relative z-10">
-                                <h3 className="text-2xl font-bold leading-tight mb-2 drop-shadow-sm">{evento.nome}</h3>
+                                <div className="flex items-start justify-between gap-3 mb-2">
+                                    <h3 className="text-2xl font-bold leading-tight drop-shadow-sm">{evento.nome}</h3>
+                                    {evento.type === 'amistoso' && friendlyGamesMap[evento.id]?.status === 'finalizado' && (
+                                        <div className="shrink-0 rounded-md border border-white/20 bg-black/20 px-2.5 py-1.5 text-white text-sm font-extrabold leading-none tracking-tight whitespace-nowrap">
+                                            <span className="text-white/90 text-[11px] mr-1">{friendlyGamesMap[evento.id].timeA_nome || 'ANCB'}</span>
+                                            <span className="text-ancb-orange">{friendlyGamesMap[evento.id].placarTimeA_final ?? friendlyGamesMap[evento.id].placarANCB_final ?? 0}</span>
+                                            <span className="text-white/80 px-1">x</span>
+                                            <span className="text-ancb-orange">{friendlyGamesMap[evento.id].placarTimeB_final ?? friendlyGamesMap[evento.id].placarAdversario_final ?? 0}</span>
+                                            <span className="text-white/90 text-[11px] ml-1">{friendlyGamesMap[evento.id].timeB_nome || friendlyGamesMap[evento.id].adversario || 'Adversário'}</span>
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="flex flex-col gap-1 text-white/80 text-sm font-medium">
                                     <div className="flex items-center gap-2">
                                         <LucideTrophy size={14} className="opacity-70" />
@@ -392,6 +674,108 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     data={shareData}
                 />
             )}
+
+            <GameSummaryModal
+                isOpen={!!selectedFriendlySummary}
+                onClose={() => setSelectedFriendlySummary(null)}
+                game={selectedFriendlySummary?.game || null}
+                eventId={selectedFriendlySummary?.eventId || ''}
+                isAdmin={userProfile?.role === 'admin' || userProfile?.role === 'super-admin'}
+                onOpenAdminPanel={() => {
+                    if (selectedFriendlySummary) {
+                        if (onOpenFriendlyAdminPanel) {
+                            onOpenFriendlyAdminPanel(selectedFriendlySummary.eventId, selectedFriendlySummary.game);
+                        } else {
+                            onSelectEvent(selectedFriendlySummary.eventId);
+                        }
+                        setSelectedFriendlySummary(null);
+                    }
+                }}
+            />
+
+            <Modal isOpen={showFriendlyEditModal} onClose={() => setShowFriendlyEditModal(false)} title="Editar Amistoso">
+                <form onSubmit={handleSaveFriendlyEdit} className="space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nome do Evento</label>
+                            <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFriendlyName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyName(e.target.value)} required />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Data</label>
+                            <input type="date" className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFriendlyDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyDate(e.target.value)} required />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Hora</label>
+                            <input type="time" className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFriendlyHour} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyHour(e.target.value)} required />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Modalidade</label>
+                            <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFriendlyMode} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setEditFriendlyMode(e.target.value as any)}>
+                                <option value="5x5">5x5</option>
+                                <option value="3x3">3x3</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Status</label>
+                            <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFriendlyStatus} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setEditFriendlyStatus(e.target.value as any)}>
+                                <option value="proximo">Próximo</option>
+                                <option value="andamento">Em Andamento</option>
+                                <option value="finalizado">Finalizado</option>
+                            </select>
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Adversário</label>
+                            <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFriendlyOpponent} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyOpponent(e.target.value)} required />
+                        </div>
+
+                        <div className="md:col-span-2 mt-2 border-t pt-4 dark:border-gray-700">
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Escalação</label>
+                            <div className="relative mb-2">
+                                <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
+                                <input 
+                                    className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600" 
+                                    placeholder="Buscar para escalar..." 
+                                    value={editFriendlyRosterSearch} 
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyRosterSearch(e.target.value)} 
+                                />
+                            </div>
+                            <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
+                                {filteredEditFriendlyRosterPlayers.map(p => {
+                                    const isSelected = editFriendlyRosterMap[p.id] !== undefined;
+                                    return (
+                                        <div key={p.id} className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${isSelected ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                                            <div className="flex items-center gap-2 flex-1" onClick={() => toggleFriendlyEditRosterPlayer(p)}>
+                                                <div className={`w-4 h-4 border rounded flex items-center justify-center ${isSelected ? 'bg-ancb-orange border-ancb-orange' : 'border-gray-400'}`}>
+                                                    {isSelected && <LucideCheckSquare size={10} className="text-white"/>}
+                                                </div>
+                                                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{p.nome}</span>
+                                            </div>
+                                            {isSelected && (
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-[10px] text-gray-500 uppercase">Nº</span>
+                                                    <input 
+                                                        type="number" 
+                                                        className="w-12 p-1 text-center border rounded text-xs font-bold dark:bg-gray-700 dark:text-white"
+                                                        value={editFriendlyRosterMap[p.id]}
+                                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFriendlyEditRosterNumber(p.id, e.target.value)}
+                                                        onClick={(e: React.MouseEvent<HTMLInputElement>) => e.stopPropagation()}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                        <Button type="submit" className="flex-1">Salvar alterações</Button>
+                        <Button type="button" variant="secondary" className="flex-1 !text-red-500 !border-red-200 hover:!bg-red-50 dark:hover:!bg-red-900/20" onClick={handleDeleteFriendlyEvent}>
+                            <LucideTrash2 size={14} /> Excluir amistoso
+                        </Button>
+                    </div>
+                </form>
+            </Modal>
         </div>
     );
 };

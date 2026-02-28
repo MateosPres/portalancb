@@ -43,13 +43,59 @@ interface PendingInvite {
     status: 'pendente' | 'confirmado' | 'recusado';
 }
 
-const calculateStatsFromTags = (tags?: Record<string, number>) => {
-    let stats = { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
-    if (!tags) return stats;
-    const WEIGHTS: Record<string, any> = { 'sniper': { ataque: 3 }, 'muralha': { defesa: 3 }, 'lider': { visao: 2 }, 'garcom': { visao: 2 }, 'flash': { velocidade: 1 }, 'guerreiro': { forca: 1 }, 'fominha': { visao: -1 }, 'tijoleiro': { ataque: -2 }, 'avenida': { defesa: -2 }, 'cone': { velocidade: -3 } };
-    Object.entries(tags).forEach(([tag, count]) => { const impact = WEIGHTS[tag]; if (impact) { if (impact.ataque) stats.ataque += (impact.ataque * count); if (impact.defesa) stats.defesa += (impact.defesa * count); if (impact.forca) stats.forca += (impact.forca * count); if (impact.velocidade) stats.velocidade += (impact.velocidade * count); if (impact.visao) stats.visao += (impact.visao * count); } });
-    const clamp = (n: number) => Math.max(20, Math.min(n, 99));
-    return { ataque: clamp(stats.ataque), defesa: clamp(stats.defesa), forca: clamp(stats.forca), velocidade: clamp(stats.velocidade), visao: clamp(stats.visao) };
+const calculateRadarStats = (
+    tags?: Record<string, number>,
+    attributeDeltas?: Partial<Record<'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao', number>>
+) => {
+    const BASE_STAT = 20;
+    const DELTA_DISPLAY_GAIN = 4.0;
+    const CONTRAST_GAIN = 1.8;
+    let stats = { ataque: BASE_STAT, defesa: BASE_STAT, forca: BASE_STAT, velocidade: BASE_STAT, visao: BASE_STAT };
+
+    const hasAttributeDeltas = !!attributeDeltas && Object.values(attributeDeltas).some(v => typeof v === 'number' && !Number.isNaN(v) && v !== 0);
+    if (hasAttributeDeltas && attributeDeltas) {
+        stats.ataque += Number(attributeDeltas.ataque || 0) * DELTA_DISPLAY_GAIN;
+        stats.defesa += Number(attributeDeltas.defesa || 0) * DELTA_DISPLAY_GAIN;
+        stats.forca += Number(attributeDeltas.forca || 0) * DELTA_DISPLAY_GAIN;
+        stats.velocidade += Number(attributeDeltas.velocidade || 0) * DELTA_DISPLAY_GAIN;
+        stats.visao += Number(attributeDeltas.visao || 0) * DELTA_DISPLAY_GAIN;
+    } else if (tags) {
+        const LEGACY_WEIGHTS: Record<string, Partial<Record<'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao', number>>> = {
+            sniper: { ataque: 3, visao: 1 },
+            muralha: { defesa: 3, forca: 1 },
+            lider: { visao: 3, defesa: 1, forca: 1 },
+            garcom: { visao: 3, ataque: 1 },
+            flash: { velocidade: 3, ataque: 1 },
+            guerreiro: { forca: 3, defesa: 1 },
+            fominha: { visao: -1, ataque: -0.5 },
+            tijoleiro: { ataque: -1, visao: -0.5 },
+            avenida: { defesa: -1, velocidade: -0.5 },
+            cone: { velocidade: -1, forca: -0.5 },
+        };
+
+        Object.entries(tags).forEach(([tag, count]) => {
+            const impact = LEGACY_WEIGHTS[tag];
+            if (!impact) return;
+            if (impact.ataque) stats.ataque += impact.ataque * count;
+            if (impact.defesa) stats.defesa += impact.defesa * count;
+            if (impact.forca) stats.forca += impact.forca * count;
+            if (impact.velocidade) stats.velocidade += impact.velocidade * count;
+            if (impact.visao) stats.visao += impact.visao * count;
+        });
+    }
+
+    const values = [stats.ataque, stats.defesa, stats.forca, stats.velocidade, stats.visao];
+    const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const enhance = (value: number) => average + ((value - average) * CONTRAST_GAIN);
+    const clamp = (n: number) => Math.max(5, Math.min(n, 99));
+
+    return {
+        ataque: clamp(enhance(stats.ataque)),
+        defesa: clamp(enhance(stats.defesa)),
+        forca: clamp(enhance(stats.forca)),
+        velocidade: clamp(enhance(stats.velocidade)),
+        visao: clamp(enhance(stats.visao)),
+    };
 };
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, onOpenReview, onOpenEvent }) => {
@@ -141,16 +187,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
             const eventsSnap = await getDocs(eventsQ);
             const invites: PendingInvite[] = [];
 
-            for (const doc of eventsSnap.docs) {
-                const eventData = doc.data() as Evento;
+            for (const eventDoc of eventsSnap.docs) {
+                const eventData = eventDoc.data() as Evento;
                 // Check new sub-collection
                 try {
-                    const rosterDoc = await getDoc(doc.ref.collection("roster").doc(playerDocId));
+                    const rosterDoc = await getDoc(doc(db, "eventos", eventDoc.id, "roster", playerDocId));
                     if (rosterDoc.exists()) {
-                        const rData = rosterDoc.data();
+                        const rData = rosterDoc.data() as { status?: string };
                         if (rData.status === 'pendente') {
                             invites.push({
-                                eventId: doc.id,
+                                eventId: eventDoc.id,
                                 eventName: eventData.nome,
                                 eventDate: eventData.data,
                                 eventType: eventData.type,
@@ -376,7 +422,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const formatDate = (dateStr?: string) => dateStr ? dateStr.split('-').reverse().join('/') : '';
     const normalizePosition = (pos: string | undefined): string => { if (!pos) return '-'; if (pos.includes('1') || pos.toLowerCase().includes('armador')) return 'Armador (1)'; if (pos.includes('2') || pos.toLowerCase().includes('ala/armador')) return 'Ala/Armador (2)'; if (pos.includes('3') || (pos.toLowerCase().includes('ala') && !pos.includes('piv'))) return 'Ala (3)'; if (pos.includes('4') || pos.toLowerCase().includes('ala/piv')) return 'Ala/Pivô (4)'; if (pos.includes('5') || pos.toLowerCase().includes('piv')) return 'Pivô (5)'; return pos; };
     const calculateAge = (dateString?: string) => { if (!dateString) return '-'; const today = new Date(); const birthDate = new Date(dateString); let age = today.getFullYear() - birthDate.getFullYear(); const m = today.getMonth() - birthDate.getMonth(); if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) { age--; } return age; };
-    const radarStats = calculateStatsFromTags(formData.stats_tags);
+    const radarStats = calculateRadarStats(formData.stats_tags, formData.stats_atributos);
+    const hasAttributeDeltas = Object.values(formData.stats_atributos || {}).some(value => Number(value) !== 0);
+    const hasRadarData = hasAttributeDeltas || Object.values(formData.stats_tags || {}).some(value => Number(value) > 0);
     const getBadgeWeight = (rarity: Badge['raridade']) => { switch(rarity) { case 'lendaria': return 4; case 'epica': return 3; case 'rara': return 2; default: return 1; } };
     const allBadges = formData.badges || [];
     const pinnedIds = formData.pinnedBadgeIds || [];
@@ -429,57 +477,92 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                     
                     {/* LEFT COLUMN: Avatar + Info */}
-                    <div className="flex flex-col md:flex-row items-center gap-6 w-full md:pl-8 lg:pl-12">
-                        <div className="relative shrink-0">
-                            <div className="w-28 h-28 md:w-32 md:h-32 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
-                                {formData.foto ? <img src={formData.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-white/50">{formData.nome?.charAt(0)}</span>}
+                    <div className="w-full md:pl-8 lg:pl-12">
+                        <div className="md:hidden flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                                <div className="relative w-fit mb-4">
+                                    <div className="w-24 h-24 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
+                                        {formData.foto ? <img src={formData.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-3xl font-bold text-white/50">{formData.nome?.charAt(0)}</span>}
+                                    </div>
+                                    <div className="absolute bottom-1 right-0 bg-ancb-orange text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md border border-white/20">
+                                        #{formData.numero_uniforme}
+                                    </div>
+                                    <label className="absolute top-0 right-0 bg-white/10 text-white p-1.5 rounded-full shadow-lg cursor-pointer hover:bg-white/20 transition-colors backdrop-blur-sm">
+                                        {isUploading ? <LucideLoader2 className="animate-spin" size={12}/> : <LucideCamera size={12} />}
+                                        <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} disabled={isUploading} />
+                                    </label>
+                                </div>
+
+                                <h1 className="text-2xl font-bold text-white leading-tight mb-1 truncate">{formData.apelido || formData.nome}</h1>
+                                <p className="text-xs text-blue-200 font-normal mb-2 truncate">{formData.nome}</p>
+
+                                <div className="flex items-center gap-2 text-gray-300 text-sm font-medium mb-4">
+                                    <LucideMapPin size={14} className="text-ancb-orange shrink-0" />
+                                    <span className="truncate">{normalizePosition(formData.posicao)}</span>
+                                </div>
                             </div>
-                            <div className="absolute bottom-1 right-0 bg-ancb-orange text-white text-sm font-bold px-3 py-1 rounded-lg shadow-md border border-white/20">
-                                #{formData.numero_uniforme}
+
+                            <div className="shrink-0 pt-1">
+                                <div className="flex items-center justify-center gap-2 mb-1 text-blue-100/50">
+                                    <LucideTrendingUp size={12} />
+                                    <span className="text-[9px] font-bold uppercase tracking-wider">Atributos</span>
+                                </div>
+                                <RadarChart stats={radarStats} hasData={hasRadarData} size={150} className="text-white/70" />
                             </div>
-                            <label className="absolute top-0 right-0 bg-white/10 text-white p-2 rounded-full shadow-lg cursor-pointer hover:bg-white/20 transition-colors backdrop-blur-sm">
-                                {isUploading ? <LucideLoader2 className="animate-spin" size={14}/> : <LucideCamera size={14} />}
-                                <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} disabled={isUploading} />
-                            </label>
                         </div>
 
-                        <div className="flex flex-col items-center md:items-start text-center md:text-left w-full">
-                            <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-1">{formData.apelido || formData.nome}</h1>
-                            <p className="text-xs text-blue-200 font-normal mb-3">{formData.nome}</p>
-                            
-                            <div className="flex items-center justify-center md:justify-start gap-2 text-gray-300 text-sm font-medium mb-4">
-                                <LucideMapPin size={16} className="text-ancb-orange" />
-                                <span>{normalizePosition(formData.posicao)}</span>
+                        <div className="hidden md:flex flex-row items-center gap-6 w-full">
+                            <div className="relative shrink-0">
+                                <div className="w-28 h-28 md:w-32 md:h-32 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
+                                    {formData.foto ? <img src={formData.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-white/50">{formData.nome?.charAt(0)}</span>}
+                                </div>
+                                <div className="absolute bottom-1 right-0 bg-ancb-orange text-white text-sm font-bold px-3 py-1 rounded-lg shadow-md border border-white/20">
+                                    #{formData.numero_uniforme}
+                                </div>
+                                <label className="absolute top-0 right-0 bg-white/10 text-white p-2 rounded-full shadow-lg cursor-pointer hover:bg-white/20 transition-colors backdrop-blur-sm">
+                                    {isUploading ? <LucideLoader2 className="animate-spin" size={14}/> : <LucideCamera size={14} />}
+                                    <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} disabled={isUploading} />
+                                </label>
                             </div>
 
-                            <button 
-                                onClick={handleOpenEditModal}
-                                className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition-colors text-xs font-bold uppercase tracking-wider text-white mb-6"
-                            >
-                                <LucideEdit2 size={14} /> Editar Perfil
-                            </button>
+                            <div className="flex flex-col items-center md:items-start text-center md:text-left w-full">
+                                <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-1">{formData.apelido || formData.nome}</h1>
+                                <p className="text-xs text-blue-200 font-normal mb-3">{formData.nome}</p>
+                                
+                                <div className="flex items-center justify-center md:justify-start gap-2 text-gray-300 text-sm font-medium mb-4">
+                                    <LucideMapPin size={16} className="text-ancb-orange" />
+                                    <span>{normalizePosition(formData.posicao)}</span>
+                                </div>
+                            </div>
+                        </div>
 
-                            <div className="grid grid-cols-2 gap-4 w-full max-w-[240px] mx-auto md:mx-0">
-                                <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
-                                    <span className="block text-2xl font-bold text-white">{calculateAge(formData.nascimento)}</span>
-                                    <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Idade</span>
-                                </div>
-                                <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
-                                    <span className="block text-2xl font-bold text-white">{matches.length}</span>
-                                    <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
-                                </div>
+                        <button 
+                            onClick={handleOpenEditModal}
+                            className="w-full md:w-auto mt-2 md:mt-3 flex items-center justify-center gap-2 px-6 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition-colors text-xs font-bold uppercase tracking-wider text-white mb-6"
+                        >
+                            <LucideEdit2 size={14} /> Editar Perfil
+                        </button>
+
+                        <div className="grid grid-cols-2 gap-4 w-full max-w-[240px] mx-auto md:mx-0">
+                            <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
+                                <span className="block text-2xl font-bold text-white">{calculateAge(formData.nascimento)}</span>
+                                <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Idade</span>
+                            </div>
+                            <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
+                                <span className="block text-2xl font-bold text-white">{matches.length}</span>
+                                <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
                             </div>
                         </div>
                     </div>
 
                     {/* RIGHT COLUMN: Radar Chart */}
-                    <div className="flex flex-col items-center justify-center h-full">
+                    <div className="hidden md:flex flex-col items-center justify-center h-full">
                         <div className="relative mb-2">
                             <div className="flex items-center justify-center gap-2 mb-2 text-blue-100/50">
                                 <LucideTrendingUp size={14} />
                                 <span className="text-[10px] font-bold uppercase tracking-wider">Atributos</span>
                             </div>
-                            <RadarChart stats={radarStats} size={240} className="text-white/70" />
+                            <RadarChart stats={radarStats} hasData={hasRadarData} size={240} className="text-white/70" />
                         </div>
                     </div>
                 </div>

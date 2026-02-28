@@ -127,6 +127,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     // Kebab Menu State
     const [activeMenuGameId, setActiveMenuGameId] = useState<string | null>(null);
     const [showHeaderAdminMenu, setShowHeaderAdminMenu] = useState(false);
+    const [headerAdminMenuPos, setHeaderAdminMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
     const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
 
@@ -882,7 +883,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                         <Button variant="secondary" size="sm" onClick={onBack} className="!bg-white/10 !border-white/20 !text-white hover:!bg-white/20">
                             <LucideArrowLeft size={18} /> Voltar
                         </Button>
-                        <div className="flex items-center gap-2 flex-wrap justify-end relative">
+                        <div className="flex items-center gap-2 flex-wrap justify-end relative z-[130]">
                             <span className="inline-block px-3 py-1 rounded-full bg-black/30 backdrop-blur-sm text-xs font-bold uppercase tracking-wider border border-white/10 whitespace-nowrap">
                                 {event.type.replace('_', ' ')}
                             </span>
@@ -890,6 +891,8 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
+                                        const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                                        setHeaderAdminMenuPos({ top: rect.bottom + 8, left: Math.max(12, rect.right - 224) });
                                         setShowHeaderAdminMenu(prev => !prev);
                                     }}
                                     className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-lg transition-colors backdrop-blur-sm"
@@ -897,53 +900,6 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                 >
                                     <LucideMoreVertical size={18} />
                                 </button>
-                            )}
-                            {isAdmin && showHeaderAdminMenu && (
-                                <div
-                                    className="fixed right-4 top-24 md:top-28 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-white/20 dark:border-gray-700 z-[120] overflow-hidden"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    {event.status !== 'andamento' && event.status !== 'finalizado' && (
-                                        <button
-                                            onClick={() => {
-                                                handleStartEvent();
-                                                setShowHeaderAdminMenu(false);
-                                            }}
-                                            className="w-full text-left px-4 py-3 hover:bg-green-50 dark:hover:bg-green-900/20 text-sm flex items-center gap-2 text-green-700 dark:text-green-400"
-                                        >
-                                            <LucidePlayCircle size={16} /> Iniciar Evento
-                                        </button>
-                                    )}
-                                    <button
-                                        onClick={() => {
-                                            setShowEditEvent(true);
-                                            setShowHeaderAdminMenu(false);
-                                        }}
-                                        className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-gray-700 dark:text-gray-300"
-                                    >
-                                        <LucideEdit size={16} /> Editar Evento
-                                    </button>
-                                    {event.type === 'torneio_externo' && (
-                                        <button
-                                            onClick={() => {
-                                                setShowChaaveConfigurator(true);
-                                                setShowHeaderAdminMenu(false);
-                                            }}
-                                            className="w-full text-left px-4 py-3 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 text-sm flex items-center gap-2 text-yellow-700 dark:text-yellow-400"
-                                        >
-                                            <LucideNetwork size={16} /> Configurar Chaves
-                                        </button>
-                                    )}
-                                    <button
-                                        onClick={() => {
-                                            handleDeleteEvent();
-                                            setShowHeaderAdminMenu(false);
-                                        }}
-                                        className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm flex items-center gap-2 text-red-600"
-                                    >
-                                        <LucideTrash2 size={16} /> Excluir Evento
-                                    </button>
-                                </div>
                             )}
                         </div>
                     </div>
@@ -954,6 +910,55 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                     </div>
                 </div>
             </div>
+
+            {isAdmin && showHeaderAdminMenu && (
+                <div
+                    className="fixed w-56 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-white/20 dark:border-gray-700 z-[300] overflow-hidden"
+                    style={{ top: headerAdminMenuPos.top, left: headerAdminMenuPos.left }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {event.status !== 'andamento' && event.status !== 'finalizado' && (
+                        <button
+                            onClick={() => {
+                                handleStartEvent();
+                                setShowHeaderAdminMenu(false);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-green-50 dark:hover:bg-green-900/20 text-sm flex items-center gap-2 text-green-700 dark:text-green-400"
+                        >
+                            <LucidePlayCircle size={16} /> Iniciar Evento
+                        </button>
+                    )}
+                    <button
+                        onClick={() => {
+                            setShowEditEvent(true);
+                            setShowHeaderAdminMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-gray-700 dark:text-gray-300"
+                    >
+                        <LucideEdit size={16} /> Editar Evento
+                    </button>
+                    {event.type === 'torneio_externo' && (
+                        <button
+                            onClick={() => {
+                                setShowChaaveConfigurator(true);
+                                setShowHeaderAdminMenu(false);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 text-sm flex items-center gap-2 text-yellow-700 dark:text-yellow-400"
+                        >
+                            <LucideNetwork size={16} /> Configurar Chaves
+                        </button>
+                    )}
+                    <button
+                        onClick={() => {
+                            handleDeleteEvent();
+                            setShowHeaderAdminMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm flex items-center gap-2 text-red-600"
+                    >
+                        <LucideTrash2 size={16} /> Excluir Evento
+                    </button>
+                </div>
+            )}
 
             <div className="flex-grow container mx-auto px-4 py-8 max-w-5xl">
                 
@@ -1449,7 +1454,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                     {event.type === 'torneio_interno' ? 'Times' : 'Convocação'}
                                 </h3>
                                 {isAdmin && event.type === 'torneio_interno' && (
-                                    <button onClick={() => { setShowTeamManager(true); setEditingTeam(null); }} className="text-xs flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-lg shadow-sm font-bold text-gray-600 dark:text-gray-300 hover:text-ancb-blue transition-all">
+                                    <button onClick={() => { if (onOpenTeamManager) onOpenTeamManager(eventId); else { setShowTeamManager(true); setEditingTeam(null); } }} className="text-xs flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-lg shadow-sm font-bold text-gray-600 dark:text-gray-300 hover:text-ancb-blue transition-all">
                                         <LucideEdit2 size={12} /> Gerenciar
                                     </button>
                                 )}

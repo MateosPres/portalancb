@@ -65,6 +65,7 @@ const App: React.FC = () => {
 
     // Navigation State
     const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+    const [pendingFriendlyEventId, setPendingFriendlyEventId] = useState<string | null>(null);
     const [targetPlayerId, setTargetPlayerId] = useState<string | null>(null);
 
     // Game Panel State
@@ -429,23 +430,67 @@ const App: React.FC = () => {
             const gameData = gameDoc.exists ? gameDoc.data() as Jogo : null;
 
             let ancbPlayerIds: string[] = [];
+            const reviewerPlayerId = userProfile?.linkedPlayerId || allPlayers.find(p => p.userId === userProfile?.uid)?.id;
+            const gameTeamIds = gameData ? [gameData.timeA_id, gameData.timeB_id].filter(Boolean) : [];
 
             if (eventData.timesParticipantes && eventData.timesParticipantes.length > 0) {
-                if (gameData && (gameData.timeA_id || gameData.timeB_id)) {
-                    const gameTeamIds = [gameData.timeA_id, gameData.timeB_id].filter(Boolean);
-                    const ancbTeam = eventData.timesParticipantes.find(t => 
-                        t.isANCB && gameTeamIds.includes(t.id)
-                    );
-                    if (ancbTeam) ancbPlayerIds = ancbTeam.jogadores || [];
+                const participantTeams = gameTeamIds.length > 0
+                    ? eventData.timesParticipantes.filter(t => gameTeamIds.includes(t.id))
+                    : eventData.timesParticipantes;
+
+                const ancbTeams = participantTeams.filter(t => t.isANCB);
+
+                const reviewerTeam = reviewerPlayerId
+                    ? ancbTeams.find(team => (team.jogadores || []).includes(reviewerPlayerId))
+                    : undefined;
+
+                if (reviewerTeam) {
+                    ancbPlayerIds = reviewerTeam.jogadores || [];
                 } else {
-                    const ancbTeam = eventData.timesParticipantes.find(t => t.isANCB);
-                    if (ancbTeam) ancbPlayerIds = ancbTeam.jogadores || [];
+                    ancbTeams.forEach(team => {
+                        ancbPlayerIds.push(...(team.jogadores || []));
+                    });
                 }
-            } else if (eventData.jogadoresEscalados && eventData.jogadoresEscalados.length > 0) {
-                ancbPlayerIds = (eventData.jogadoresEscalados as any[])
-                    .map((e: any) => typeof e === 'string' ? e : e.id)
+            } else if (eventData.times && eventData.times.length > 0) {
+                if (gameTeamIds.length > 0) {
+                    const participantTeams = eventData.times.filter(t => gameTeamIds.includes(t.id));
+                    const reviewerTeam = reviewerPlayerId
+                        ? participantTeams.find(team => (team.jogadores || []).includes(reviewerPlayerId))
+                        : undefined;
+
+                    if (reviewerTeam) {
+                        ancbPlayerIds = reviewerTeam.jogadores || [];
+                    } else {
+                        participantTeams.forEach(team => {
+                            ancbPlayerIds.push(...(team.jogadores || []));
+                        });
+                    }
+                } else {
+                    eventData.times.forEach(team => {
+                        ancbPlayerIds.push(...(team.jogadores || []));
+                    });
+                }
+            } else {
+                const gameRoster = (gameData?.jogadoresEscalados || [])
+                    .map((e: any) => typeof e === 'string' ? e : e?.id)
+                    .filter(Boolean);
+
+                const eventRoster = (eventData.jogadoresEscalados || [])
+                    .map((e: any) => typeof e === 'string' ? e : e?.id)
+                    .filter(Boolean);
+
+                ancbPlayerIds = gameRoster.length > 0 ? gameRoster : eventRoster;
+            }
+
+            if (ancbPlayerIds.length === 0) {
+                const rosterCollectionSnap = await db.collection("eventos").doc(eventId).collection("roster").get();
+                ancbPlayerIds = rosterCollectionSnap.docs
+                    .filter(d => (d.data() as any).status !== 'recusado')
+                    .map(d => d.id)
                     .filter(Boolean);
             }
+
+            ancbPlayerIds = Array.from(new Set(ancbPlayerIds));
 
             if (ancbPlayerIds.length === 0) {
                 alert("Não há jogadores ANCB escalados nesta partida para avaliar.");
@@ -453,7 +498,7 @@ const App: React.FC = () => {
             }
 
             const playersToReview = allPlayers.filter(p => 
-                ancbPlayerIds.includes(p.id) && p.id !== userProfile?.linkedPlayerId
+                ancbPlayerIds.includes(p.id) && p.id !== reviewerPlayerId
             );
 
             if (playersToReview.length > 0) {
@@ -482,9 +527,23 @@ const App: React.FC = () => {
         }
     };
 
-    const handleOpenEventDetail = (eventId: string) => {
-        setSelectedEventId(eventId);
-        setCurrentView('evento-detalhe');
+    const handleOpenEventDetail = async (eventId: string) => {
+        try {
+            const eventSnap = await getDoc(doc(db, 'eventos', eventId));
+            if (!eventSnap.exists()) return;
+
+            const eventData = eventSnap.data() as Evento;
+            if (eventData.type === 'amistoso') {
+                setPendingFriendlyEventId(eventId);
+                setCurrentView('eventos');
+                return;
+            }
+
+            setSelectedEventId(eventId);
+            setCurrentView('evento-detalhe');
+        } catch (error) {
+            console.error('Erro ao abrir evento:', error);
+        }
     };
 
     const handleOpenPlayerDetail = (playerId: string, fromEventId?: string, fromTeamId?: string) => {
@@ -634,7 +693,7 @@ const App: React.FC = () => {
                     <Feed />
                 </div>
             );
-            case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onSelectEvent={handleOpenEventDetail} />;
+            case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onSelectEvent={handleOpenEventDetail} onOpenFriendlyAdminPanel={(eventId, game) => handleOpenGamePanel(game, eventId, true)} initialFriendlyEventId={pendingFriendlyEventId} onFriendlySummaryOpened={() => setPendingFriendlyEventId(null)} />;
             case 'evento-detalhe': return selectedEventId ? <EventoDetalheView 
                 eventId={selectedEventId} 
                 initialTeamId={returnToTeamId} 

@@ -8,7 +8,7 @@ import {
     LucideArrowLeft, LucideRotateCcw, LucideCheckCircle2, LucideUsers, 
     LucideTrophy, LucideActivity, LucideUser, LucidePlayCircle, LucideCalendarClock
 } from 'lucide-react';
-import { collection, doc, updateDoc, deleteDoc, addDoc, serverTimestamp, increment, onSnapshot } from 'firebase/firestore';
+import { collection, doc, updateDoc, deleteDoc, addDoc, serverTimestamp, increment, onSnapshot, getDocs, query, where, limit, setDoc } from 'firebase/firestore';
 
 interface PainelJogoViewProps {
     game: Jogo;
@@ -268,6 +268,52 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
             // envia automaticamente a notificação do quiz de avaliação
             // para todos os jogadores escalados nos dois times.
             await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), { status: 'finalizado' });
+
+            // Fallback para amistoso: garante pending_review mesmo sem deploy/execução da Cloud Function.
+            if (eventData?.type === 'amistoso') {
+                const gameRoster = (liveGame.jogadoresEscalados || []).filter(Boolean);
+                const eventRoster = (eventData.jogadoresEscalados || []).map((entry: string | EscaladoInfo) =>
+                    typeof entry === 'string' ? entry : entry.id
+                ).filter(Boolean);
+
+                let ancbPlayerIds = gameRoster.length > 0 ? gameRoster : eventRoster;
+
+                if (ancbPlayerIds.length === 0) {
+                    const rosterSnap = await getDocs(collection(db, "eventos", eventId, "roster"));
+                    ancbPlayerIds = rosterSnap.docs
+                        .filter(d => (d.data() as any).status !== 'recusado')
+                        .map(d => d.id)
+                        .filter(Boolean);
+                }
+
+                ancbPlayerIds = Array.from(new Set(ancbPlayerIds));
+
+                const scoreA = liveGame.placarTimeA_final ?? liveGame.placarANCB_final ?? 0;
+                const scoreB = liveGame.placarTimeB_final ?? liveGame.placarAdversario_final ?? 0;
+                const teamAName = liveGame.timeA_nome || 'ANCB';
+                const teamBName = liveGame.timeB_nome || liveGame.adversario || 'Adversário';
+                const eventName = eventData.nome || 'Evento';
+
+                for (const playerId of ancbPlayerIds) {
+                    const userSnap = await getDocs(query(collection(db, "usuarios"), where("linkedPlayerId", "==", playerId), limit(1)));
+                    if (userSnap.empty) continue;
+
+                    const userDoc = userSnap.docs[0];
+                    const notifId = `pending_review_${userDoc.id}_${game.id}`;
+
+                    await setDoc(doc(db, "notifications", notifId), {
+                        targetUserId: userDoc.id,
+                        type: 'pending_review',
+                        title: 'Avalie seus companheiros! 🏆',
+                        message: `${teamAName} ${scoreA} x ${scoreB} ${teamBName} — Partida de ${eventName} encerrada.`,
+                        data: { eventId, gameId: game.id },
+                        read: false,
+                        timestamp: serverTimestamp(),
+                        deduplicationKey: notifId
+                    }, { merge: true });
+                }
+            }
+
             onBack();
         } catch (e) {
             console.error("Erro ao finalizar jogo:", e);

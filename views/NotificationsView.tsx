@@ -15,7 +15,7 @@ import {
     LucideBellRing,
     LucideClipboardList,
 } from 'lucide-react';
-import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, orderBy, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, orderBy, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from 'framer-motion';
 
 interface NotificationsViewProps {
@@ -134,7 +134,28 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
     const handleRosterResponse = async (notification: NotificationItem, accept: boolean) => {
         try {
             const { eventId, teamId } = notification.data || {};
-            if (!eventId || !teamId) { alert("Dados da notificação inválidos."); return; }
+            if (!eventId) { alert("Dados da notificação inválidos."); return; }
+
+            const playerIdFromNotif = (notification as any).playerId || notification.data?.playerId || userProfile.linkedPlayerId;
+
+            // Convocação de amistoso: sem teamId, atualiza roster subcollection
+            if (!teamId) {
+                if (!playerIdFromNotif) {
+                    alert("Jogador não identificado na notificação.");
+                    return;
+                }
+
+                await setDoc(doc(db, 'eventos', eventId, 'roster', playerIdFromNotif), {
+                    playerId: playerIdFromNotif,
+                    status: accept ? 'confirmado' : 'recusado',
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+
+                await deleteDoc(doc(db, 'notifications', notification.id));
+                setNotifications(prev => prev.filter(n => n.id !== notification.id));
+                alert(accept ? "Convocação aceita!" : "Convocação recusada.");
+                return;
+            }
 
             const eventRef = doc(db, 'eventos', eventId);
             const eventSnap = await getDoc(eventRef);
@@ -148,7 +169,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
 
                 if (teamIndex !== -1) {
                     const team = teams[teamIndex];
-                    const playerId = (notification as any).playerId || notification.data?.playerId || userProfile.linkedPlayerId;
+                    const playerId = playerIdFromNotif;
                     if (playerId) {
                         const newStatus = { ...(team.rosterStatus || {}), [playerId]: accept ? 'confirmado' : 'recusado' };
                         const updatedTeams = [...teams];

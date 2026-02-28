@@ -31,7 +31,7 @@ import {
     LucideEdit2,
     LucideTrash2
 } from 'lucide-react';
-import { deleteDoc, doc } from 'firebase/firestore';
+import { deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 
 interface JogadoresViewProps {
     onBack: () => void;
@@ -57,42 +57,58 @@ interface MatchHistoryItem {
     cesta3: number;
 }
 
-const calculateStatsFromTags = (tags?: Record<string, number>) => {
-    let stats = { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
-    if (!tags) return stats;
+const calculateRadarStats = (
+    tags?: Record<string, number>,
+    attributeDeltas?: Partial<Record<'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao', number>>
+) => {
+    const BASE_STAT = 20;
+    const DELTA_DISPLAY_GAIN = 4.0;
+    const CONTRAST_GAIN = 1.8;
+    let stats = { ataque: BASE_STAT, defesa: BASE_STAT, forca: BASE_STAT, velocidade: BASE_STAT, visao: BASE_STAT };
 
-    const WEIGHTS: Record<string, any> = {
-        'sniper': { ataque: 3 },
-        'muralha': { defesa: 3 },
-        'lider': { visao: 2 },
-        'garcom': { visao: 2 },
-        'flash': { velocidade: 1 },
-        'guerreiro': { forca: 1 },
-        'fominha': { visao: -1 },
-        'tijoleiro': { ataque: -2 },
-        'avenida': { defesa: -2 },
-        'cone': { velocidade: -3 }
-    };
+    const hasAttributeDeltas = !!attributeDeltas && Object.values(attributeDeltas).some(v => typeof v === 'number' && !Number.isNaN(v) && v !== 0);
+    if (hasAttributeDeltas && attributeDeltas) {
+        stats.ataque += Number(attributeDeltas.ataque || 0) * DELTA_DISPLAY_GAIN;
+        stats.defesa += Number(attributeDeltas.defesa || 0) * DELTA_DISPLAY_GAIN;
+        stats.forca += Number(attributeDeltas.forca || 0) * DELTA_DISPLAY_GAIN;
+        stats.velocidade += Number(attributeDeltas.velocidade || 0) * DELTA_DISPLAY_GAIN;
+        stats.visao += Number(attributeDeltas.visao || 0) * DELTA_DISPLAY_GAIN;
+    } else if (tags) {
+        const LEGACY_WEIGHTS: Record<string, Partial<Record<'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao', number>>> = {
+            sniper: { ataque: 3, visao: 1 },
+            muralha: { defesa: 3, forca: 1 },
+            lider: { visao: 3, defesa: 1, forca: 1 },
+            garcom: { visao: 3, ataque: 1 },
+            flash: { velocidade: 3, ataque: 1 },
+            guerreiro: { forca: 3, defesa: 1 },
+            fominha: { visao: -1, ataque: -0.5 },
+            tijoleiro: { ataque: -1, visao: -0.5 },
+            avenida: { defesa: -1, velocidade: -0.5 },
+            cone: { velocidade: -1, forca: -0.5 },
+        };
 
-    Object.entries(tags).forEach(([tag, count]) => {
-        const impact = WEIGHTS[tag];
-        if (impact) {
-            if (impact.ataque) stats.ataque += (impact.ataque * count);
-            if (impact.defesa) stats.defesa += (impact.defesa * count);
-            if (impact.forca) stats.forca += (impact.forca * count);
-            if (impact.velocidade) stats.velocidade += (impact.velocidade * count);
-            if (impact.visao) stats.visao += (impact.visao * count);
-        }
-    });
+        Object.entries(tags).forEach(([tag, count]) => {
+            const impact = LEGACY_WEIGHTS[tag];
+            if (!impact) return;
+            if (impact.ataque) stats.ataque += impact.ataque * count;
+            if (impact.defesa) stats.defesa += impact.defesa * count;
+            if (impact.forca) stats.forca += impact.forca * count;
+            if (impact.velocidade) stats.velocidade += impact.velocidade * count;
+            if (impact.visao) stats.visao += impact.visao * count;
+        });
+    }
 
-    const clamp = (n: number) => Math.max(20, Math.min(n, 99));
-    
+    const values = [stats.ataque, stats.defesa, stats.forca, stats.velocidade, stats.visao];
+    const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const enhance = (value: number) => average + ((value - average) * CONTRAST_GAIN);
+    const clamp = (n: number) => Math.max(5, Math.min(n, 99));
+
     return {
-        ataque: clamp(stats.ataque),
-        defesa: clamp(stats.defesa),
-        forca: clamp(stats.forca),
-        velocidade: clamp(stats.velocidade),
-        visao: clamp(stats.visao)
+        ataque: clamp(enhance(stats.ataque)),
+        defesa: clamp(enhance(stats.defesa)),
+        forca: clamp(enhance(stats.forca)),
+        velocidade: clamp(enhance(stats.velocidade)),
+        visao: clamp(enhance(stats.visao)),
     };
 };
 
@@ -145,6 +161,25 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         };
         fetchPlayers();
     }, [initialPlayerId]);
+
+    useEffect(() => {
+        if (!selectedPlayer?.id) return;
+
+        const playerRef = doc(db, 'jogadores', selectedPlayer.id);
+        const unsubscribe = onSnapshot(playerRef, (snapshot) => {
+            if (!snapshot.exists()) {
+                setPlayers(prev => prev.filter(p => p.id !== selectedPlayer.id));
+                setSelectedPlayer(null);
+                return;
+            }
+
+            const freshPlayer = { id: snapshot.id, ...(snapshot.data() as any) } as Player;
+            setSelectedPlayer(prev => prev && prev.id === freshPlayer.id ? freshPlayer : prev);
+            setPlayers(prev => prev.map(p => p.id === freshPlayer.id ? freshPlayer : p));
+        });
+
+        return () => unsubscribe();
+    }, [selectedPlayer?.id]);
 
     useEffect(() => {
         if (!selectedPlayer) return;
@@ -430,8 +465,11 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     };
 
     const radarStats = selectedPlayer 
-        ? calculateStatsFromTags(selectedPlayer.stats_tags) 
+        ? calculateRadarStats(selectedPlayer.stats_tags, selectedPlayer.stats_atributos)
         : { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
+    const hasRadarData = selectedPlayer
+        ? Object.values(selectedPlayer.stats_atributos || {}).some(value => Number(value) !== 0) || Object.values(selectedPlayer.stats_tags || {}).some(value => Number(value) > 0)
+        : false;
     
     // BADGE DISPLAY LOGIC
     let displayBadges: Badge[] = [];
@@ -474,66 +512,96 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
 
                         <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                             {/* LEFT COLUMN: Avatar + Info */}
-                            {/* Added md:pl-8 lg:pl-12 for negative space/centering */}
-                            <div className="flex flex-col md:flex-row items-center gap-6 w-full md:pl-8 lg:pl-12">
-                                <div className="relative shrink-0">
-                                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
-                                        {selectedPlayer.foto ? <img src={selectedPlayer.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-white/50">{selectedPlayer.nome.charAt(0)}</span>}
+                            <div className="w-full md:pl-8 lg:pl-12">
+                                <div className="md:hidden flex items-start justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="relative w-fit mb-4">
+                                            <div className="w-24 h-24 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
+                                                {selectedPlayer.foto ? <img src={selectedPlayer.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-3xl font-bold text-white/50">{selectedPlayer.nome.charAt(0)}</span>}
+                                            </div>
+                                            <div className="absolute bottom-1 right-0 bg-ancb-orange text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md border border-white/20">
+                                                #{selectedPlayer.numero_uniforme}
+                                            </div>
+                                        </div>
+
+                                        <h1 className="text-2xl font-bold text-white leading-tight mb-1 truncate">{selectedPlayer.apelido || selectedPlayer.nome}</h1>
+                                        <span className="text-xs text-blue-200 font-normal mb-2 block truncate">{selectedPlayer.nome}</span>
+                                        
+                                        <div className="flex items-center gap-2 text-gray-300 text-sm font-medium mb-4">
+                                            <LucideMapPin size={14} className="text-ancb-orange shrink-0" />
+                                            <span className="truncate">{normalizePosition(selectedPlayer.posicao)}</span>
+                                        </div>
                                     </div>
-                                    <div className="absolute bottom-1 right-0 bg-ancb-orange text-white text-sm md:text-base font-bold px-3 py-1 rounded-lg shadow-md border border-white/20">
-                                        #{selectedPlayer.numero_uniforme}
+
+                                    <div className="shrink-0 pt-1">
+                                        <div className="flex items-center justify-center gap-2 mb-1 text-blue-100/50">
+                                            <LucideTrendingUp size={12} />
+                                            <span className="text-[9px] font-bold uppercase tracking-wider">Atributos</span>
+                                        </div>
+                                        <RadarChart stats={radarStats} hasData={hasRadarData} size={150} className="text-white/70" />
                                     </div>
                                 </div>
-                                
-                                <div className="flex flex-col items-center md:items-start text-center md:text-left w-full">
-                                    <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-1">{selectedPlayer.apelido || selectedPlayer.nome}</h1>
-                                    <span className="text-xs text-blue-200 font-normal mb-3 block">{selectedPlayer.nome}</span>
-                                    
-                                    <div className="flex items-center justify-center md:justify-start gap-2 text-gray-300 text-sm font-medium mb-4">
-                                        <LucideMapPin size={16} className="text-ancb-orange" />
-                                        <span>{normalizePosition(selectedPlayer.posicao)}</span>
+
+                                <div className="hidden md:flex flex-row items-center gap-6 w-full">
+                                    <div className="relative shrink-0">
+                                        <div className="w-28 h-28 md:w-32 md:h-32 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
+                                            {selectedPlayer.foto ? <img src={selectedPlayer.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-white/50">{selectedPlayer.nome.charAt(0)}</span>}
+                                        </div>
+                                        <div className="absolute bottom-1 right-0 bg-ancb-orange text-white text-sm md:text-base font-bold px-3 py-1 rounded-lg shadow-md border border-white/20">
+                                            #{selectedPlayer.numero_uniforme}
+                                        </div>
                                     </div>
+                                    
+                                    <div className="flex flex-col items-center md:items-start text-center md:text-left w-full">
+                                        <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-1">{selectedPlayer.apelido || selectedPlayer.nome}</h1>
+                                        <span className="text-xs text-blue-200 font-normal mb-3 block">{selectedPlayer.nome}</span>
+                                        
+                                        <div className="flex items-center justify-center md:justify-start gap-2 text-gray-300 text-sm font-medium mb-4">
+                                            <LucideMapPin size={16} className="text-ancb-orange" />
+                                            <span>{normalizePosition(selectedPlayer.posicao)}</span>
+                                        </div>
+                                    </div>
+                                </div>
 
-                                    {/* ADMIN EDIT BUTTONS */}
-                                    {isAdmin && (
-                                        <div className="flex gap-2 mb-6">
-                                            <button 
-                                                onClick={handleStartEdit}
-                                                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition-colors text-xs font-bold uppercase tracking-wider text-white"
-                                            >
-                                                <LucideEdit2 size={14} /> Editar
-                                            </button>
-                                            <button 
-                                                onClick={handleDeletePlayer}
-                                                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-red-500/50 bg-red-600/20 hover:bg-red-600 hover:text-white transition-colors text-xs font-bold uppercase tracking-wider text-red-300"
-                                                title="Excluir Jogador"
-                                            >
-                                                <LucideTrash2 size={14} />
-                                            </button>
-                                        </div>
-                                    )}
+                                {/* ADMIN EDIT BUTTONS */}
+                                {isAdmin && (
+                                    <div className="flex gap-2 mt-2 md:mt-3 mb-6">
+                                        <button 
+                                            onClick={handleStartEdit}
+                                            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition-colors text-xs font-bold uppercase tracking-wider text-white"
+                                        >
+                                            <LucideEdit2 size={14} /> Editar
+                                        </button>
+                                        <button 
+                                            onClick={handleDeletePlayer}
+                                            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-red-500/50 bg-red-600/20 hover:bg-red-600 hover:text-white transition-colors text-xs font-bold uppercase tracking-wider text-red-300"
+                                            title="Excluir Jogador"
+                                        >
+                                            <LucideTrash2 size={14} />
+                                        </button>
+                                    </div>
+                                )}
 
-                                    <div className="grid grid-cols-2 gap-4 w-full max-w-[240px] mx-auto md:mx-0">
-                                        <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
-                                            <span className="block text-2xl font-bold text-white">{selectedPlayer.nascimento ? calculateAge(selectedPlayer.nascimento) : '-'}</span>
-                                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Idade</span>
-                                        </div>
-                                        <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
-                                            <span className="block text-2xl font-bold text-white">{matches.length}</span>
-                                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
-                                        </div>
+                                <div className="grid grid-cols-2 gap-4 w-full max-w-[240px] mx-auto md:mx-0">
+                                    <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
+                                        <span className="block text-2xl font-bold text-white">{selectedPlayer.nascimento ? calculateAge(selectedPlayer.nascimento) : '-'}</span>
+                                        <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Idade</span>
+                                    </div>
+                                    <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
+                                        <span className="block text-2xl font-bold text-white">{matches.length}</span>
+                                        <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
                                     </div>
                                 </div>
                             </div>
 
                             {/* RIGHT COLUMN: Radar Chart */}
-                            <div className="flex flex-col items-center justify-center h-full">
+                            <div className="hidden md:flex flex-col items-center justify-center h-full">
                                 <div className="relative mb-2">
                                     <div className="flex items-center justify-center gap-2 mb-2 text-blue-100/50">
                                         <LucideTrendingUp size={14} />
                                         <span className="text-[10px] font-bold uppercase tracking-wider">Atributos</span>
                                     </div>
-                                    <RadarChart stats={radarStats} size={240} className="text-white/70" />
+                                    <RadarChart stats={radarStats} hasData={hasRadarData} size={240} className="text-white/70" />
                                 </div>
                             </div>
                         </div>

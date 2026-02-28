@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import firebase, { db, auth, functions } from '../services/firebase';
 import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player, Time, Cesta, UserProfile, Badge } from '../types';
 import { Button } from '../components/Button';
@@ -8,6 +8,20 @@ import imageCompression from 'browser-image-compression';
 import { ApoiadoresManager } from '../components/ApoiadoresManager';
 import { LiveStreamAdmin } from '../components/LiveStreamAdmin';
 
+const REVIEW_TAG_MULTIPLIERS: Record<number, number> = { 1: 1.0, 2: 0.75, 3: 0.55 };
+const REVIEW_TAG_IMPACTS: Record<string, Partial<Record<'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao', number>>> = {
+    muralha: { defesa: 3, forca: 1 },
+    sniper: { ataque: 3, visao: 1 },
+    garcom: { visao: 3, ataque: 1 },
+    flash: { velocidade: 3, ataque: 1 },
+    lider: { visao: 3, defesa: 1, forca: 1 },
+    guerreiro: { forca: 3, defesa: 1 },
+    avenida: { defesa: -1, velocidade: -0.5 },
+    fominha: { visao: -1, ataque: -0.5 },
+    tijoleiro: { ataque: -1, visao: -0.5 },
+    cone: { velocidade: -1, forca: -0.5 },
+};
+
 interface AdminViewProps {
     onBack: () => void;
     onOpenGamePanel: (game: Jogo, eventId: string, isEditable: boolean) => void;
@@ -15,7 +29,7 @@ interface AdminViewProps {
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, userProfile }) => {
-    const [adminTab, setAdminTab] = useState<'home' | 'posts' | 'users' | 'apoiadores' | 'live'>('home');
+    const [adminTab, setAdminTab] = useState<'home' | 'posts' | 'users' | 'apoiadores' | 'live' | 'reviews'>('home');
     const [events, setEvents] = useState<Evento[]>([]);
     
     // Forms
@@ -40,7 +54,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     // Lists
     const [reviews, setReviews] = useState<any[]>([]);
     const [loadingReviews, setLoadingReviews] = useState(false);
-    const [showReviewsModal, setShowReviewsModal] = useState(false);
     const [isRecovering, setIsRecovering] = useState(false);
     const [recoveringStatus, setRecoveringStatus] = useState('');
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
@@ -396,8 +409,119 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const handleDeleteUser = async (user: UserProfile) => { if (!window.confirm(`Excluir usuário ${user.nome}?`)) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(user.uid); batch.delete(userRef); if (user.linkedPlayerId) { const playerRef = db.collection("jogadores").doc(user.linkedPlayerId); const playerSnap = await playerRef.get(); if (playerSnap.exists) { batch.update(playerRef, { userId: null }); } } await batch.commit(); alert("Usuário excluído."); } catch (error) { alert("Erro."); } };
     
     const handleDeleteEvent = async (id: string) => { if (!window.confirm("Excluir evento e dados?")) return; try { const gamesSnap = await db.collection("eventos").doc(id).collection("jogos").get(); for (const gameDoc of gamesSnap.docs) { const cestasSnap = await gameDoc.ref.collection("cestas").get(); const deleteCestasPromises = cestasSnap.docs.map(c => c.ref.delete()); await Promise.all(deleteCestasPromises); await gameDoc.ref.delete(); } await db.collection("eventos").doc(id).delete(); alert("Limpo."); } catch (error) { alert("Erro."); } };
-    const loadReviews = async () => { setLoadingReviews(true); try { const snap = await db.collection("avaliacoes_gamified").orderBy("timestamp", "desc").limit(50).get(); const enriched = snap.docs.map(doc => { const data = doc.data() as any; const reviewer = activePlayers.find(p => p.id === data.reviewerId); const target = activePlayers.find(p => p.id === data.targetId); return { id: doc.id, ...data, reviewerName: reviewer?.nome || 'Desconhecido', targetName: target?.nome || 'Desconhecido' }; }); setReviews(enriched); setShowReviewsModal(true); } catch (e) { alert("Erro ao carregar avaliações."); } finally { setLoadingReviews(false); } };
-    const handleDeleteReview = async (review: any) => { if (!window.confirm("Excluir?")) return; try { const updates: any = {}; if (review.tags && Array.isArray(review.tags)) { review.tags.forEach((tag: string) => { updates[`stats_tags.${tag}`] = firebase.firestore.FieldValue.increment(-1); }); await db.collection("jogadores").doc(review.targetId).update(updates); } await db.collection("avaliacoes_gamified").doc(review.id).delete(); setReviews(prev => prev.filter(r => r.id !== review.id)); } catch (e) { alert("Erro."); } };
+    const loadReviews = async () => { setLoadingReviews(true); try { const snap = await db.collection("avaliacoes_gamified").orderBy("timestamp", "desc").get(); const enriched = snap.docs.map(doc => { const data = doc.data() as any; const reviewer = activePlayers.find(p => p.id === data.reviewerId); const target = activePlayers.find(p => p.id === data.targetId); return { id: doc.id, ...data, reviewerName: reviewer?.nome || 'Desconhecido', targetName: target?.nome || 'Desconhecido' }; }); setReviews(enriched); } catch (e) { alert("Erro ao carregar avaliações."); } finally { setLoadingReviews(false); } };
+    const handleDeleteReview = async (review: any) => {
+        if (!window.confirm("Excluir? Isso vai reverter os efeitos da avaliação no atleta.")) return;
+
+        try {
+            const updates: any = {};
+            const tags: string[] = Array.isArray(review.tags) ? review.tags : [];
+
+            if (tags.length > 0) {
+                tags.forEach((tag: string) => {
+                    updates[`stats_tags.${tag}`] = firebase.firestore.FieldValue.increment(-1);
+                });
+
+                const multiplier = REVIEW_TAG_MULTIPLIERS[tags.length] ?? 1.0;
+                const attrDeltas: Partial<Record<'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao', number>> = {};
+
+                tags.forEach((tagId: string) => {
+                    const impact = REVIEW_TAG_IMPACTS[tagId];
+                    if (!impact) return;
+                    Object.entries(impact).forEach(([attr, value]) => {
+                        const key = attr as 'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao';
+                        attrDeltas[key] = (attrDeltas[key] || 0) + (Number(value) * multiplier);
+                    });
+                });
+
+                Object.entries(attrDeltas).forEach(([attr, delta]) => {
+                    const rounded = Math.round(Number(delta) * 10) / 10;
+                    if (rounded !== 0) {
+                        updates[`stats_atributos.${attr}`] = firebase.firestore.FieldValue.increment(-rounded);
+                    }
+                });
+
+                await db.collection("jogadores").doc(review.targetId).update(updates);
+            }
+
+            await db.collection("avaliacoes_gamified").doc(review.id).delete();
+            setReviews(prev => prev.filter(r => r.id !== review.id));
+        } catch (e) {
+            alert("Erro.");
+        }
+    };
+
+    const buildReviewAggregateForTarget = (targetId: string) => {
+        const playerReviews = reviews.filter((review: any) => review.targetId === targetId);
+        const deltas = { ataque: 0, defesa: 0, forca: 0, velocidade: 0, visao: 0 };
+        const tagCounts: Record<string, number> = {};
+
+        playerReviews.forEach((review: any) => {
+            const tags: string[] = Array.isArray(review.tags) ? review.tags : [];
+            const multiplier = REVIEW_TAG_MULTIPLIERS[tags.length] ?? 1.0;
+
+            tags.forEach((tagId: string) => {
+                tagCounts[tagId] = (tagCounts[tagId] || 0) + 1;
+                const impact = REVIEW_TAG_IMPACTS[tagId];
+                if (!impact) return;
+                deltas.ataque += Number(impact.ataque || 0) * multiplier;
+                deltas.defesa += Number(impact.defesa || 0) * multiplier;
+                deltas.forca += Number(impact.forca || 0) * multiplier;
+                deltas.velocidade += Number(impact.velocidade || 0) * multiplier;
+                deltas.visao += Number(impact.visao || 0) * multiplier;
+            });
+        });
+
+        return {
+            stats_atributos: {
+                ataque: Math.round(deltas.ataque * 10) / 10,
+                defesa: Math.round(deltas.defesa * 10) / 10,
+                forca: Math.round(deltas.forca * 10) / 10,
+                velocidade: Math.round(deltas.velocidade * 10) / 10,
+                visao: Math.round(deltas.visao * 10) / 10,
+            },
+            stats_tags: tagCounts,
+            totalReviews: playerReviews.length,
+        };
+    };
+
+    const handleSyncPlayerReviewStats = async (targetId: string, targetName: string) => {
+        if (!targetId) return;
+        try {
+            const aggregate = buildReviewAggregateForTarget(targetId);
+            await db.collection('jogadores').doc(targetId).set({
+                stats_atributos: aggregate.stats_atributos,
+                stats_tags: aggregate.stats_tags,
+            }, { merge: true });
+            alert(`Atributos de ${targetName} sincronizados com ${aggregate.totalReviews} avaliação(ões).`);
+        } catch (error) {
+            alert('Erro ao sincronizar atributos do atleta.');
+        }
+    };
+
+    const handleSyncAllReviewStats = async () => {
+        if (reviewSummaryByPlayer.length === 0) {
+            alert('Nenhum atleta avaliado para sincronizar.');
+            return;
+        }
+        if (!window.confirm(`Sincronizar atributos de ${reviewSummaryByPlayer.length} atleta(s) com base nas avaliações atuais?`)) return;
+
+        try {
+            let synced = 0;
+            for (const item of reviewSummaryByPlayer) {
+                if (!item.targetId) continue;
+                const aggregate = buildReviewAggregateForTarget(item.targetId);
+                await db.collection('jogadores').doc(item.targetId).set({
+                    stats_atributos: aggregate.stats_atributos,
+                    stats_tags: aggregate.stats_tags,
+                }, { merge: true });
+                synced += 1;
+            }
+            alert(`Sincronização concluída: ${synced} atleta(s) atualizado(s).`);
+        } catch (error) {
+            alert('Erro ao sincronizar todos os atletas.');
+        }
+    };
     
     const handleEmergencySync = async () => { 
         if (!window.confirm("Isso irá verificar TODOS os jogos e garantir que os placares apareçam, copiando os dados existentes. Confirmar?")) return;
@@ -554,6 +678,62 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         const matchesSearch = haystack.includes(postSearch.toLowerCase());
         return matchesType && matchesSearch;
     });
+    const reviewSummaryByPlayer = useMemo(() => {
+        const summaryMap = new Map<string, {
+            targetId: string;
+            targetName: string;
+            totalReviews: number;
+            ataque: number;
+            defesa: number;
+            forca: number;
+            velocidade: number;
+            visao: number;
+        }>();
+
+        reviews.forEach((review: any) => {
+            const targetId = review.targetId || 'desconhecido';
+            const targetName = review.targetName || activePlayers.find(p => p.id === targetId)?.nome || 'Desconhecido';
+            if (!summaryMap.has(targetId)) {
+                summaryMap.set(targetId, {
+                    targetId,
+                    targetName,
+                    totalReviews: 0,
+                    ataque: 0,
+                    defesa: 0,
+                    forca: 0,
+                    velocidade: 0,
+                    visao: 0,
+                });
+            }
+
+            const playerSummary = summaryMap.get(targetId)!;
+            playerSummary.totalReviews += 1;
+
+            const tags: string[] = Array.isArray(review.tags) ? review.tags : [];
+            const multiplier = REVIEW_TAG_MULTIPLIERS[tags.length] ?? 1.0;
+
+            tags.forEach((tagId: string) => {
+                const impact = REVIEW_TAG_IMPACTS[tagId];
+                if (!impact) return;
+                playerSummary.ataque += Number(impact.ataque || 0) * multiplier;
+                playerSummary.defesa += Number(impact.defesa || 0) * multiplier;
+                playerSummary.forca += Number(impact.forca || 0) * multiplier;
+                playerSummary.velocidade += Number(impact.velocidade || 0) * multiplier;
+                playerSummary.visao += Number(impact.visao || 0) * multiplier;
+            });
+        });
+
+        return Array.from(summaryMap.values())
+            .map(item => ({
+                ...item,
+                ataque: Math.round(item.ataque * 10) / 10,
+                defesa: Math.round(item.defesa * 10) / 10,
+                forca: Math.round(item.forca * 10) / 10,
+                velocidade: Math.round(item.velocidade * 10) / 10,
+                visao: Math.round(item.visao * 10) / 10,
+            }))
+            .sort((a, b) => b.totalReviews - a.totalReviews || a.targetName.localeCompare(b.targetName));
+    }, [reviews, activePlayers]);
     const isHome = adminTab === 'home';
 
     return (
@@ -789,6 +969,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                             </div>
                             <p className="text-sm text-gray-500 dark:text-gray-400">Configurar transmissão e controles do conteúdo ao vivo.</p>
                         </button>
+
+                        <button onClick={() => { setAdminTab('reviews'); loadReviews(); }} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-amber-400 dark:hover:border-amber-500 transition-all shadow-sm hover:shadow-md">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 flex items-center justify-center"><LucideStar size={18} /></div>
+                                <h3 className="font-bold text-gray-800 dark:text-gray-200">Avaliações</h3>
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Gerenciar avaliações e reverter impactos quando necessário.</p>
+                        </button>
                     </div>
                 </div>
             )}
@@ -797,6 +985,78 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             {adminTab === 'live' && (
                 <div className="animate-fadeIn">
                     <LiveStreamAdmin />
+                </div>
+            )}
+
+            {/* TAB: REVIEWS */}
+            {adminTab === 'reviews' && (
+                <div className="animate-fadeIn bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+                        <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                            <LucideStar size={18} /> Gerenciar Avaliações
+                        </h3>
+                        <div className="flex items-center gap-2">
+                            <Button size="sm" variant="secondary" onClick={handleSyncAllReviewStats} disabled={loadingReviews || reviews.length === 0}>
+                                <LucideSave size={14} /> Sincronizar Todos
+                            </Button>
+                            <Button size="sm" variant="secondary" onClick={loadReviews} disabled={loadingReviews}>
+                                <LucideRefreshCw size={14} /> Atualizar
+                            </Button>
+                        </div>
+                    </div>
+
+                    {loadingReviews ? (
+                        <div className="flex justify-center p-8"><LucideStar className="animate-spin" /></div>
+                    ) : reviews.length === 0 ? (
+                        <p className="text-center text-gray-400 py-8">Nenhuma avaliação encontrada.</p>
+                    ) : (
+                        <div className="space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar pr-1">
+                            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-3">
+                                <h4 className="font-bold text-gray-800 dark:text-gray-100 mb-3">Resumo por Atleta Avaliado ({reviewSummaryByPlayer.length})</h4>
+                                <div className="space-y-2">
+                                    {reviewSummaryByPlayer.map(item => (
+                                        <div key={item.targetId} className="p-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700/40">
+                                            <div className="flex items-center justify-between mb-2 gap-2">
+                                                <span className="text-sm font-bold text-gray-800 dark:text-white">{item.targetName}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => handleSyncPlayerReviewStats(item.targetId, item.targetName)}
+                                                        className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-200 dark:hover:bg-emerald-900/60"
+                                                        title="Sincronizar stats do atleta com as avaliações"
+                                                    >
+                                                        Sincronizar
+                                                    </button>
+                                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-bold">{item.totalReviews} avaliações</span>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5 text-[11px]">
+                                                <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold">ATQ: {item.ataque > 0 ? '+' : ''}{item.ataque}</span>
+                                                <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold">DEF: {item.defesa > 0 ? '+' : ''}{item.defesa}</span>
+                                                <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold">VIS: {item.visao > 0 ? '+' : ''}{item.visao}</span>
+                                                <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold">VEL: {item.velocidade > 0 ? '+' : ''}{item.velocidade}</span>
+                                                <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold">FOR: {item.forca > 0 ? '+' : ''}{item.forca}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <h4 className="font-bold text-gray-800 dark:text-gray-100 mb-2">Avaliações Individuais ({reviews.length})</h4>
+                                <div className="space-y-2">
+                                    {reviews.map(review => (
+                                        <div key={review.id} className="p-3 border rounded bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 flex justify-between items-center text-sm">
+                                            <div>
+                                                <div className="font-bold text-gray-800 dark:text-white">{review.reviewerName} <span className="text-gray-400 font-normal">avaliou</span> {review.targetName}</div>
+                                                <div className="flex gap-1 mt-1">{review.tags && review.tags.map((t: string) => (<span key={t} className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] rounded uppercase font-bold">{t}</span>))}</div>
+                                            </div>
+                                            <button onClick={() => handleDeleteReview(review)} className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/20 rounded" title="Excluir (Desfaz Pontos)"><LucideTrash2 size={16} /></button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -1102,28 +1362,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                 </div>
             </Modal>
             
-            <Modal isOpen={showReviewsModal} onClose={() => setShowReviewsModal(false)} title="Gerenciar Avaliações">
-                <div className="space-y-4">
-                    {loadingReviews ? (
-                        <div className="flex justify-center p-4"><LucideStar className="animate-spin" /></div>
-                    ) : reviews.length === 0 ? (
-                        <p className="text-center text-gray-400">Nenhuma avaliação recente encontrada.</p>
-                    ) : (
-                        <div className="space-y-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                            {reviews.map(review => (
-                                <div key={review.id} className="p-3 border rounded bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 flex justify-between items-center text-sm">
-                                    <div>
-                                        <div className="font-bold text-gray-800 dark:text-white">{review.reviewerName} <span className="text-gray-400 font-normal">avaliou</span> {review.targetName}</div>
-                                        <div className="flex gap-1 mt-1">{review.tags && review.tags.map((t: string) => (<span key={t} className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] rounded uppercase font-bold">{t}</span>))}</div>
-                                    </div>
-                                    <button onClick={() => handleDeleteReview(review)} className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/20 rounded" title="Excluir (Desfaz Pontos)"><LucideTrash2 size={16} /></button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </Modal>
-
         </div>
     );
 };

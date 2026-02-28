@@ -11,9 +11,10 @@ interface RadarChartProps {
     };
     size?: number;
     className?: string; // Allow overriding text colors
+    hasData?: boolean;
 }
 
-export const RadarChart: React.FC<RadarChartProps> = ({ stats, size = 200, className }) => {
+export const RadarChart: React.FC<RadarChartProps> = ({ stats, size = 200, className, hasData = true }) => {
     // Config
     const center = size / 2;
     const radius = (size / 2) - 35; // Padding for labels
@@ -22,11 +23,11 @@ export const RadarChart: React.FC<RadarChartProps> = ({ stats, size = 200, class
     // 5 Axes (Pentagon) - Starting from top (270 degrees in SVG math, or -PI/2)
     // Angles: -90, -18, 54, 126, 198 (Degrees)
     const axes = [
-        { label: 'ATAQUE', key: 'ataque', angle: -90 },
-        { label: 'VISÃO', key: 'visao', angle: -18 },
-        { label: 'VELOCIDADE', key: 'velocidade', angle: 54 },
-        { label: 'FORÇA', key: 'forca', angle: 126 },
-        { label: 'DEFESA', key: 'defesa', angle: 198 },
+        { label: 'ATAQUE', angle: -90, value: stats.ataque },
+        { label: 'VISÃO', angle: -18, value: stats.visao },
+        { label: 'VELOCIDADE', angle: 54, value: stats.velocidade },
+        { label: 'FORÇA', angle: 126, value: stats.forca },
+        { label: 'DEFESA', angle: 198, value: stats.defesa },
     ];
 
     // Helper to calculate coordinates
@@ -40,8 +41,7 @@ export const RadarChart: React.FC<RadarChartProps> = ({ stats, size = 200, class
 
     // Build the data path
     const dataPoints = axes.map((axis) => {
-        // @ts-ignore
-        const val = stats[axis.key] || 0;
+        const val = axis.value || 0;
         // Clamp between 20 (base visual) and 100
         const visualVal = Math.max(20, Math.min(val, 100));
         return getCoords(visualVal, axis.angle);
@@ -74,13 +74,27 @@ export const RadarChart: React.FC<RadarChartProps> = ({ stats, size = 200, class
                 })}
 
                 {/* Data Polygon */}
-                <polygon 
-                    points={dataPoints} 
-                    fill="rgba(249, 115, 22, 0.5)" // ancb-orange with opacity
-                    stroke="#F27405" 
-                    strokeWidth="2"
-                    className="animate-fadeIn"
-                />
+                {hasData && (
+                    <polygon 
+                        points={dataPoints} 
+                        fill="rgba(249, 115, 22, 0.5)" // ancb-orange with opacity
+                        stroke="#F27405" 
+                        strokeWidth="2"
+                        className="animate-fadeIn"
+                    />
+                )}
+
+                {!hasData && (
+                    <text
+                        x={center}
+                        y={center}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        className="text-[11px] font-bold fill-current uppercase tracking-wider opacity-80"
+                    >
+                        Sem dados
+                    </text>
+                )}
 
                 {/* Labels */}
                 {axes.map((axis, i) => {
