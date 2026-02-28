@@ -143,10 +143,13 @@ export interface Cesta {
 
 export interface FeedPost {
     id: string;
-    type: 'placar' | 'noticia' | 'aviso';
+    type: 'placar' | 'noticia' | 'aviso' | 'resultado_evento';
     timestamp: any; // serverTimestamp
     author_id: string;
     image_url?: string | null;
+    source?: 'manual' | 'auto_game_finalized' | 'auto_event_finalized';
+    source_ref?: string;
+    notifyPlayers?: boolean;
     content: {
         titulo?: string;
         resumo?: string;
@@ -154,6 +157,12 @@ export interface FeedPost {
         placar_ancb?: number;
         placar_adv?: number;
         link_video?: string;
+        eventId?: string;
+        gameId?: string;
+        teamAName?: string;
+        teamBName?: string;
+        resultado_label?: string;
+        resultado_detalhes?: string;
     };
 }
 
@@ -194,7 +203,7 @@ export interface ReviewTagDefinition {
 
 export interface NotificationItem {
     id: string;
-    type: 'pending_review' | 'roster_invite' | 'evaluation' | 'roster_alert';
+    type: 'pending_review' | 'roster_invite' | 'evaluation' | 'roster_alert' | 'feed_alert';
     title: string;
     message: string;
     data: any; // Dados extras (gameId, eventId, etc)

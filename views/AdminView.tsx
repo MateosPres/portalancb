@@ -15,21 +15,27 @@ interface AdminViewProps {
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, userProfile }) => {
-    const [adminTab, setAdminTab] = useState<'general' | 'users' | 'apoiadores' | 'live'>('general');
+    const [adminTab, setAdminTab] = useState<'home' | 'posts' | 'users' | 'apoiadores' | 'live'>('home');
     const [events, setEvents] = useState<Evento[]>([]);
     
     // Forms
-    const [showAddPost, setShowAddPost] = useState(false);
-    const [postType, setPostType] = useState<'noticia' | 'placar' | 'aviso'>('noticia');
+    const [postType, setPostType] = useState<'noticia' | 'placar' | 'aviso' | 'resultado_evento'>('noticia');
     const [postTitle, setPostTitle] = useState('');
     const [postBody, setPostBody] = useState('');
     const [postScoreAncb, setPostScoreAncb] = useState('');
     const [postScoreAdv, setPostScoreAdv] = useState('');
     const [postTeamAdv, setPostTeamAdv] = useState('');
     const [postVideoLink, setPostVideoLink] = useState('');
+    const [postNotifyPlayers, setPostNotifyPlayers] = useState(false);
+    const [postEventId, setPostEventId] = useState('');
     const [postImageFile, setPostImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const [posts, setPosts] = useState<FeedPost[]>([]);
+    const [loadingPosts, setLoadingPosts] = useState(true);
+    const [editingPostId, setEditingPostId] = useState<string | null>(null);
+    const [postSearch, setPostSearch] = useState('');
+    const [postFilterType, setPostFilterType] = useState<'todos' | 'noticia' | 'placar' | 'aviso' | 'resultado_evento'>('todos');
 
     // Lists
     const [reviews, setReviews] = useState<any[]>([]);
@@ -85,6 +91,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
         });
 
+        const unsubPosts = db.collection("feed_posts").orderBy("timestamp", "desc").onSnapshot((snapshot) => {
+            setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as FeedPost)));
+            setLoadingPosts(false);
+        }, () => {
+            setLoadingPosts(false);
+        });
+
         const unsubApoiadores = db.collection('apoiadores').onSnapshot(async snap => {
             const docsData = snap.docs.map((doc, index) => ({ 
                 id: doc.id, 
@@ -115,27 +128,113 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         });
 
         return () => {
-            unsubEvents(); unsubActivePlayers(); unsubUsers(); unsubApoiadores();
+            unsubEvents(); unsubActivePlayers(); unsubUsers(); unsubApoiadores(); unsubPosts();
         };
     }, []);
 
     const compressImage = async (file: File): Promise<File> => { const options = { maxSizeMB: 0.1, maxWidthOrHeight: 800, useWebWorker: true, fileType: 'image/webp' }; try { return await imageCompression(file, options); } catch (error) { return file; } };
     const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
-    const createPost = async (e: React.FormEvent) => { 
-        e.preventDefault(); if (!auth.currentUser) return; setIsUploading(true); 
+    const isValidYoutubeUrl = (url: string): boolean => {
+        try {
+            const parsed = new URL(url);
+            const host = parsed.hostname.replace('www.', '').toLowerCase();
+            return host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtu.be';
+        } catch {
+            return false;
+        }
+    };
+    const buildEventResultSummary = (event: Evento) => {
+        if (event.podio?.primeiro || event.podio?.segundo || event.podio?.terceiro) {
+            return [
+                `🥇 ${event.podio.primeiro || '---'}`,
+                `🥈 ${event.podio.segundo || '---'}`,
+                `🥉 ${event.podio.terceiro || '---'}`,
+            ].join('\n');
+        }
+        return `Evento ${event.nome} finalizado com sucesso.`;
+    };
+    const createOrUpdatePost = async (e: React.FormEvent) => { 
+        e.preventDefault(); if (!auth.currentUser) return;
+        const cleanVideoLink = postVideoLink.trim();
+        if (cleanVideoLink && !isValidYoutubeUrl(cleanVideoLink)) {
+            alert('Use um link válido do YouTube (youtube.com ou youtu.be).');
+            return;
+        }
+        if (postType === 'resultado_evento' && !postEventId) {
+            alert('Selecione um evento para gerar o resultado.');
+            return;
+        }
+        setIsUploading(true); 
         try { 
             let imageUrl = null; 
-            if (postImageFile && (postType === 'noticia' || postType === 'placar')) { const compressed = await compressImage(postImageFile); imageUrl = await fileToBase64(compressed); } 
+            if (postImageFile && (postType === 'noticia' || postType === 'placar' || postType === 'resultado_evento')) { const compressed = await compressImage(postImageFile); imageUrl = await fileToBase64(compressed); } 
             const postContent: any = {}; 
-            if (postType === 'noticia') { postContent.titulo = postTitle; postContent.resumo = postBody; if (postVideoLink) postContent.link_video = postVideoLink; } 
+            if (postType === 'noticia') { postContent.titulo = postTitle; postContent.resumo = postBody; if (cleanVideoLink) postContent.link_video = cleanVideoLink; } 
             else if (postType === 'placar') { postContent.time_adv = postTeamAdv; postContent.placar_ancb = Number(postScoreAncb); postContent.placar_adv = Number(postScoreAdv); postContent.titulo = postTitle; } 
-            else if (postType === 'aviso') { postContent.titulo = postTitle; postContent.resumo = postBody; } 
-            await db.collection("feed_posts").add({ type: postType, timestamp: firebase.firestore.FieldValue.serverTimestamp(), author_id: auth.currentUser.uid, image_url: imageUrl, content: postContent }); 
-            resetPostForm(); setShowAddPost(false); 
+            else if (postType === 'aviso') { postContent.titulo = postTitle; postContent.resumo = postBody; if (cleanVideoLink) postContent.link_video = cleanVideoLink; } 
+            else if (postType === 'resultado_evento') {
+                const selectedEvent = events.find(ev => ev.id === postEventId);
+                if (!selectedEvent) {
+                    alert('Evento selecionado não encontrado.');
+                    setIsUploading(false);
+                    return;
+                }
+                postContent.titulo = postTitle || `Resultado: ${selectedEvent.nome}`;
+                postContent.resumo = postBody || buildEventResultSummary(selectedEvent);
+                postContent.eventId = selectedEvent.id;
+                postContent.resultado_label = selectedEvent.type === 'torneio_interno' ? 'Torneio Interno' : (selectedEvent.type === 'torneio_externo' ? 'Torneio Externo' : 'Amistoso');
+                postContent.resultado_detalhes = `${selectedEvent.nome} • ${selectedEvent.data}`;
+                if (cleanVideoLink) postContent.link_video = cleanVideoLink;
+            }
+            const payload: any = {
+                type: postType,
+                source: 'manual',
+                notifyPlayers: postType === 'aviso' ? postNotifyPlayers : false,
+                author_id: auth.currentUser.uid,
+                image_url: postType === 'aviso' ? null : imageUrl,
+                content: postContent,
+            };
+
+            if (editingPostId) {
+                await db.collection("feed_posts").doc(editingPostId).update({
+                    ...payload,
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+            } else {
+                await db.collection("feed_posts").add({
+                    ...payload,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+            }
+            resetPostForm();
         } catch (error) { alert("Erro ao criar postagem."); } finally { setIsUploading(false); } 
     };
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; setPostImageFile(file); setImagePreview(URL.createObjectURL(file)); } };
-    const resetPostForm = () => { setPostType('noticia'); setPostTitle(''); setPostBody(''); setPostScoreAncb(''); setPostScoreAdv(''); setPostTeamAdv(''); setPostVideoLink(''); setPostImageFile(null); setImagePreview(null); };
+    const resetPostForm = () => { setPostType('noticia'); setPostTitle(''); setPostBody(''); setPostScoreAncb(''); setPostScoreAdv(''); setPostTeamAdv(''); setPostVideoLink(''); setPostNotifyPlayers(false); setPostEventId(''); setPostImageFile(null); setImagePreview(null); setEditingPostId(null); };
+    const loadPostToForm = (post: FeedPost) => {
+        setEditingPostId(post.id);
+        setPostType(post.type === 'resultado_evento' ? 'resultado_evento' : post.type);
+        setPostTitle(post.content?.titulo || '');
+        setPostBody(post.content?.resumo || '');
+        setPostScoreAncb(post.content?.placar_ancb !== undefined ? String(post.content.placar_ancb) : '');
+        setPostScoreAdv(post.content?.placar_adv !== undefined ? String(post.content.placar_adv) : '');
+        setPostTeamAdv(post.content?.time_adv || '');
+        setPostVideoLink(post.content?.link_video || '');
+        setPostNotifyPlayers(Boolean((post as any).notifyPlayers));
+        setPostEventId(post.content?.eventId || '');
+        setPostImageFile(null);
+        setImagePreview(post.image_url || null);
+        setAdminTab('posts');
+    };
+    const handleDeletePost = async (postId: string) => {
+        if (!window.confirm('Deseja excluir este post?')) return;
+        try {
+            await db.collection('feed_posts').doc(postId).delete();
+            if (editingPostId === postId) resetPostForm();
+        } catch {
+            alert('Erro ao excluir post.');
+        }
+    };
 
     // --- APOIADORES FUNCTIONS ---
     const compressLogoAgressivo = async (file: File): Promise<string> => {
@@ -433,27 +532,28 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     };
 
     const filteredUsers = users.filter(u => (u.nome || '').toLowerCase().includes(userSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(userSearch.toLowerCase()));
+    const filteredPosts = posts.filter((post) => {
+        const matchesType = postFilterType === 'todos' || post.type === postFilterType;
+        const haystack = `${post.content?.titulo || ''} ${post.content?.resumo || ''}`.toLowerCase();
+        const matchesSearch = haystack.includes(postSearch.toLowerCase());
+        return matchesType && matchesSearch;
+    });
+    const isHome = adminTab === 'home';
 
     return (
         <div className="animate-fadeIn">
             {/* Header */}
             <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
                 <div className="flex items-center gap-3 self-start md:self-center">
-                    <Button variant="secondary" size="sm" onClick={onBack} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"><LucideArrowLeft size={18} /></Button>
+                    <Button variant="secondary" size="sm" onClick={() => isHome ? onBack() : setAdminTab('home')} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"><LucideArrowLeft size={18} /></Button>
                     <h2 className="text-2xl font-bold text-ancb-blue dark:text-blue-400">Painel Administrativo</h2>
                 </div>
-                <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg self-stretch md:self-auto gap-1">
-                    <button onClick={() => setAdminTab('general')} className={`flex-1 px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${adminTab === 'general' ? 'bg-white dark:bg-gray-600 shadow text-ancb-blue dark:text-white' : 'text-gray-500'}`}>Geral</button>
-                    <button onClick={() => setAdminTab('users')} className={`flex-1 px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${adminTab === 'users' ? 'bg-white dark:bg-gray-600 shadow text-ancb-blue dark:text-white' : 'text-gray-500'}`}>Usuários</button>
-                    <button onClick={() => setAdminTab('apoiadores')} className={`flex-1 px-4 py-1.5 rounded-md text-sm font-bold transition-colors flex items-center justify-center gap-1 ${adminTab === 'apoiadores' ? 'bg-white dark:bg-gray-600 shadow text-ancb-orange dark:text-orange-400' : 'text-gray-500'}`}>
-                        <LucideHeart size={13} /> Apoiadores
-                    </button>
-                    <button onClick={() => setAdminTab('live')} className={`flex-1 px-4 py-1.5 rounded-md text-sm font-bold transition-colors flex items-center justify-center gap-1 ${adminTab === 'live' ? 'bg-white dark:bg-gray-600 shadow text-red-600 dark:text-red-400' : 'text-gray-500'}`}>
-                        <LucideRadio size={13} /> Live
-                    </button>
-                </div>
                 <div className="flex gap-2 self-end md:self-auto">
-                    <Button onClick={() => setShowAddPost(true)} variant="secondary" className="!bg-blue-600 !text-white border-none"><LucideNewspaper size={18} /> <span className="hidden sm:inline">Postar</span></Button>
+                    {!isHome && (
+                        <Button onClick={() => setAdminTab('home')} variant="secondary" className="!bg-blue-600 !text-white border-none">
+                            <LucideArrowLeft size={16} /> <span className="hidden sm:inline">Voltar ao Início</span>
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -517,42 +617,162 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                 </div>
             )}
 
-            {/* TAB: GENERAL */}
-            {adminTab === 'general' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-orange-200 dark:border-orange-900/50 flex flex-col gap-3 h-fit">
-                        <div className="flex items-center gap-2 border-b pb-2 border-orange-100 dark:border-orange-900/30">
-                            <LucideTrophy size={18} className="text-orange-600 dark:text-orange-400" />
-                            <h3 className="font-bold text-gray-700 dark:text-gray-300">Gestão de Temporada</h3>
+            {/* TAB: POSTS */}
+            {adminTab === 'posts' && (
+                <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 animate-fadeIn">
+                    <div className="xl:col-span-2 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 h-fit">
+                        <div className="flex items-center justify-between mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+                            <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                                <LucideEdit size={18} /> {editingPostId ? 'Editar Post' : 'Novo Post'}
+                            </h3>
+                            {editingPostId && (
+                                <Button size="sm" variant="secondary" onClick={resetPostForm}>Cancelar Edição</Button>
+                            )}
                         </div>
-                        <Button size="sm" onClick={handleEmergencySync} disabled={isRecovering} className="w-full !bg-gradient-to-r from-orange-600 to-red-600 text-white animate-pulse">
-                            <LucideZap size={14} className={isRecovering ? 'animate-spin' : ''} /> 
-                            {isRecovering ? recoveringStatus : 'SINCRONIZAR E CORRIGIR TUDO'}
-                        </Button>
-                        <Button size="sm" onClick={openAdvancedRecovery} disabled={isRecovering} className="w-full !bg-white hover:!bg-gray-50 !text-gray-800 border border-gray-300 shadow-sm">
-                            <LucideSiren size={14} /> 
-                            Ferramentas Avançadas
-                        </Button>
-                        <Button size="sm" variant="secondary" onClick={loadReviews} className="w-full mt-2 text-xs !text-gray-600 border border-gray-300">
-                            Gerenciar Gamification Tags
-                        </Button>
-                    </div>
-                    
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                        <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 border-b pb-2 dark:border-gray-600">Eventos Recentes</h3>
-                        <div className="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar">
-                            {events.map(ev => (
-                                <div key={ev.id} className="p-3 rounded-lg border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <h4 className="font-bold text-gray-800 dark:text-gray-200 text-sm">{ev.nome}</h4>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">{ev.data} • {ev.status}</p>
-                                        </div>
-                                        <button onClick={() => handleDeleteEvent(ev.id)} className="text-red-300 hover:text-red-600 p-1"><LucideTrash2 size={14} /></button>
-                                    </div>
+                        <form onSubmit={createOrUpdatePost} className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo de Postagem</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {([
+                                        { key: 'noticia', label: 'Notícia' },
+                                        { key: 'placar', label: 'Placar' },
+                                        { key: 'aviso', label: 'Aviso' },
+                                        { key: 'resultado_evento', label: 'Resultado' },
+                                    ] as const).map(item => (
+                                        <button key={item.key} type="button" onClick={() => setPostType(item.key)} className={`py-2 rounded-lg text-sm font-bold border-2 transition-all ${postType === item.key ? 'border-ancb-blue bg-blue-50 text-ancb-blue dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-400' : 'border-transparent bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>{item.label}</button>
+                                    ))}
                                 </div>
-                            ))}
+                            </div>
+
+                            {postType === 'noticia' && <>
+                                <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Título" value={postTitle} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostTitle(e.target.value)} required />
+                                <textarea className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Conteúdo" value={postBody} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPostBody(e.target.value)} rows={4} required />
+                            </>}
+
+                            {postType === 'aviso' && <>
+                                <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Assunto" value={postTitle} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostTitle(e.target.value)} required />
+                                <textarea className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Mensagem" value={postBody} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPostBody(e.target.value)} rows={4} required />
+                                <label className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-600 p-3">
+                                    <div>
+                                        <p className="font-bold text-sm text-gray-700 dark:text-gray-200">Notificar jogadores</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Envia notificação para usuários com role jogador.</p>
+                                    </div>
+                                    <input type="checkbox" checked={postNotifyPlayers} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostNotifyPlayers(e.target.checked)} className="w-4 h-4 accent-ancb-orange" />
+                                </label>
+                            </>}
+
+                            {postType === 'placar' && <div className="space-y-2">
+                                <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Título (ex: Amistoso)" value={postTitle} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostTitle(e.target.value)} required />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Placar ANCB" value={postScoreAncb} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostScoreAncb(e.target.value)} required />
+                                    <input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Placar Adversário" value={postScoreAdv} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostScoreAdv(e.target.value)} required />
+                                </div>
+                                <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Nome do adversário" value={postTeamAdv} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostTeamAdv(e.target.value)} required />
+                            </div>}
+
+                            {postType === 'resultado_evento' && <div className="space-y-2">
+                                <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={postEventId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPostEventId(e.target.value)} required>
+                                    <option value="">Selecione um evento finalizado</option>
+                                    {events.filter(ev => ev.status === 'finalizado').map(ev => (
+                                        <option key={ev.id} value={ev.id}>{ev.nome} • {ev.data}</option>
+                                    ))}
+                                </select>
+                                <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Título (opcional)" value={postTitle} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostTitle(e.target.value)} />
+                                <textarea className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Resumo (opcional)" value={postBody} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPostBody(e.target.value)} rows={3} />
+                            </div>}
+
+                            {(postType === 'noticia' || postType === 'aviso' || postType === 'resultado_evento') && (
+                                <input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Link do YouTube (opcional)" value={postVideoLink} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostVideoLink(e.target.value)} />
+                            )}
+
+                            {postType !== 'aviso' && (
+                                <div className="space-y-2">
+                                    <input type="file" accept="image/*" onChange={handleImageSelect} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                                    {imagePreview && <img src={imagePreview} alt="Preview" className="w-full h-28 object-cover rounded border border-gray-200 dark:border-gray-700" />}
+                                </div>
+                            )}
+
+                            <Button type="submit" className="w-full" disabled={isUploading}>{isUploading ? 'Salvando...' : (editingPostId ? 'Salvar Alterações' : 'Publicar Post')}</Button>
+                        </form>
+                    </div>
+
+                    <div className="xl:col-span-3 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                        <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+                            <h3 className="font-bold text-gray-700 dark:text-gray-300">Gerenciar Posts ({filteredPosts.length})</h3>
+                            <div className="flex gap-2 w-full md:w-auto">
+                                <input className="flex-1 md:w-64 p-2 text-sm border rounded bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Buscar por título/resumo" value={postSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostSearch(e.target.value)} />
+                                <select className="p-2 text-sm border rounded bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" value={postFilterType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPostFilterType(e.target.value as any)}>
+                                    <option value="todos">Todos</option>
+                                    <option value="noticia">Notícia</option>
+                                    <option value="placar">Placar</option>
+                                    <option value="aviso">Aviso</option>
+                                    <option value="resultado_evento">Resultado</option>
+                                </select>
+                            </div>
                         </div>
+
+                        {loadingPosts ? (
+                            <p className="text-sm text-gray-500">Carregando posts...</p>
+                        ) : filteredPosts.length === 0 ? (
+                            <p className="text-sm text-gray-500">Nenhum post encontrado com os filtros atuais.</p>
+                        ) : (
+                            <div className="space-y-3 max-h-[68vh] overflow-y-auto custom-scrollbar pr-1">
+                                {filteredPosts.map(post => (
+                                    <div key={post.id} className="p-3 rounded-lg border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div>
+                                                <p className="font-bold text-gray-800 dark:text-gray-200 text-sm">{post.content?.titulo || 'Sem título'}</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{post.type.replace('_', ' ')} {(post as any).notifyPlayers ? '• notifica jogadores' : ''}</p>
+                                                {post.content?.resumo && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{post.content.resumo}</p>}
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <Button size="sm" variant="secondary" onClick={() => loadPostToForm(post)} className="!py-1 !px-2 text-xs"><LucideEdit size={14} /></Button>
+                                                <button onClick={() => handleDeletePost(post.id)} className="p-1.5 rounded bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50"><LucideTrash2 size={14} /></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* HOME: HUB DE CARDS */}
+            {adminTab === 'home' && (
+                <div className="animate-fadeIn">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                        <button onClick={() => setAdminTab('posts')} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all shadow-sm hover:shadow-md">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 flex items-center justify-center"><LucideNewspaper size={18} /></div>
+                                <h3 className="font-bold text-gray-800 dark:text-gray-200">Posts</h3>
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Criar, editar e excluir notícias, avisos, placares e resultados.</p>
+                        </button>
+
+                        <button onClick={() => setAdminTab('users')} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all shadow-sm hover:shadow-md">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center"><LucideUsers size={18} /></div>
+                                <h3 className="font-bold text-gray-800 dark:text-gray-200">Usuários</h3>
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Gerenciar contas, permissões e vínculos com atletas.</p>
+                        </button>
+
+                        <button onClick={() => setAdminTab('apoiadores')} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-orange-400 dark:hover:border-orange-500 transition-all shadow-sm hover:shadow-md">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-300 flex items-center justify-center"><LucideHeart size={18} /></div>
+                                <h3 className="font-bold text-gray-800 dark:text-gray-200">Apoiadores</h3>
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Cadastrar, destacar e organizar parceiros e patrocinadores.</p>
+                        </button>
+
+                        <button onClick={() => setAdminTab('live')} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-red-400 dark:hover:border-red-500 transition-all shadow-sm hover:shadow-md">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300 flex items-center justify-center"><LucideRadio size={18} /></div>
+                                <h3 className="font-bold text-gray-800 dark:text-gray-200">Live</h3>
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Configurar transmissão e controles do conteúdo ao vivo.</p>
+                        </button>
                     </div>
                 </div>
             )}
@@ -888,23 +1108,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                 </div>
             </Modal>
 
-            <Modal isOpen={showAddPost} onClose={() => setShowAddPost(false)} title="Novo Post">
-                <form onSubmit={createPost} className="space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo de Postagem</label>
-                        <div className="flex gap-2">
-                            {(['noticia', 'placar', 'aviso'] as const).map(type => (
-                                <button key={type} type="button" onClick={() => setPostType(type)} className={`flex-1 py-2 rounded-lg text-sm font-bold capitalize border-2 transition-all ${postType === type ? 'border-ancb-blue bg-blue-50 text-ancb-blue dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-400' : 'border-transparent bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>{type}</button>
-                            ))}
-                        </div>
-                    </div>
-                    {postType === 'noticia' && <><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Título" value={postTitle} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostTitle(e.target.value)} required /><textarea className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Conteúdo" value={postBody} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPostBody(e.target.value)} required /></>}
-                    {postType === 'aviso' && <><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Assunto" value={postTitle} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostTitle(e.target.value)} required /><textarea className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Mensagem" value={postBody} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPostBody(e.target.value)} required /></>}
-                    {postType === 'placar' && <div className="space-y-2"><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Título (ex: Amistoso)" value={postTitle} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostTitle(e.target.value)} required /><input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Placar ANCB" value={postScoreAncb} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostScoreAncb(e.target.value)} required /><input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Placar Adv" value={postScoreAdv} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostScoreAdv(e.target.value)} required /><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" placeholder="Nome Adversário" value={postTeamAdv} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPostTeamAdv(e.target.value)} required /></div>}
-                    {postType !== 'aviso' && <input type="file" accept="image/*" onChange={handleImageSelect} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>}
-                    <Button type="submit" className="w-full" disabled={isUploading}>{isUploading ? 'Enviando...' : 'Publicar'}</Button>
-                </form>
-            </Modal>
         </div>
     );
 };

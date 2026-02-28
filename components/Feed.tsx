@@ -35,7 +35,15 @@ export const Feed: React.FC = () => {
 
     const getYoutubeId = (url: string) => {
         try {
-            return url.split('v=')[1]?.split('&')[0] || url.split('youtu.be/')[1];
+            const parsed = new URL(url);
+            const host = parsed.hostname.replace('www.', '').toLowerCase();
+            if (host === 'youtu.be') return parsed.pathname.replace('/', '').split('/')[0] || null;
+            if (host === 'youtube.com' || host === 'm.youtube.com') {
+                if (parsed.pathname === '/watch') return parsed.searchParams.get('v');
+                if (parsed.pathname.startsWith('/shorts/')) return parsed.pathname.split('/shorts/')[1]?.split('/')[0] || null;
+                if (parsed.pathname.startsWith('/embed/')) return parsed.pathname.split('/embed/')[1]?.split('/')[0] || null;
+            }
+            return null;
         } catch {
             return null;
         }
@@ -105,6 +113,7 @@ export const Feed: React.FC = () => {
                          <LucideCalendar size={14} />
                          <span className="uppercase font-bold text-xs">{formatTime(post.timestamp)}</span>
                          {post.type === 'aviso' && <span className="bg-yellow-100 text-yellow-800 text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">Aviso Oficial</span>}
+                         {post.type === 'resultado_evento' && <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">Resultado de Evento</span>}
                     </div>
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 leading-tight">
                         {post.content.titulo || (post.content.time_adv ? `Jogo contra ${post.content.time_adv}` : 'Sem título')}
@@ -176,6 +185,23 @@ export const Feed: React.FC = () => {
                                 <h3 className="font-bold text-lg text-gray-800 dark:text-gray-200 mb-2 line-clamp-2">{post.content.titulo}</h3>
                                 <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed line-clamp-3">{post.content.resumo}</p>
                                 <span className="mt-auto pt-4 text-xs font-bold text-yellow-600 dark:text-yellow-400 uppercase">Ler comunicado</span>
+                            </div>
+                        );
+                    }
+                    if (post.type === 'resultado_evento') {
+                        return (
+                            <div 
+                                key={post.id} 
+                                onClick={() => setSelectedPost(post)}
+                                className="bg-blue-50 dark:bg-blue-900/10 border-l-4 border-ancb-blue rounded-r-xl p-6 shadow-sm flex flex-col cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
+                            >
+                                <div className="flex items-center gap-3 mb-3 text-ancb-blue dark:text-blue-400">
+                                    <LucideCalendar size={24} />
+                                    <span className="font-bold text-xs uppercase tracking-wider">{dateStr}</span>
+                                </div>
+                                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-200 mb-2 line-clamp-2">{post.content.titulo}</h3>
+                                <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed line-clamp-3">{post.content.resumo}</p>
+                                <span className="mt-auto pt-4 text-xs font-bold text-ancb-blue dark:text-blue-400 uppercase">Ver resultado completo</span>
                             </div>
                         );
                     }

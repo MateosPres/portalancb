@@ -99,6 +99,13 @@ exports.onGameFinished = functions.firestore
         if (!eventDoc.exists) return null;
         const eventData = eventDoc.data();
 
+        const scoreA = newData.placarTimeA_final ?? newData.placarANCB_final ?? 0;
+        const scoreB = newData.placarTimeB_final ?? newData.placarAdversario_final ?? 0;
+        const teamAName = newData.timeA_nome || 'ANCB';
+        const teamBName = newData.timeB_nome || newData.adversario || 'Adversário';
+
+        await upsertAutoGameFeedPost(eventId, gameId, eventData, newData, teamAName, scoreA, teamBName, scoreB);
+
         let ancbPlayerIds = [];
 
         // ── NOVO SISTEMA: timesParticipantes com flag isANCB ─────────────
@@ -151,10 +158,6 @@ exports.onGameFinished = functions.firestore
         }
 
         const eventName = eventData.nome || 'Evento';
-        const scoreA = newData.placarTimeA_final ?? newData.placarANCB_final ?? 0;
-        const scoreB = newData.placarTimeB_final ?? newData.placarAdversario_final ?? 0;
-        const teamAName = newData.timeA_nome || 'ANCB';
-        const teamBName = newData.timeB_nome || newData.adversario || 'Adversário';
 
         console.log(`Notificando ${ancbPlayerIds.length} jogadores ANCB sobre o quiz pós-jogo.`);
 
@@ -168,6 +171,90 @@ exports.onGameFinished = functions.firestore
         await admin.firestore().collection('eventos').doc(eventId).collection('jogos').doc(gameId)
             .update({ notificationSentAt: admin.firestore.FieldValue.serverTimestamp() });
 
+        return null;
+    });
+
+// ─────────────────────────────────────────────────────────────
+// 2.1 AUTO POST: RESULTADO DE EVENTO FINALIZADO
+// ─────────────────────────────────────────────────────────────
+exports.onEventFinishedCreatePost = functions.firestore
+    .document('eventos/{eventId}')
+    .onUpdate(async (change, context) => {
+        const newData = change.after.data();
+        const oldData = change.before.data();
+
+        if (!newData || !oldData) return null;
+        if (oldData.status === 'finalizado' || newData.status !== 'finalizado') return null;
+
+        const eventId = context.params.eventId;
+        const postId = `auto_event_${eventId}`;
+        const eventTypeLabel = newData.type === 'torneio_interno'
+            ? 'Torneio Interno'
+            : (newData.type === 'torneio_externo' ? 'Torneio Externo' : 'Amistoso');
+
+        let resumo = `${newData.nome || 'Evento'} foi finalizado.`;
+        if (newData.podio && (newData.podio.primeiro || newData.podio.segundo || newData.podio.terceiro)) {
+            resumo = [
+                `🏁 ${newData.nome || 'Evento'} finalizado!`,
+                `🥇 ${newData.podio.primeiro || '---'}`,
+                `🥈 ${newData.podio.segundo || '---'}`,
+                `🥉 ${newData.podio.terceiro || '---'}`
+            ].join('\n');
+        }
+
+        await admin.firestore().collection('feed_posts').doc(postId).set({
+            type: 'resultado_evento',
+            source: 'auto_event_finalized',
+            source_ref: `event:${eventId}`,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            author_id: 'system',
+            image_url: null,
+            content: {
+                titulo: `Resultado do Evento: ${newData.nome || 'Evento'}`,
+                resumo,
+                eventId,
+                resultado_label: eventTypeLabel,
+                resultado_detalhes: `${newData.nome || 'Evento'} • ${newData.data || ''}`,
+            }
+        }, { merge: true });
+
+        return null;
+    });
+
+// ─────────────────────────────────────────────────────────────
+// 2.2 AVISOS: FAN-OUT OPCIONAL PARA JOGADORES
+// ─────────────────────────────────────────────────────────────
+exports.onAvisoPostCreated = functions.firestore
+    .document('feed_posts/{postId}')
+    .onCreate(async (snap, context) => {
+        const data = snap.data() || {};
+        if (data.type !== 'aviso' || !data.notifyPlayers) return null;
+
+        const usuariosSnap = await admin.firestore().collection('usuarios')
+            .where('role', '==', 'jogador')
+            .where('status', '==', 'active')
+            .get();
+
+        if (usuariosSnap.empty) return null;
+
+        const titulo = data?.content?.titulo || 'Novo Aviso';
+        const resumo = data?.content?.resumo || 'Você recebeu um novo aviso no Portal ANCB.';
+        const postId = context.params.postId;
+
+        const writes = usuariosSnap.docs.map((userDoc) => {
+            const notifId = `aviso_${postId}_${userDoc.id}`;
+            return admin.firestore().collection('notifications').doc(notifId).set({
+                targetUserId: userDoc.id,
+                type: 'feed_alert',
+                title: `📣 ${titulo}`,
+                message: resumo,
+                data: { postId, type: 'aviso' },
+                read: false,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        });
+
+        await Promise.all(writes);
         return null;
     });
 
@@ -391,5 +478,35 @@ async function notifyPlayerQuizPosJogo(playerId, eventId, gameId, eventName, tea
 
     } catch (error) {
         console.error("Erro ao notificar jogador para quiz pós-jogo:", playerId, error);
+    }
+}
+
+async function upsertAutoGameFeedPost(eventId, gameId, eventData, gameData, teamAName, scoreA, teamBName, scoreB) {
+    try {
+        const postId = `auto_game_${eventId}_${gameId}`;
+        const eventName = eventData?.nome || 'Evento';
+        const gameDate = gameData?.dataJogo || eventData?.data || '';
+
+        await admin.firestore().collection('feed_posts').doc(postId).set({
+            type: 'placar',
+            source: 'auto_game_finalized',
+            source_ref: `event:${eventId}:game:${gameId}`,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            author_id: 'system',
+            image_url: null,
+            content: {
+                titulo: `${eventName} • ${teamAName} x ${teamBName}`,
+                time_adv: teamBName,
+                placar_ancb: Number(scoreA) || 0,
+                placar_adv: Number(scoreB) || 0,
+                eventId,
+                gameId,
+                teamAName,
+                teamBName,
+                resultado_detalhes: gameDate ? `${eventName} • ${gameDate}` : eventName,
+            }
+        }, { merge: true });
+    } catch (error) {
+        console.error(`Erro ao criar post automático de placar para jogo ${gameId}:`, error);
     }
 }
