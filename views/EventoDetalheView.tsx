@@ -110,6 +110,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     // Add Game Modal State
     const [showAddGame, setShowAddGame] = useState(false);
     const [newGameDate, setNewGameDate] = useState('');
+    const [newGameHour, setNewGameHour] = useState('');
     const [newGameTimeA, setNewGameTimeA] = useState(''); // ID for internal, Name for External
     const [newGameTimeB, setNewGameTimeB] = useState('');
     const [newGameLocation, setNewGameLocation] = useState('');
@@ -125,6 +126,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
     // Kebab Menu State
     const [activeMenuGameId, setActiveMenuGameId] = useState<string | null>(null);
+    const [showHeaderAdminMenu, setShowHeaderAdminMenu] = useState(false);
 
     const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
 
@@ -147,7 +149,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
         const unsubGames = onSnapshot(collection(db, "eventos", eventId, "jogos"), (snapshot) => {
             const gamesData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Jogo));
-            setGames(gamesData.sort((a, b) => a.dataJogo.localeCompare(b.dataJogo)));
+            setGames(gamesData);
         });
 
         const unsubRoster = onSnapshot(collection(db, "eventos", eventId, "roster"), (snapshot) => {
@@ -163,7 +165,10 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         fetchPlayers();
 
         // Click outside to close menu
-        const handleClickOutside = () => setActiveMenuGameId(null);
+        const handleClickOutside = () => {
+            setActiveMenuGameId(null);
+            setShowHeaderAdminMenu(false);
+        };
         document.addEventListener('click', handleClickOutside);
         return () => {
             unsubEvent(); unsubGames(); unsubRoster();
@@ -373,6 +378,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         try {
             const gameData: any = {
                 dataJogo: newGameDate,
+                horaJogo: newGameHour,
                 status: 'agendado',
                 placarTimeA_final: 0,
                 placarTimeB_final: 0,
@@ -415,6 +421,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
             await addDoc(collection(db, "eventos", eventId, "jogos"), gameData);
             setShowAddGame(false);
+            setNewGameHour('');
             setNewGameTimeA(''); setNewGameTimeB(''); setNewGameLocation('');
         } catch (e) {
             alert("Erro ao criar jogo.");
@@ -760,27 +767,45 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const getGameResultClass = (game: Jogo) => {
         const base = "border-2";
         if (game.status !== 'finalizado') return `${base} border-gray-200 dark:border-gray-700`;
-        if (event.type === 'torneio_interno') return `${base} border-blue-400 dark:border-blue-600`;
 
         const scoreA = resolveScore(game.placarTimeA_final, game.placarANCB_final);
         const scoreB = resolveScore(game.placarTimeB_final, game.placarAdversario_final);
-        
-        let ancbScore = 0;
-        let advScore = 0;
 
-        const teamAName = (game.timeA_nome || '').toUpperCase();
-        if (teamAName.includes('ANCB') || teamAName === '' || !game.timeB_id) {
-             ancbScore = scoreA;
-             advScore = scoreB;
-        } else {
-             ancbScore = scoreB;
-             advScore = scoreA;
+        const hasANCBInName = (name?: string) => (name || '').toUpperCase().includes('ANCB');
+
+        const isTeamANCB = (teamId: string | undefined, teamName: string | undefined, side: 'A' | 'B') => {
+            if (event.type === 'torneio_interno') return true;
+
+            if (event.type === 'amistoso') {
+                if (side === 'A') return true;
+                return hasANCBInName(teamName);
+            }
+
+            const externalTeam = (event.timesParticipantes || []).find(t => t.id === teamId);
+            if (externalTeam) return !!externalTeam.isANCB;
+
+            return hasANCBInName(teamName);
+        };
+
+        const teamAIsANCB = isTeamANCB(game.timeA_id, game.timeA_nome, 'A');
+        const teamBIsANCB = isTeamANCB(game.timeB_id, game.timeB_nome || game.adversario, 'B');
+
+        if (teamAIsANCB && teamBIsANCB) return `${base} border-green-500 dark:border-green-500`;
+        if (!teamAIsANCB && !teamBIsANCB) return `${base} border-gray-400 dark:border-gray-600`;
+
+        if (teamAIsANCB) {
+            if (scoreA > scoreB) return `${base} border-green-500 dark:border-green-500`;
+            if (scoreA < scoreB) return `${base} border-red-500 dark:border-red-500`;
+            return `${base} border-gray-400 dark:border-gray-600`;
         }
 
-        if (ancbScore > advScore) return `${base} border-green-500 dark:border-green-500`; 
-        if (ancbScore < advScore) return `${base} border-red-500 dark:border-red-500`; 
-        
-        return `${base} border-gray-400`; 
+        if (teamBIsANCB) {
+            if (scoreB > scoreA) return `${base} border-green-500 dark:border-green-500`;
+            if (scoreB < scoreA) return `${base} border-red-500 dark:border-red-500`;
+            return `${base} border-gray-400 dark:border-gray-600`;
+        }
+
+        return `${base} border-gray-400 dark:border-gray-600`;
     };
 
     const getEffectiveRoster = () => {
@@ -809,61 +834,120 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         (p.apelido || '').toLowerCase().includes(teamRosterSearch.toLowerCase())
     );
 
+    const normalizeGameDate = (dateValue?: string) => {
+        if (!dateValue) return '';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return dateValue;
+
+        const brDate = dateValue.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (brDate) {
+            return `${brDate[3]}-${brDate[2]}-${brDate[1]}`;
+        }
+
+        return dateValue;
+    };
+
+    const getGameSortKey = (game: Jogo) => {
+        const normalizedDate = normalizeGameDate(game.dataJogo);
+        const safeDate = /^\d{4}-\d{2}-\d{2}$/.test(normalizedDate) ? normalizedDate : '9999-12-31';
+        const safeTime = /^\d{2}:\d{2}$/.test(game.horaJogo || '') ? (game.horaJogo as string) : '99:99';
+        return `${safeDate}T${safeTime}`;
+    };
+
+    const sortedGames = [...games].sort((a, b) => getGameSortKey(a).localeCompare(getGameSortKey(b)));
+
+    const groupedGames = sortedGames.reduce((acc, game) => {
+        const dateKey = normalizeGameDate(game.dataJogo) || 'Sem data';
+        if (!acc[dateKey]) acc[dateKey] = [];
+        acc[dateKey].push(game);
+        return acc;
+    }, {} as Record<string, Jogo[]>);
+
+    const formatGroupDateLabel = (dateKey: string) => {
+        if (dateKey === 'Sem data') return dateKey;
+        const dateParts = dateKey.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!dateParts) return dateKey;
+        return `${dateParts[3]}/${dateParts[2]}/${dateParts[1]}`;
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col">
             {/* HERO HEADER */}
-            <div className={`relative w-full ${getGradient()} text-white p-6 pt-20 md:p-12 shadow-xl overflow-hidden`}>
+            <div className={`relative z-30 w-full ${getGradient()} text-white p-4 pt-4 md:p-12 shadow-xl overflow-hidden`}>
                 <div className="absolute top-0 right-0 opacity-10 pointer-events-none transform translate-x-10 -translate-y-10">
                     <LucideTrophy size={300} />
                 </div>
-                <div className="absolute top-4 left-4 z-20 flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={onBack} className="!bg-white/10 !border-white/20 !text-white hover:!bg-white/20">
-                        <LucideArrowLeft size={18} /> Voltar
-                    </Button>
-                </div>
-                <div className="absolute top-4 right-4 z-20 flex gap-2">
-                    {isAdmin && (
-                        <button 
-                            onClick={handleDeleteEvent}
-                            className="bg-red-600/80 hover:bg-red-600 text-white p-2 rounded-lg transition-colors backdrop-blur-sm"
-                            title="Excluir Evento"
-                        >
-                            <LucideTrash2 size={18} />
-                        </button>
-                    )}
-                    {isAdmin && event.status !== 'andamento' && event.status !== 'finalizado' && (
-                        <button 
-                            onClick={handleStartEvent}
-                            className="bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-lg flex items-center gap-1 backdrop-blur-sm"
-                        >
-                            <LucidePlayCircle size={14} /> Iniciar Evento
-                        </button>
-                    )}
-                    {isAdmin && (
-                        <button 
-                            onClick={() => setShowEditEvent(true)}
-                            className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-lg transition-colors backdrop-blur-sm"
-                            title="Editar Evento"
-                        >
-                            <LucideEdit size={18} />
-                        </button>
-                    )}
-                    {isAdmin && event.type === 'torneio_externo' && (
-                        <button 
-                            onClick={() => setShowChaaveConfigurator(true)}
-                            className="bg-yellow-500/80 hover:bg-yellow-500 text-white p-2 rounded-lg transition-colors backdrop-blur-sm"
-                            title="Configurar Chaves"
-                        >
-                            <LucideNetwork size={18} />
-                        </button>
-                    )}
-                </div>
                 
                 <div className="relative z-10 max-w-4xl mx-auto">
-                    <span className="inline-block px-3 py-1 rounded-full bg-black/30 backdrop-blur-sm text-xs font-bold uppercase tracking-wider mb-4 border border-white/10">
-                        {event.type.replace('_', ' ')}
-                    </span>
-                    <h1 className="text-3xl md:text-5xl font-black mb-4 leading-tight">{event.nome}</h1>
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                        <Button variant="secondary" size="sm" onClick={onBack} className="!bg-white/10 !border-white/20 !text-white hover:!bg-white/20">
+                            <LucideArrowLeft size={18} /> Voltar
+                        </Button>
+                        <div className="flex items-center gap-2 flex-wrap justify-end relative">
+                            <span className="inline-block px-3 py-1 rounded-full bg-black/30 backdrop-blur-sm text-xs font-bold uppercase tracking-wider border border-white/10 whitespace-nowrap">
+                                {event.type.replace('_', ' ')}
+                            </span>
+                            {isAdmin && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowHeaderAdminMenu(prev => !prev);
+                                    }}
+                                    className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-lg transition-colors backdrop-blur-sm"
+                                    title="Opções de Admin"
+                                >
+                                    <LucideMoreVertical size={18} />
+                                </button>
+                            )}
+                            {isAdmin && showHeaderAdminMenu && (
+                                <div
+                                    className="fixed right-4 top-24 md:top-28 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-white/20 dark:border-gray-700 z-[120] overflow-hidden"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    {event.status !== 'andamento' && event.status !== 'finalizado' && (
+                                        <button
+                                            onClick={() => {
+                                                handleStartEvent();
+                                                setShowHeaderAdminMenu(false);
+                                            }}
+                                            className="w-full text-left px-4 py-3 hover:bg-green-50 dark:hover:bg-green-900/20 text-sm flex items-center gap-2 text-green-700 dark:text-green-400"
+                                        >
+                                            <LucidePlayCircle size={16} /> Iniciar Evento
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => {
+                                            setShowEditEvent(true);
+                                            setShowHeaderAdminMenu(false);
+                                        }}
+                                        className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-gray-700 dark:text-gray-300"
+                                    >
+                                        <LucideEdit size={16} /> Editar Evento
+                                    </button>
+                                    {event.type === 'torneio_externo' && (
+                                        <button
+                                            onClick={() => {
+                                                setShowChaaveConfigurator(true);
+                                                setShowHeaderAdminMenu(false);
+                                            }}
+                                            className="w-full text-left px-4 py-3 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 text-sm flex items-center gap-2 text-yellow-700 dark:text-yellow-400"
+                                        >
+                                            <LucideNetwork size={16} /> Configurar Chaves
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => {
+                                            handleDeleteEvent();
+                                            setShowHeaderAdminMenu(false);
+                                        }}
+                                        className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm flex items-center gap-2 text-red-600"
+                                    >
+                                        <LucideTrash2 size={16} /> Excluir Evento
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <h1 className="text-3xl md:text-5xl font-black mb-3 leading-tight">{event.nome}</h1>
                     <div className="flex flex-wrap gap-6 text-sm md:text-base font-medium opacity-90">
                         <div className="flex items-center gap-2"><LucideCalendar className="opacity-70" /> {event.data.split('-').reverse().join('/')}</div>
                         <div className="flex items-center gap-2"><LucideMapPin className="opacity-70" /> {event.modalidade}</div>
@@ -916,86 +1000,100 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                     <p className="text-gray-500">Nenhum jogo agendado.</p>
                                 </div>
                             ) : (
-                                <div className="space-y-4">
-                                    {games.map(game => {
-                                        const sA = resolveScore(game.placarTimeA_final, game.placarANCB_final);
-                                        const sB = resolveScore(game.placarTimeB_final, game.placarAdversario_final);
-                                        const isGameLive = game.status === 'andamento';
-                                        return (
-                                            <div 
-                                                key={game.id} 
-                                                onClick={() => event.type === 'torneio_externo' ? handleOpenGame(game) : setSelectedGameForSummary(game)}
-                                                className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors relative ${getGameResultClass(game)}`}
-                                            >
-                                                <div className="flex-1 grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
-                                                    {/* Team A */}
-                                                    <span className="font-bold text-xs md:text-sm text-right leading-tight text-gray-900 dark:text-gray-100 break-words whitespace-normal line-clamp-2">
-                                                        {game.timeA_nome || 'ANCB'}
-                                                    </span>
-                                                    
-                                                    {/* Score */}
-                                                    <div className={`px-2 py-1 rounded font-mono font-bold text-base md:text-lg whitespace-nowrap text-center min-w-[60px] ${isGameLive ? 'bg-red-100 text-red-600 animate-pulse border border-red-200' : 'bg-gray-100 dark:bg-gray-700'}`}>
-                                                        {sA} - {sB}
-                                                    </div>
-                                                    
-                                                    {/* Team B */}
-                                                    <span className="font-bold text-xs md:text-sm text-left leading-tight text-gray-900 dark:text-gray-100 break-words whitespace-normal line-clamp-2">
-                                                        {game.timeB_nome || game.adversario || 'ADV'}
-                                                    </span>
-                                                </div>
-                                                
-                                                {/* Actions */}
-                                                <div className="ml-2 pl-2 border-l border-gray-200 dark:border-gray-700 flex items-center relative">
-                                                    {/* If Admin, show Kebab Menu or Direct Actions if space allows. Mobile = Kebab */}
-                                                    {isAdmin ? (
-                                                        <div 
-                                                            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"
-                                                            onClick={(e) => { e.stopPropagation(); setActiveMenuGameId(activeMenuGameId === game.id ? null : game.id); }}
-                                                        >
-                                                            <LucideMoreVertical size={18} />
-                                                            {activeMenuGameId === game.id && (
-                                                                <div className="absolute right-0 top-8 z-50 bg-white dark:bg-gray-800 shadow-xl rounded-xl border border-gray-100 dark:border-gray-700 py-1 w-48 animate-slideDown overflow-hidden">
-                                                                    <button 
-                                                                        className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-gray-700 dark:text-gray-200"
-                                                                        onClick={(e) => { e.stopPropagation(); handleShareGame(e, game); }}
-                                                                    >
-                                                                        <LucideShare2 size={16} /> Compartilhar Card
-                                                                    </button>
-                                                                    <button 
-                                                                        className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-ancb-blue"
-                                                                        onClick={(e) => { e.stopPropagation(); handleOpenScoreEdit(game); }}
-                                                                    >
-                                                                        <LucideEdit2 size={16} /> Editar Placar
-                                                                    </button>
-                                                                    {event?.formato === 'chaveamento' && (
-                                                                        <button 
-                                                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-amber-600 dark:text-amber-500"
-                                                                            onClick={(e) => { e.stopPropagation(); setEditPhaseGame(game); setEditPhaseValue((game as any).fase || 'fase_grupos'); setActiveMenuGameId(null); }}
-                                                                        >
-                                                                            <LucideEdit2 size={16} /> Editar Fase
-                                                                        </button>
-                                                                    )}
-                                                                    <button 
-                                                                        className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm flex items-center gap-2 text-red-600"
-                                                                        onClick={(e) => { e.stopPropagation(); handleDeleteGame(game.id); }}
-                                                                    >
-                                                                        <LucideTrash2 size={16} /> Excluir Jogo
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <button 
-                                                            onClick={(e) => handleShareGame(e, game)}
-                                                            className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                                                        >
-                                                            <LucideShare2 size={16} />
-                                                        </button>
-                                                    )}
-                                                </div>
+                                <div className="space-y-5">
+                                    {Object.entries(groupedGames).map(([dateKey, dateGames]) => (
+                                        <div key={dateKey} className="space-y-3">
+                                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                                                <LucideCalendar size={12} /> {formatGroupDateLabel(dateKey)}
                                             </div>
-                                        );
-                                    })}
+
+                                            <div className="space-y-4">
+                                                {dateGames.map(game => {
+                                                    const sA = resolveScore(game.placarTimeA_final, game.placarANCB_final);
+                                                    const sB = resolveScore(game.placarTimeB_final, game.placarAdversario_final);
+                                                    const isGameLive = game.status === 'andamento';
+                                                    return (
+                                                        <div 
+                                                            key={game.id} 
+                                                            onClick={() => event.type === 'torneio_externo' ? handleOpenGame(game) : setSelectedGameForSummary(game)}
+                                                            className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors relative ${getGameResultClass(game)}`}
+                                                        >
+                                                            <div className="flex-1 relative">
+                                                                {game.horaJogo && (
+                                                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-gray-500 dark:text-gray-400 leading-none">
+                                                                        {game.horaJogo}
+                                                                    </div>
+                                                                )}
+                                                                <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                                                                    <span className="font-bold text-xs md:text-sm text-right leading-tight text-gray-900 dark:text-gray-100 break-words whitespace-normal line-clamp-2">
+                                                                        {game.timeA_nome || 'ANCB'}
+                                                                    </span>
+                                                                    
+                                                                    <div className="flex items-center justify-center">
+                                                                        <div className={`px-2 py-1 rounded font-mono font-bold text-base md:text-lg whitespace-nowrap text-center min-w-[60px] ${isGameLive ? 'bg-red-100 text-red-600 animate-pulse border border-red-200' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                                                                            {sA} - {sB}
+                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    <span className="font-bold text-xs md:text-sm text-left leading-tight text-gray-900 dark:text-gray-100 break-words whitespace-normal line-clamp-2">
+                                                                        {game.timeB_nome || game.adversario || 'ADV'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            <div className="ml-2 pl-2 border-l border-gray-200 dark:border-gray-700 flex items-center relative">
+                                                                {isAdmin ? (
+                                                                    <div 
+                                                                        className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"
+                                                                        onClick={(e) => { e.stopPropagation(); setActiveMenuGameId(activeMenuGameId === game.id ? null : game.id); }}
+                                                                    >
+                                                                        <LucideMoreVertical size={18} />
+                                                                        {activeMenuGameId === game.id && (
+                                                                            <div className="absolute right-0 top-8 z-50 bg-white dark:bg-gray-800 shadow-xl rounded-xl border border-gray-100 dark:border-gray-700 py-1 w-48 animate-slideDown overflow-hidden">
+                                                                                <button 
+                                                                                    className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-gray-700 dark:text-gray-200"
+                                                                                    onClick={(e) => { e.stopPropagation(); handleShareGame(e, game); }}
+                                                                                >
+                                                                                    <LucideShare2 size={16} /> Compartilhar Card
+                                                                                </button>
+                                                                                <button 
+                                                                                    className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-ancb-blue"
+                                                                                    onClick={(e) => { e.stopPropagation(); handleOpenScoreEdit(game); }}
+                                                                                >
+                                                                                    <LucideEdit2 size={16} /> Editar Placar
+                                                                                </button>
+                                                                                {event?.formato === 'chaveamento' && (
+                                                                                    <button 
+                                                                                        className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-amber-600 dark:text-amber-500"
+                                                                                        onClick={(e) => { e.stopPropagation(); setEditPhaseGame(game); setEditPhaseValue((game as any).fase || 'fase_grupos'); setActiveMenuGameId(null); }}
+                                                                                    >
+                                                                                        <LucideEdit2 size={16} /> Editar Fase
+                                                                                    </button>
+                                                                                )}
+                                                                                <button 
+                                                                                    className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm flex items-center gap-2 text-red-600"
+                                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteGame(game.id); }}
+                                                                                >
+                                                                                    <LucideTrash2 size={16} /> Excluir Jogo
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <button 
+                                                                        onClick={(e) => handleShareGame(e, game)}
+                                                                        className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                                                    >
+                                                                        <LucideShare2 size={16} />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
@@ -1577,7 +1675,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
             <Modal isOpen={showAddGame} onClose={() => setShowAddGame(false)} title="Agendar Jogo">
                 <form onSubmit={handleAddGame} className="space-y-5">
                     {/* Date and Location stacked better on mobile */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data</label>
                             <input 
@@ -1586,6 +1684,16 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                 value={newGameDate} 
                                 onChange={e => setNewGameDate(e.target.value)} 
                                 required 
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Hora</label>
+                            <input 
+                                type="time"
+                                className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none transition-all"
+                                value={newGameHour}
+                                onChange={e => setNewGameHour(e.target.value)}
+                                required
                             />
                         </div>
                         <div>

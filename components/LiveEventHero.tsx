@@ -28,16 +28,35 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
     // 1. Fetch Games
     useEffect(() => {
         const gamesRef = collection(db, "eventos", event.id, "jogos");
-        const q = query(gamesRef, orderBy("dataJogo", "desc"));
+        const q = query(gamesRef);
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
             if (!snapshot.empty) {
                 const games = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Jogo));
+
+                const normalizeGameDate = (dateValue?: string) => {
+                    if (!dateValue) return '';
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return dateValue;
+                    const brDate = dateValue.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                    if (brDate) return `${brDate[3]}-${brDate[2]}-${brDate[1]}`;
+                    return dateValue;
+                };
+
+                const getGameSortKey = (game: Jogo) => {
+                    const normalizedDate = normalizeGameDate(game.dataJogo);
+                    const safeDate = /^\d{4}-\d{2}-\d{2}$/.test(normalizedDate) ? normalizedDate : '9999-12-31';
+                    const safeTime = /^\d{2}:\d{2}$/.test(game.horaJogo || '') ? (game.horaJogo as string) : '99:99';
+                    return `${safeDate}T${safeTime}`;
+                };
                 
                 // Find priority: 1. Live, 2. Finished (for results), 3. Scheduled (for next)
                 const live = games.find(g => g.status === 'andamento');
-                const finished = games.filter(g => g.status === 'finalizado').sort((a,b) => (b.dataJogo || '').localeCompare(a.dataJogo || ''))[0];
-                const next = games.filter(g => g.status !== 'finalizado' && g.status !== 'andamento').sort((a,b) => (a.dataJogo || '').localeCompare(b.dataJogo || ''))[0];
+                const finished = games
+                    .filter(g => g.status === 'finalizado')
+                    .sort((a, b) => getGameSortKey(b).localeCompare(getGameSortKey(a)))[0];
+                const next = games
+                    .filter(g => g.status !== 'finalizado' && g.status !== 'andamento')
+                    .sort((a, b) => getGameSortKey(a).localeCompare(getGameSortKey(b)))[0];
 
                 setActiveGame(live || null);
                 setLatestFinishedGame(finished || null);
@@ -241,7 +260,7 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
                         </span>
                         <div className="flex flex-col items-center px-4">
                             <span className="text-3xl font-black text-ancb-orange">VS</span>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase mt-1">{nextGame.dataJogo ? nextGame.dataJogo.split('-').reverse().join('/') : 'EM BREVE'}</span>
+                            <span className="text-[10px] text-gray-400 font-bold uppercase mt-1">{nextGame.dataJogo ? nextGame.dataJogo.split('-').reverse().join('/') : 'EM BREVE'}{nextGame.horaJogo ? ` • ${nextGame.horaJogo}` : ''}</span>
                         </div>
                         <span className="text-xl font-black text-white w-1/3 text-left">
                             {isInternal(nextGame) ? nextGame.timeB_nome : (nextGame.adversario || 'ADV')}

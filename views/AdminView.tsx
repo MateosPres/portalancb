@@ -442,6 +442,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             setFeedPlacares(posts);
             const eventsSnap = await db.collection('eventos').get();
             const auditList: any[] = [];
+
+            const normalizeDate = (dateValue?: string) => {
+                if (!dateValue) return '';
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return dateValue;
+                const brDate = dateValue.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                if (brDate) return `${brDate[3]}-${brDate[2]}-${brDate[1]}`;
+                return dateValue;
+            };
+
+            const getAuditSortKey = (item: any) => {
+                const normalizedDate = normalizeDate(item.gameDate);
+                const safeDate = /^\d{4}-\d{2}-\d{2}$/.test(normalizedDate) ? normalizedDate : '0000-01-01';
+                const safeTime = /^\d{2}:\d{2}$/.test(item.gameTime || '') ? item.gameTime : '00:00';
+                return `${safeDate}T${safeTime}`;
+            };
+
             for (const ev of eventsSnap.docs) {
                 const games = await ev.ref.collection('jogos').get();
                 const eventData = ev.data();
@@ -452,10 +468,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                     const isInternal = eventData.type === 'torneio_interno';
                     const teamA = isInternal ? (data.timeA_nome || 'Time A') : 'ANCB';
                     const teamB = isInternal ? (data.timeB_nome || 'Time B') : (data.adversario || 'Adversário');
-                    auditList.push({ gameId: g.id, eventId: ev.id, eventName: eventData.nome, eventType: eventData.type, gameDate: data.dataJogo || eventData.data, teamAName: teamA, teamBName: teamB, currentScoreA: sA, currentScoreB: sB, manualScoreA: sA, manualScoreB: sB, data: data });
+                    auditList.push({ gameId: g.id, eventId: ev.id, eventName: eventData.nome, eventType: eventData.type, gameDate: data.dataJogo || eventData.data, gameTime: data.horaJogo || '', teamAName: teamA, teamBName: teamB, currentScoreA: sA, currentScoreB: sB, manualScoreA: sA, manualScoreB: sB, data: data });
                 });
             }
-            auditList.sort((a, b) => b.gameDate.localeCompare(a.gameDate));
+            auditList.sort((a, b) => getAuditSortKey(b).localeCompare(getAuditSortKey(a)));
             const initialMap: Record<string, string> = {};
             auditList.forEach(game => {
                 const gameDateStr = game.gameDate;

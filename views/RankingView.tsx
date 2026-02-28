@@ -29,6 +29,14 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
     const [selectedCategory, setSelectedCategory] = useState<'aberta' | 'juvenil'>('aberta');
 
     useEffect(() => {
+        const scrollToTop = () => window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        scrollToTop();
+        const timeoutId = window.setTimeout(scrollToTop, 50);
+
+        return () => window.clearTimeout(timeoutId);
+    }, []);
+
+    useEffect(() => {
         const fetchRankingData = async () => {
             setLoading(true);
             try {

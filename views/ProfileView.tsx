@@ -23,6 +23,7 @@ interface MatchHistoryItem {
     eventName: string;
     eventType: string; // Added to match styling
     date: string;
+    gameTime?: string;
     opponent: string;
     myTeam: string;
     scoreMyTeam: number;
@@ -191,6 +192,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         const fetchMatches = async () => {
             setLoadingMatches(true);
             const historyList: MatchHistoryItem[] = [];
+
+            const normalizeDate = (dateValue?: string) => {
+                if (!dateValue) return '';
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return dateValue;
+                const brDate = dateValue.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                if (brDate) return `${brDate[3]}-${brDate[2]}-${brDate[1]}`;
+                return dateValue;
+            };
+
+            const getHistorySortKey = (match: MatchHistoryItem) => {
+                const normalizedDate = normalizeDate(match.date);
+                const safeDate = /^\d{4}-\d{2}-\d{2}$/.test(normalizedDate) ? normalizedDate : '0000-01-01';
+                const safeTime = /^\d{2}:\d{2}$/.test(match.gameTime || '') ? (match.gameTime as string) : '00:00';
+                return `${safeDate}T${safeTime}`;
+            };
             try {
                 const eventsQ = query(collection(db, "eventos"), where("status", "==", "finalizado"));
                 const eventsSnap = await getDocs(eventsQ);
@@ -228,13 +244,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                             const sB = gameData.placarTimeB_final ?? gameData.placarAdversario_final ?? 0;
                             historyList.push({
                                 eventId: eventDoc.id, gameId: gameDoc.id, eventName: eventData.nome, eventType: eventData.modalidade || '5x5',
-                                date: gameData.dataJogo || eventData.data, opponent: isTeamA ? (gameData.adversario || gameData.timeB_nome || 'Adversário') : (gameData.timeA_nome || 'ANCB'),
+                                date: gameData.dataJogo || eventData.data, gameTime: gameData.horaJogo || '', opponent: isTeamA ? (gameData.adversario || gameData.timeB_nome || 'Adversário') : (gameData.timeA_nome || 'ANCB'),
                                 myTeam: isTeamA ? (gameData.timeA_nome || 'ANCB') : (gameData.timeB_nome || 'Meu Time'), scoreMyTeam: isTeamA ? sA : sB, scoreOpponent: isTeamA ? sB : sA, reviewed: !reviewSnap.empty, individualPoints: points, cesta1: c1, cesta2: c2, cesta3: c3
                             });
                         }
                     }
                 }
-                historyList.sort((a, b) => b.date.localeCompare(a.date));
+                historyList.sort((a, b) => getHistorySortKey(b).localeCompare(getHistorySortKey(a)));
                 setMatches(historyList);
             } catch (e) { console.error("Error fetching matches", e); } finally { setLoadingMatches(false); }
         };
@@ -540,7 +556,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                             return (
                                 <div key={match.gameId} className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${borderClass} p-3`}>
                                     <div className="text-[10px] text-gray-400 mb-2 flex justify-between uppercase font-bold tracking-wider">
-                                        <span className="flex items-center gap-1">{formatDate(match.date)}<span className="bg-gray-100 dark:bg-gray-700 px-1.5 rounded text-[9px] text-gray-500">{match.eventType}</span></span>
+                                        <span className="flex items-center gap-1">{formatDate(match.date)}{match.gameTime ? ` • ${match.gameTime}` : ''}<span className="bg-gray-100 dark:bg-gray-700 px-1.5 rounded text-[9px] text-gray-500">{match.eventType}</span></span>
                                         <span className="text-ancb-blue truncate max-w-[120px]">{match.eventName}</span>
                                     </div>
                                     <div className="flex justify-between items-center mb-2 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg">

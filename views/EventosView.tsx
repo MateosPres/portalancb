@@ -30,6 +30,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [showEventForm, setShowEventForm] = useState(false);
     const [formName, setFormName] = useState('');
     const [formDate, setFormDate] = useState('');
+    const [formGameHour, setFormGameHour] = useState('');
     const [formMode, setFormMode] = useState<'3x3'|'5x5'>('5x5');
     const [formType, setFormType] = useState<'amistoso'|'torneio_interno'|'torneio_externo'>('amistoso');
     const [formStatus, setFormStatus] = useState<'proximo'|'andamento'|'finalizado'>('proximo');
@@ -111,6 +112,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             if (formType === 'amistoso' && formOpponent) {
                 await eventDocRef.collection('jogos').add({
                     dataJogo: formDate,
+                    horaJogo: formGameHour,
                     status: 'agendado',
                     timeA_nome: 'ANCB',
                     timeB_nome: formOpponent,
@@ -124,7 +126,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
             setShowEventForm(false);
             // Reset form
-            setFormName(''); setFormDate(''); setFormOpponent(''); setSelectedRosterMap({});
+            setFormName(''); setFormDate(''); setFormGameHour(''); setFormOpponent(''); setSelectedRosterMap({});
         } catch (e) { alert("Erro ao criar evento"); }
     };
 
@@ -318,6 +320,14 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                             <div className="md:col-span-2 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
                                 <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Adversário</label>
                                 <input className="w-full p-3 border rounded-xl mt-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-400 outline-none transition-all" placeholder="Nome do time rival" value={formOpponent} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormOpponent(e.target.value)} required />
+                                <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mt-3 mb-1">Hora do Jogo</label>
+                                <input
+                                    type="time"
+                                    className="w-full p-3 border rounded-xl mt-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-400 outline-none transition-all"
+                                    value={formGameHour}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormGameHour(e.target.value)}
+                                    required
+                                />
                                 <p className="text-[10px] text-gray-500 mt-2 flex items-center gap-1"><LucideGamepad2 size={12} /> Isso criará automaticamente o jogo no sistema.</p>
                             </div>
                         )}

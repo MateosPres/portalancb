@@ -45,6 +45,7 @@ interface MatchHistoryItem {
     eventName: string;
     eventType: string; // '3x3' or '5x5'
     date: string;
+    gameTime?: string;
     opponent: string;
     myTeam: string;
     scoreMyTeam: number;
@@ -152,6 +153,21 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
             setLoadingMatches(true);
             const historyList: MatchHistoryItem[] = [];
             const scoredGamesMap = new Map<string, string | undefined>(); 
+
+            const normalizeDate = (dateValue?: string) => {
+                if (!dateValue) return '';
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return dateValue;
+                const brDate = dateValue.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                if (brDate) return `${brDate[3]}-${brDate[2]}-${brDate[1]}`;
+                return dateValue;
+            };
+
+            const getHistorySortKey = (match: MatchHistoryItem) => {
+                const normalizedDate = normalizeDate(match.date);
+                const safeDate = /^\d{4}-\d{2}-\d{2}$/.test(normalizedDate) ? normalizedDate : '0000-01-01';
+                const safeTime = /^\d{2}:\d{2}$/.test(match.gameTime || '') ? (match.gameTime as string) : '00:00';
+                return `${safeDate}T${safeTime}`;
+            };
             try {
                 const snapCestas = await db.collectionGroup('cestas').where('jogadorId', '==', selectedPlayer.id).get();
                 snapCestas.forEach(d => {
@@ -260,6 +276,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                 eventName: eventData.nome,
                                 eventType: eventData.modalidade || '5x5',
                                 date: gameData.dataJogo || eventData.data,
+                                gameTime: gameData.horaJogo || '',
                                 opponent: isTeamA ? (gameData.adversario || gameData.timeB_nome || 'Adversário') : (gameData.timeA_nome || 'ANCB'),
                                 myTeam: isTeamA ? (gameData.timeA_nome || 'ANCB') : (gameData.timeB_nome || 'Meu Time'),
                                 scoreMyTeam: isTeamA ? sA : sB,
@@ -273,7 +290,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                         }
                     }
                 }
-                historyList.sort((a, b) => b.date.localeCompare(a.date));
+                historyList.sort((a, b) => getHistorySortKey(b).localeCompare(getHistorySortKey(a)));
                 setMatches(historyList);
             } catch (e) {
                 console.error("Error fetching matches", e);
@@ -575,7 +592,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                     return (
                                         <div key={match.gameId} className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${borderClass} p-3`}>
                                             <div className="text-[10px] text-gray-400 mb-2 flex justify-between uppercase font-bold tracking-wider">
-                                                <span className="flex items-center gap-1">{formatDate(match.date)}<span className="bg-gray-100 dark:bg-gray-700 px-1.5 rounded text-[9px] text-gray-500">{match.eventType}</span></span>
+                                                <span className="flex items-center gap-1">{formatDate(match.date)}{match.gameTime ? ` • ${match.gameTime}` : ''}<span className="bg-gray-100 dark:bg-gray-700 px-1.5 rounded text-[9px] text-gray-500">{match.eventType}</span></span>
                                                 <span className="text-ancb-blue truncate max-w-[120px]">{match.eventName}</span>
                                             </div>
                                             <div className="flex justify-between items-center mb-2 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
