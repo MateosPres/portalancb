@@ -1,3 +1,30 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@keyframes apoiadoresMarquee {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
+}
+
+.apoiadores-marquee {
+	position: relative;
+	width: 100%;
+}
+
+.apoiadores-marquee-track {
+	animation-name: apoiadoresMarquee;
+	animation-timing-function: linear;
+	animation-iteration-count: infinite;
+	will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.apoiadores-marquee-track {
+		animation: none;
+	}
+}

@@ -117,9 +117,24 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         if (onFriendlySummaryOpened) onFriendlySummaryOpened();
     }, [initialFriendlyEventId, friendlyGamesMap, onFriendlySummaryOpened]);
 
-    const handleEventCardClick = (evento: Evento) => {
+    const handleEventCardClick = async (evento: Evento) => {
         if (evento.type === 'amistoso') {
-            const game = friendlyGamesMap[evento.id];
+            let game = friendlyGamesMap[evento.id];
+
+            if (!game) {
+                const gamesSnap = await getDocs(collection(db, "eventos", evento.id, "jogos"));
+                const games = gamesSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Jogo));
+                if (games.length > 0) {
+                    game = [...games].sort((a, b) => {
+                        const keyA = `${a.dataJogo || ''}T${a.horaJogo || '00:00'}`;
+                        const keyB = `${b.dataJogo || ''}T${b.horaJogo || '00:00'}`;
+                        return keyA.localeCompare(keyB);
+                    })[0];
+
+                    setFriendlyGamesMap(prev => ({ ...prev, [evento.id]: game! }));
+                }
+            }
+
             if (game) {
                 setSelectedFriendlySummary({ eventId: evento.id, game });
                 return;
@@ -367,7 +382,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
             // If Amistoso, automatically create the single match
             if (formType === 'amistoso' && formOpponent) {
-                await eventDocRef.collection('jogos').add({
+                const gamePayload = {
                     dataJogo: formDate,
                     horaJogo: formGameHour,
                     status: 'agendado',
@@ -378,7 +393,16 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     placarTimeB_final: 0,
                     placarANCB_final: 0,
                     placarAdversario_final: 0
-                });
+                };
+
+                const newGameRef = await eventDocRef.collection('jogos').add(gamePayload);
+                setFriendlyGamesMap(prev => ({
+                    ...prev,
+                    [eventDocRef.id]: {
+                        id: newGameRef.id,
+                        ...gamePayload,
+                    } as Jogo,
+                }));
             }
 
             setShowEventForm(false);

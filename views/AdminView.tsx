@@ -83,6 +83,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [apoiadorLogoPreview, setApoiadorLogoPreview] = useState<string | null>(null);
     const [isSavingApoiador, setIsSavingApoiador] = useState(false);
     const [draggedApoiador, setDraggedApoiador] = useState<string | null>(null);
+    const [editingApoiadorId, setEditingApoiadorId] = useState<string | null>(null);
 
     const isSuperAdmin = userProfile?.role === 'super-admin';
 
@@ -274,32 +275,59 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         }
     };
 
+    const resetApoiadorForm = () => {
+        setApoiadorNome('');
+        setApoiadorSite('');
+        setApoiadorDescricao('');
+        setApoiadorDestaque(false);
+        setApoiadorLogoFile(null);
+        setApoiadorLogoPreview(null);
+        setEditingApoiadorId(null);
+        setShowApoiadorForm(false);
+    };
+
+    const handleEditApoiador = (apoiador: any) => {
+        setEditingApoiadorId(apoiador.id);
+        setApoiadorNome(apoiador.nome || '');
+        setApoiadorSite(apoiador.site || '');
+        setApoiadorDescricao(apoiador.descricao || '');
+        setApoiadorDestaque(Boolean(apoiador.destaque));
+        setApoiadorLogoFile(null);
+        setApoiadorLogoPreview(apoiador.logoBase64 || null);
+        setShowApoiadorForm(true);
+    };
+
     const handleSalvarApoiador = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!apoiadorLogoFile) {
+        if (!editingApoiadorId && !apoiadorLogoFile) {
             alert('Selecione uma logo para o apoiador.');
             return;
         }
         setIsSavingApoiador(true);
         try {
-            const logoBase64 = await compressLogoAgressivo(apoiadorLogoFile);
-            const proximaOrdem = apoiadores.length;
-            await db.collection('apoiadores').add({
+            const payload: any = {
                 nome: apoiadorNome,
                 site: apoiadorSite,
                 descricao: apoiadorDescricao,
                 destaque: apoiadorDestaque,
-                logoBase64,
-                ordem: proximaOrdem,
-                criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
-            });
-            setApoiadorNome('');
-            setApoiadorSite('');
-            setApoiadorDescricao('');
-            setApoiadorDestaque(false);
-            setApoiadorLogoFile(null);
-            setApoiadorLogoPreview(null);
-            setShowApoiadorForm(false);
+                atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+            };
+
+            if (apoiadorLogoFile) {
+                payload.logoBase64 = await compressLogoAgressivo(apoiadorLogoFile);
+            }
+
+            if (editingApoiadorId) {
+                await db.collection('apoiadores').doc(editingApoiadorId).update(payload);
+            } else {
+                const proximaOrdem = apoiadores.length;
+                await db.collection('apoiadores').add({
+                    ...payload,
+                    ordem: proximaOrdem,
+                    criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+            }
+            resetApoiadorForm();
         } catch {
             alert('Erro ao salvar apoiador.');
         } finally {
@@ -1129,6 +1157,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                 {/* Ações */}
                                 <div className="flex gap-1.5 flex-shrink-0">
                                     <button
+                                        onClick={() => handleEditApoiador(a)}
+                                        className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all"
+                                        title="Editar apoiador"
+                                    >
+                                        <LucideEdit2 size={14} />
+                                    </button>
+
+                                    <button
                                         onClick={() => moveApoiadorUp(index)}
                                         disabled={index === 0}
                                         className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -1172,15 +1208,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                 <div className="p-5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <LucideHeart size={18} className="text-ancb-orange" fill="currentColor" />
-                                        <h4 className="font-black text-gray-900 dark:text-white">Novo Apoiador</h4>
+                                        <h4 className="font-black text-gray-900 dark:text-white">{editingApoiadorId ? 'Editar Apoiador' : 'Novo Apoiador'}</h4>
                                     </div>
-                                    <button onClick={() => setShowApoiadorForm(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-all text-xl font-bold">×</button>
+                                    <button onClick={resetApoiadorForm} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-all text-xl font-bold">×</button>
                                 </div>
                                 <form onSubmit={handleSalvarApoiador} className="p-5 space-y-4">
                                     {/* Upload Logo */}
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">
-                                            Logo do Apoiador *
+                                            Logo do Apoiador {editingApoiadorId ? '(opcional)' : '*'}
                                         </label>
                                         <div className="flex items-center gap-3">
                                             <div className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden bg-gray-50 dark:bg-gray-800 flex-shrink-0">
@@ -1259,7 +1295,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                         {isSavingApoiador ? (
                                             <><span className="animate-spin inline-block">⏳</span> Comprimindo e salvando...</>
                                         ) : (
-                                            <><LucideHeart size={16} fill="white" /> Salvar Apoiador</>
+                                            <><LucideHeart size={16} fill="white" /> {editingApoiadorId ? 'Salvar Alterações' : 'Salvar Apoiador'}</>
                                         )}
                                     </button>
                                 </form>
