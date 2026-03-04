@@ -12,13 +12,14 @@ import {
     LucideUsers, LucideCheckCircle2, LucideXCircle, LucideClock, 
     LucidePlus, LucideTrash2, LucideGamepad2, LucidePlayCircle, LucideEdit, LucideCheckSquare, LucideSquare,
     LucideLoader2, LucideStar, LucideChevronRight, LucideEdit2, LucideChevronDown, LucideChevronUp, LucideShield, LucidePlay, LucideUpload, LucideSave, LucideSearch, LucideX, LucideShare2, LucideMoreVertical,
-    LucideRotateCcw, LucideList, LucideNetwork, LucideMedal, LucideAward
+    LucideRotateCcw, LucideList, LucideNetwork, LucideMedal, LucideAward, LucideDownload
 } from 'lucide-react';
 import { collection, doc, onSnapshot, updateDoc, setDoc, serverTimestamp, query, getDocs, addDoc, deleteDoc, where } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
 import { SimpleScorePanel } from '../components/SimpleScorePanel';
 import { GroupStandings } from '../components/GroupStandings';
 import { ChaaveConfigurator } from '../components/ChaaveConfigurator';
+import { formatCpf } from '../utils/contactFormat';
 
 interface EventoDetalheViewProps {
     eventId: string;
@@ -126,6 +127,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
     // Kebab Menu State
     const [activeMenuGameId, setActiveMenuGameId] = useState<string | null>(null);
+    const [activeMenuTeamId, setActiveMenuTeamId] = useState<string | null>(null);
     const [showHeaderAdminMenu, setShowHeaderAdminMenu] = useState(false);
     const [headerAdminMenuPos, setHeaderAdminMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
@@ -168,6 +170,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         // Click outside to close menu
         const handleClickOutside = () => {
             setActiveMenuGameId(null);
+            setActiveMenuTeamId(null);
             setShowHeaderAdminMenu(false);
         };
         document.addEventListener('click', handleClickOutside);
@@ -200,6 +203,155 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     };
     
     const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
+
+    const handleGenerateTeamSheetPdf = (team: Time) => {
+        if (!event || !team.isANCB) return;
+
+        const rosterPlayers = (team.jogadores || [])
+            .map(playerId => allPlayers.find(player => player.id === playerId))
+            .filter((player): player is Player => !!player)
+            .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
+            .slice(0, 12);
+
+        const escapeHtml = (value?: string) => (value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
+        const formatBirthDate = (dateValue?: string) => {
+            if (!dateValue) return '-';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+                const [year, month, day] = dateValue.split('-');
+                return `${day}/${month}/${year}`;
+            }
+            return dateValue;
+        };
+
+        const defaultPhotoSvg = `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" fill="#e5e7eb"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="24" fill="#6b7280">?</text></svg>')}`;
+        const logoUrl = team.logoUrl || 'https://i.imgur.com/SE2jHsz.png';
+
+        const rowsHtml = Array.from({ length: 12 }).map((_, index) => {
+            const player = rosterPlayers[index];
+            if (!player) {
+                return `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                `;
+            }
+
+            return `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td><img src="${player.foto || defaultPhotoSvg}" alt="${escapeHtml(player.nome)}" class="athlete-photo" /></td>
+                    <td>${escapeHtml(player.nome || '-')}</td>
+                    <td>${formatBirthDate(player.nascimento)}</td>
+                    <td>${escapeHtml(formatCpf(player.cpf) || '-')}</td>
+                </tr>
+            `;
+        }).join('');
+
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert('Não foi possível abrir a janela de impressão. Verifique se o navegador bloqueou pop-up.');
+            return;
+        }
+
+        const html = `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                <title>Ficha de Jogadores - ${escapeHtml(event.nome)}</title>
+                <style>
+                    @page { size: A4 portrait; margin: 8mm; }
+                    * { box-sizing: border-box; }
+                    body { margin: 0; font-family: Arial, sans-serif; color: #111827; font-size: 12pt; }
+                    .sheet { width: 100%; }
+                    .header { text-align: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 8px; margin-bottom: 8px; }
+                    .header img { width: 54px; height: 54px; object-fit: cover; border-radius: 50%; border: 1.5px solid #1e3a8a; }
+                    .title { font-size: 12pt; font-weight: 700; margin: 6px 0 2px; }
+                    .subtitle { font-size: 12pt; color: #374151; margin: 0; }
+                    .event-name { margin-top: 4px; font-size: 12pt; }
+                    .section { margin-top: 8px; page-break-inside: avoid; }
+                    .section h2 { margin: 0 0 6px; font-size: 12pt; text-transform: uppercase; letter-spacing: .04em; color: #1d4ed8; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #d1d5db; padding: 3px 5px; font-size: 12pt; text-align: left; vertical-align: middle; line-height: 1.12; }
+                    th { background: #eff6ff; font-weight: 700; }
+                    .athlete-photo { width: 46px; height: 46px; object-fit: cover; border-radius: 4px; border: 1px solid #d1d5db; }
+                    .footer { margin-top: 8px; page-break-inside: avoid; }
+                    .coach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+                    .line-field { margin-top: 0; }
+                    .line-label { display: block; font-size: 12pt; color: #374151; margin-bottom: 3px; font-weight: 700; }
+                    .line-value { border-bottom: 1px solid #111827; height: 14px; }
+                </style>
+            </head>
+            <body>
+                <div class="sheet">
+                    <div class="header">
+                        <img src="${logoUrl}" alt="Logo ANCB" />
+                        <p class="title">Associação Nova Canaã de Basquete</p>
+                        <p class="subtitle">Ficha de Jogadores</p>
+                        <p class="event-name"><strong>Evento:</strong> ${escapeHtml(event.nome)}</p>
+                        <p class="event-name"><strong>Equipe:</strong> ${escapeHtml(team.nomeTime)}</p>
+                    </div>
+
+                    <div class="section">
+                        <h2>Escalação</h2>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 32px;">#</th>
+                                    <th style="width: 74px;">Foto</th>
+                                    <th>Nome completo</th>
+                                    <th style="width: 96px;">Nascimento</th>
+                                    <th style="width: 140px;">Documento</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="footer">
+                        <div class="coach-grid">
+                            <div class="line-field">
+                                <span class="line-label">Nome do Responsável Técnico:</span>
+                                <div class="line-value"></div>
+                            </div>
+                            <div class="line-field">
+                                <span class="line-label">Documento:</span>
+                                <div class="line-value"></div>
+                            </div>
+                            <div class="line-field">
+                                <span class="line-label">Contato:</span>
+                                <div class="line-value"></div>
+                            </div>
+                            <div class="line-field">
+                                <span class="line-label">Assinatura:</span>
+                                <div class="line-value"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        printWindow.document.open();
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => printWindow.print(), 300);
+    };
 
     // --- JERSEY NUMBER LOGIC ---
     const getEventJerseyNumber = (playerId: string) => {
@@ -1151,13 +1303,52 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                             </div>
                                         </div>
                                         {isAdmin && (
-                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={(e) => { e.stopPropagation(); onOpenTeamManager && onOpenTeamManager(eventId, team.id); }} className={`p-2 rounded-full transition-colors ${team.isANCB ? 'text-blue-200 hover:text-white hover:bg-blue-800' : 'text-gray-400 hover:text-ancb-blue bg-gray-50 dark:bg-gray-700'}`}>
-                                                    <LucideEdit2 size={16} />
+                                            <div className="relative" onClick={(e) => e.stopPropagation()}>
+                                                <button
+                                                    className={`p-2 rounded-full transition-colors ${team.isANCB ? 'text-blue-200 hover:text-white hover:bg-blue-800' : 'text-gray-400 hover:text-ancb-blue bg-gray-50 dark:bg-gray-700'}`}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setActiveMenuTeamId(prev => prev === team.id ? null : team.id);
+                                                    }}
+                                                >
+                                                    <LucideMoreVertical size={16} />
                                                 </button>
-                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteExternalTeam(team.id); }} className={`p-2 rounded-full transition-colors ${team.isANCB ? 'text-blue-200 hover:text-red-400 hover:bg-blue-800' : 'text-gray-400 hover:text-red-500 bg-gray-50 dark:bg-gray-700'}`}>
-                                                    <LucideTrash2 size={16} />
-                                                </button>
+                                                {activeMenuTeamId === team.id && (
+                                                    <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                                                        <button
+                                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-gray-700 dark:text-gray-200"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveMenuTeamId(null);
+                                                                onOpenTeamManager && onOpenTeamManager(eventId, team.id);
+                                                            }}
+                                                        >
+                                                            <LucideEdit2 size={16} /> Editar Time
+                                                        </button>
+                                                        <button
+                                                            className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm flex items-center gap-2 text-red-600"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveMenuTeamId(null);
+                                                                handleDeleteExternalTeam(team.id);
+                                                            }}
+                                                        >
+                                                            <LucideTrash2 size={16} /> Apagar Time
+                                                        </button>
+                                                        {team.isANCB && (
+                                                            <button
+                                                                className="w-full text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-sm flex items-center gap-2 text-ancb-blue"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setActiveMenuTeamId(null);
+                                                                    handleGenerateTeamSheetPdf(team);
+                                                                }}
+                                                            >
+                                                                <LucideDownload size={16} /> Gerar Ficha (PDF)
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>

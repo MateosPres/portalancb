@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, User, LogIn, ClipboardList, Home, Shield, Moon, Sun, LogOut, Bell } from 'lucide-react';
+import { Menu, X, User, LogIn, ClipboardList, Home, Shield, Moon, Sun, LogOut, Bell, Heart, UserPlus } from 'lucide-react';
 import { NotificationItem } from '../types';
 
 const PRANCHETA_URL = "https://prancheta.ancb.app.br";
@@ -15,10 +15,12 @@ interface HeaderProps {
   isDarkMode: boolean;
   onToggleTheme: () => void;
   onLogin: () => void;
+  onRegister: () => void;
   onLogout: () => void;
   onProfileClick: () => void;
   onAdminClick: () => void;
   onHomeClick: () => void;
+  onNossaHistoriaClick: () => void;
   notifications?: NotificationItem[];
   onNotificationsClick?: () => void;
 }
@@ -28,10 +30,12 @@ export const Header: React.FC<HeaderProps> = ({
   isDarkMode, 
   onToggleTheme, 
   onLogin, 
+  onRegister,
   onLogout,
   onProfileClick,
   onAdminClick,
   onHomeClick,
+  onNossaHistoriaClick,
   notifications = [],
   onNotificationsClick,
 }) => {
@@ -171,6 +175,16 @@ export const Header: React.FC<HeaderProps> = ({
           <button onClick={() => { onHomeClick(); closeMenu(); }} className="header-menu-item">
             <Home size={20} /> Início
           </button>
+
+          <button onClick={() => { onNossaHistoriaClick(); closeMenu(); }} className="header-menu-item">
+            <Heart size={20} /> Nossa História
+          </button>
+
+          {!user && (
+            <button onClick={() => { onRegister(); closeMenu(); }} className="header-menu-item text-ancb-orange">
+              <UserPlus size={20} /> Registrar
+            </button>
+          )}
 
           {user && (
             <button onClick={() => { onProfileClick(); closeMenu(); }} className="header-menu-item">

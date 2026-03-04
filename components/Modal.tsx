@@ -7,9 +7,23 @@ interface ModalProps {
     title?: string;
     children: React.ReactNode;
     zIndex?: number;
+    maxWidthClassName?: string;
+    bodyClassName?: string;
+    maxHeightClassName?: string;
+    scrollable?: boolean;
 }
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, zIndex = 100 }) => {
+export const Modal: React.FC<ModalProps> = ({
+    isOpen,
+    onClose,
+    title,
+    children,
+    zIndex = 100,
+    maxWidthClassName = 'max-w-lg',
+    bodyClassName = 'p-6',
+    maxHeightClassName = 'max-h-[90vh]',
+    scrollable = true,
+}) => {
     // Prevent background scrolling when modal is open
     useEffect(() => {
         if (isOpen) {
@@ -31,7 +45,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
             ></div>
 
             {/* Content */}
-            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col animate-slideUp transition-colors duration-300">
+            <div className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full ${maxWidthClassName} ${maxHeightClassName} ${scrollable ? 'overflow-y-auto' : 'overflow-hidden'} flex flex-col animate-slideUp transition-colors duration-300`}>
                 <div className="sticky top-0 bg-white dark:bg-gray-800 z-10 px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center transition-colors duration-300">
                     <h3 className="text-xl font-bold text-gray-800 dark:text-white">{title}</h3>
                     <button 
@@ -42,7 +56,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
                     </button>
                 </div>
                 
-                <div className="p-6">
+                <div className={bodyClassName}>
                     {children}
                 </div>
             </div>

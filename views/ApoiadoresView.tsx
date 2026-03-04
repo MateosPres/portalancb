@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../services/firebase';
 import { Button } from '../components/Button';
-import { LucideArrowLeft, LucideHeart, LucideExternalLink, LucideStar, LucideUsers } from 'lucide-react';
+import { Modal } from '../components/Modal';
+import { LucideArrowLeft, LucideHeart, LucideExternalLink, LucideStar, LucideUsers, LucideImages, LucideUpload, LucideLoader2, LucideChevronLeft, LucideChevronRight, LucideTrash2 } from 'lucide-react';
+import { UserProfile } from '../types';
 
 interface Apoiador {
     id: string;
@@ -15,12 +17,52 @@ interface Apoiador {
 
 interface ApoiadoresViewProps {
     onBack: () => void;
+    userProfile?: UserProfile | null;
 }
 
-export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack }) => {
+interface GaleriaItem {
+    id: string;
+    imageUrl: string;
+    deleteUrl?: string;
+    createdAt?: any;
+    createdBy?: string;
+}
+
+interface ImgBBUploadResponse {
+    data: {
+        url: string;
+        display_url?: string;
+        delete_url?: string;
+        id?: string;
+    };
+    success: boolean;
+    status: number;
+}
+
+const IMGBB_API_URL = 'https://api.imgbb.com/1/upload';
+const IMGBB_API_KEY = '5bec53fdc4489e83e9184584335bee45';
+
+export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProfile }) => {
+    const GALERIA_MAX_ITENS_VISIVEIS = 3;
+
     const [apoiadores, setApoiadores] = useState<Apoiador[]>([]);
     const [loading, setLoading] = useState(true);
     const [isDark, setIsDark] = useState(false);
+    const [galeria, setGaleria] = useState<GaleriaItem[]>([]);
+    const [loadingGaleria, setLoadingGaleria] = useState(true);
+    const [showGaleriaModal, setShowGaleriaModal] = useState(false);
+    const [currentSlide, setCurrentSlide] = useState(0);
+    const [isSlideAnimating, setIsSlideAnimating] = useState(true);
+    const [galeriaItensVisiveis, setGaleriaItensVisiveis] = useState(() => {
+        if (typeof window === 'undefined') return GALERIA_MAX_ITENS_VISIVEIS;
+        if (window.innerWidth < 640) return 1;
+        if (window.innerWidth < 1024) return 2;
+        return GALERIA_MAX_ITENS_VISIVEIS;
+    });
+    const [isUploadingImagem, setIsUploadingImagem] = useState(false);
+    const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
+
+    const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
 
     useEffect(() => {
         const checkDark = () => setIsDark(document.documentElement.classList.contains('dark'));
@@ -42,6 +84,152 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack }) => {
         return () => unsub();
     }, []);
 
+    useEffect(() => {
+        const unsubGaleria = db.collection('historia_galeria').orderBy('createdAt', 'desc').onSnapshot(snap => {
+            setGaleria(snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as GaleriaItem)));
+            setLoadingGaleria(false);
+        }, () => {
+            setLoadingGaleria(false);
+        });
+        return () => unsubGaleria();
+    }, []);
+
+    useEffect(() => {
+        const handleResize = () => {
+            if (window.innerWidth < 640) {
+                setGaleriaItensVisiveis(1);
+                return;
+            }
+            if (window.innerWidth < 1024) {
+                setGaleriaItensVisiveis(2);
+                return;
+            }
+            setGaleriaItensVisiveis(GALERIA_MAX_ITENS_VISIVEIS);
+        };
+
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    const canSlideGaleria = galeria.length > galeriaItensVisiveis;
+
+    useEffect(() => {
+        if (!canSlideGaleria) {
+            setCurrentSlide(0);
+            setIsSlideAnimating(false);
+            return;
+        }
+
+        setIsSlideAnimating(true);
+
+        if (currentSlide > galeria.length) {
+            setCurrentSlide(0);
+        }
+        if (currentSlide < -1) {
+            setCurrentSlide(galeria.length - 1);
+        }
+    }, [canSlideGaleria, galeria.length, currentSlide]);
+
+    const uploadImageToImgBB = async (file: File): Promise<{ imageUrl: string; deleteUrl?: string }> => {
+        if (!IMGBB_API_KEY) {
+            throw new Error('API key do ImgBB não configurada. Adicione VITE_IMGBB_API_KEY no .env');
+        }
+
+        const formData = new FormData();
+        formData.append('key', IMGBB_API_KEY);
+        formData.append('image', file);
+
+        const response = await fetch(IMGBB_API_URL, {
+            method: 'POST',
+            body: formData,
+        });
+
+        const result: ImgBBUploadResponse = await response.json();
+
+        if (!response.ok || !result.success || !result.data?.url) {
+            throw new Error('Falha ao enviar imagem para o ImgBB.');
+        }
+
+        return {
+            imageUrl: result.data.url,
+            deleteUrl: result.data.delete_url,
+        };
+    };
+
+    const handleUploadGaleria = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!isAdmin) return;
+        if (!e.target.files || !e.target.files[0]) return;
+
+        const file = e.target.files[0];
+        setIsUploadingImagem(true);
+        try {
+            const { imageUrl, deleteUrl } = await uploadImageToImgBB(file);
+            setGaleria(prev => prev.some(item => item.imageUrl === imageUrl) ? prev : [{ id: `temp-${Date.now()}`, imageUrl, deleteUrl, createdBy: userProfile?.uid }, ...prev]);
+            setCurrentSlide(0);
+
+            await db.collection('historia_galeria').add({
+                imageUrl,
+                deleteUrl: deleteUrl || null,
+                createdBy: userProfile?.uid || null,
+                createdAt: new Date(),
+            });
+        } catch (error: any) {
+            alert(error?.message || 'Erro ao enviar imagem da galeria.');
+        } finally {
+            setIsUploadingImagem(false);
+            e.target.value = '';
+        }
+    };
+
+    const goToNextSlide = () => {
+        if (!canSlideGaleria) return;
+        setIsSlideAnimating(true);
+        setCurrentSlide(prev => prev + 1);
+    };
+
+    const goToPrevSlide = () => {
+        if (!canSlideGaleria) return;
+        setIsSlideAnimating(true);
+        setCurrentSlide(prev => prev - 1);
+    };
+
+    useEffect(() => {
+        if (!canSlideGaleria) return;
+
+        const interval = window.setInterval(() => {
+            setIsSlideAnimating(true);
+            setCurrentSlide(prev => prev + 1);
+        }, 4500);
+
+        return () => window.clearInterval(interval);
+    }, [canSlideGaleria]);
+
+    const handleDeleteGaleriaItem = async (item: GaleriaItem) => {
+        if (!isAdmin) return;
+        if (!window.confirm('Deseja excluir esta foto da galeria?')) return;
+
+        const previous = galeria;
+        setGaleria(prev => prev.filter(photo => photo.id !== item.id));
+
+        try {
+            if (item.id && !item.id.startsWith('temp-')) {
+                await db.collection('historia_galeria').doc(item.id).delete();
+            }
+
+            if (item.deleteUrl) {
+                try {
+                    await fetch(item.deleteUrl);
+                } catch {
+                    // silently ignore external delete failures
+                }
+            }
+        } catch {
+            setGaleria(previous);
+            alert('Erro ao excluir foto da galeria.');
+        }
+    };
+
     // Modo escuro: logo branca | Modo claro: logo azul-escuro
     const logoStyle = isDark
         ? { filter: 'brightness(0) invert(1)' }
@@ -53,6 +241,33 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack }) => {
     const destacados = apoiadores.filter(a => a.destaque);
     const demais = apoiadores.filter(a => !a.destaque);
     const todosParaExibir = [...destacados, ...demais];
+    const galeriaTrack = canSlideGaleria
+        ? [galeria[galeria.length - 1], ...galeria, galeria[0]]
+        : galeria;
+
+    const slideTrackIndex = canSlideGaleria ? currentSlide + 1 : 0;
+    const larguraItemPercentual = 100 / Math.max(1, Math.min(galeriaItensVisiveis, GALERIA_MAX_ITENS_VISIVEIS));
+
+    const handleSlideTransitionEnd = () => {
+        if (!canSlideGaleria) return;
+
+        if (currentSlide >= galeria.length) {
+            setIsSlideAnimating(false);
+            setCurrentSlide(0);
+            window.requestAnimationFrame(() => {
+                window.requestAnimationFrame(() => setIsSlideAnimating(true));
+            });
+            return;
+        }
+
+        if (currentSlide < 0) {
+            setIsSlideAnimating(false);
+            setCurrentSlide(galeria.length - 1);
+            window.requestAnimationFrame(() => {
+                window.requestAnimationFrame(() => setIsSlideAnimating(true));
+            });
+        }
+    };
 
     return (
         <div className="animate-fadeIn pb-16">
@@ -61,7 +276,7 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack }) => {
                 <Button variant="secondary" size="sm" onClick={onBack} className="dark:text-gray-300 dark:border-gray-600">
                     <LucideArrowLeft size={18} />
                 </Button>
-                <h2 className="text-2xl font-bold text-ancb-black dark:text-white">Apoiadores</h2>
+                <h2 className="text-2xl font-bold text-ancb-black dark:text-white">Nossa História</h2>
             </div>
 
             {/* Hero — Nossa História */}
@@ -97,6 +312,102 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack }) => {
                         uma história maior — a de transformar vidas através do esporte. E essa jornada só é 
                         possível graças ao apoio de pessoas e empresas que acreditam no nosso projeto.
                     </p>
+
+                    <div className="pt-4 mt-5 border-t border-white/10">
+                        <div className="flex items-center justify-between gap-3 mb-4">
+                            <div className="flex items-center gap-2">
+                                <LucideImages size={16} className="text-ancb-orange" />
+                                <span className="text-xs font-black text-white uppercase tracking-wider">Galeria</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button size="sm" variant="secondary" onClick={() => setShowGaleriaModal(true)} className="!text-xs !py-1.5 !px-3">
+                                    Ver tudo
+                                </Button>
+                                {isAdmin && (
+                                    <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-ancb-orange text-white text-xs font-bold cursor-pointer hover:brightness-110 transition-all">
+                                        {isUploadingImagem ? <LucideLoader2 size={13} className="animate-spin" /> : <LucideUpload size={13} />}
+                                        {isUploadingImagem ? 'Enviando...' : 'Upload'}
+                                        <input type="file" accept="image/*" onChange={handleUploadGaleria} className="hidden" disabled={isUploadingImagem} />
+                                    </label>
+                                )}
+                            </div>
+                        </div>
+
+                        {loadingGaleria ? (
+                            <div className="flex justify-center py-6">
+                                <LucideLoader2 className="animate-spin text-white/70" size={24} />
+                            </div>
+                        ) : galeria.length > 0 ? (
+                            <div className="relative rounded-xl border border-white/15 bg-black/20 p-3 md:p-4">
+                                <div className="flex items-center gap-2 md:gap-3">
+                                    {canSlideGaleria && (
+                                        <button
+                                            onClick={goToPrevSlide}
+                                            className="shrink-0 p-2 rounded-full bg-black/45 text-white hover:bg-black/65 transition-colors"
+                                            title="Miniaturas anteriores"
+                                        >
+                                            <LucideChevronLeft size={18} />
+                                        </button>
+                                    )}
+
+                                    <div className="flex-1 overflow-hidden">
+                                        <div
+                                            className={`flex ${isSlideAnimating ? 'transition-transform duration-500 ease-in-out' : ''}`}
+                                            style={{ transform: `translateX(-${slideTrackIndex * larguraItemPercentual}%)` }}
+                                            onTransitionEnd={handleSlideTransitionEnd}
+                                        >
+                                            {galeriaTrack.map((item, trackIndex) => (
+                                                <div
+                                                    key={`${item.id}-${trackIndex}`}
+                                                    className="shrink-0 box-border px-1.5 md:px-2"
+                                                    style={{ width: `${larguraItemPercentual}%` }}
+                                                >
+                                                    <div className="relative group rounded-lg overflow-hidden border border-white/20 bg-black/30 hover:border-ancb-orange transition-all">
+                                                        <button
+                                                            onClick={() => setExpandedImageUrl(item.imageUrl)}
+                                                            className="w-full block leading-none p-0 m-0 border-0 bg-transparent align-top"
+                                                            title="Clique para ampliar"
+                                                        >
+                                                            <img
+                                                                src={item.imageUrl}
+                                                                alt="Miniatura da galeria"
+                                                                className="block w-full h-32 md:h-40 lg:h-44 object-cover group-hover:scale-105 transition-transform duration-300"
+                                                            />
+                                                        </button>
+                                                        {isAdmin && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteGaleriaItem(item);
+                                                                }}
+                                                                className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/60 text-white hover:bg-red-600 transition-colors"
+                                                                title="Excluir foto"
+                                                            >
+                                                                <LucideTrash2 size={12} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {canSlideGaleria && (
+                                        <button
+                                            onClick={goToNextSlide}
+                                            className="shrink-0 p-2 rounded-full bg-black/45 text-white hover:bg-black/65 transition-colors"
+                                            title="Próximas miniaturas"
+                                        >
+                                            <LucideChevronRight size={18} />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-white/60 py-4">Nenhuma foto na galeria ainda.</p>
+                        )}
+                    </div>
+
                     <div className="flex items-center gap-4 pt-4 border-t border-white/10">
                         <div className="text-center">
                             <span className="block text-xl font-black text-white">{apoiadores.length}</span>
@@ -182,6 +493,61 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack }) => {
                     Quero Apoiar
                 </a>
             </div>
+
+            <Modal
+                isOpen={showGaleriaModal}
+                onClose={() => setShowGaleriaModal(false)}
+                title="Galeria Completa"
+                maxWidthClassName="max-w-6xl"
+            >
+                {loadingGaleria ? (
+                    <div className="flex justify-center py-10"><LucideLoader2 className="animate-spin text-ancb-blue" /></div>
+                ) : galeria.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-10">Nenhuma foto cadastrada ainda.</p>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+                        {galeria.map((item) => (
+                            <div
+                                key={item.id}
+                                className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40 hover:border-ancb-orange transition-colors text-left"
+                            >
+                                <button onClick={() => setExpandedImageUrl(item.imageUrl)} className="w-full text-left block leading-none p-0 m-0 border-0 bg-transparent align-top">
+                                    <img src={item.imageUrl} alt="Foto da galeria" className="w-full h-48 md:h-52 object-cover" />
+                                </button>
+                                {isAdmin && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteGaleriaItem(item);
+                                        }}
+                                        className="absolute top-2 right-2 p-2 rounded-full bg-black/60 text-white hover:bg-red-600 transition-colors"
+                                        title="Excluir foto"
+                                    >
+                                        <LucideTrash2 size={14} />
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </Modal>
+
+            <Modal
+                isOpen={!!expandedImageUrl}
+                onClose={() => setExpandedImageUrl(null)}
+                title="Visualizar Foto"
+                zIndex={120}
+                maxWidthClassName="max-w-7xl"
+                bodyClassName="p-2 md:p-3 flex justify-center"
+                maxHeightClassName="max-h-[96vh]"
+                scrollable={false}
+            >
+                {expandedImageUrl && (
+                    <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-transparent flex justify-center">
+                        <img src={expandedImageUrl} alt="Foto ampliada" className="max-w-full max-h-[calc(96vh-7.5rem)] h-auto w-auto object-contain" />
+                    </div>
+                )}
+            </Modal>
 
         </div>
     );

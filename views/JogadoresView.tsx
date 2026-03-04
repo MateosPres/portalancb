@@ -6,6 +6,7 @@ import { PlayerCard } from '../components/PlayerCard';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { RadarChart } from '../components/RadarChart'; 
+import { ImageCropperModal } from '../components/ImageCropperModal';
 import { 
     CalendarDays as LucideCalendarDays, 
     AlertCircle as LucideAlertCircle, 
@@ -29,9 +30,12 @@ import {
     LucideMapPin,
     LucideGrid,
     LucideEdit2,
-    LucideTrash2
+    LucideTrash2,
+    LucideCamera
 } from 'lucide-react';
 import { deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { formatCpf, formatPhoneForDisplay, normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
+import imageCompression from 'browser-image-compression';
 
 interface JogadoresViewProps {
     onBack: () => void;
@@ -126,7 +130,11 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const [showAllBadges, setShowAllBadges] = useState(false); // For modal gallery
 
     const [isEditing, setIsEditing] = useState(false);
+    const [showPlayerDataModal, setShowPlayerDataModal] = useState(false);
     const [editFormData, setEditFormData] = useState<Partial<Player>>({});
+    const [isPhotoUploading, setIsPhotoUploading] = useState(false);
+    const [showCropper, setShowCropper] = useState(false);
+    const [imageToCrop, setImageToCrop] = useState<string | null>(null);
 
     const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
     const isSuperAdmin = userProfile?.role === 'super-admin';
@@ -380,6 +388,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const handlePlayerClick = (player: Player) => {
         setSelectedPlayer(player);
         setIsEditing(false);
+        setShowPlayerDataModal(false);
         setEditFormData({});
         window.scrollTo(0, 0); 
     };
@@ -388,9 +397,9 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         if (!selectedPlayer) return;
         setEditFormData({
             nascimento: selectedPlayer.nascimento,
-            cpf: selectedPlayer.cpf,
+            cpf: formatCpf(selectedPlayer.cpf),
             emailContato: selectedPlayer.emailContato,
-            telefone: selectedPlayer.telefone
+            telefone: formatPhoneForDisplay(selectedPlayer.telefone)
         });
         setIsEditing(true);
     };
@@ -403,14 +412,73 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const handleSavePlayer = async () => {
         if (!selectedPlayer) return;
         try {
-            await db.collection("jogadores").doc(selectedPlayer.id).update(editFormData);
-            const updatedPlayer = { ...selectedPlayer, ...editFormData };
+            const normalizedData = {
+                ...editFormData,
+                cpf: normalizeCpfForStorage(editFormData.cpf || ''),
+                telefone: normalizePhoneForStorage(editFormData.telefone || ''),
+            };
+
+            await db.collection("jogadores").doc(selectedPlayer.id).update(normalizedData);
+            const updatedPlayer = { ...selectedPlayer, ...normalizedData };
             setPlayers(prev => prev.map(p => p.id === updatedPlayer.id ? updatedPlayer : p));
             setSelectedPlayer(updatedPlayer);
             setIsEditing(false);
         } catch (error) {
             console.error("Error updating player:", error);
             alert("Erro ao atualizar dados.");
+        }
+    };
+
+    const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (error) => reject(error);
+    });
+
+    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!isAdmin || !selectedPlayer) return;
+        if (!e.target.files || e.target.files.length === 0) return;
+
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.addEventListener('load', () => {
+            setImageToCrop(reader.result as string);
+            setShowCropper(true);
+        });
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
+
+    const handleCropComplete = async (croppedImageBlob: Blob) => {
+        if (!selectedPlayer || !isAdmin) return;
+
+        setIsPhotoUploading(true);
+        try {
+            const file = new File([croppedImageBlob], 'player_photo.jpg', { type: 'image/jpeg' });
+            const compressedFile = await imageCompression(file, {
+                maxSizeMB: 0.06,
+                maxWidthOrHeight: 420,
+                useWebWorker: true,
+                fileType: 'image/jpeg',
+                initialQuality: 0.5,
+            });
+
+            const base64String = await fileToBase64(compressedFile);
+            await db.collection('jogadores').doc(selectedPlayer.id).set({ foto: base64String }, { merge: true });
+
+            if (selectedPlayer.userId) {
+                await db.collection('usuarios').doc(selectedPlayer.userId).set({ foto: base64String }, { merge: true });
+            }
+
+            alert('Foto do atleta atualizada com sucesso.');
+        } catch (error) {
+            console.error('Error updating player photo:', error);
+            alert('Erro ao atualizar foto do atleta.');
+        } finally {
+            setIsPhotoUploading(false);
+            setShowCropper(false);
+            setImageToCrop(null);
         }
     };
 
@@ -519,6 +587,12 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                             <div className="w-24 h-24 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
                                                 {selectedPlayer.foto ? <img src={selectedPlayer.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-3xl font-bold text-white/50">{selectedPlayer.nome.charAt(0)}</span>}
                                             </div>
+                                            {isAdmin && (
+                                                <label className="absolute top-0 right-0 bg-white/10 text-white p-1.5 rounded-full shadow-lg cursor-pointer hover:bg-white/20 transition-colors backdrop-blur-sm">
+                                                    {isPhotoUploading ? <LucideLoader2 className="animate-spin" size={12} /> : <LucideCamera size={12} />}
+                                                    <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} disabled={isPhotoUploading} />
+                                                </label>
+                                            )}
                                             <div className="absolute bottom-1 right-0 bg-ancb-orange text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md border border-white/20">
                                                 #{selectedPlayer.numero_uniforme}
                                             </div>
@@ -547,6 +621,12 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                         <div className="w-28 h-28 md:w-32 md:h-32 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
                                             {selectedPlayer.foto ? <img src={selectedPlayer.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-white/50">{selectedPlayer.nome.charAt(0)}</span>}
                                         </div>
+                                        {isAdmin && (
+                                            <label className="absolute top-0 right-0 bg-white/10 text-white p-2 rounded-full shadow-lg cursor-pointer hover:bg-white/20 transition-colors backdrop-blur-sm">
+                                                {isPhotoUploading ? <LucideLoader2 className="animate-spin" size={14} /> : <LucideCamera size={14} />}
+                                                <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} disabled={isPhotoUploading} />
+                                            </label>
+                                        )}
                                         <div className="absolute bottom-1 right-0 bg-ancb-orange text-white text-sm md:text-base font-bold px-3 py-1 rounded-lg shadow-md border border-white/20">
                                             #{selectedPlayer.numero_uniforme}
                                         </div>
@@ -565,12 +645,19 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
 
                                 {/* ADMIN EDIT BUTTONS */}
                                 {isAdmin && (
-                                    <div className="flex gap-2 mt-2 md:mt-3 mb-6">
+                                    <div className="flex flex-wrap gap-2 mt-2 md:mt-3 mb-5">
                                         <button 
                                             onClick={handleStartEdit}
                                             className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition-colors text-xs font-bold uppercase tracking-wider text-white"
                                         >
                                             <LucideEdit2 size={14} /> Editar
+                                        </button>
+                                        <button 
+                                            onClick={() => setShowPlayerDataModal(true)}
+                                            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition-colors text-xs font-bold uppercase tracking-wider text-white"
+                                            title="Visualizar dados completos do atleta"
+                                        >
+                                            <LucideInfo size={14} /> Ver dados
                                         </button>
                                         <button 
                                             onClick={handleDeletePlayer}
@@ -582,14 +669,16 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                     </div>
                                 )}
 
-                                <div className="grid grid-cols-2 gap-4 w-full max-w-[240px] mx-auto md:mx-0">
-                                    <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
+                                <div className="w-full max-w-[320px] mx-auto md:mx-0 mt-6 pt-4 border-t border-white/10">
+                                    <div className="grid grid-cols-2 gap-3 md:gap-4">
+                                    <div className="bg-[#092b5e] rounded-xl p-3 md:p-4 text-center border border-white/5 shadow-inner">
                                         <span className="block text-2xl font-bold text-white">{selectedPlayer.nascimento ? calculateAge(selectedPlayer.nascimento) : '-'}</span>
                                         <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Idade</span>
                                     </div>
-                                    <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
+                                    <div className="bg-[#092b5e] rounded-xl p-3 md:p-4 text-center border border-white/5 shadow-inner">
                                         <span className="block text-2xl font-bold text-white">{matches.length}</span>
                                         <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
+                                    </div>
                                     </div>
                                 </div>
                             </div>
@@ -686,10 +775,30 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                         <Modal isOpen={isEditing} onClose={handleCancelEdit} title="Editar Dados Administrativos">
                             <div className="space-y-4">
                                 <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Data Nascimento</label><input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.nascimento || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, nascimento: e.target.value})} /></div>
-                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.cpf || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, cpf: e.target.value})} /></div>
+                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.cpf || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, cpf: formatCpf(e.target.value)})} /></div>
                                 <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Email Contato</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.emailContato || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, emailContato: e.target.value})} /></div>
-                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">WhatsApp (Sem formato)</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="5566999999999" value={editFormData.telefone || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, telefone: e.target.value})} /></div>
+                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">WhatsApp</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="(66) 999999999" value={editFormData.telefone || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, telefone: formatPhoneForDisplay(e.target.value)})} /></div>
                                 <div className="flex gap-2 mt-4"><Button className="flex-1" onClick={handleSavePlayer}><LucideSave size={14} /> Salvar</Button><Button variant="secondary" className="flex-1" onClick={handleCancelEdit}><LucideX size={14} /> Cancelar</Button></div>
+                            </div>
+                        </Modal>
+                    )}
+
+                    {isAdmin && (
+                        <Modal isOpen={showPlayerDataModal} onClose={() => setShowPlayerDataModal(false)} title="Dados completos do atleta">
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Nome</p><p className="text-sm font-semibold text-gray-900 dark:text-white break-words">{selectedPlayer.nome || '-'}</p></div>
+                                    <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Apelido</p><p className="text-sm font-semibold text-gray-900 dark:text-white break-words">{selectedPlayer.apelido || '-'}</p></div>
+                                    <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Idade</p><p className="text-sm font-semibold text-gray-900 dark:text-white">{selectedPlayer.nascimento ? `${calculateAge(selectedPlayer.nascimento)} anos` : '-'}</p></div>
+                                    <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Nascimento</p><p className="text-sm font-semibold text-gray-900 dark:text-white">{selectedPlayer.nascimento ? formatDate(selectedPlayer.nascimento) : '-'}</p></div>
+                                    <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Documento (CPF)</p><p className="text-sm font-semibold text-gray-900 dark:text-white break-words">{selectedPlayer.cpf ? formatCpf(selectedPlayer.cpf) : '-'}</p></div>
+                                    <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Telefone</p><p className="text-sm font-semibold text-gray-900 dark:text-white break-words">{selectedPlayer.telefone ? formatPhoneForDisplay(selectedPlayer.telefone) : '-'}</p></div>
+                                    <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Email de contato</p><p className="text-sm font-semibold text-gray-900 dark:text-white break-words">{selectedPlayer.emailContato || '-'}</p></div>
+                                    <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">ID do usuário vinculado</p><p className="text-sm font-semibold text-gray-900 dark:text-white break-all">{selectedPlayer.userId || '-'}</p></div>
+                                    <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Posição</p><p className="text-sm font-semibold text-gray-900 dark:text-white">{normalizePosition(selectedPlayer.posicao) || '-'}</p></div>
+                                    <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Nº Uniforme</p><p className="text-sm font-semibold text-gray-900 dark:text-white">{selectedPlayer.numero_uniforme ?? '-'}</p></div>
+                                </div>
+
                             </div>
                         </Modal>
                     )}
@@ -732,6 +841,16 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                         </div>
                     </div>
                 </Modal>
+
+                {showCropper && imageToCrop && (
+                    <ImageCropperModal
+                        isOpen={showCropper}
+                        onClose={() => { setShowCropper(false); setImageToCrop(null); }}
+                        imageSrc={imageToCrop}
+                        onCropComplete={handleCropComplete}
+                        aspect={1}
+                    />
+                )}
             </div>
         );
     }

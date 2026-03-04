@@ -23,6 +23,7 @@ import { ApoiadoresView } from './views/ApoiadoresView';
 import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare, LucideUserPlus, LucideRefreshCw, LucideBellRing, LucideSettings } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { Header } from './components/Header';
+import { formatCpf, formatPhoneForDisplay, normalizeCpfForStorage, normalizePhoneForStorage } from './utils/contactFormat';
 
 // Chave VAPID fornecida para autenticação do Push Notification
 const VAPID_KEY = "BI9T9nLXUjdJHqOSZEoORZ7UDyWQoIMcrQ5Oz-7KeKif19LoGx_Db5AdY4zi0yXT5zTdvZRbJy6nF65Dv-8ncKk"; 
@@ -55,6 +56,7 @@ const App: React.FC = () => {
     const [regEmail, setRegEmail] = useState('');
     const [regPhone, setRegPhone] = useState('');
     const [regPassword, setRegPassword] = useState('');
+    const [regPasswordConfirm, setRegPasswordConfirm] = useState('');
     const [regCpf, setRegCpf] = useState('');
     const [regBirthDate, setRegBirthDate] = useState('');
     const [regJerseyNumber, setRegJerseyNumber] = useState('');
@@ -417,7 +419,6 @@ const App: React.FC = () => {
         return () => unsubscribe();
     }, []);
 
-
     const handleOpenReviewQuiz = async (gameId: string, eventId: string, notificationId?: string) => {
         try {
             const playersSnap = await db.collection("jogadores").get();
@@ -582,6 +583,10 @@ const App: React.FC = () => {
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (regPassword !== regPasswordConfirm) {
+            alert("A confirmação de senha não confere.");
+            return;
+        }
         if (regPassword.length < 6) {
             alert("A senha deve ter pelo menos 6 caracteres.");
             return;
@@ -591,24 +596,31 @@ const App: React.FC = () => {
             return;
         }
 
+        const normalizedPhone = normalizePhoneForStorage(regPhone);
+        if (!normalizedPhone) {
+            alert('Informe um WhatsApp válido com DDD. Ex: (66) 999999999');
+            return;
+        }
+
         setIsRegistering(true);
         try {
             const userCredential = await auth.createUserWithEmailAndPassword(regEmail, regPassword);
             const user = userCredential.user;
 
             if (user) {
-                const cleanPhone = regPhone.replace(/\D/g, ''); 
-                const formattedPhone = `+55${cleanPhone}`;
+                const formattedPhone = normalizedPhone;
+                const formattedCpf = normalizeCpfForStorage(regCpf);
 
                 await db.collection("usuarios").doc(user.uid).set({
                     nome: regName,
                     apelido: regNickname,
                     email: regEmail,
+                    emailContato: regEmail,
                     role: 'jogador',
                     status: 'pending',
                     dataNascimento: regBirthDate,
                     whatsapp: formattedPhone,
-                    cpf: regCpf,
+                    cpf: formattedCpf,
                     posicaoPreferida: regPosition,
                     numeroPreferido: regJerseyNumber,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -617,6 +629,7 @@ const App: React.FC = () => {
                 alert("Conta criada com sucesso! Aguarde a aprovação do administrador.");
                 setShowRegister(false);
                 setRegName(''); setRegNickname(''); setRegEmail(''); setRegPhone(''); setRegPassword(''); 
+                setRegPasswordConfirm('');
                 setRegCpf(''); setRegBirthDate(''); setRegJerseyNumber('');
             }
         } catch (error: any) {
@@ -730,13 +743,18 @@ const App: React.FC = () => {
             case 'public-game': return selectedPublicGame ? <PublicGameView game={selectedPublicGame.game} eventId={selectedPublicGame.eventId} onBack={() => setCurrentView('home')} /> : <div>Jogo não encontrado</div>;
             case 'profile': return userProfile ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} onOpenReview={handleOpenReviewQuiz} onOpenEvent={handleOpenEventDetail} /> : null;
             case 'team-manager': return teamManagerEventId ? <TeamManagerView eventId={teamManagerEventId} teamId={teamManagerTeamId} onBack={() => { setCurrentView('evento-detalhe'); }} userProfile={userProfile} /> : null;
-            case 'apoiadores': return <ApoiadoresView onBack={() => setCurrentView('home')} />;
+            case 'apoiadores': return <ApoiadoresView onBack={() => setCurrentView('home')} userProfile={userProfile} />;
             default: return <div>404</div>;
         }
     };
 
     // LÓGICA DO HEADER
     const handleLogin = () => setShowLogin(true);
+    const handleOpenRegister = () => {
+        setShowLogin(false);
+        setShowRegister(true);
+        setAuthError('');
+    };
     const handleLogout = () => auth.signOut();
     
     const handleToggleTheme = () => {
@@ -748,6 +766,7 @@ const App: React.FC = () => {
 
     const handleProfileClick = () => setCurrentView('profile');
     const handleAdminClick = () => setCurrentView('admin');
+    const handleNossaHistoriaClick = () => setCurrentView('apoiadores');
     const handleHomeClick = () => {
         setCurrentView('home');
         setReturnToEventId(null);
@@ -788,10 +807,12 @@ const App: React.FC = () => {
                 isDarkMode={isDarkMode}
                 onToggleTheme={handleToggleTheme}
                 onLogin={handleLogin} 
+                onRegister={handleOpenRegister}
                 onLogout={handleLogout}
                 onProfileClick={handleProfileClick}
                 onAdminClick={handleAdminClick}
                 onHomeClick={handleHomeClick}
+                onNossaHistoriaClick={handleNossaHistoriaClick}
                 notifications={notifications}
                 onNotificationsClick={() => setShowNotificationsView(true)}
             />
@@ -892,6 +913,13 @@ const App: React.FC = () => {
                     <input type="password" required placeholder="Senha" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={authPassword} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAuthPassword(e.target.value)} />
                     {authError && <p className="text-red-500 text-xs">{authError}</p>}
                     <Button type="submit" className="w-full">Entrar</Button>
+                    <button
+                        type="button"
+                        onClick={handleOpenRegister}
+                        className="w-full text-sm font-semibold text-ancb-orange hover:text-orange-400 transition-colors"
+                    >
+                        Não tem conta? Registrar
+                    </button>
                 </form>
             </Modal>
 
@@ -901,15 +929,15 @@ const App: React.FC = () => {
                     <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Apelido (Para o Ranking)</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regNickname} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegNickname(e.target.value)} required /></div>
                     <div className="grid grid-cols-2 gap-4">
                         <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nascimento</label><input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regBirthDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegBirthDate(e.target.value)} required /></div>
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regCpf} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegCpf(e.target.value)} placeholder="000.000.000-00" required /></div>
+                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regCpf} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegCpf(formatCpf(e.target.value))} placeholder="000.000.000-00" required /></div>
                     </div>
                     <div>
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400">WhatsApp</label>
                         <div className="flex items-center border rounded overflow-hidden dark:border-gray-600">
                             <span className="bg-gray-200 dark:bg-gray-600 px-3 py-2 text-gray-600 dark:text-gray-300 border-r dark:border-gray-500 text-sm font-bold">+55</span>
-                            <input type="tel" className="flex-1 p-2 outline-none dark:bg-gray-700 dark:text-white" placeholder="DDD + Número (Ex: 65999999999)" value={regPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPhone(e.target.value)} required />
+                            <input type="tel" className="flex-1 p-2 outline-none dark:bg-gray-700 dark:text-white" placeholder="(66) 999999999" value={regPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPhone(formatPhoneForDisplay(e.target.value))} required />
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1">Insira apenas números com DDD.</p>
+                        <p className="text-[10px] text-gray-400 mt-1">No banco será salvo como +5566999999999.</p>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Número</label><input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regJerseyNumber} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegJerseyNumber(e.target.value)} /></div>
@@ -919,6 +947,7 @@ const App: React.FC = () => {
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Dados de Login</label>
                         <input type="email" className="w-full p-2 border rounded mt-1 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Email" value={regEmail} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegEmail(e.target.value)} required />
                         <input type="password" className="w-full p-2 border rounded mt-2 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Senha (Min 6 caracteres)" value={regPassword} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPassword(e.target.value)} required />
+                        <input type="password" className="w-full p-2 border rounded mt-2 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Confirmar senha" value={regPasswordConfirm} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPasswordConfirm(e.target.value)} required />
                     </div>
                     <Button type="submit" className="w-full mt-4" disabled={isRegistering}>
                         {isRegistering ? <LucideLoader2 className="animate-spin" /> : "Criar Conta"}

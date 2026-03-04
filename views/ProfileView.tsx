@@ -9,6 +9,7 @@ import { LucideArrowLeft, LucideCamera, LucideLink, LucideSearch, LucideLoader2,
 import imageCompression from 'browser-image-compression';
 import { RadarChart } from '../components/RadarChart';
 import { ImageCropperModal } from '../components/ImageCropperModal';
+import { normalizePhoneForStorage } from '../utils/contactFormat';
 
 interface ProfileViewProps {
     userProfile: UserProfile;
@@ -118,7 +119,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const [showAllBadges, setShowAllBadges] = useState(false);
 
     const [isUploading, setIsUploading] = useState(false);
-    const [pendingPhotoRequest, setPendingPhotoRequest] = useState(false);
     const [showClaimSection, setShowClaimSection] = useState(false);
     const [claimSearch, setClaimSearch] = useState('');
     const [foundPlayers, setFoundPlayers] = useState<Player[]>([]);
@@ -164,12 +164,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                         else if (!userProfile.linkedPlayerId) setShowClaimSection(true);
                     }
                 } catch (claimErr) {}
-
-                try {
-                    const qPhoto = query(collection(db, "solicitacoes_foto"), where("userId", "==", userProfile.uid), where("status", "==", "pending"));
-                    const photoSnap = await getDocs(qPhoto);
-                    if (isMounted && !photoSnap.empty) setPendingPhotoRequest(true);
-                } catch (e) {}
 
             } catch (error) {
                 if (isMounted) setLoading(false);
@@ -306,6 +300,22 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     // ... (Keep existing helpers: useEffect search, fileToBase64, handlePhotoUpload, handleSave, handleTogglePin, handleClaim, formatDate, normalizePosition, calculateAge, etc.) ...
     useEffect(() => { if (!claimSearch || claimSearch.length < 3) { setFoundPlayers([]); return; } const search = async () => { try { const q = query(collection(db, "jogadores"), orderBy("nome")); const snap = await getDocs(q); const matches = snap.docs.map(d => ({id: d.id, ...(d.data() as any)} as Player)).filter(p => { const pName = p.nome ? p.nome.toLowerCase() : ''; const pNick = p.apelido ? p.apelido.toLowerCase() : ''; return (pName.includes(claimSearch.toLowerCase()) || pNick.includes(claimSearch.toLowerCase())) && !p.userId && p.id !== userProfile.uid; }); setFoundPlayers(matches); } catch (err) {} }; const timer = setTimeout(search, 500); return () => clearTimeout(timer); }, [claimSearch, userProfile.uid]);
     const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
+    const getPhoneParts = (value?: string) => {
+        const normalized = normalizePhoneForStorage(value || '');
+        if (normalized) {
+            const local = normalized.replace('+55', '');
+            return { ddd: local.slice(0, 2), number: local.slice(2) };
+        }
+
+        const digits = (value || '').replace(/\D/g, '');
+        if (digits.startsWith('55') && digits.length >= 12) {
+            return { ddd: digits.slice(2, 4), number: digits.slice(4, 13) };
+        }
+        if (digits.length >= 10) {
+            return { ddd: digits.slice(0, 2), number: digits.slice(2, 11) };
+        }
+        return { ddd: '', number: digits.slice(0, 9) };
+    };
     
     const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -334,18 +344,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
             const compressedFile = await imageCompression(file, options);
             const base64String = await fileToBase64(compressedFile);
             
-            await addDoc(collection(db, "solicitacoes_foto"), { 
-                userId: userProfile.uid,
-                playerId: playerDocId, 
-                playerName: formData.nome || 'Desconhecido', 
-                newPhotoUrl: base64String, 
-                currentPhotoUrl: formData.foto || null, 
-                status: 'pending', 
-                timestamp: serverTimestamp() 
-            });
-            
-            setPendingPhotoRequest(true);
-            alert("Foto enviada para análise.");
+            await setDoc(doc(db, 'jogadores', playerDocId), { foto: base64String }, { merge: true });
+            await setDoc(doc(db, 'usuarios', userProfile.uid), { foto: base64String }, { merge: true });
+            setFormData((prev) => ({ ...prev, foto: base64String }));
+            alert("Foto de perfil atualizada!");
         } catch (error) {
             console.error(error);
             alert("Erro ao processar imagem.");
@@ -359,17 +361,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const handleOpenEditModal = () => {
         // Pré-popula os campos de telefone ao abrir o modal
         const tel = formData.telefone || '';
-        // Formato esperado: 5511999999999 → ddd=11, number=999999999
-        if (tel.startsWith('55') && tel.length >= 12) {
-            setPhoneDdd(tel.slice(2, 4));
-            setPhoneNumber(tel.slice(4));
-        } else if (tel.length >= 10) {
-            setPhoneDdd(tel.slice(0, 2));
-            setPhoneNumber(tel.slice(2));
-        } else {
-            setPhoneDdd('');
-            setPhoneNumber(tel);
-        }
+        const { ddd, number } = getPhoneParts(tel);
+        setPhoneDdd(ddd);
+        setPhoneNumber(number);
         setNewPassword('');
         setConfirmPassword('');
         setShowPasswordFields(false);
@@ -392,8 +386,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         }
 
         try {
-            // Monta telefone completo: +55 (DD fixo) + DDD + número
-            const fullPhone = phoneDdd && phoneNumber ? `55${phoneDdd}${phoneNumber.replace(/\D/g, '')}` : formData.telefone || '';
+            // Monta telefone completo no banco: +55 + DDD + número
+            const fullPhone = phoneDdd && phoneNumber
+                ? normalizePhoneForStorage(`${phoneDdd}${phoneNumber}`)
+                : normalizePhoneForStorage(formData.telefone || '');
+
+            if ((phoneDdd || phoneNumber) && !fullPhone) {
+                alert('WhatsApp inválido. Use DDD + número.');
+                return;
+            }
+
             const dataToSave = { ...formData, telefone: fullPhone };
             if (!dataToSave.id) dataToSave.id = playerDocId;
             await setDoc(doc(db, 'jogadores', playerDocId), dataToSave, { merge: true });
@@ -734,7 +736,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                         </div>
                         <p className="text-[10px] text-gray-400 mt-1.5">
                             Número completo: <span className="font-mono font-bold text-gray-500 dark:text-gray-300">
-                                {phoneDdd && phoneNumber ? `+55 (${phoneDdd}) ${phoneNumber}` : '—'}
+                                {phoneDdd && phoneNumber ? `(${phoneDdd}) ${phoneNumber}` : '—'}
                             </span>
                         </p>
                     </div>

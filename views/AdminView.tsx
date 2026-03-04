@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import firebase, { db, auth, functions } from '../services/firebase';
-import { Evento, Jogo, FeedPost, ClaimRequest, PhotoRequest, Player, Time, Cesta, UserProfile, Badge } from '../types';
+import { Evento, Jogo, FeedPost, ClaimRequest, Player, Time, Cesta, UserProfile, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideRadio, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing, LucideBellOff, LucideSend, LucideKeyRound, LucideCrown, LucideShield, LucideSiren, LucideDatabase, LucideHistory, LucideSave, LucideArrowRight, LucideZap, LucideEdit2, LucideHeart, LucideArrowUp, LucideArrowDown, LucideGripVertical } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { ApoiadoresManager } from '../components/ApoiadoresManager';
 import { LiveStreamAdmin } from '../components/LiveStreamAdmin';
+import { normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
 
 const REVIEW_TAG_MULTIPLIERS: Record<number, number> = { 1: 1.0, 2: 0.75, 3: 0.55 };
 const REVIEW_TAG_IMPACTS: Record<string, Partial<Record<'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao', number>>> = {
@@ -71,6 +72,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [showUserEditModal, setShowUserEditModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
     const [linkPlayerId, setLinkPlayerId] = useState('');
+    const [userPhotoPreview, setUserPhotoPreview] = useState<string>('');
+    const [isSavingUserPhoto, setIsSavingUserPhoto] = useState(false);
 
     // --- APOIADORES STATE ---
     const [apoiadores, setApoiadores] = useState<any[]>([]);
@@ -431,9 +434,60 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             return false;
         });
     };
-    const handleApproveUser = async (user: UserProfile) => { if (!window.confirm(`Aprovar ${user.nome}?`)) return; try { const batch = db.batch(); const newPlayerRef = db.collection("jogadores").doc(); const playerData: any = { nome: user.nome, apelido: user.apelido || '', posicao: (user as any).posicaoPreferida || 'Ala (3)', numero_uniforme: (user as any).numeroPreferido || 0, telefone: (user as any).whatsapp || '', nascimento: (user as any).dataNascimento || '', cpf: (user as any).cpf || '', emailContato: user.email, userId: user.uid, status: 'active' }; batch.set(newPlayerRef, playerData); const userRef = db.collection("usuarios").doc(user.uid); batch.update(userRef, { status: 'active', linkedPlayerId: newPlayerRef.id }); await batch.commit(); alert("Usuário aprovado e perfil criado!"); } catch (error) { alert("Erro."); } };
-    const handleAutoLinkUser = async (user: UserProfile, targetPlayerId: string) => { if (!window.confirm(`Vincular?`)) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(user.uid); const playerRef = db.collection("jogadores").doc(targetPlayerId); batch.update(userRef, { linkedPlayerId: targetPlayerId, status: 'active' }); batch.update(playerRef, { userId: user.uid, status: 'active' }); await batch.commit(); alert("Vinculado!"); } catch (error) { alert("Erro."); } };
-    const handleLinkPlayerToUser = async () => { if (!selectedUser || !linkPlayerId) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(selectedUser.uid); const playerRef = db.collection("jogadores").doc(linkPlayerId); batch.update(userRef, { linkedPlayerId: linkPlayerId, status: 'active' }); batch.update(playerRef, { userId: selectedUser.uid, status: 'active' }); await batch.commit(); setShowUserEditModal(false); alert("Vínculo realizado!"); } catch (error) { alert("Erro."); } };
+    const handleApproveUser = async (user: UserProfile) => { if (!window.confirm(`Aprovar ${user.nome}?`)) return; try { const batch = db.batch(); const newPlayerRef = db.collection("jogadores").doc(); const contactEmail = (user as any).emailContato || user.email || ''; const playerData: any = { nome: user.nome, apelido: user.apelido || '', posicao: (user as any).posicaoPreferida || 'Ala (3)', numero_uniforme: (user as any).numeroPreferido || 0, telefone: normalizePhoneForStorage((user as any).whatsapp || (user as any).telefone || ''), nascimento: (user as any).dataNascimento || '', cpf: normalizeCpfForStorage((user as any).cpf || ''), emailContato: contactEmail, userId: user.uid, status: 'active' }; batch.set(newPlayerRef, playerData); const userRef = db.collection("usuarios").doc(user.uid); batch.update(userRef, { status: 'active', linkedPlayerId: newPlayerRef.id, emailContato: contactEmail }); await batch.commit(); alert("Usuário aprovado e perfil criado!"); } catch (error) { alert("Erro."); } };
+    const handleAutoLinkUser = async (user: UserProfile, targetPlayerId: string) => { if (!window.confirm(`Vincular?`)) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(user.uid); const playerRef = db.collection("jogadores").doc(targetPlayerId); const contactEmail = (user as any).emailContato || user.email || ''; batch.update(userRef, { linkedPlayerId: targetPlayerId, status: 'active', emailContato: contactEmail }); batch.update(playerRef, { userId: user.uid, status: 'active', emailContato: contactEmail }); await batch.commit(); alert("Vinculado!"); } catch (error) { alert("Erro."); } };
+    const handleLinkPlayerToUser = async () => { if (!selectedUser || !linkPlayerId) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(selectedUser.uid); const playerRef = db.collection("jogadores").doc(linkPlayerId); const contactEmail = (selectedUser as any).emailContato || selectedUser.email || ''; batch.update(userRef, { linkedPlayerId: linkPlayerId, status: 'active', emailContato: contactEmail }); batch.update(playerRef, { userId: selectedUser.uid, status: 'active', emailContato: contactEmail }); await batch.commit(); setShowUserEditModal(false); alert("Vínculo realizado!"); } catch (error) { alert("Erro."); } };
+    const handleUserPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!selectedUser) return;
+        if (!e.target.files || !e.target.files[0]) return;
+
+        setIsSavingUserPhoto(true);
+        try {
+            const compressed = await compressImage(e.target.files[0]);
+            const photoBase64 = await fileToBase64(compressed);
+
+            const userRef = db.collection("usuarios").doc(selectedUser.uid);
+            await userRef.set({ foto: photoBase64 }, { merge: true });
+
+            const linkedPlayerId = selectedUser.linkedPlayerId;
+            if (linkedPlayerId) {
+                await db.collection("jogadores").doc(linkedPlayerId).set({ foto: photoBase64 }, { merge: true });
+            }
+
+            setUserPhotoPreview(photoBase64);
+            setSelectedUser({ ...selectedUser, foto: photoBase64 });
+            alert('Foto do usuário atualizada.');
+        } catch (error) {
+            alert('Erro ao atualizar foto do usuário.');
+        } finally {
+            setIsSavingUserPhoto(false);
+            e.target.value = '';
+        }
+    };
+
+    const handleRemoveUserPhoto = async () => {
+        if (!selectedUser) return;
+        if (!window.confirm(`Remover foto de ${selectedUser.nome}?`)) return;
+
+        setIsSavingUserPhoto(true);
+        try {
+            const userRef = db.collection("usuarios").doc(selectedUser.uid);
+            await userRef.set({ foto: null }, { merge: true });
+
+            const linkedPlayerId = selectedUser.linkedPlayerId;
+            if (linkedPlayerId) {
+                await db.collection("jogadores").doc(linkedPlayerId).set({ foto: '' }, { merge: true });
+            }
+
+            setUserPhotoPreview('');
+            setSelectedUser({ ...selectedUser, foto: null });
+            alert('Foto do usuário removida.');
+        } catch (error) {
+            alert('Erro ao remover foto do usuário.');
+        } finally {
+            setIsSavingUserPhoto(false);
+        }
+    };
     const handleDeleteUser = async (user: UserProfile) => { if (!window.confirm(`Excluir usuário ${user.nome}?`)) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(user.uid); batch.delete(userRef); if (user.linkedPlayerId) { const playerRef = db.collection("jogadores").doc(user.linkedPlayerId); const playerSnap = await playerRef.get(); if (playerSnap.exists) { batch.update(playerRef, { userId: null }); } } await batch.commit(); alert("Usuário excluído."); } catch (error) { alert("Erro."); } };
     
     const handleDeleteEvent = async (id: string) => { if (!window.confirm("Excluir evento e dados?")) return; try { const gamesSnap = await db.collection("eventos").doc(id).collection("jogos").get(); for (const gameDoc of gamesSnap.docs) { const cestasSnap = await gameDoc.ref.collection("cestas").get(); const deleteCestasPromises = cestasSnap.docs.map(c => c.ref.delete()); await Promise.all(deleteCestasPromises); await gameDoc.ref.delete(); } await db.collection("eventos").doc(id).delete(); alert("Limpo."); } catch (error) { alert("Erro."); } };
@@ -828,7 +882,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                                     )}
                                                     <Button size="sm" variant="secondary" onClick={() => handleResetPassword(user)} className="!py-1 !px-2 text-xs !border-orange-500 !text-orange-600 hover:!bg-orange-50" title="Resetar Senha"><LucideKeyRound size={14} /></Button>
                                                     {user.status !== 'active' && !user.linkedPlayerId && (suggestedPlayer ? <Button size="sm" onClick={() => handleAutoLinkUser(user, suggestedPlayer.id)} className="!py-1 !px-2 !bg-orange-500 hover:!bg-orange-600 text-xs" title={`Vincular a ${suggestedPlayer.nome}`}><LucideLink size={14} /> Vincular</Button> : <Button size="sm" onClick={() => handleApproveUser(user)} className="!py-1 !px-2 !bg-green-600 hover:!bg-green-700 text-xs" title="Aprovar e Criar Atleta"><LucideUserPlus size={14} /> Criar Atleta</Button>)}
-                                                    <Button size="sm" variant="secondary" onClick={() => { setSelectedUser(user); setShowUserEditModal(true); }} className="!py-1 !px-2 text-xs"><LucideEdit size={14} /></Button>
+                                                    <Button size="sm" variant="secondary" onClick={() => { setSelectedUser(user); setLinkPlayerId(user.linkedPlayerId || ''); setUserPhotoPreview((user as any).foto || ''); setShowUserEditModal(true); }} className="!py-1 !px-2 text-xs"><LucideEdit size={14} /></Button>
                                                     <button onClick={() => handleDeleteUser(user)} className="p-1.5 rounded bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50" title="Excluir Usuário"><LucideTrash2 size={14} /></button>
                                                 </td>
                                             </tr>
@@ -1389,6 +1443,30 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
 
             <Modal isOpen={showUserEditModal} onClose={() => setShowUserEditModal(false)} title="Editar Usuário">
                 <div className="space-y-4">
+                    <div className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-800/60 dark:border-gray-700">
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">Foto de perfil de <strong>{selectedUser?.nome}</strong></p>
+                        <div className="flex items-center gap-4">
+                            <div className="w-16 h-16 rounded-full overflow-hidden border border-gray-300 dark:border-gray-600 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                                {userPhotoPreview ? <img src={userPhotoPreview} alt="Foto do usuário" className="w-full h-full object-cover" /> : <LucideUserCheck size={22} className="text-gray-400" />}
+                            </div>
+                            <div className="flex gap-2">
+                                <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-ancb-blue text-white text-xs font-bold cursor-pointer hover:bg-blue-700 transition-colors">
+                                    <LucideUpload size={14} /> {isSavingUserPhoto ? 'Salvando...' : 'Trocar Foto'}
+                                    <input type="file" accept="image/*" className="hidden" onChange={handleUserPhotoSelect} disabled={isSavingUserPhoto} />
+                                </label>
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={handleRemoveUserPhoto}
+                                    className="!text-red-600 !border-red-200"
+                                    disabled={isSavingUserPhoto}
+                                >
+                                    <LucideTrash2 size={14} /> Remover
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+
                     <p className="text-sm text-gray-500">Vincular <strong>{selectedUser?.nome}</strong> a um perfil de jogador existente.</p>
                     <select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white" value={linkPlayerId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLinkPlayerId(e.target.value)}>
                         <option value="">Selecione um Atleta</option>

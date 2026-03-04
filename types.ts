@@ -66,17 +66,6 @@ export interface ClaimRequest {
     timestamp: any;
 }
 
-export interface PhotoRequest {
-    id: string;
-    playerId: string;
-    playerName: string;
-    userId: string;
-    newPhotoUrl: string;
-    currentPhotoUrl?: string; // Para comparação
-    status: 'pending' | 'approved' | 'rejected';
-    timestamp: any;
-}
-
 export interface EscaladoInfo {
     id: string;
     numero: number | string;
