@@ -5,6 +5,7 @@ import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
 import { Modal } from './components/Modal';
+import { ImageCropperModal } from './components/ImageCropperModal';
 import { Feed } from './components/Feed';
 import { PeerReviewQuiz } from './components/PeerReviewQuiz';
 import { LiveEventHero } from './components/LiveEventHero';
@@ -24,6 +25,7 @@ import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, Lu
 import imageCompression from 'browser-image-compression';
 import { Header } from './components/Header';
 import { formatCpf, formatPhoneForDisplay, normalizeCpfForStorage, normalizePhoneForStorage } from './utils/contactFormat';
+import { fileToBase64 } from './utils/imageUtils';
 
 // Chave VAPID fornecida para autenticação do Push Notification
 const VAPID_KEY = "BI9T9nLXUjdJHqOSZEoORZ7UDyWQoIMcrQ5Oz-7KeKif19LoGx_Db5AdY4zi0yXT5zTdvZRbJy6nF65Dv-8ncKk"; 
@@ -62,6 +64,9 @@ const App: React.FC = () => {
     const [regJerseyNumber, setRegJerseyNumber] = useState('');
     const [regPosition, setRegPosition] = useState('Ala (3)');
     const [regPhotoPreview, setRegPhotoPreview] = useState<string | null>(null);
+    const [registerCropImageSrc, setRegisterCropImageSrc] = useState<string | null>(null);
+    const [showRegisterCropModal, setShowRegisterCropModal] = useState(false);
+    const [registerStep, setRegisterStep] = useState<1 | 2>(1);
     const [isRegistering, setIsRegistering] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -581,8 +586,106 @@ const App: React.FC = () => {
         }
     };
 
+    const resetRegisterForm = () => {
+        setRegName('');
+        setRegNickname('');
+        setRegEmail('');
+        setRegPhone('');
+        setRegPassword('');
+        setRegPasswordConfirm('');
+        setRegCpf('');
+        setRegBirthDate('');
+        setRegJerseyNumber('');
+        setRegPosition('Ala (3)');
+        setRegPhotoPreview(null);
+        setRegisterCropImageSrc(null);
+        setShowRegisterCropModal(false);
+        setRegisterStep(1);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const handleCloseRegister = () => {
+        setShowRegister(false);
+        resetRegisterForm();
+    };
+
+    const handleRegisterPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const rawBase64 = await fileToBase64(file);
+            setRegisterCropImageSrc(rawBase64);
+            setShowRegisterCropModal(true);
+        } catch (error) {
+            alert('Não foi possível carregar a foto. Tente outra imagem.');
+        }
+    };
+
+    const handleRegisterCropComplete = async (croppedImageBlob: Blob) => {
+        try {
+            const croppedFile = new File([croppedImageBlob], 'perfil-recortado.jpg', { type: 'image/jpeg' });
+            const compressed = await imageCompression(croppedFile, {
+                maxSizeMB: 0.1,
+                maxWidthOrHeight: 600,
+                useWebWorker: true,
+                fileType: 'image/webp',
+                initialQuality: 0.6,
+            });
+
+            const base64 = await fileToBase64(compressed);
+            setRegPhotoPreview(base64);
+            setShowRegisterCropModal(false);
+            setRegisterCropImageSrc(null);
+        } catch (error) {
+            alert('Não foi possível recortar/comprimir a foto. Tente novamente.');
+        }
+    };
+
+    const goToRegisterStepTwo = () => {
+        if (!regName || !regBirthDate || !regCpf || !regEmail || !regPhone || !regPassword || !regPasswordConfirm) {
+            alert('Preencha todos os campos da Etapa 1.');
+            return;
+        }
+
+        const cpfDigits = regCpf.replace(/\D/g, '');
+        if (cpfDigits.length !== 11) {
+            alert('Informe um CPF válido com 11 dígitos.');
+            return;
+        }
+
+        if (regPassword !== regPasswordConfirm) {
+            alert("A confirmação de senha não confere.");
+            return;
+        }
+
+        if (regPassword.length < 6) {
+            alert("A senha deve ter pelo menos 6 caracteres.");
+            return;
+        }
+
+        const normalizedPhone = normalizePhoneForStorage(regPhone);
+        if (!normalizedPhone) {
+            alert('Informe um telefone válido com DDD. Ex: (66) 999999999');
+            return;
+        }
+
+        setRegisterStep(2);
+    };
+
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (registerStep === 1) {
+            goToRegisterStepTwo();
+            return;
+        }
+
+        if (!regNickname || !regJerseyNumber) {
+            alert('Preencha os campos obrigatórios da Etapa 2.');
+            return;
+        }
+
         if (regPassword !== regPasswordConfirm) {
             alert("A confirmação de senha não confere.");
             return;
@@ -598,7 +701,7 @@ const App: React.FC = () => {
 
         const normalizedPhone = normalizePhoneForStorage(regPhone);
         if (!normalizedPhone) {
-            alert('Informe um WhatsApp válido com DDD. Ex: (66) 999999999');
+            alert('Informe um telefone válido com DDD. Ex: (66) 999999999');
             return;
         }
 
@@ -623,14 +726,12 @@ const App: React.FC = () => {
                     cpf: formattedCpf,
                     posicaoPreferida: regPosition,
                     numeroPreferido: regJerseyNumber,
+                    foto: regPhotoPreview || null,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
 
                 alert("Conta criada com sucesso! Aguarde a aprovação do administrador.");
-                setShowRegister(false);
-                setRegName(''); setRegNickname(''); setRegEmail(''); setRegPhone(''); setRegPassword(''); 
-                setRegPasswordConfirm('');
-                setRegCpf(''); setRegBirthDate(''); setRegJerseyNumber('');
+                handleCloseRegister();
             }
         } catch (error: any) {
             console.error("Registration Error:", error);
@@ -752,6 +853,7 @@ const App: React.FC = () => {
     const handleLogin = () => setShowLogin(true);
     const handleOpenRegister = () => {
         setShowLogin(false);
+        setRegisterStep(1);
         setShowRegister(true);
         setAuthError('');
     };
@@ -923,37 +1025,72 @@ const App: React.FC = () => {
                 </form>
             </Modal>
 
-            <Modal isOpen={showRegister} onClose={() => setShowRegister(false)} title="Criar Conta">
+            <Modal isOpen={showRegister} onClose={handleCloseRegister} title="Criar Conta">
                 <form onSubmit={handleRegister} className="space-y-4 max-h-[80vh] overflow-y-auto p-1 custom-scrollbar">
-                    <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nome Completo</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegName(e.target.value)} required /></div>
-                    <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Apelido (Para o Ranking)</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regNickname} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegNickname(e.target.value)} required /></div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nascimento</label><input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regBirthDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegBirthDate(e.target.value)} required /></div>
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regCpf} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegCpf(formatCpf(e.target.value))} placeholder="000.000.000-00" required /></div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-ancb-orange">
+                        Etapa {registerStep} de 2
                     </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">WhatsApp</label>
-                        <div className="flex items-center border rounded overflow-hidden dark:border-gray-600">
-                            <span className="bg-gray-200 dark:bg-gray-600 px-3 py-2 text-gray-600 dark:text-gray-300 border-r dark:border-gray-500 text-sm font-bold">+55</span>
-                            <input type="tel" className="flex-1 p-2 outline-none dark:bg-gray-700 dark:text-white" placeholder="(66) 999999999" value={regPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPhone(formatPhoneForDisplay(e.target.value))} required />
-                        </div>
-                        <p className="text-[10px] text-gray-400 mt-1">No banco será salvo como +5566999999999.</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Número</label><input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regJerseyNumber} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegJerseyNumber(e.target.value)} /></div>
-                        <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Posição</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regPosition} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setRegPosition(e.target.value)}><option value="Armador (1)">Armador (1)</option><option value="Ala/Armador (2)">Ala/Armador (2)</option><option value="Ala (3)">Ala (3)</option><option value="Ala/Pivô (4)">Ala/Pivô (4)</option><option value="Pivô (5)">Pivô (5)</option></select></div>
-                    </div>
-                    <div className="border-t pt-4 mt-2 dark:border-gray-700">
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Dados de Login</label>
-                        <input type="email" className="w-full p-2 border rounded mt-1 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Email" value={regEmail} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegEmail(e.target.value)} required />
-                        <input type="password" className="w-full p-2 border rounded mt-2 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Senha (Min 6 caracteres)" value={regPassword} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPassword(e.target.value)} required />
-                        <input type="password" className="w-full p-2 border rounded mt-2 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Confirmar senha" value={regPasswordConfirm} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPasswordConfirm(e.target.value)} required />
-                    </div>
-                    <Button type="submit" className="w-full mt-4" disabled={isRegistering}>
-                        {isRegistering ? <LucideLoader2 className="animate-spin" /> : "Criar Conta"}
-                    </Button>
+
+                    {registerStep === 1 ? (
+                        <>
+                            <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Nome Completo</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegName(e.target.value)} required /></div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Data de Nascimento</label><input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regBirthDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegBirthDate(e.target.value)} required /></div>
+                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regCpf} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegCpf(formatCpf(e.target.value))} placeholder="000.000.000-00" required /></div>
+                            </div>
+                            <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Email</label><input type="email" className="w-full p-2 border rounded mt-1 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Email" value={regEmail} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegEmail(e.target.value)} required /></div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Número de Telefone</label>
+                                <div className="flex items-center border rounded overflow-hidden dark:border-gray-600">
+                                    <span className="bg-gray-200 dark:bg-gray-600 px-3 py-2 text-gray-600 dark:text-gray-300 border-r dark:border-gray-500 text-sm font-bold">+55</span>
+                                    <input type="tel" className="flex-1 p-2 outline-none dark:bg-gray-700 dark:text-white" placeholder="(66) 999999999" value={regPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPhone(formatPhoneForDisplay(e.target.value))} required />
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-1">No banco será salvo como +5566999999999.</p>
+                            </div>
+                            <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Senha</label><input type="password" className="w-full p-2 border rounded mt-1 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Senha (Min 6 caracteres)" value={regPassword} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPassword(e.target.value)} required /></div>
+                            <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Confirmação de senha</label><input type="password" className="w-full p-2 border rounded mt-1 dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="Confirmar senha" value={regPasswordConfirm} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegPasswordConfirm(e.target.value)} required /></div>
+
+                            <Button type="submit" className="w-full mt-2">Avançar</Button>
+                        </>
+                    ) : (
+                        <>
+                            <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Apelido (Para o Ranking)</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regNickname} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegNickname(e.target.value)} required /></div>
+                            <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Número preferido</label><input type="number" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regJerseyNumber} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRegJerseyNumber(e.target.value)} required /></div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400">Upload de foto de perfil</label>
+                                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleRegisterPhotoSelect} className="w-full mt-1 p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" />
+                                <p className="text-[10px] text-gray-400 mt-1">A imagem será recortada e comprimida de forma agressiva antes de salvar.</p>
+                                {regPhotoPreview && (
+                                    <div className="mt-3 flex items-center gap-3">
+                                        <img src={regPhotoPreview} alt="Prévia" className="w-14 h-14 rounded-full object-cover border border-gray-300 dark:border-gray-600" />
+                                        <button type="button" onClick={() => { setRegPhotoPreview(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="text-xs font-bold text-red-500 hover:text-red-400">Remover foto</button>
+                                    </div>
+                                )}
+                            </div>
+                            <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Posição</label><select className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={regPosition} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setRegPosition(e.target.value)}><option value="Armador (1)">Armador (1)</option><option value="Ala/Armador (2)">Ala/Armador (2)</option><option value="Ala (3)">Ala (3)</option><option value="Ala/Pivô (4)">Ala/Pivô (4)</option><option value="Pivô (5)">Pivô (5)</option></select></div>
+
+                            <div className="grid grid-cols-2 gap-2 pt-2">
+                                <Button type="button" variant="secondary" onClick={() => setRegisterStep(1)}>Voltar</Button>
+                                <Button type="submit" className="w-full" disabled={isRegistering}>
+                                    {isRegistering ? <LucideLoader2 className="animate-spin" /> : "Finalizar"}
+                                </Button>
+                            </div>
+                        </>
+                    )}
                 </form>
             </Modal>
+
+            <ImageCropperModal
+                isOpen={showRegisterCropModal}
+                onClose={() => {
+                    setShowRegisterCropModal(false);
+                    setRegisterCropImageSrc(null);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
+                imageSrc={registerCropImageSrc || ''}
+                onCropComplete={handleRegisterCropComplete}
+                aspect={1}
+            />
         </div>
     );
 };

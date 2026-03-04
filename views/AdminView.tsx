@@ -74,6 +74,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [linkPlayerId, setLinkPlayerId] = useState('');
     const [userPhotoPreview, setUserPhotoPreview] = useState<string>('');
     const [isSavingUserPhoto, setIsSavingUserPhoto] = useState(false);
+    const [isSyncingContactEmails, setIsSyncingContactEmails] = useState(false);
 
     // --- APOIADORES STATE ---
     const [apoiadores, setApoiadores] = useState<any[]>([]);
@@ -434,9 +435,83 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             return false;
         });
     };
-    const handleApproveUser = async (user: UserProfile) => { if (!window.confirm(`Aprovar ${user.nome}?`)) return; try { const batch = db.batch(); const newPlayerRef = db.collection("jogadores").doc(); const contactEmail = (user as any).emailContato || user.email || ''; const playerData: any = { nome: user.nome, apelido: user.apelido || '', posicao: (user as any).posicaoPreferida || 'Ala (3)', numero_uniforme: (user as any).numeroPreferido || 0, telefone: normalizePhoneForStorage((user as any).whatsapp || (user as any).telefone || ''), nascimento: (user as any).dataNascimento || '', cpf: normalizeCpfForStorage((user as any).cpf || ''), emailContato: contactEmail, userId: user.uid, status: 'active' }; batch.set(newPlayerRef, playerData); const userRef = db.collection("usuarios").doc(user.uid); batch.update(userRef, { status: 'active', linkedPlayerId: newPlayerRef.id, emailContato: contactEmail }); await batch.commit(); alert("Usuário aprovado e perfil criado!"); } catch (error) { alert("Erro."); } };
-    const handleAutoLinkUser = async (user: UserProfile, targetPlayerId: string) => { if (!window.confirm(`Vincular?`)) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(user.uid); const playerRef = db.collection("jogadores").doc(targetPlayerId); const contactEmail = (user as any).emailContato || user.email || ''; batch.update(userRef, { linkedPlayerId: targetPlayerId, status: 'active', emailContato: contactEmail }); batch.update(playerRef, { userId: user.uid, status: 'active', emailContato: contactEmail }); await batch.commit(); alert("Vinculado!"); } catch (error) { alert("Erro."); } };
-    const handleLinkPlayerToUser = async () => { if (!selectedUser || !linkPlayerId) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(selectedUser.uid); const playerRef = db.collection("jogadores").doc(linkPlayerId); const contactEmail = (selectedUser as any).emailContato || selectedUser.email || ''; batch.update(userRef, { linkedPlayerId: linkPlayerId, status: 'active', emailContato: contactEmail }); batch.update(playerRef, { userId: selectedUser.uid, status: 'active', emailContato: contactEmail }); await batch.commit(); setShowUserEditModal(false); alert("Vínculo realizado!"); } catch (error) { alert("Erro."); } };
+    const handleApproveUser = async (user: UserProfile) => {
+        if (!window.confirm(`Aprovar ${user.nome}?`)) return;
+        try {
+            const batch = db.batch();
+            const newPlayerRef = db.collection("jogadores").doc();
+            const contactEmail = (user as any).emailContato || user.email || '';
+            const userPhoto = (user as any).foto || null;
+            const playerData: any = {
+                nome: user.nome,
+                apelido: user.apelido || '',
+                posicao: (user as any).posicaoPreferida || 'Ala (3)',
+                numero_uniforme: (user as any).numeroPreferido || 0,
+                telefone: normalizePhoneForStorage((user as any).whatsapp || (user as any).telefone || ''),
+                nascimento: (user as any).dataNascimento || '',
+                cpf: normalizeCpfForStorage((user as any).cpf || ''),
+                emailContato: contactEmail,
+                userId: user.uid,
+                status: 'active',
+                foto: userPhoto || ''
+            };
+
+            batch.set(newPlayerRef, playerData);
+            const userRef = db.collection("usuarios").doc(user.uid);
+            batch.update(userRef, { status: 'active', linkedPlayerId: newPlayerRef.id, emailContato: contactEmail });
+            await batch.commit();
+            alert("Usuário aprovado e perfil criado!");
+        } catch (error) {
+            alert("Erro.");
+        }
+    };
+
+    const handleAutoLinkUser = async (user: UserProfile, targetPlayerId: string) => {
+        if (!window.confirm(`Vincular?`)) return;
+        try {
+            const batch = db.batch();
+            const userRef = db.collection("usuarios").doc(user.uid);
+            const playerRef = db.collection("jogadores").doc(targetPlayerId);
+            const contactEmail = (user as any).emailContato || user.email || '';
+            const userPhoto = (user as any).foto || null;
+
+            batch.update(userRef, { linkedPlayerId: targetPlayerId, status: 'active', emailContato: contactEmail });
+            batch.update(playerRef, {
+                userId: user.uid,
+                status: 'active',
+                emailContato: contactEmail,
+                ...(userPhoto ? { foto: userPhoto } : {})
+            });
+            await batch.commit();
+            alert("Vinculado!");
+        } catch (error) {
+            alert("Erro.");
+        }
+    };
+
+    const handleLinkPlayerToUser = async () => {
+        if (!selectedUser || !linkPlayerId) return;
+        try {
+            const batch = db.batch();
+            const userRef = db.collection("usuarios").doc(selectedUser.uid);
+            const playerRef = db.collection("jogadores").doc(linkPlayerId);
+            const contactEmail = (selectedUser as any).emailContato || selectedUser.email || '';
+            const userPhoto = (selectedUser as any).foto || null;
+
+            batch.update(userRef, { linkedPlayerId: linkPlayerId, status: 'active', emailContato: contactEmail });
+            batch.update(playerRef, {
+                userId: selectedUser.uid,
+                status: 'active',
+                emailContato: contactEmail,
+                ...(userPhoto ? { foto: userPhoto } : {})
+            });
+            await batch.commit();
+            setShowUserEditModal(false);
+            alert("Vínculo realizado!");
+        } catch (error) {
+            alert("Erro.");
+        }
+    };
     const handleUserPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!selectedUser) return;
         if (!e.target.files || !e.target.files[0]) return;
@@ -489,6 +564,71 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         }
     };
     const handleDeleteUser = async (user: UserProfile) => { if (!window.confirm(`Excluir usuário ${user.nome}?`)) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(user.uid); batch.delete(userRef); if (user.linkedPlayerId) { const playerRef = db.collection("jogadores").doc(user.linkedPlayerId); const playerSnap = await playerRef.get(); if (playerSnap.exists) { batch.update(playerRef, { userId: null }); } } await batch.commit(); alert("Usuário excluído."); } catch (error) { alert("Erro."); } };
+
+    const handleSyncLegacyContactEmails = async () => {
+        if (!window.confirm('Sincronizar email de contato com email de login para usuários/atletas vinculados?')) return;
+
+        setIsSyncingContactEmails(true);
+        try {
+            const usersByUid = new Map<string, any>();
+            users.forEach((u: any) => {
+                if (u?.uid && u?.email) usersByUid.set(u.uid, u);
+            });
+
+            let batch = db.batch();
+            let operationCount = 0;
+            let updatedUsers = 0;
+            let updatedPlayers = 0;
+
+            const commitBatchIfNeeded = async (force = false) => {
+                if (operationCount === 0) return;
+                if (force || operationCount >= 400) {
+                    await batch.commit();
+                    batch = db.batch();
+                    operationCount = 0;
+                }
+            };
+
+            for (const u of users as any[]) {
+                const email = (u?.email || '').trim();
+                if (!u?.uid || !email) continue;
+
+                const current = (u?.emailContato || '').trim();
+                if (current !== email) {
+                    batch.update(db.collection('usuarios').doc(u.uid), { emailContato: email });
+                    operationCount++;
+                    updatedUsers++;
+                    await commitBatchIfNeeded();
+                }
+            }
+
+            const playersSnap = await db.collection('jogadores').get();
+            for (const playerDoc of playersSnap.docs) {
+                const player = playerDoc.data() as any;
+                const linkedUserId = (player?.userId || '').trim();
+                if (!linkedUserId) continue;
+
+                const linkedUser = usersByUid.get(linkedUserId);
+                const userEmail = (linkedUser?.email || '').trim();
+                if (!userEmail) continue;
+
+                const currentContact = (player?.emailContato || '').trim();
+                if (currentContact !== userEmail) {
+                    batch.update(playerDoc.ref, { emailContato: userEmail });
+                    operationCount++;
+                    updatedPlayers++;
+                    await commitBatchIfNeeded();
+                }
+            }
+
+            await commitBatchIfNeeded(true);
+            alert(`Sincronização concluída. Usuários atualizados: ${updatedUsers}. Atletas atualizados: ${updatedPlayers}.`);
+        } catch (error: any) {
+            alert('Erro ao sincronizar emails de contato: ' + (error?.message || 'desconhecido'));
+        } finally {
+            setIsSyncingContactEmails(false);
+        }
+    };
     
     const handleDeleteEvent = async (id: string) => { if (!window.confirm("Excluir evento e dados?")) return; try { const gamesSnap = await db.collection("eventos").doc(id).collection("jogos").get(); for (const gameDoc of gamesSnap.docs) { const cestasSnap = await gameDoc.ref.collection("cestas").get(); const deleteCestasPromises = cestasSnap.docs.map(c => c.ref.delete()); await Promise.all(deleteCestasPromises); await gameDoc.ref.delete(); } await db.collection("eventos").doc(id).delete(); alert("Limpo."); } catch (error) { alert("Erro."); } };
     const loadReviews = async () => { setLoadingReviews(true); try { const snap = await db.collection("avaliacoes_gamified").orderBy("timestamp", "desc").get(); const enriched = snap.docs.map(doc => { const data = doc.data() as any; const reviewer = activePlayers.find(p => p.id === data.reviewerId); const target = activePlayers.find(p => p.id === data.targetId); return { id: doc.id, ...data, reviewerName: reviewer?.nome || 'Desconhecido', targetName: target?.nome || 'Desconhecido' }; }); setReviews(enriched); } catch (e) { alert("Erro ao carregar avaliações."); } finally { setLoadingReviews(false); } };
@@ -852,9 +992,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             {adminTab === 'users' && (
                 <div className="animate-fadeIn">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
                             <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2"><LucideUserCheck size={20} /> Gerenciar Usuários</h3>
-                            <div className="relative w-64"><LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={16} /><input type="text" placeholder="Buscar..." className="w-full pl-9 p-2 text-sm border rounded bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" value={userSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUserSearch(e.target.value)} /></div>
+                            <div className="flex items-center gap-2 w-full md:w-auto">
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={handleSyncLegacyContactEmails}
+                                    disabled={isSyncingContactEmails}
+                                    className="!border-orange-400 !text-orange-600 hover:!bg-orange-50"
+                                    title="Sincroniza emailContato de usuários e atletas vinculados"
+                                >
+                                    <LucideRefreshCw size={14} className={isSyncingContactEmails ? 'animate-spin' : ''} />
+                                    {isSyncingContactEmails ? 'Sincronizando...' : 'Sincronizar Emails'}
+                                </Button>
+                                <div className="relative w-full md:w-64"><LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={16} /><input type="text" placeholder="Buscar..." className="w-full pl-9 p-2 text-sm border rounded bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" value={userSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUserSearch(e.target.value)} /></div>
+                            </div>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
@@ -881,7 +1034,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                                         <Button size="sm" variant="secondary" onClick={() => handlePromoteUser(user)} className="!py-1 !px-2 text-xs !border-purple-300 text-purple-600" title="Promover a Admin"><LucideCrown size={14}/></Button>
                                                     )}
                                                     <Button size="sm" variant="secondary" onClick={() => handleResetPassword(user)} className="!py-1 !px-2 text-xs !border-orange-500 !text-orange-600 hover:!bg-orange-50" title="Resetar Senha"><LucideKeyRound size={14} /></Button>
-                                                    {user.status !== 'active' && !user.linkedPlayerId && (suggestedPlayer ? <Button size="sm" onClick={() => handleAutoLinkUser(user, suggestedPlayer.id)} className="!py-1 !px-2 !bg-orange-500 hover:!bg-orange-600 text-xs" title={`Vincular a ${suggestedPlayer.nome}`}><LucideLink size={14} /> Vincular</Button> : <Button size="sm" onClick={() => handleApproveUser(user)} className="!py-1 !px-2 !bg-green-600 hover:!bg-green-700 text-xs" title="Aprovar e Criar Atleta"><LucideUserPlus size={14} /> Criar Atleta</Button>)}
+                                                    {!user.linkedPlayerId && (suggestedPlayer ? <Button size="sm" onClick={() => handleAutoLinkUser(user, suggestedPlayer.id)} className="!py-1 !px-2 !bg-orange-500 hover:!bg-orange-600 text-xs" title={`Vincular a ${suggestedPlayer.nome}`}><LucideLink size={14} /> Vincular</Button> : <Button size="sm" onClick={() => handleApproveUser(user)} className="!py-1 !px-2 !bg-green-600 hover:!bg-green-700 text-xs" title="Criar nova ficha de atleta"><LucideUserPlus size={14} /> Criar Atleta</Button>)}
                                                     <Button size="sm" variant="secondary" onClick={() => { setSelectedUser(user); setLinkPlayerId(user.linkedPlayerId || ''); setUserPhotoPreview((user as any).foto || ''); setShowUserEditModal(true); }} className="!py-1 !px-2 text-xs"><LucideEdit size={14} /></Button>
                                                     <button onClick={() => handleDeleteUser(user)} className="p-1.5 rounded bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50" title="Excluir Usuário"><LucideTrash2 size={14} /></button>
                                                 </td>

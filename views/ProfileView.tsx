@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { doc, onSnapshot, setDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, collection, query, where, getDocs, serverTimestamp, orderBy, getDoc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
 import { UserProfile, Player, Jogo, Evento, Cesta, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucideArrowLeft, LucideCamera, LucideLink, LucideSearch, LucideLoader2, LucideClock, LucideStar, LucideHistory, LucideEdit2, LucideTrendingUp, LucideTrophy, LucideMapPin, LucideGrid, LucideUser, LucideCheckCircle2, LucidePin, LucidePinOff, LucideCalendar } from 'lucide-react';
+import { LucideArrowLeft, LucideCamera, LucideLink, LucideLoader2, LucideStar, LucideHistory, LucideEdit2, LucideTrendingUp, LucideTrophy, LucideMapPin, LucideGrid, LucideUser, LucideCheckCircle2, LucidePin, LucidePinOff, LucideCalendar } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { RadarChart } from '../components/RadarChart';
 import { ImageCropperModal } from '../components/ImageCropperModal';
@@ -119,11 +119,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const [showAllBadges, setShowAllBadges] = useState(false);
 
     const [isUploading, setIsUploading] = useState(false);
-    const [showClaimSection, setShowClaimSection] = useState(false);
-    const [claimSearch, setClaimSearch] = useState('');
-    const [foundPlayers, setFoundPlayers] = useState<Player[]>([]);
-    const [claimStatus, setClaimStatus] = useState<'none'|'pending'>('none');
-    const [claimingId, setClaimingId] = useState<string | null>(null);
     
     // Image Cropper State
     const [showCropper, setShowCropper] = useState(false);
@@ -155,15 +150,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     }
                     setLoading(false);
                 });
-                
-                try {
-                    const qClaim = query(collection(db, "solicitacoes_vinculo"), where("userId", "==", userProfile.uid), where("status", "==", "pending"));
-                    const claimSnap = await getDocs(qClaim);
-                    if (isMounted) {
-                        if (!claimSnap.empty) setClaimStatus('pending');
-                        else if (!userProfile.linkedPlayerId) setShowClaimSection(true);
-                    }
-                } catch (claimErr) {}
 
             } catch (error) {
                 if (isMounted) setLoading(false);
@@ -171,7 +157,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         };
         init();
         return () => { isMounted = false; if (unsubPlayer) unsubPlayer(); };
-    }, [playerDocId, userProfile.uid, userProfile.linkedPlayerId]);
+    }, [playerDocId, userProfile.uid]);
 
     // Check for pending roster invites
     useEffect(() => {
@@ -298,7 +284,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     }, [playerDocId]);
 
     // ... (Keep existing helpers: useEffect search, fileToBase64, handlePhotoUpload, handleSave, handleTogglePin, handleClaim, formatDate, normalizePosition, calculateAge, etc.) ...
-    useEffect(() => { if (!claimSearch || claimSearch.length < 3) { setFoundPlayers([]); return; } const search = async () => { try { const q = query(collection(db, "jogadores"), orderBy("nome")); const snap = await getDocs(q); const matches = snap.docs.map(d => ({id: d.id, ...(d.data() as any)} as Player)).filter(p => { const pName = p.nome ? p.nome.toLowerCase() : ''; const pNick = p.apelido ? p.apelido.toLowerCase() : ''; return (pName.includes(claimSearch.toLowerCase()) || pNick.includes(claimSearch.toLowerCase())) && !p.userId && p.id !== userProfile.uid; }); setFoundPlayers(matches); } catch (err) {} }; const timer = setTimeout(search, 500); return () => clearTimeout(timer); }, [claimSearch, userProfile.uid]);
     const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
     const getPhoneParts = (value?: string) => {
         const normalized = normalizePhoneForStorage(value || '');
@@ -420,7 +405,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         }
     };
     const handleTogglePin = async (badgeId: string) => { if (!playerDocId) return; let currentPinned = formData.pinnedBadgeIds || []; if (currentPinned.includes(badgeId)) { currentPinned = currentPinned.filter(id => id !== badgeId); } else { if (currentPinned.length >= 3) { alert("Limite de 3 conquistas fixadas."); return; } currentPinned.push(badgeId); } setFormData({ ...formData, pinnedBadgeIds: currentPinned }); try { await setDoc(doc(db, "jogadores", playerDocId), { pinnedBadgeIds: currentPinned }, { merge: true }); } catch (e) { alert("Erro ao fixar."); } };
-    const handleClaim = async (targetPlayer: Player) => { if (!userProfile || !userProfile.uid) return; setClaimingId(targetPlayer.id); try { await addDoc(collection(db, "solicitacoes_vinculo"), { userId: userProfile.uid, userName: userProfile.nome || 'Usuário Sem Nome', playerId: targetPlayer.id, playerName: targetPlayer.nome || 'Atleta Sem Nome', status: 'pending', timestamp: serverTimestamp() }); setClaimStatus('pending'); setShowClaimSection(false); alert("Solicitação enviada!"); } catch (e: any) { alert(`Erro: ${e.message}`); } finally { setClaimingId(null); } };
     const formatDate = (dateStr?: string) => dateStr ? dateStr.split('-').reverse().join('/') : '';
     const normalizePosition = (pos: string | undefined): string => { if (!pos) return '-'; if (pos.includes('1') || pos.toLowerCase().includes('armador')) return 'Armador (1)'; if (pos.includes('2') || pos.toLowerCase().includes('ala/armador')) return 'Ala/Armador (2)'; if (pos.includes('3') || (pos.toLowerCase().includes('ala') && !pos.includes('piv'))) return 'Ala (3)'; if (pos.includes('4') || pos.toLowerCase().includes('ala/piv')) return 'Ala/Pivô (4)'; if (pos.includes('5') || pos.toLowerCase().includes('piv')) return 'Pivô (5)'; return pos; };
     const calculateAge = (dateString?: string) => { if (!dateString) return '-'; const today = new Date(); const birthDate = new Date(dateString); let age = today.getFullYear() - birthDate.getFullYear(); const m = today.getMonth() - birthDate.getMonth(); if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) { age--; } return age; };
@@ -605,30 +589,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     </div>
                 )}
             </div>
-
-            {/* Claim Section ... (Same as before) */}
-            {showClaimSection && (
-                <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-6 mb-6">
-                    <h3 className="font-bold text-orange-800 dark:text-orange-200 mb-2 flex items-center gap-2"><LucideLink size={20} /> Vincular Perfil de Atleta</h3>
-                    <p className="text-sm text-orange-700 dark:text-orange-300 mb-4">Seu usuário não está vinculado a nenhum atleta. Busque seu nome abaixo para reivindicar seu histórico.</p>
-                    {claimStatus === 'pending' ? (
-                        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg text-center text-gray-500"><LucideClock className="mx-auto mb-2 text-orange-500" size={24} /><p>Solicitação enviada. Aguardando aprovação do administrador.</p></div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="relative"><LucideSearch className="absolute left-3 top-3 text-gray-400" size={18} /><input className="w-full pl-10 p-3 rounded-lg border border-orange-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white" placeholder="Digite seu nome..." value={claimSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setClaimSearch(e.target.value)} /></div>
-                            <div className="space-y-2">
-                                {foundPlayers.map(p => (
-                                    <div key={p.id} className="flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded-lg border border-orange-100 dark:border-gray-700">
-                                        <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center">{p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="font-bold text-gray-400">{p.nome.charAt(0)}</span>}</div><div><p className="font-bold text-sm dark:text-gray-200">{p.nome}</p><p className="text-xs text-gray-500">{normalizePosition(p.posicao)}</p></div></div>
-                                        <Button size="sm" onClick={() => handleClaim(p)} disabled={!!claimingId}>{claimingId === p.id ? <LucideLoader2 className="animate-spin"/> : 'É meu!'}</Button>
-                                    </div>
-                                ))}
-                                {claimSearch.length > 2 && foundPlayers.length === 0 && <p className="text-center text-gray-500 text-sm">Nenhum atleta encontrado.</p>}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
 
             <div>
                 <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2"><LucideHistory size={18} className="text-gray-500" /> Histórico de Partidas</h3>

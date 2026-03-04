@@ -30,11 +30,22 @@ export const normalizePhoneForStorage = (value?: string | null): string => {
 };
 
 export const formatPhoneForDisplay = (value?: string | null): string => {
-    const normalized = normalizePhoneForStorage(value);
-    if (!normalized) return '';
+    const digitsRaw = onlyDigits(value);
+    if (!digitsRaw) return '';
 
-    const local = normalized.replace('+55', '');
-    const ddd = local.slice(0, 2);
-    const number = local.slice(2);
-    return `(${ddd}) ${number}`;
+    let digits = digitsRaw;
+    if (digits.startsWith('55') && digits.length > 11) {
+        digits = digits.slice(2);
+    }
+    digits = digits.slice(0, 11);
+
+    if (digits.length <= 2) return `(${digits}`;
+
+    const ddd = digits.slice(0, 2);
+    const number = digits.slice(2);
+
+    if (number.length <= 4) return `(${ddd}) ${number}`;
+    if (number.length <= 8) return `(${ddd}) ${number.slice(0, 4)}-${number.slice(4)}`;
+
+    return `(${ddd}) ${number.slice(0, 5)}-${number.slice(5)}`;
 };
