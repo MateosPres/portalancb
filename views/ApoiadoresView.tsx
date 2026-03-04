@@ -39,8 +39,7 @@ interface ImgBBUploadResponse {
     status: number;
 }
 
-const IMGBB_API_URL = 'https://api.imgbb.com/1/upload';
-const IMGBB_API_KEY = '5bec53fdc4489e83e9184584335bee45';
+const IMGBB_WORKER_URL = ((import.meta as any).env?.VITE_IMGBB_WORKER_URL as string | undefined)?.trim() || 'https://proxy-imgbb-ancb.mateospres.workers.dev';
 
 export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProfile }) => {
     const GALERIA_MAX_ITENS_VISIVEIS = 3;
@@ -132,15 +131,14 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
     }, [canSlideGaleria, galeria.length, currentSlide]);
 
     const uploadImageToImgBB = async (file: File): Promise<{ imageUrl: string; deleteUrl?: string }> => {
-        if (!IMGBB_API_KEY) {
-            throw new Error('API key do ImgBB não configurada. Adicione VITE_IMGBB_API_KEY no .env');
+        if (!IMGBB_WORKER_URL || IMGBB_WORKER_URL.includes('seu-usuario.workers.dev')) {
+            throw new Error('URL do Worker não configurada. Defina VITE_IMGBB_WORKER_URL com sua URL real do Cloudflare Worker.');
         }
 
         const formData = new FormData();
-        formData.append('key', IMGBB_API_KEY);
         formData.append('image', file);
 
-        const response = await fetch(IMGBB_API_URL, {
+        const response = await fetch(IMGBB_WORKER_URL, {
             method: 'POST',
             body: formData,
         });

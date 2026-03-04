@@ -206,6 +206,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
     const handleGenerateTeamSheetPdf = (team: Time) => {
         if (!event || !team.isANCB) return;
+        const teamDisplayName = 'ANCB - Nova Canaã do Norte';
 
         const rosterPlayers = (team.jogadores || [])
             .map(playerId => allPlayers.find(player => player.id === playerId))
@@ -300,7 +301,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                         <p class="title">Associação Nova Canaã de Basquete</p>
                         <p class="subtitle">Ficha de Jogadores</p>
                         <p class="event-name"><strong>Evento:</strong> ${escapeHtml(event.nome)}</p>
-                        <p class="event-name"><strong>Equipe:</strong> ${escapeHtml(team.nomeTime)}</p>
+                        <p class="event-name"><strong>Equipe:</strong> ${escapeHtml(teamDisplayName)}</p>
                     </div>
 
                     <div class="section">
