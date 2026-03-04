@@ -21,7 +21,7 @@ import { AdminView } from './views/AdminView';
 import { PainelJogoView } from './views/PainelJogoView';
 import { ProfileView } from './views/ProfileView';
 import { ApoiadoresView } from './views/ApoiadoresView';
-import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare, LucideUserPlus, LucideRefreshCw, LucideBellRing, LucideSettings } from 'lucide-react';
+import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare, LucideUserPlus, LucideBellRing, LucideSettings } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { Header } from './components/Header';
 import { formatCpf, formatPhoneForDisplay, normalizeCpfForStorage, normalizePhoneForStorage } from './utils/contactFormat';
@@ -103,22 +103,58 @@ const App: React.FC = () => {
     const [isIos, setIsIos] = useState(false);
     const [isAndroid, setIsAndroid] = useState(false);
     const [isStandalone, setIsStandalone] = useState(false);
-    const [isUpdating, setIsUpdating] = useState(false);
+    const hasAutoReloadedForUpdate = useRef(false);
 
     // --- AUTO UPDATE PWA LOGIC ---
     useEffect(() => {
-        const updateSW = async () => {
-            if ('serviceWorker' in navigator) {
-                try {
-                    const registration = await navigator.serviceWorker.getRegistration();
-                    if (registration) {
-                        await registration.update();
-                    }
-                } catch (error) {
-                    console.log('SW update check skipped (preview environment)');
-                }
+        if (!('serviceWorker' in navigator)) return;
+
+        const reloadAppOnce = () => {
+            if (hasAutoReloadedForUpdate.current) return;
+            hasAutoReloadedForUpdate.current = true;
+            window.location.reload();
+        };
+
+        const applyWaitingWorker = (registration?: ServiceWorkerRegistration | null) => {
+            if (!registration?.waiting) return;
+            try {
+                registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+            } catch (error) {
+                console.warn('Não foi possível ativar o SW em espera:', error);
             }
         };
+
+        const onControllerChange = () => {
+            reloadAppOnce();
+        };
+
+        navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+
+        const updateSW = async () => {
+            try {
+                const registration = await navigator.serviceWorker.getRegistration();
+                if (!registration) return;
+
+                applyWaitingWorker(registration);
+
+                registration.onupdatefound = () => {
+                    const installingWorker = registration.installing;
+                    if (!installingWorker) return;
+
+                    installingWorker.onstatechange = () => {
+                        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            applyWaitingWorker(registration);
+                        }
+                    };
+                };
+
+                await registration.update();
+                applyWaitingWorker(registration);
+            } catch (error) {
+                console.log('SW update check skipped (preview environment)');
+            }
+        };
+
         updateSW();
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
@@ -126,7 +162,10 @@ const App: React.FC = () => {
             }
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+        };
     }, []);
 
     useEffect(() => {
@@ -559,33 +598,6 @@ const App: React.FC = () => {
         setCurrentView('jogadores');
     };
 
-    const handleManualUpdate = async () => {
-        setIsUpdating(true);
-        if ('serviceWorker' in navigator) {
-            try {
-                const registration = await navigator.serviceWorker.getRegistration();
-                if (registration) {
-                    await registration.update();
-                    setTimeout(() => {
-                        setIsUpdating(false);
-                        window.location.reload(); 
-                        alert("Atualização pronta! Por favor, reinicie o aplicativo para aplicar as mudanças.");
-                    }, 2000);
-                } else {
-                    setIsUpdating(false);
-                    alert("Serviço de atualização não encontrado.");
-                }
-            } catch (error) {
-                console.error("Update error:", error);
-                setIsUpdating(false);
-                alert("Erro ao verificar atualizações.");
-            }
-        } else {
-            setIsUpdating(false);
-            alert("Seu navegador não suporta atualizações automáticas.");
-        }
-    };
-
     const resetRegisterForm = () => {
         setRegName('');
         setRegNickname('');
@@ -950,12 +962,6 @@ const App: React.FC = () => {
                 <footer className="bg-[#062553] text-white text-center py-8 mt-10">
                     <p className="font-bold mb-1">Associação Nova Canaã de Basquete - MT</p>
                     <p className="text-sm text-gray-400">&copy; 2025 Todos os direitos reservados.</p>
-                    <div className="mt-6 flex justify-center">
-                        <button onClick={handleManualUpdate} disabled={isUpdating} className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all disabled:opacity-50">
-                            <LucideRefreshCw size={14} className={isUpdating ? 'animate-spin' : ''} />
-                            {isUpdating ? 'Verificando...' : 'Verificar Atualizações'}
-                        </button>
-                    </div>
                     {(!isStandalone && (deferredPrompt || isIos)) && (<button onClick={() => { if (isIos) setShowInstallModal(true); else if (deferredPrompt) deferredPrompt.prompt(); }} className="mt-4 inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all"><LucideDownload size={14} /> Instalar Portal</button>)}
                 </footer>
             )}
