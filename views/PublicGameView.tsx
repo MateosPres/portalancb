@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { collection, query, orderBy, limit, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Jogo, Cesta, Evento } from '../types';
 import { Button } from '../components/Button';
 import { LucideActivity, LucideTrophy, LucideCalendar, LucideArrowLeft } from 'lucide-react';
+import { useLiveStream } from '../hooks/useLiveStream';
+import { LiveYouTubePlayer } from '../components/LiveYouTubePlayer';
 
 interface PublicGameViewProps {
     game: Jogo;
@@ -16,6 +18,12 @@ export const PublicGameView: React.FC<PublicGameViewProps> = ({ game, eventId, o
     const [liveScore, setLiveScore] = useState({ scoreA: 0, scoreB: 0 });
     const [feedItems, setFeedItems] = useState<Cesta[]>([]);
     const [eventData, setEventData] = useState<Evento | null>(null);
+    const [showPlayer, setShowPlayer] = useState(true);
+    const hasAutoOpenedPlayerRef = useRef(false);
+
+    const { config: streamConfig, game: streamGame } = useLiveStream();
+
+    const hasLiveStream = Boolean(streamConfig?.active && streamConfig.videoId && streamGame);
 
     // 1. Fetch Event Data
     useEffect(() => {
@@ -47,6 +55,20 @@ export const PublicGameView: React.FC<PublicGameViewProps> = ({ game, eventId, o
         });
         return () => unsubscribe();
     }, [game.id, eventId]);
+
+    useEffect(() => {
+        if (!hasLiveStream) {
+            setShowPlayer(false);
+            hasAutoOpenedPlayerRef.current = false;
+        }
+    }, [hasLiveStream]);
+
+    useEffect(() => {
+        if (hasLiveStream && liveGame.status === 'andamento' && !hasAutoOpenedPlayerRef.current) {
+            setShowPlayer(true);
+            hasAutoOpenedPlayerRef.current = true;
+        }
+    }, [hasLiveStream, liveGame.status]);
 
     // 3. Real-time Feed
     useEffect(() => {
@@ -85,9 +107,26 @@ export const PublicGameView: React.FC<PublicGameViewProps> = ({ game, eventId, o
                 <h2 className="text-2xl font-bold text-ancb-black dark:text-white">Acompanhar Jogo</h2>
             </div>
 
-            <div className="space-y-6 max-w-4xl mx-auto">
+            <div className="space-y-6">
+                {hasLiveStream && streamConfig && streamGame && showPlayer && (
+                    <LiveYouTubePlayer
+                        videoId={streamConfig.videoId}
+                        game={streamGame}
+                        eventId={streamConfig.eventId}
+                        delaySeconds={streamConfig.delaySeconds}
+                        onClose={() => setShowPlayer(false)}
+                    />
+                )}
+
                 {/* Header / Scoreboard */}
-                <div className="bg-gradient-to-r from-[#062553] to-blue-900 rounded-2xl shadow-xl overflow-hidden relative border border-blue-800 p-6 md:p-12 text-center">
+                <div
+                    onClick={() => {
+                        if (liveGame.status === 'andamento' && hasLiveStream) {
+                            setShowPlayer(true);
+                        }
+                    }}
+                    className={`bg-gradient-to-r from-[#062553] to-blue-900 rounded-2xl shadow-xl overflow-hidden relative border border-blue-800 p-6 md:p-12 text-center ${liveGame.status === 'andamento' && hasLiveStream ? 'cursor-pointer transition-all hover:shadow-2xl hover:scale-[1.01]' : ''}`}
+                >
                     {/* Background Pattern */}
                     <div className="absolute top-0 right-0 opacity-10 pointer-events-none">
                         <LucideTrophy size={300} className="transform rotate-12 -translate-y-10 translate-x-10 text-white" />

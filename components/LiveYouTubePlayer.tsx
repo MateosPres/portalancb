@@ -58,6 +58,29 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
   const cestasIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const apoiadorIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const lockLandscape = async () => {
+    try {
+      if ('screen' in window && 'orientation' in window.screen) {
+        await (window.screen.orientation as any).lock?.('landscape');
+      }
+    } catch (_) {
+      // Orientation lock can fail on unsupported browsers or without user gesture.
+    }
+  };
+
+  const unlockOrientation = () => {
+    try {
+      (window.screen.orientation as any)?.unlock?.();
+    } catch (_) {
+      // Ignore unsupported unlock on some browsers.
+    }
+  };
+
+  const getFullscreenElement = () => {
+    const doc = document as any;
+    return doc.fullscreenElement || doc.webkitFullscreenElement || null;
+  };
+
   const teamAName = game.timeA_nome || 'ANCB';
   const teamBName = game.timeB_nome || game.adversario || 'ADV';
 
@@ -221,22 +244,62 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
     return parts.length > 1 ? parts[parts.length - 1] : name;
   };
 
-  // Fullscreen: lock to landscape on mobile
-  const handleFullscreen = () => {
-    if (!isFullscreen) {
-      setIsFullscreen(true);
-      // Try to lock orientation to landscape on mobile
-      if ('screen' in window && 'orientation' in window.screen) {
-        try {
-          (window.screen.orientation as any).lock?.('landscape').catch(() => {});
-        } catch (_) {}
+  // Keep fullscreen state in sync with native browser fullscreen lifecycle.
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      const active = Boolean(getFullscreenElement());
+      setIsFullscreen(active);
+      if (!active) {
+        unlockOrientation();
       }
-    } else {
-      setIsFullscreen(false);
+    };
+
+    document.addEventListener('fullscreenchange', syncFullscreenState);
+    document.addEventListener('webkitfullscreenchange' as any, syncFullscreenState);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreenState);
+      document.removeEventListener('webkitfullscreenchange' as any, syncFullscreenState);
+      unlockOrientation();
+    };
+  }, []);
+
+  // Fullscreen: use native API first, fallback to in-page fullscreen.
+  const handleFullscreen = async () => {
+    const container = containerRef.current as any;
+    const doc = document as any;
+    const fullscreenActive = Boolean(getFullscreenElement());
+
+    if (!fullscreenActive) {
       try {
-        (window.screen.orientation as any).unlock?.();
-      } catch (_) {}
+        if (container?.requestFullscreen) {
+          await container.requestFullscreen();
+        } else if (container?.webkitRequestFullscreen) {
+          container.webkitRequestFullscreen();
+        } else {
+          // Fallback when fullscreen API is unavailable.
+          setIsFullscreen(true);
+        }
+        await lockLandscape();
+      } catch (_) {
+        // If request fullscreen is blocked, keep fallback behavior.
+        setIsFullscreen(true);
+      }
+      return;
     }
+
+    try {
+      if (doc.exitFullscreen) {
+        await doc.exitFullscreen();
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen();
+      }
+    } catch (_) {
+      // Ignore; fallback state update below.
+    }
+
+    setIsFullscreen(false);
+    unlockOrientation();
   };
 
   // Last 3 feed items for overlay

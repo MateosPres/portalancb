@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { db } from '../services/firebase';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucideArrowLeft, LucideHeart, LucideExternalLink, LucideStar, LucideUsers, LucideImages, LucideUpload, LucideLoader2, LucideChevronLeft, LucideChevronRight, LucideTrash2 } from 'lucide-react';
+import { LucideArrowLeft, LucideHeart, LucideUsers, LucideImages, LucideUpload, LucideLoader2, LucideTrash2 } from 'lucide-react';
 import { UserProfile } from '../types';
 
 interface Apoiador {
@@ -41,25 +41,54 @@ interface ImgBBUploadResponse {
 
 const IMGBB_WORKER_URL = ((import.meta as any).env?.VITE_IMGBB_WORKER_URL as string | undefined)?.trim() || 'https://proxy-imgbb-ancb.mateospres.workers.dev';
 
-export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProfile }) => {
-    const GALERIA_MAX_ITENS_VISIVEIS = 3;
+interface InstagramGalleryItemProps {
+    item: GaleriaItem;
+    isAdmin: boolean;
+    onOpen: (imageUrl: string) => void;
+    onDelete: (item: GaleriaItem) => void;
+}
 
+const InstagramGalleryItem: React.FC<InstagramGalleryItemProps> = ({ item, isAdmin, onOpen, onDelete }) => {
+    return (
+        <div className="group relative aspect-square overflow-hidden rounded-[4px] bg-slate-200 dark:bg-slate-800">
+            <button
+                onClick={() => onOpen(item.imageUrl)}
+                className="block h-full w-full p-0 m-0 border-0 bg-transparent"
+                title="Abrir imagem"
+            >
+                <img
+                    src={item.imageUrl}
+                    alt="Foto da galeria"
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+            </button>
+
+            {isAdmin && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(item);
+                    }}
+                    className="absolute top-1 right-1 z-10 p-1.5 rounded-full bg-black/60 text-white hover:bg-red-600 transition-colors"
+                    title="Excluir foto"
+                >
+                    <LucideTrash2 size={12} />
+                </button>
+            )}
+        </div>
+    );
+};
+
+export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProfile }) => {
     const [apoiadores, setApoiadores] = useState<Apoiador[]>([]);
     const [loading, setLoading] = useState(true);
     const [isDark, setIsDark] = useState(false);
     const [galeria, setGaleria] = useState<GaleriaItem[]>([]);
     const [loadingGaleria, setLoadingGaleria] = useState(true);
-    const [showGaleriaModal, setShowGaleriaModal] = useState(false);
-    const [currentSlide, setCurrentSlide] = useState(0);
-    const [isSlideAnimating, setIsSlideAnimating] = useState(true);
-    const [galeriaItensVisiveis, setGaleriaItensVisiveis] = useState(() => {
-        if (typeof window === 'undefined') return GALERIA_MAX_ITENS_VISIVEIS;
-        if (window.innerWidth < 640) return 1;
-        if (window.innerWidth < 1024) return 2;
-        return GALERIA_MAX_ITENS_VISIVEIS;
-    });
     const [isUploadingImagem, setIsUploadingImagem] = useState(false);
     const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
+    const [galleryViewportHeight, setGalleryViewportHeight] = useState<number | null>(null);
+    const galleryGridRef = useRef<HTMLDivElement | null>(null);
 
     const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
 
@@ -94,41 +123,32 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
     }, []);
 
     useEffect(() => {
-        const handleResize = () => {
-            if (window.innerWidth < 640) {
-                setGaleriaItensVisiveis(1);
-                return;
-            }
-            if (window.innerWidth < 1024) {
-                setGaleriaItensVisiveis(2);
-                return;
-            }
-            setGaleriaItensVisiveis(GALERIA_MAX_ITENS_VISIVEIS);
+        const node = galleryGridRef.current;
+        if (!node || typeof window === 'undefined') return;
+
+        const updateViewportHeight = () => {
+            const width = node.clientWidth;
+            if (!width) return;
+
+            const isDesktop = window.innerWidth >= 768;
+            const rows = isDesktop ? 2 : 3;
+            const gap = isDesktop ? 8 : 4; // gap-2 desktop | gap-1 mobile
+            const cellSize = (width - (gap * 2)) / 3;
+            const maxHeight = Math.floor((rows * cellSize) + ((rows - 1) * gap));
+            setGalleryViewportHeight(maxHeight);
         };
 
-        handleResize();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
+        updateViewportHeight();
 
-    const canSlideGaleria = galeria.length > galeriaItensVisiveis;
+        const observer = new ResizeObserver(updateViewportHeight);
+        observer.observe(node);
+        window.addEventListener('resize', updateViewportHeight);
 
-    useEffect(() => {
-        if (!canSlideGaleria) {
-            setCurrentSlide(0);
-            setIsSlideAnimating(false);
-            return;
-        }
-
-        setIsSlideAnimating(true);
-
-        if (currentSlide > galeria.length) {
-            setCurrentSlide(0);
-        }
-        if (currentSlide < -1) {
-            setCurrentSlide(galeria.length - 1);
-        }
-    }, [canSlideGaleria, galeria.length, currentSlide]);
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('resize', updateViewportHeight);
+        };
+    }, [galeria.length]);
 
     const uploadImageToImgBB = async (file: File): Promise<{ imageUrl: string; deleteUrl?: string }> => {
         if (!IMGBB_WORKER_URL || IMGBB_WORKER_URL.includes('seu-usuario.workers.dev')) {
@@ -164,7 +184,6 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
         try {
             const { imageUrl, deleteUrl } = await uploadImageToImgBB(file);
             setGaleria(prev => prev.some(item => item.imageUrl === imageUrl) ? prev : [{ id: `temp-${Date.now()}`, imageUrl, deleteUrl, createdBy: userProfile?.uid }, ...prev]);
-            setCurrentSlide(0);
 
             await db.collection('historia_galeria').add({
                 imageUrl,
@@ -179,29 +198,6 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
             e.target.value = '';
         }
     };
-
-    const goToNextSlide = () => {
-        if (!canSlideGaleria) return;
-        setIsSlideAnimating(true);
-        setCurrentSlide(prev => prev + 1);
-    };
-
-    const goToPrevSlide = () => {
-        if (!canSlideGaleria) return;
-        setIsSlideAnimating(true);
-        setCurrentSlide(prev => prev - 1);
-    };
-
-    useEffect(() => {
-        if (!canSlideGaleria) return;
-
-        const interval = window.setInterval(() => {
-            setIsSlideAnimating(true);
-            setCurrentSlide(prev => prev + 1);
-        }, 4500);
-
-        return () => window.clearInterval(interval);
-    }, [canSlideGaleria]);
 
     const handleDeleteGaleriaItem = async (item: GaleriaItem) => {
         if (!isAdmin) return;
@@ -239,34 +235,6 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
     const destacados = apoiadores.filter(a => a.destaque);
     const demais = apoiadores.filter(a => !a.destaque);
     const todosParaExibir = [...destacados, ...demais];
-    const galeriaTrack = canSlideGaleria
-        ? [galeria[galeria.length - 1], ...galeria, galeria[0]]
-        : galeria;
-
-    const slideTrackIndex = canSlideGaleria ? currentSlide + 1 : 0;
-    const larguraItemPercentual = 100 / Math.max(1, Math.min(galeriaItensVisiveis, GALERIA_MAX_ITENS_VISIVEIS));
-
-    const handleSlideTransitionEnd = () => {
-        if (!canSlideGaleria) return;
-
-        if (currentSlide >= galeria.length) {
-            setIsSlideAnimating(false);
-            setCurrentSlide(0);
-            window.requestAnimationFrame(() => {
-                window.requestAnimationFrame(() => setIsSlideAnimating(true));
-            });
-            return;
-        }
-
-        if (currentSlide < 0) {
-            setIsSlideAnimating(false);
-            setCurrentSlide(galeria.length - 1);
-            window.requestAnimationFrame(() => {
-                window.requestAnimationFrame(() => setIsSlideAnimating(true));
-            });
-        }
-    };
-
     return (
         <div className="animate-fadeIn pb-16">
             {/* Header */}
@@ -318,9 +286,6 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
                                 <span className="text-xs font-black text-white uppercase tracking-wider">Galeria</span>
                             </div>
                             <div className="flex items-center gap-2">
-                                <Button size="sm" variant="secondary" onClick={() => setShowGaleriaModal(true)} className="!text-xs !py-1.5 !px-3">
-                                    Ver tudo
-                                </Button>
                                 {isAdmin && (
                                     <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-ancb-orange text-white text-xs font-bold cursor-pointer hover:brightness-110 transition-all">
                                         {isUploadingImagem ? <LucideLoader2 size={13} className="animate-spin" /> : <LucideUpload size={13} />}
@@ -336,69 +301,22 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
                                 <LucideLoader2 className="animate-spin text-white/70" size={24} />
                             </div>
                         ) : galeria.length > 0 ? (
-                            <div className="relative rounded-xl border border-white/15 bg-black/20 p-3 md:p-4">
-                                <div className="flex items-center gap-2 md:gap-3">
-                                    {canSlideGaleria && (
-                                        <button
-                                            onClick={goToPrevSlide}
-                                            className="shrink-0 p-2 rounded-full bg-black/45 text-white hover:bg-black/65 transition-colors"
-                                            title="Miniaturas anteriores"
-                                        >
-                                            <LucideChevronLeft size={18} />
-                                        </button>
-                                    )}
-
-                                    <div className="flex-1 overflow-hidden">
-                                        <div
-                                            className={`flex ${isSlideAnimating ? 'transition-transform duration-500 ease-in-out' : ''}`}
-                                            style={{ transform: `translateX(-${slideTrackIndex * larguraItemPercentual}%)` }}
-                                            onTransitionEnd={handleSlideTransitionEnd}
-                                        >
-                                            {galeriaTrack.map((item, trackIndex) => (
-                                                <div
-                                                    key={`${item.id}-${trackIndex}`}
-                                                    className="shrink-0 box-border px-1.5 md:px-2"
-                                                    style={{ width: `${larguraItemPercentual}%` }}
-                                                >
-                                                    <div className="relative group rounded-lg overflow-hidden border border-white/20 bg-black/30 hover:border-ancb-orange transition-all">
-                                                        <button
-                                                            onClick={() => setExpandedImageUrl(item.imageUrl)}
-                                                            className="w-full block leading-none p-0 m-0 border-0 bg-transparent align-top"
-                                                            title="Clique para ampliar"
-                                                        >
-                                                            <img
-                                                                src={item.imageUrl}
-                                                                alt="Miniatura da galeria"
-                                                                className="block w-full h-32 md:h-40 lg:h-44 object-cover group-hover:scale-105 transition-transform duration-300"
-                                                            />
-                                                        </button>
-                                                        {isAdmin && (
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDeleteGaleriaItem(item);
-                                                                }}
-                                                                className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/60 text-white hover:bg-red-600 transition-colors"
-                                                                title="Excluir foto"
-                                                            >
-                                                                <LucideTrash2 size={12} />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
+                            <div className="rounded-xl border border-white/15 bg-white/5 dark:bg-black/20 p-1.5 sm:p-2">
+                                <div
+                                    className="overflow-y-auto custom-scrollbar"
+                                    style={galleryViewportHeight ? { maxHeight: `${galleryViewportHeight}px` } : undefined}
+                                >
+                                    <div ref={galleryGridRef} className="grid grid-cols-3 gap-1 md:gap-2">
+                                        {galeria.map((item) => (
+                                        <InstagramGalleryItem
+                                            key={item.id}
+                                            item={item}
+                                            isAdmin={isAdmin}
+                                            onOpen={setExpandedImageUrl}
+                                            onDelete={handleDeleteGaleriaItem}
+                                        />
+                                    ))}
                                     </div>
-
-                                    {canSlideGaleria && (
-                                        <button
-                                            onClick={goToNextSlide}
-                                            className="shrink-0 p-2 rounded-full bg-black/45 text-white hover:bg-black/65 transition-colors"
-                                            title="Próximas miniaturas"
-                                        >
-                                            <LucideChevronRight size={18} />
-                                        </button>
-                                    )}
                                 </div>
                             </div>
                         ) : (
@@ -420,47 +338,33 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
                 </div>
             </div>
 
-            {/* Wall de logos — sem caixinhas */}
+            {/* Grid de apoiadores responsivo */}
             {!loading && todosParaExibir.length > 0 && (
                 <div className="mb-8">
-                    <div className="flex items-center gap-2 mb-8">
+                    <div className="flex items-center gap-2 mb-6 md:mb-8">
                         <LucideHeart size={14} className="text-ancb-orange" fill="currentColor" />
                         <h3 className="text-sm font-black text-ancb-black dark:text-white uppercase tracking-[0.12em]">
                             Nossos Apoiadores
                         </h3>
                     </div>
 
-                    <div className="flex flex-wrap gap-x-12 gap-y-10 items-center justify-start">
+                    <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 auto-rows-fr gap-x-2 gap-y-4 sm:gap-x-3 sm:gap-y-5 md:gap-4">
                         {todosParaExibir.map(apoiador => (
                             <div
                                 key={apoiador.id}
                                 onClick={apoiador.site ? () => window.open(apoiador.site, '_blank') : undefined}
-                                className={`flex flex-col items-center gap-2.5 group ${apoiador.site ? 'cursor-pointer' : ''}`}
+                                className={`w-full h-full px-1.5 sm:px-2 py-1 flex items-center justify-center text-center group ${apoiador.site ? 'cursor-pointer' : ''}`}
                             >
-                                {apoiador.destaque && (
-                                    <span className="text-[8px] font-black text-yellow-500 uppercase tracking-widest flex items-center gap-0.5">
-                                        <LucideStar size={8} fill="currentColor" /> destaque
-                                    </span>
-                                )}
-
-                                <img
-                                    src={apoiador.logoBase64}
-                                    alt={apoiador.nome}
-                                    className={`object-contain transition-all duration-300 group-hover:scale-105 ${apoiador.destaque ? 'h-16' : 'h-12'}`}
-                                    style={{ ...logoStyle, opacity: logoOpacity }}
-                                    onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-                                    onMouseLeave={e => (e.currentTarget.style.opacity = logoOpacity)}
-                                />
-
-                                <span className={`font-semibold uppercase tracking-wider text-center leading-tight max-w-[90px] ${apoiador.destaque ? 'text-[10px]' : 'text-[9px]'} text-gray-400 dark:text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors`}>
-                                    {apoiador.nome}
-                                </span>
-
-                                {apoiador.site && (
-                                    <span className="text-[8px] font-bold text-ancb-blue dark:text-blue-400 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity -mt-1">
-                                        <LucideExternalLink size={8} /> visitar
-                                    </span>
-                                )}
+                                <div className="w-[112px] sm:w-[124px] h-[70px] sm:h-[72px] flex items-center justify-center">
+                                    <img
+                                        src={apoiador.logoBase64}
+                                        alt={apoiador.nome}
+                                        className="w-full h-full object-contain transition-all duration-300 group-hover:scale-105"
+                                        style={{ ...logoStyle, opacity: logoOpacity }}
+                                        onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                                        onMouseLeave={e => (e.currentTarget.style.opacity = logoOpacity)}
+                                    />
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -491,44 +395,6 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
                     Quero Apoiar
                 </a>
             </div>
-
-            <Modal
-                isOpen={showGaleriaModal}
-                onClose={() => setShowGaleriaModal(false)}
-                title="Galeria Completa"
-                maxWidthClassName="max-w-6xl"
-            >
-                {loadingGaleria ? (
-                    <div className="flex justify-center py-10"><LucideLoader2 className="animate-spin text-ancb-blue" /></div>
-                ) : galeria.length === 0 ? (
-                    <p className="text-sm text-gray-500 text-center py-10">Nenhuma foto cadastrada ainda.</p>
-                ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
-                        {galeria.map((item) => (
-                            <div
-                                key={item.id}
-                                className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40 hover:border-ancb-orange transition-colors text-left"
-                            >
-                                <button onClick={() => setExpandedImageUrl(item.imageUrl)} className="w-full text-left block leading-none p-0 m-0 border-0 bg-transparent align-top">
-                                    <img src={item.imageUrl} alt="Foto da galeria" className="w-full h-48 md:h-52 object-cover" />
-                                </button>
-                                {isAdmin && (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDeleteGaleriaItem(item);
-                                        }}
-                                        className="absolute top-2 right-2 p-2 rounded-full bg-black/60 text-white hover:bg-red-600 transition-colors"
-                                        title="Excluir foto"
-                                    >
-                                        <LucideTrash2 size={14} />
-                                    </button>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </Modal>
 
             <Modal
                 isOpen={!!expandedImageUrl}
