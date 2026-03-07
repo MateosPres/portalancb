@@ -208,4 +208,4 @@ export interface NotificationItem {
     timestamp: any;
 }
 
-export type ViewState = 'home' | 'eventos' | 'evento-detalhe' | 'jogadores' | 'ranking' | 'admin' | 'painel-jogo' | 'public-game' | 'profile' | 'team-manager' | 'notifications' | 'apoiadores';
+export type ViewState = 'home' | 'eventos' | 'evento-detalhe' | 'jogadores' | 'ranking' | 'admin' | 'painel-jogo' | 'public-game' | 'profile' | 'team-manager' | 'notifications' | 'apoiadores' | 'post-view';

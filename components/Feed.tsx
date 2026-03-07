@@ -2,12 +2,15 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../services/firebase';
 import { FeedPost } from '../types';
-import { LucideAlertTriangle, LucideYoutube, LucideX, LucideCalendar, LucidePlay } from 'lucide-react';
+import { LucideAlertTriangle, LucideYoutube, LucideCalendar, LucidePlay } from 'lucide-react';
 
-export const Feed: React.FC = () => {
+interface FeedProps {
+    onOpenPost: (post: FeedPost) => void;
+}
+
+export const Feed: React.FC<FeedProps> = ({ onOpenPost }) => {
     const [posts, setPosts] = useState<FeedPost[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
 
     const getPosts = async () => {
         try {
@@ -49,81 +52,12 @@ export const Feed: React.FC = () => {
         }
     };
 
-    const getYoutubeEmbed = (url: string) => {
-        const videoId = getYoutubeId(url);
-        if (videoId) {
-            return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
-        }
-        return null;
-    };
-
     const getYoutubeThumbnail = (url: string) => {
         const videoId = getYoutubeId(url);
         if (videoId) {
             return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
         }
         return null;
-    };
-
-    const renderModalContent = (post: FeedPost) => {
-        const videoSrc = post.content.link_video ? getYoutubeEmbed(post.content.link_video) : null;
-
-        return (
-            <div className="flex flex-col h-full">
-                <div className="bg-black flex items-center justify-center relative w-full flex-shrink-0">
-                    {post.type === 'placar' ? (
-                        <div className="w-full bg-ancb-black text-white p-8 flex flex-col items-center justify-center min-h-[300px]">
-                             {post.image_url && (
-                                <div className="absolute inset-0 opacity-30">
-                                    <img src={post.image_url} className="w-full h-full object-cover" />
-                                </div>
-                            )}
-                            <div className="relative z-10 w-full max-w-md">
-                                <h3 className="text-center text-gray-400 font-bold mb-6 uppercase tracking-widest">{post.content.titulo || 'Fim de Jogo'}</h3>
-                                <div className="flex justify-between items-center mb-4">
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-2xl md:text-3xl font-bold mb-2">ANCB</span>
-                                        <span className="text-5xl md:text-7xl font-bold text-ancb-orange">{post.content.placar_ancb}</span>
-                                    </div>
-                                    <span className="text-gray-600 text-2xl font-bold">X</span>
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-2xl md:text-3xl font-bold mb-2 text-center break-words max-w-[120px]">{post.content.time_adv || 'Adv'}</span>
-                                        <span className="text-5xl md:text-7xl font-bold text-white">{post.content.placar_adv}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ) : videoSrc ? (
-                        <div className="w-full h-[50vh] md:h-[70vh] relative">
-                             <iframe 
-                                src={videoSrc} 
-                                className="absolute inset-0 w-full h-full" 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                allowFullScreen
-                            ></iframe>
-                        </div>
-                    ) : post.image_url ? (
-                        <div className="w-full max-h-[60vh] flex items-center justify-center bg-gray-900">
-                            <img src={post.image_url} alt="Post" className="max-w-full max-h-[60vh] object-contain" />
-                        </div>
-                    ) : null}
-                </div>
-                <div className="p-6 bg-white dark:bg-gray-800 flex-grow overflow-y-auto">
-                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-3">
-                         <LucideCalendar size={14} />
-                         <span className="uppercase font-bold text-xs">{formatTime(post.timestamp)}</span>
-                         {post.type === 'aviso' && <span className="bg-yellow-100 text-yellow-800 text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">Aviso Oficial</span>}
-                         {post.type === 'resultado_evento' && <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">Resultado de Evento</span>}
-                    </div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 leading-tight">
-                        {post.content.titulo || (post.content.time_adv ? `Jogo contra ${post.content.time_adv}` : 'Sem título')}
-                    </h2>
-                    <div className="prose dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                        {post.content.resumo}
-                    </div>
-                </div>
-            </div>
-        );
     };
 
     if (loading) return <div className="text-center py-10 opacity-50">Carregando feed...</div>;
@@ -142,7 +76,7 @@ export const Feed: React.FC = () => {
                         return (
                             <div 
                                 key={post.id} 
-                                onClick={() => setSelectedPost(post)}
+                                onClick={() => onOpenPost(post)}
                                 className="bg-ancb-black text-white rounded-xl overflow-hidden shadow-lg border border-gray-700 flex flex-col cursor-pointer transform transition-transform hover:-translate-y-1 hover:shadow-xl group"
                             >
                                 <div className="bg-gray-800 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-widest flex justify-between">
@@ -175,7 +109,7 @@ export const Feed: React.FC = () => {
                         return (
                             <div 
                                 key={post.id} 
-                                onClick={() => setSelectedPost(post)}
+                                onClick={() => onOpenPost(post)}
                                 className="bg-yellow-50 dark:bg-yellow-900/10 border-l-4 border-yellow-400 rounded-r-xl p-6 shadow-sm flex flex-col cursor-pointer hover:bg-yellow-100 dark:hover:bg-yellow-900/20 transition-colors"
                             >
                                 <div className="flex items-center gap-3 mb-3 text-yellow-700 dark:text-yellow-500">
@@ -192,7 +126,7 @@ export const Feed: React.FC = () => {
                         return (
                             <div 
                                 key={post.id} 
-                                onClick={() => setSelectedPost(post)}
+                                onClick={() => onOpenPost(post)}
                                 className="bg-blue-50 dark:bg-blue-900/10 border-l-4 border-ancb-blue rounded-r-xl p-6 shadow-sm flex flex-col cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
                             >
                                 <div className="flex items-center gap-3 mb-3 text-ancb-blue dark:text-blue-400">
@@ -208,7 +142,7 @@ export const Feed: React.FC = () => {
                     return (
                         <div 
                             key={post.id} 
-                            onClick={() => setSelectedPost(post)}
+                            onClick={() => onOpenPost(post)}
                             className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group"
                         >
                             {videoThumbnail ? (
@@ -244,27 +178,6 @@ export const Feed: React.FC = () => {
                     );
                 })}
             </div>
-            {selectedPost && (
-                <div 
-                    className="fixed inset-0 z-[100] flex items-center justify-center p-0 md:p-4 bg-black/90 backdrop-blur-sm animate-fadeIn"
-                    onClick={() => setSelectedPost(null)}
-                >
-                    <div 
-                        className="bg-white dark:bg-gray-800 w-full md:max-w-4xl h-full md:h-auto md:max-h-[90vh] md:rounded-2xl overflow-hidden shadow-2xl flex flex-col relative animate-slideUp"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <button 
-                            onClick={() => setSelectedPost(null)} 
-                            className="absolute top-4 right-4 z-50 bg-black/50 text-white p-2 rounded-full hover:bg-black/80 transition-colors backdrop-blur-md"
-                        >
-                            <LucideX size={24} />
-                        </button>
-                        <div className="h-full overflow-y-auto custom-scrollbar">
-                            {renderModalContent(selectedPost)}
-                        </div>
-                    </div>
-                </div>
-            )}
         </section>
     );
 };

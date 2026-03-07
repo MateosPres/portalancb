@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player } from './types';
+import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player, FeedPost } from './types';
 import firebase, { auth, db, requestFCMToken, onMessageListener } from './services/firebase';
 import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { Button } from './components/Button';
@@ -21,17 +21,20 @@ import { AdminView } from './views/AdminView';
 import { PainelJogoView } from './views/PainelJogoView';
 import { ProfileView } from './views/ProfileView';
 import { ApoiadoresView } from './views/ApoiadoresView';
+import { PostView } from './views/PostView';
 import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare, LucideUserPlus, LucideBellRing, LucideSettings } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { Header } from './components/Header';
 import { formatCpf, formatPhoneForDisplay, normalizeCpfForStorage, normalizePhoneForStorage } from './utils/contactFormat';
 import { fileToBase64 } from './utils/imageUtils';
+import { useScrollToTop } from './hooks/useScrollToTop';
 
 // Chave VAPID fornecida para autenticação do Push Notification
 const VAPID_KEY = "BI9T9nLXUjdJHqOSZEoORZ7UDyWQoIMcrQ5Oz-7KeKif19LoGx_Db5AdY4zi0yXT5zTdvZRbJy6nF65Dv-8ncKk"; 
 
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>('home');
+    useScrollToTop(currentView);
     
     const [returnToEventId, setReturnToEventId] = useState<string | null>(null);
     const [returnToTeamId, setReturnToTeamId] = useState<string | null>(null);
@@ -74,6 +77,8 @@ const App: React.FC = () => {
     const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
     const [pendingFriendlyEventId, setPendingFriendlyEventId] = useState<string | null>(null);
     const [targetPlayerId, setTargetPlayerId] = useState<string | null>(null);
+    const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
+    const [postReturnView, setPostReturnView] = useState<ViewState>('home');
 
     // Game Panel State
     const [panelGame, setPanelGame] = useState<Jogo | null>(null);
@@ -598,6 +603,12 @@ const App: React.FC = () => {
         setCurrentView('jogadores');
     };
 
+    const handleOpenPostView = (post: FeedPost) => {
+        setSelectedPost(post);
+        setPostReturnView(currentView);
+        setCurrentView('post-view');
+    };
+
     const resetRegisterForm = () => {
         setRegName('');
         setRegNickname('');
@@ -816,7 +827,7 @@ const App: React.FC = () => {
                             </div>
                         </Card>
                     </section>
-                    <Feed />
+                    <Feed onOpenPost={handleOpenPostView} />
                 </div>
             );
             case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onSelectEvent={handleOpenEventDetail} onOpenFriendlyAdminPanel={(eventId, game) => handleOpenGamePanel(game, eventId, true)} initialFriendlyEventId={pendingFriendlyEventId} onFriendlySummaryOpened={() => setPendingFriendlyEventId(null)} />;
@@ -857,6 +868,7 @@ const App: React.FC = () => {
             case 'profile': return userProfile ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} onOpenReview={handleOpenReviewQuiz} onOpenEvent={handleOpenEventDetail} /> : null;
             case 'team-manager': return teamManagerEventId ? <TeamManagerView eventId={teamManagerEventId} teamId={teamManagerTeamId} onBack={() => { setCurrentView('evento-detalhe'); }} userProfile={userProfile} /> : null;
             case 'apoiadores': return <ApoiadoresView onBack={() => setCurrentView('home')} userProfile={userProfile} />;
+            case 'post-view': return selectedPost ? <PostView post={selectedPost} onBack={() => { setCurrentView(postReturnView || 'home'); setSelectedPost(null); }} /> : null;
             default: return <div>404</div>;
         }
     };
@@ -931,7 +943,7 @@ const App: React.FC = () => {
                 onNotificationsClick={() => setShowNotificationsView(true)}
             />
 
-            <main className={`flex-grow ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
+            <main className={`flex-grow ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' || currentView === 'post-view' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
                 {renderContent()}
             </main>
 
