@@ -914,6 +914,10 @@ const App: React.FC = () => {
         setShowPranchetaInstallModal(true);
     };
 
+    const handleOpenPranchetaInBrowser = () => {
+        window.open(PRANCHETA_URL, '_blank', 'noopener,noreferrer');
+    };
+
     const showInstallInMenu = !isStandalone && (deferredPrompt || isIos) && (isIos || isAndroid);
 
     const getSafePhoto = (profile: any) => {
@@ -1044,6 +1048,13 @@ const App: React.FC = () => {
                             <div><span className="block font-bold text-gray-800 dark:text-white text-sm">2. Toque em Adicionar a tela inicial</span><span className="text-xs text-gray-500 dark:text-gray-400">No Chrome ou Safari, use o menu de compartilhamento.</span></div>
                         </div>
                     </div>
+                    <button
+                        type="button"
+                        onClick={handleOpenPranchetaInBrowser}
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors"
+                    >
+                        <LucideExternalLink size={18} /> Abrir Prancheta no navegador
+                    </button>
                     <Button onClick={() => setShowPranchetaInstallModal(false)} className="w-full">Entendi</Button>
                 </div>
             </Modal>
