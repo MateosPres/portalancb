@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, User, LogIn, ClipboardList, Home, Shield, Moon, Sun, LogOut, Bell, Heart, UserPlus } from 'lucide-react';
+import { Menu, X, User, LogIn, ClipboardList, Home, Shield, Moon, Sun, LogOut, Bell, Heart, UserPlus, Download } from 'lucide-react';
 import { NotificationItem } from '../types';
 
 const PRANCHETA_URL = "https://prancheta.ancb.app.br";
@@ -23,6 +23,8 @@ interface HeaderProps {
   onNossaHistoriaClick: () => void;
   notifications?: NotificationItem[];
   onNotificationsClick?: () => void;
+  showInstallAppLink?: boolean;
+  onInstallApp?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -38,6 +40,8 @@ export const Header: React.FC<HeaderProps> = ({
   onNossaHistoriaClick,
   notifications = [],
   onNotificationsClick,
+  showInstallAppLink = false,
+  onInstallApp,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeMenu = () => setIsMenuOpen(false);
@@ -176,15 +180,21 @@ export const Header: React.FC<HeaderProps> = ({
             <Home size={20} /> Início
           </button>
 
-          <button onClick={() => { onNossaHistoriaClick(); closeMenu(); }} className="header-menu-item">
-            <Heart size={20} /> Nossa História
-          </button>
+          {!user && (
+            <button onClick={() => { onLogin(); closeMenu(); }} className="header-menu-item">
+              <LogIn size={20} /> Entrar
+            </button>
+          )}
 
           {!user && (
             <button onClick={() => { onRegister(); closeMenu(); }} className="header-menu-item text-ancb-orange">
               <UserPlus size={20} /> Registrar
             </button>
           )}
+
+          <button onClick={() => { onNossaHistoriaClick(); closeMenu(); }} className="header-menu-item">
+            <Heart size={20} /> Nossa História
+          </button>
 
           {user && (
             <button onClick={() => { onProfileClick(); closeMenu(); }} className="header-menu-item">
@@ -212,6 +222,12 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-[10px] opacity-80">{isPranchetaInstalled ? 'Abrir App' : 'App Offline'}</span>
             </div>
           </a>
+
+          {showInstallAppLink && onInstallApp && (
+            <button onClick={() => { onInstallApp(); closeMenu(); }} className="header-menu-item text-ancb-orange">
+              <Download size={20} /> Instalar app
+            </button>
+          )}
 
           {user && (
             <button 

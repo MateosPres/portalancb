@@ -898,6 +898,18 @@ const App: React.FC = () => {
         setReturnToEventId(null);
     };
 
+    const handleInstallPortal = () => {
+        if (isIos) {
+            setShowInstallModal(true);
+            return;
+        }
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+        }
+    };
+
+    const showInstallInMenu = !isStandalone && (deferredPrompt || isIos) && (isIos || isAndroid);
+
     const getSafePhoto = (profile: any) => {
         if (!profile) return null;
         let raw = (profile.foto || profile.photoURL || '').trim();
@@ -941,6 +953,8 @@ const App: React.FC = () => {
                 onNossaHistoriaClick={handleNossaHistoriaClick}
                 notifications={notifications}
                 onNotificationsClick={() => setShowNotificationsView(true)}
+                showInstallAppLink={showInstallInMenu}
+                onInstallApp={handleInstallPortal}
             />
 
             <main className={`flex-grow ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' || currentView === 'post-view' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
@@ -974,7 +988,7 @@ const App: React.FC = () => {
                 <footer className="bg-[#062553] text-white text-center py-8 mt-10">
                     <p className="font-bold mb-1">Associação Nova Canaã de Basquete - MT</p>
                     <p className="text-sm text-gray-400">&copy; 2025 Todos os direitos reservados.</p>
-                    {(!isStandalone && (deferredPrompt || isIos)) && (<button onClick={() => { if (isIos) setShowInstallModal(true); else if (deferredPrompt) deferredPrompt.prompt(); }} className="mt-4 inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all"><LucideDownload size={14} /> Instalar Portal</button>)}
+                    {(!isStandalone && (deferredPrompt || isIos)) && (<button onClick={handleInstallPortal} className="mt-4 inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all"><LucideDownload size={14} /> Instalar Portal</button>)}
                 </footer>
             )}
 
