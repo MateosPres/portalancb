@@ -25,6 +25,7 @@ interface HeaderProps {
   onNotificationsClick?: () => void;
   showInstallAppLink?: boolean;
   onInstallApp?: () => void;
+  onInstallPranchetaApp?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -42,12 +43,14 @@ export const Header: React.FC<HeaderProps> = ({
   onNotificationsClick,
   showInstallAppLink = false,
   onInstallApp,
+  onInstallPranchetaApp,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeMenu = () => setIsMenuOpen(false);
 
   const isAdmin = user?.role === 'admin' || user?.role === 'super-admin';
   const unreadCount = notifications.filter(n => !n.read).length;
+  const isMobileDevice = /android|iphone|ipad|ipod/i.test(window.navigator.userAgent);
 
   // Detecta se a Prancheta está instalada como PWA
   const [isPranchetaInstalled, setIsPranchetaInstalled] = useState(false);
@@ -58,20 +61,27 @@ export const Header: React.FC<HeaderProps> = ({
         setIsPranchetaInstalled(installed);
       }).catch(() => {});
     }
-    // Fallback: verifica se está rodando em standalone (própria janela de PWA)
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      setIsPranchetaInstalled(true);
-    }
   }, []);
 
   const handlePranchetaClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (isPranchetaInstalled) {
-      // Tenta abrir o app instalado — abre na própria aba sem _blank
-      window.location.href = PRANCHETA_URL;
-    } else {
+
+    // No desktop sempre abre no navegador.
+    if (!isMobileDevice) {
       window.open(PRANCHETA_URL, '_blank', 'noopener,noreferrer');
+      closeMenu();
+      return;
     }
+
+    if (isPranchetaInstalled) {
+      // Em mobile, quando instalada, tenta abrir a app instalada.
+      window.location.href = PRANCHETA_URL;
+      closeMenu();
+      return;
+    }
+
+    // Em mobile sem app instalada, inicia fluxo de instalação sem navegar para a web da prancheta.
+    onInstallPranchetaApp?.();
     closeMenu();
   };
 
@@ -219,7 +229,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div>
               <span className="font-bold block leading-tight">Prancheta Tática</span>
-              <span className="text-[10px] opacity-80">{isPranchetaInstalled ? 'Abrir App' : 'App Offline'}</span>
+              <span className="text-[10px] opacity-80">{isMobileDevice ? (isPranchetaInstalled ? 'Abrir App' : 'Instalar App') : 'Abrir no navegador'}</span>
             </div>
           </a>
 

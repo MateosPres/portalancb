@@ -31,6 +31,7 @@ import { useScrollToTop } from './hooks/useScrollToTop';
 
 // Chave VAPID fornecida para autenticação do Push Notification
 const VAPID_KEY = "BI9T9nLXUjdJHqOSZEoORZ7UDyWQoIMcrQ5Oz-7KeKif19LoGx_Db5AdY4zi0yXT5zTdvZRbJy6nF65Dv-8ncKk"; 
+const PRANCHETA_URL = 'https://prancheta.ancb.app.br';
 
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>('home');
@@ -105,6 +106,7 @@ const App: React.FC = () => {
     // PWA & Theme
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     const [showInstallModal, setShowInstallModal] = useState(false);
+    const [showPranchetaInstallModal, setShowPranchetaInstallModal] = useState(false);
     const [isIos, setIsIos] = useState(false);
     const [isAndroid, setIsAndroid] = useState(false);
     const [isStandalone, setIsStandalone] = useState(false);
@@ -908,6 +910,10 @@ const App: React.FC = () => {
         }
     };
 
+    const handleInstallPrancheta = () => {
+        setShowPranchetaInstallModal(true);
+    };
+
     const showInstallInMenu = !isStandalone && (deferredPrompt || isIos) && (isIos || isAndroid);
 
     const getSafePhoto = (profile: any) => {
@@ -955,6 +961,7 @@ const App: React.FC = () => {
                 onNotificationsClick={() => setShowNotificationsView(true)}
                 showInstallAppLink={showInstallInMenu}
                 onInstallApp={handleInstallPortal}
+                onInstallPranchetaApp={handleInstallPrancheta}
             />
 
             <main className={`flex-grow ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' || currentView === 'post-view' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
@@ -1019,6 +1026,25 @@ const App: React.FC = () => {
                         </div>
                     </div>
                     <Button onClick={() => setShowInstallModal(false)} className="w-full">Entendi</Button>
+                </div>
+            </Modal>
+
+            <Modal isOpen={showPranchetaInstallModal} onClose={() => setShowPranchetaInstallModal(false)} title="Instalar Prancheta Tática">
+                <div className="flex flex-col items-center text-center space-y-6">
+                    <p className="text-gray-600 dark:text-gray-300">
+                        A prancheta abre direto como app no celular quando estiver instalada. Para instalar sem abrir no navegador agora, siga estes passos:
+                    </p>
+                    <div className="flex flex-col gap-4 w-full">
+                        <div className="flex items-center gap-4 bg-gray-100 dark:bg-gray-700 p-3 rounded-xl text-left">
+                            <div className="bg-white dark:bg-gray-600 p-2 rounded-lg text-blue-500"><LucideShare size={24} /></div>
+                            <div><span className="block font-bold text-gray-800 dark:text-white text-sm">1. Abra a Prancheta uma vez no navegador</span><span className="text-xs text-gray-500 dark:text-gray-400 break-all">{PRANCHETA_URL}</span></div>
+                        </div>
+                        <div className="flex items-center gap-4 bg-gray-100 dark:bg-gray-700 p-3 rounded-xl text-left">
+                            <div className="bg-white dark:bg-gray-600 p-2 rounded-lg text-gray-800 dark:text-white"><LucidePlusSquare size={24} /></div>
+                            <div><span className="block font-bold text-gray-800 dark:text-white text-sm">2. Toque em Adicionar a tela inicial</span><span className="text-xs text-gray-500 dark:text-gray-400">No Chrome ou Safari, use o menu de compartilhamento.</span></div>
+                        </div>
+                    </div>
+                    <Button onClick={() => setShowPranchetaInstallModal(false)} className="w-full">Entendi</Button>
                 </div>
             </Modal>
 
