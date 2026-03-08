@@ -223,6 +223,8 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
         <img
           src={logoUrl}
           alt={name}
+          loading="lazy"
+          decoding="async"
           className="rounded-full object-cover"
           style={{ width: size, height: size }}
         />
@@ -509,6 +511,8 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
               <img
                 src={currentLogo}
                 alt={apoiadores[currentApoiadorIndex].nome}
+                loading="lazy"
+                decoding="async"
                 className="object-contain drop-shadow-xl"
                 style={{
                   width: isPortrait ? '56px' : '80px',

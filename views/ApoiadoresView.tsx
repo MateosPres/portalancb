@@ -59,6 +59,8 @@ const InstagramGalleryItem: React.FC<InstagramGalleryItemProps> = ({ item, isAdm
                 <img
                     src={item.imageUrl}
                     alt="Foto da galeria"
+                    loading="lazy"
+                    decoding="async"
                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                 />
             </button>
@@ -251,6 +253,8 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
                 <img
                     src="https://i.imgur.com/myenXDV.jpeg"
                     alt="Time ANCB-MT"
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-56 object-cover object-center"
                 />
 
@@ -359,6 +363,8 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
                                     <img
                                         src={apoiador.logoBase64}
                                         alt={apoiador.nome}
+                                        loading="lazy"
+                                        decoding="async"
                                         className="w-full h-full object-contain transition-all duration-300 group-hover:scale-105"
                                         style={{ ...logoStyle, opacity: logoOpacity }}
                                         onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
@@ -408,7 +414,7 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
             >
                 {expandedImageUrl && (
                     <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-transparent flex justify-center">
-                        <img src={expandedImageUrl} alt="Foto ampliada" className="max-w-full max-h-[calc(96vh-7.5rem)] h-auto w-auto object-contain" />
+                        <img src={expandedImageUrl} alt="Foto ampliada" decoding="async" className="max-w-full max-h-[calc(96vh-7.5rem)] h-auto w-auto object-contain" />
                     </div>
                 )}
             </Modal>

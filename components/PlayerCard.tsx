@@ -58,7 +58,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, onClick }) => {
             {/* Avatar */}
             <div className="w-24 h-24 rounded-full border-4 border-gray-50 dark:border-gray-700 mb-3 overflow-hidden shadow-inner bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                 {player.foto ? (
-                    <img src={player.foto} alt={player.nome} className="w-full h-full object-cover" />
+                    <img src={player.foto} alt={player.nome} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                 ) : (
                     <span className="text-2xl font-bold text-gray-400 dark:text-gray-500">{getInitials(player.nome)}</span>
                 )}

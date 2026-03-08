@@ -468,7 +468,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                             <div className="flex-1 min-w-0">
                                 <div className="relative w-fit mb-4">
                                     <div className="w-24 h-24 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
-                                        {formData.foto ? <img src={formData.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-3xl font-bold text-white/50">{formData.nome?.charAt(0)}</span>}
+                                        {formData.foto ? <img src={formData.foto} alt="Profile" loading="lazy" decoding="async" className="w-full h-full object-cover" /> : <span className="text-3xl font-bold text-white/50">{formData.nome?.charAt(0)}</span>}
                                     </div>
                                     <div className="absolute bottom-1 right-0 bg-ancb-orange text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md border border-white/20">
                                         #{formData.numero_uniforme}
@@ -500,7 +500,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                         <div className="hidden md:flex flex-row items-center gap-6 w-full">
                             <div className="relative shrink-0">
                                 <div className="w-28 h-28 md:w-32 md:h-32 rounded-full border-4 border-white/10 bg-gray-700 shadow-xl overflow-hidden flex items-center justify-center">
-                                    {formData.foto ? <img src={formData.foto} alt="Profile" className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-white/50">{formData.nome?.charAt(0)}</span>}
+                                    {formData.foto ? <img src={formData.foto} alt="Profile" loading="lazy" decoding="async" className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-white/50">{formData.nome?.charAt(0)}</span>}
                                 </div>
                                 <div className="absolute bottom-1 right-0 bg-ancb-orange text-white text-sm font-bold px-3 py-1 rounded-lg shadow-md border border-white/20">
                                     #{formData.numero_uniforme}

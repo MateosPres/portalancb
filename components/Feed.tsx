@@ -85,7 +85,7 @@ export const Feed: React.FC<FeedProps> = ({ onOpenPost }) => {
                                 </div>
                                 {post.image_url && (
                                     <div className="h-40 w-full relative">
-                                        <img src={post.image_url} alt="Foto do Jogo" className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity" />
+                                        <img src={post.image_url} alt="Foto do Jogo" loading="lazy" decoding="async" className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity" />
                                         <div className="absolute inset-0 bg-gradient-to-t from-ancb-black to-transparent"></div>
                                     </div>
                                 )}
@@ -150,6 +150,8 @@ export const Feed: React.FC<FeedProps> = ({ onOpenPost }) => {
                                     <img 
                                         src={videoThumbnail} 
                                         alt="Video Thumbnail" 
+                                        loading="lazy"
+                                        decoding="async"
                                         className="w-full h-full object-cover opacity-80 group-hover:opacity-60 transition-opacity transform group-hover:scale-105 duration-500" 
                                     />
                                     <div className="absolute inset-0 flex items-center justify-center">
@@ -160,7 +162,7 @@ export const Feed: React.FC<FeedProps> = ({ onOpenPost }) => {
                                 </div>
                             ) : post.image_url ? (
                                 <div className="h-48 w-full overflow-hidden">
-                                    <img src={post.image_url} alt={post.content.titulo} className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500" />
+                                    <img src={post.image_url} alt={post.content.titulo} loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500" />
                                 </div>
                             ) : null}
                             <div className="p-5 flex flex-col flex-grow">

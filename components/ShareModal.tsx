@@ -3,9 +3,18 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { StoryRenderer, StoryType } from './StoryTemplates';
-import { toPng } from 'html-to-image';
-import { LucideDownload, LucideShare2, LucideLoader2, LucideSave } from 'lucide-react';
+import { LucideShare2, LucideLoader2 } from 'lucide-react';
 import { Evento, Jogo, Player, Time } from '../types';
+
+let htmlToImageModulePromise: Promise<typeof import('html-to-image')> | null = null;
+
+const getToPng = async () => {
+    if (!htmlToImageModulePromise) {
+        htmlToImageModulePromise = import('html-to-image');
+    }
+    const module = await htmlToImageModulePromise;
+    return module.toPng;
+};
 
 interface ShareModalProps {
     isOpen: boolean;
@@ -57,6 +66,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, data })
         setLoading(true);
         
         try {
+            const toPng = await getToPng();
+
             // 1. Wait for DOM to settle
             await new Promise(resolve => setTimeout(resolve, 1000));
 

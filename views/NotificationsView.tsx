@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { db } from '../services/firebase';
 import { UserProfile, NotificationItem, Evento } from '../types';
 import { Button } from '../components/Button';
@@ -16,7 +16,7 @@ import {
     LucideClipboardList,
 } from 'lucide-react';
 import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, orderBy, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from 'framer-motion';
+import { motion, AnimatePresence, type PanInfo, useMotionValue, useTransform } from 'framer-motion';
 
 interface NotificationsViewProps {
     onBack: () => void;
@@ -49,17 +49,19 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                 const rawNotifs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as NotificationItem));
                 
                 // Limpeza automática de notificações de jogos deletados
-                const validNotifs: NotificationItem[] = [];
-                for (const notif of rawNotifs) {
+                const notificationChecks = rawNotifs.map(async (notif) => {
                     if (notif.type === 'pending_review' && notif.data?.eventId && notif.data?.gameId) {
                         const gameSnap = await getDoc(doc(db, 'eventos', notif.data.eventId, 'jogos', notif.data.gameId));
                         if (!gameSnap.exists()) {
                             deleteDoc(doc(db, 'notifications', notif.id)).catch(console.error);
-                            continue; 
+                            return null;
                         }
                     }
-                    validNotifs.push(notif);
-                }
+                    return notif;
+                });
+
+                const checkedNotifs = await Promise.all(notificationChecks);
+                const validNotifs = checkedNotifs.filter((n): n is NotificationItem => n !== null);
                 setNotifications(validNotifs);
 
                 // Busca eventos onde o jogador está escalado
@@ -109,12 +111,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
         fetchNotifications();
     }, [userProfile]);
 
-    // ✅ Apaga a notificação pending_review do estado local (chamado pelo App.tsx após o quiz)
-    const removeNotification = (notificationId: string) => {
-        setNotifications(prev => prev.filter(n => n.id !== notificationId));
-    };
-
-    const handleDeleteNotification = async (id: string, type: string) => {
+    const handleDeleteNotification = useCallback(async (id: string, type: string) => {
         if (type === 'roster_invite' || type === 'pending_review') return;
         try {
             await deleteDoc(doc(db, 'notifications', id));
@@ -122,16 +119,16 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
         } catch (error) {
             console.error("Error deleting notification:", error);
         }
-    };
+    }, []);
 
-    const handleClearAll = async () => {
+    const handleClearAll = useCallback(async () => {
         if (!window.confirm("Deseja limpar todas as notificações recentes?")) return;
         const deletable = notifications.filter(n => n.type !== 'roster_invite' && n.type !== 'pending_review');
-        for (const notif of deletable) await deleteDoc(doc(db, 'notifications', notif.id));
+        await Promise.all(deletable.map((notif) => deleteDoc(doc(db, 'notifications', notif.id))));
         setNotifications(prev => prev.filter(n => n.type === 'roster_invite' || n.type === 'pending_review'));
-    };
+    }, [notifications]);
 
-    const handleRosterResponse = async (notification: NotificationItem, accept: boolean) => {
+    const handleRosterResponse = useCallback(async (notification: NotificationItem, accept: boolean) => {
         try {
             const { eventId, teamId } = notification.data || {};
             if (!eventId) { alert("Dados da notificação inválidos."); return; }
@@ -186,9 +183,9 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
             console.error("Error responding:", error);
             alert("Erro ao responder à convocação.");
         }
-    };
+    }, [userProfile.linkedPlayerId]);
 
-    const handleStartEvaluation = async (notification: NotificationItem) => {
+    const handleStartEvaluation = useCallback(async (notification: NotificationItem) => {
         const { eventId, gameId } = notification.data || {};
 
         if (!eventId || !gameId) {
@@ -212,12 +209,12 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
             console.error("Erro ao verificar partida:", error);
             alert("Erro ao acessar os dados do jogo.");
         }
-    };
+    }, [onStartEvaluation]);
 
     // Separa por tipo
-    const pendingReviews = notifications.filter(n => n.type === 'pending_review');
-    const otherNotifs   = notifications.filter(n => n.type !== 'pending_review');
-    const hasAnything   = rosteredEvents.length > 0 || pendingReviews.length > 0 || otherNotifs.length > 0;
+    const pendingReviews = useMemo(() => notifications.filter(n => n.type === 'pending_review'), [notifications]);
+    const otherNotifs = useMemo(() => notifications.filter(n => n.type !== 'pending_review'), [notifications]);
+    const hasAnything = rosteredEvents.length > 0 || pendingReviews.length > 0 || otherNotifs.length > 0;
 
     if (loading) return (
         <div className="fixed inset-0 z-50 flex justify-center items-center bg-black/50 backdrop-blur-sm">
@@ -349,7 +346,7 @@ interface PendingReviewCardProps {
     onStart: () => void;
 }
 
-const PendingReviewCard: React.FC<PendingReviewCardProps> = ({ notification, onStart }) => (
+const PendingReviewCard: React.FC<PendingReviewCardProps> = memo(({ notification, onStart }) => (
     <motion.div
         layout
         initial={{ opacity: 0, y: 16 }}
@@ -374,7 +371,7 @@ const PendingReviewCard: React.FC<PendingReviewCardProps> = ({ notification, onS
             </div>
         </div>
     </motion.div>
-);
+));
 
 // ── CARD DE NOTIFICAÇÃO GERAL ─────────────────────────────────────────────────
 interface NotificationCardProps {
@@ -383,7 +380,7 @@ interface NotificationCardProps {
     onRosterResponse: (notification: NotificationItem, accept: boolean) => void;
 }
 
-const NotificationCard = React.forwardRef<HTMLDivElement, NotificationCardProps>(
+const NotificationCard = memo(React.forwardRef<HTMLDivElement, NotificationCardProps>(
     ({ notification, onDelete, onRosterResponse }, ref) => {
         const isDeletable = notification.type !== 'roster_invite';
         const x = useMotionValue(0);
@@ -450,4 +447,6 @@ const NotificationCard = React.forwardRef<HTMLDivElement, NotificationCardProps>
             </motion.div>
         );
     }
-);
+));
+
+NotificationCard.displayName = 'NotificationCard';

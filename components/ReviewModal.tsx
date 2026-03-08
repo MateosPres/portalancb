@@ -70,7 +70,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({ isOpen, onClose, teamm
                             >
                                 <div className="w-12 h-12 rounded-full overflow-hidden mb-1 bg-gray-200">
                                     {player.foto ? (
-                                        <img src={player.foto} className="w-full h-full object-cover" />
+                                        <img src={player.foto} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center font-bold text-gray-400">{player.nome.charAt(0)}</div>
                                     )}

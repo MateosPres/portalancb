@@ -258,7 +258,7 @@ export const ChaaveConfigurator: React.FC<ChaaveConfiguratorProps> = ({
         >
             <LucideGripVertical size={16} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
             {time.logoUrl ? (
-                <img src={time.logoUrl} alt={time.nomeTime} className="w-6 h-6 object-contain" />
+                <img src={time.logoUrl} alt={time.nomeTime} loading="lazy" decoding="async" className="w-6 h-6 object-contain" />
             ) : (
                 <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-ancb-blue dark:text-blue-300 font-bold text-xs">
                     {time.nomeTime.charAt(0)}

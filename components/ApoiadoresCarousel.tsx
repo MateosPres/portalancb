@@ -89,6 +89,8 @@ export const ApoiadoresCarousel: React.FC<ApoiadoresCarouselProps> = ({ onVerTod
                                 <img
                                     src={apoiador.logoBase64}
                                     alt={apoiador.nome}
+                                    loading="lazy"
+                                    decoding="async"
                                     className="h-full w-full object-contain object-center"
                                     style={{
                                         opacity: logoOpacity,

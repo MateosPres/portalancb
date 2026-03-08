@@ -40,7 +40,7 @@ const PlayerButton: React.FC<PlayerButtonProps> = ({ player, jerseyNumber, onCli
     >
         <div className="relative mb-2">
             <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gray-700 overflow-hidden border-2 border-white/10">
-                {player.foto ? <img src={player.foto} className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center font-bold text-white/50">{player.nome.charAt(0)}</span>}
+                {player.foto ? <img src={player.foto} loading="lazy" decoding="async" className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center font-bold text-white/50">{player.nome.charAt(0)}</span>}
             </div>
             {/* Number Badge - Positioned Absolute OUTSIDE the overflow-hidden container */}
             <div className="absolute -bottom-1 -right-1 bg-ancb-orange text-white text-[10px] font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-gray-900 shadow-md z-10">
@@ -482,7 +482,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                         <div className="flex flex-col items-center mb-6">
                             <div className="w-20 h-20 rounded-full bg-gray-700 border-4 border-ancb-orange overflow-hidden mb-3 shadow-lg">
                                 {selectedPlayerForScoring.player.foto ? 
-                                    <img src={selectedPlayerForScoring.player.foto} className="w-full h-full object-cover" /> : 
+                                    <img src={selectedPlayerForScoring.player.foto} loading="lazy" decoding="async" className="w-full h-full object-cover" /> : 
                                     <div className="w-full h-full flex items-center justify-center font-bold text-2xl text-gray-400">{selectedPlayerForScoring.player.nome.charAt(0)}</div>
                                 }
                             </div>

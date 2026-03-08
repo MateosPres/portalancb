@@ -175,6 +175,8 @@ export const GroupStandings: React.FC<GroupStandingsProps> = ({
                                             <img
                                                 src={standing.team.logoUrl}
                                                 alt={standing.team.nomeTime}
+                                                loading="lazy"
+                                                decoding="async"
                                                 className="w-8 h-8 object-contain"
                                             />
                                         ) : (

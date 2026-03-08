@@ -446,7 +446,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                                 {isUploadingLogo ? (
                                     <LucideLoader2 className="animate-spin text-gray-400" />
                                 ) : team.logoUrl ? (
-                                    <img src={team.logoUrl} className="w-full h-full object-contain" />
+                                    <img src={team.logoUrl} loading="lazy" decoding="async" className="w-full h-full object-contain" />
                                 ) : (
                                     <span className="text-xs text-gray-400 text-center px-2">Logo</span>
                                 )}
@@ -520,7 +520,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                                         <div className="flex items-center gap-3 cursor-pointer min-w-0 mr-2" onClick={() => isAdmin && !isSelected && togglePlayer(p.id)}>
                                             <div className="relative">
                                                 <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center border-2 border-white dark:border-gray-700 shadow-sm">
-                                                    {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-sm font-bold text-gray-500">{p.nome.charAt(0)}</span>}
+                                                    {p.foto ? <img src={p.foto} loading="lazy" decoding="async" className="w-full h-full object-cover"/> : <span className="text-sm font-bold text-gray-500">{p.nome.charAt(0)}</span>}
                                                 </div>
                                                 {isSelected && (
                                                     <div className="absolute -bottom-1 -right-1 bg-ancb-blue text-white rounded-full p-0.5 border-2 border-white dark:border-gray-800">

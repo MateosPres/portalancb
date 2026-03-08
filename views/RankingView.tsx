@@ -375,7 +375,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                 <div className="relative mb-2">
                                     <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-4 border-gray-300 shadow-lg bg-gray-200 dark:bg-gray-700">
                                         {stats[1].foto ? (
-                                            <img src={stats[1].foto} alt="" className="w-full h-full object-cover"/>
+                                            <img src={stats[1].foto} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"/>
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-xl font-bold text-gray-400">
                                                 {stats[1].nome.charAt(0)}
@@ -402,7 +402,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                     
                                     <div className="w-20 h-20 md:w-28 md:h-28 rounded-full overflow-hidden border-4 border-yellow-400 shadow-xl ring-4 ring-yellow-100 dark:ring-yellow-900 bg-gray-200 dark:bg-gray-700 relative z-10">
                                         {stats[0].foto ? (
-                                            <img src={stats[0].foto} alt="" className="w-full h-full object-cover"/>
+                                            <img src={stats[0].foto} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"/>
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-gray-400">
                                                 {stats[0].nome.charAt(0)}
@@ -425,7 +425,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                 <div className="relative mb-2">
                                     <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-4 border-orange-300 shadow-lg bg-gray-200 dark:bg-gray-700">
                                         {stats[2].foto ? (
-                                            <img src={stats[2].foto} alt="" className="w-full h-full object-cover"/>
+                                            <img src={stats[2].foto} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"/>
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-xl font-bold text-gray-400">
                                                 {stats[2].nome.charAt(0)}
@@ -461,7 +461,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                         <div className="col-span-6 flex items-center gap-3">
                                             <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden hidden sm:flex items-center justify-center">
                                                 {player.foto ? (
-                                                    <img src={player.foto} className="w-full h-full object-cover"/>
+                                                    <img src={player.foto} loading="lazy" decoding="async" className="w-full h-full object-cover"/>
                                                 ) : (
                                                     <span className="text-xs font-bold text-gray-400">{player.nome.charAt(0)}</span>
                                                 )}

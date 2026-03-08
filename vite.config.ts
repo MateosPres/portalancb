@@ -52,5 +52,19 @@ export default defineConfig({
     target: 'es2015', // Aumenta a compatibilidade com iOS/Safari antigos e evita tela branca
     outDir: 'dist',
     assetsDir: 'assets',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+
+          if (id.includes('firebase')) return 'firebase';
+          if (id.includes('framer-motion')) return 'framer-motion';
+          if (id.includes('html-to-image')) return 'html-to-image';
+          if (id.includes('lucide-react')) return 'icons';
+
+          return 'vendor';
+        }
+      }
+    }
   }
 });

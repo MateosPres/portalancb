@@ -1,28 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player, FeedPost } from './types';
 import firebase, { auth, db, requestFCMToken, onMessageListener } from './services/firebase';
 import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
 import { Modal } from './components/Modal';
-import { ImageCropperModal } from './components/ImageCropperModal';
 import { Feed } from './components/Feed';
-import { PeerReviewQuiz } from './components/PeerReviewQuiz';
 import { LiveEventHero } from './components/LiveEventHero';
 import { ApoiadoresCarousel } from './components/ApoiadoresCarousel';
-import { PublicGameView } from './views/PublicGameView';
-import { TeamManagerView } from './views/TeamManagerView';
-import { NotificationsView } from './views/NotificationsView';
-import { JogadoresView } from './views/JogadoresView';
-import { EventosView } from './views/EventosView';
-import { EventoDetalheView } from './views/EventoDetalheView';
-import { RankingView } from './views/RankingView';
-import { AdminView } from './views/AdminView';
-import { PainelJogoView } from './views/PainelJogoView';
-import { ProfileView } from './views/ProfileView';
-import { ApoiadoresView } from './views/ApoiadoresView';
-import { PostView } from './views/PostView';
-import { LucideCalendar, LucideUsers, LucideTrophy, LucideLogOut, LucideUser, LucideShield, LucideLock, LucideMail, LucideMoon, LucideSun, LucideEdit, LucideCamera, LucideLoader2, LucideLogIn, LucideBell, LucideCheckSquare, LucideMegaphone, LucideDownload, LucideShare, LucidePlus, LucidePhone, LucideInfo, LucideX, LucideExternalLink, LucideStar, LucideShare2, LucidePlusSquare, LucideUserPlus, LucideBellRing, LucideSettings } from 'lucide-react';
+import { LucideCalendar, LucideUsers, LucideTrophy, LucideLoader2, LucideMegaphone, LucideDownload, LucideShare, LucideX, LucideExternalLink, LucideStar, LucidePlusSquare } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { Header } from './components/Header';
 import { formatCpf, formatPhoneForDisplay, normalizeCpfForStorage, normalizePhoneForStorage } from './utils/contactFormat';
@@ -32,6 +18,22 @@ import { useScrollToTop } from './hooks/useScrollToTop';
 // Chave VAPID fornecida para autenticação do Push Notification
 const VAPID_KEY = "BI9T9nLXUjdJHqOSZEoORZ7UDyWQoIMcrQ5Oz-7KeKif19LoGx_Db5AdY4zi0yXT5zTdvZRbJy6nF65Dv-8ncKk"; 
 const PRANCHETA_URL = 'https://prancheta.ancb.app.br';
+
+// Route-level lazy loading to reduce initial mobile bundle size.
+const PublicGameView = React.lazy(() => import('./views/PublicGameView').then((m) => ({ default: m.PublicGameView })));
+const TeamManagerView = React.lazy(() => import('./views/TeamManagerView').then((m) => ({ default: m.TeamManagerView })));
+const NotificationsView = React.lazy(() => import('./views/NotificationsView').then((m) => ({ default: m.NotificationsView })));
+const JogadoresView = React.lazy(() => import('./views/JogadoresView').then((m) => ({ default: m.JogadoresView })));
+const EventosView = React.lazy(() => import('./views/EventosView').then((m) => ({ default: m.EventosView })));
+const EventoDetalheView = React.lazy(() => import('./views/EventoDetalheView').then((m) => ({ default: m.EventoDetalheView })));
+const RankingView = React.lazy(() => import('./views/RankingView').then((m) => ({ default: m.RankingView })));
+const AdminView = React.lazy(() => import('./views/AdminView').then((m) => ({ default: m.AdminView })));
+const PainelJogoView = React.lazy(() => import('./views/PainelJogoView').then((m) => ({ default: m.PainelJogoView })));
+const ProfileView = React.lazy(() => import('./views/ProfileView').then((m) => ({ default: m.ProfileView })));
+const ApoiadoresView = React.lazy(() => import('./views/ApoiadoresView').then((m) => ({ default: m.ApoiadoresView })));
+const PostView = React.lazy(() => import('./views/PostView').then((m) => ({ default: m.PostView })));
+const ImageCropperModal = React.lazy(() => import('./components/ImageCropperModal').then((m) => ({ default: m.ImageCropperModal })));
+const PeerReviewQuiz = React.lazy(() => import('./components/PeerReviewQuiz').then((m) => ({ default: m.PeerReviewQuiz })));
 
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>('home');
@@ -969,7 +971,13 @@ const App: React.FC = () => {
             />
 
             <main className={`flex-grow ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' || currentView === 'post-view' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
-                {renderContent()}
+                <Suspense fallback={
+                    <div className="w-full py-16 flex items-center justify-center">
+                        <div className="w-10 h-10 border-4 border-gray-200 dark:border-gray-700 border-t-ancb-orange rounded-full animate-spin" />
+                    </div>
+                }>
+                    {renderContent()}
+                </Suspense>
             </main>
 
             {foregroundNotification && (
@@ -1004,16 +1012,18 @@ const App: React.FC = () => {
             )}
 
             {showNotificationsView && userProfile && (
-                <NotificationsView 
-                    onBack={() => setShowNotificationsView(false)} 
-                    userProfile={userProfile} 
-                    notificationPermissionStatus={notificationPermissionStatus}
-                    onEnableNotifications={handleEnableNotifications}
-                    onStartEvaluation={(gameId, eventId, notificationId) => {
-                        setShowNotificationsView(false);
-                        handleOpenReviewQuiz(gameId, eventId, notificationId);
-                    }}
-                />
+                <Suspense fallback={null}>
+                    <NotificationsView 
+                        onBack={() => setShowNotificationsView(false)} 
+                        userProfile={userProfile} 
+                        notificationPermissionStatus={notificationPermissionStatus}
+                        onEnableNotifications={handleEnableNotifications}
+                        onStartEvaluation={(gameId, eventId, notificationId) => {
+                            setShowNotificationsView(false);
+                            handleOpenReviewQuiz(gameId, eventId, notificationId);
+                        }}
+                    />
+                </Suspense>
             )}
 
             <Modal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} title="Instalar no iPhone">
@@ -1059,24 +1069,28 @@ const App: React.FC = () => {
                 </div>
             </Modal>
 
-            {reviewTargetGame && userProfile?.linkedPlayerId && <PeerReviewQuiz 
-                isOpen={showQuiz} 
-                onClose={async () => {
-                    setShowQuiz(false);
-                    if (pendingReviewNotificationId) {
-                        try {
-                            await deleteDoc(doc(db, 'notifications', pendingReviewNotificationId));
-                        } catch (e) {
-                            console.warn("Não foi possível apagar notificação de review:", e);
-                        }
-                        setPendingReviewNotificationId(null);
-                    }
-                }} 
-                gameId={reviewTargetGame.gameId} 
-                eventId={reviewTargetGame.eventId} 
-                reviewerId={userProfile.linkedPlayerId} 
-                playersToReview={reviewTargetGame.playersToReview} 
-            />}
+            {reviewTargetGame && userProfile?.linkedPlayerId && (
+                <Suspense fallback={null}>
+                    <PeerReviewQuiz 
+                        isOpen={showQuiz} 
+                        onClose={async () => {
+                            setShowQuiz(false);
+                            if (pendingReviewNotificationId) {
+                                try {
+                                    await deleteDoc(doc(db, 'notifications', pendingReviewNotificationId));
+                                } catch (e) {
+                                    console.warn("Não foi possível apagar notificação de review:", e);
+                                }
+                                setPendingReviewNotificationId(null);
+                            }
+                        }} 
+                        gameId={reviewTargetGame.gameId} 
+                        eventId={reviewTargetGame.eventId} 
+                        reviewerId={userProfile.linkedPlayerId} 
+                        playersToReview={reviewTargetGame.playersToReview} 
+                    />
+                </Suspense>
+            )}
             
             <Modal isOpen={showLogin} onClose={() => setShowLogin(false)} title="Entrar">
                 <form onSubmit={async (e) => { e.preventDefault(); try { await auth.signInWithEmailAndPassword(authEmail, authPassword); setShowLogin(false); setAuthEmail(''); setAuthPassword(''); } catch (error) { setAuthError("Erro ao entrar. Verifique suas credenciais."); } }} className="space-y-4">
@@ -1149,17 +1163,19 @@ const App: React.FC = () => {
                 </form>
             </Modal>
 
-            <ImageCropperModal
-                isOpen={showRegisterCropModal}
-                onClose={() => {
-                    setShowRegisterCropModal(false);
-                    setRegisterCropImageSrc(null);
-                    if (fileInputRef.current) fileInputRef.current.value = '';
-                }}
-                imageSrc={registerCropImageSrc || ''}
-                onCropComplete={handleRegisterCropComplete}
-                aspect={1}
-            />
+            <Suspense fallback={null}>
+                <ImageCropperModal
+                    isOpen={showRegisterCropModal}
+                    onClose={() => {
+                        setShowRegisterCropModal(false);
+                        setRegisterCropImageSrc(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    imageSrc={registerCropImageSrc || ''}
+                    onCropComplete={handleRegisterCropComplete}
+                    aspect={1}
+                />
+            </Suspense>
         </div>
     );
 };

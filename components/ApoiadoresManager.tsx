@@ -147,7 +147,7 @@ export const ApoiadoresManager: React.FC<ApoiadoresManagerProps> = ({
                         />
 
                         <div className="w-14 h-14 rounded-xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-100 dark:border-gray-600">
-                            <img src={a.logoBase64} alt={a.nome} className="w-12 h-12 object-contain" />
+                            <img src={a.logoBase64} alt={a.nome} loading="lazy" decoding="async" className="w-12 h-12 object-contain" />
                         </div>
 
                         <div className="flex-1 min-w-0">
@@ -221,7 +221,7 @@ export const ApoiadoresManager: React.FC<ApoiadoresManagerProps> = ({
                                 <div className="flex items-center gap-3">
                                     <div className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden bg-gray-50 dark:bg-gray-800 flex-shrink-0">
                                         {apoiadorLogoPreview
-                                            ? <img src={apoiadorLogoPreview} alt="preview" className="w-18 h-18 object-contain p-1" />
+                                            ? <img src={apoiadorLogoPreview} alt="preview" decoding="async" className="w-18 h-18 object-contain p-1" />
                                             : <span className="text-3xl">🏢</span>
                                         }
                                     </div>

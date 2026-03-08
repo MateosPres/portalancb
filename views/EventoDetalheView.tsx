@@ -250,7 +250,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
             return `
                 <tr>
                     <td>${index + 1}</td>
-                    <td><img src="${player.foto || defaultPhotoSvg}" alt="${escapeHtml(player.nome)}" class="athlete-photo" /></td>
+                    <td><img src="${player.foto || defaultPhotoSvg}" alt="${escapeHtml(player.nome)}" loading="lazy" decoding="async" class="athlete-photo" /></td>
                     <td>${escapeHtml(player.nome || '-')}</td>
                     <td>${formatBirthDate(player.nascimento)}</td>
                     <td>${escapeHtml(formatCpf(player.cpf) || '-')}</td>
@@ -297,7 +297,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
             <body>
                 <div class="sheet">
                     <div class="header">
-                        <img src="${logoUrl}" alt="Logo ANCB" />
+                        <img src="${logoUrl}" alt="Logo ANCB" loading="lazy" decoding="async" />
                         <p class="title">Associação Nova Canaã de Basquete</p>
                         <p class="subtitle">Ficha de Jogadores</p>
                         <p class="event-name"><strong>Evento:</strong> ${escapeHtml(event.nome)}</p>
@@ -760,7 +760,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                         <div className="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" onClick={() => setExpandedTeamId(expandedTeamId === team.id ? null : team.id)} >
                             <div className="flex items-center gap-3">
                                 {team.logoUrl ? (
-                                    <img src={team.logoUrl} alt={team.nomeTime} className="w-8 h-8 object-contain" />
+                                    <img src={team.logoUrl} alt={team.nomeTime} loading="lazy" decoding="async" className="w-8 h-8 object-contain" />
                                 ) : (
                                     <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-ancb-blue dark:text-blue-300 font-bold text-xs">
                                         {team.nomeTime.charAt(0)}
@@ -790,7 +790,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                     return (
                                         <div key={pid} className="flex items-center gap-3 p-2 rounded hover:bg-white dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => onSelectPlayer && onSelectPlayer(pid, team.id)}>
                                             <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center">
-                                                {p?.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-400">{p?.nome?.charAt(0) ?? '?'}</span>}
+                                                {p?.foto ? <img src={p.foto} loading="lazy" decoding="async" className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-400">{p?.nome?.charAt(0) ?? '?'}</span>}
                                             </div>
                                             <div>
                                                 <p className="text-xs font-bold text-gray-800 dark:text-gray-200">{p?.apelido || p?.nome || 'Desconhecido'}</p>
@@ -828,7 +828,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                     {/* Left: Avatar */}
                     <div className="w-12 h-12 flex-shrink-0 cursor-pointer" onClick={() => onSelectPlayer && onSelectPlayer(p.id)}>
                         <div className="w-full h-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center border border-gray-100 dark:border-gray-600">
-                            {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-sm font-bold text-gray-400">{p.nome.charAt(0)}</span>}
+                            {p.foto ? <img src={p.foto} loading="lazy" decoding="async" className="w-full h-full object-cover"/> : <span className="text-sm font-bold text-gray-400">{p.nome.charAt(0)}</span>}
                         </div>
                     </div>
 
@@ -1289,7 +1289,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                         <div className="flex items-center gap-3">
                                             <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg overflow-hidden border-2 ${team.isANCB ? 'bg-blue-800 border-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 border-gray-100 dark:border-gray-600 text-gray-600 dark:text-gray-300'}`}>
                                                 {team.logoUrl ? (
-                                                    <img src={team.logoUrl} alt={team.nomeTime} className="w-full h-full object-cover" />
+                                                    <img src={team.logoUrl} alt={team.nomeTime} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                                                 ) : (
                                                     <span>{team.nomeTime.charAt(0)}</span>
                                                 )}
@@ -1772,7 +1772,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                         <div className="space-y-4">
                             <div className="flex items-center gap-4 justify-center mb-6">
                                 <div className={`w-24 h-24 rounded-full border-4 border-blue-100 dark:border-blue-900 flex items-center justify-center overflow-hidden ${viewingTeam.logoUrl ? 'bg-transparent' : 'bg-gray-200 dark:bg-gray-700'}`}>
-                                    {viewingTeam.logoUrl ? <img src={viewingTeam.logoUrl} className="w-full h-full object-contain"/> : <span className="text-2xl font-bold text-gray-400">{viewingTeam.nomeTime.charAt(0)}</span>}
+                                    {viewingTeam.logoUrl ? <img src={viewingTeam.logoUrl} loading="lazy" decoding="async" className="w-full h-full object-contain"/> : <span className="text-2xl font-bold text-gray-400">{viewingTeam.nomeTime.charAt(0)}</span>}
                                 </div>
                             </div>
                             
@@ -1797,7 +1797,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                     className="flex items-center gap-3 p-3 cursor-pointer border-b last:border-0 border-gray-100 dark:border-gray-700/50 hover:bg-white dark:hover:bg-gray-700 transition-colors"
                                                 >
                                                     <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden flex items-center justify-center border border-gray-100 dark:border-gray-500">
-                                                        {p.foto ? <img src={p.foto} className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-500">{p.nome.charAt(0)}</span>}
+                                                        {p.foto ? <img src={p.foto} loading="lazy" decoding="async" className="w-full h-full object-cover"/> : <span className="text-xs font-bold text-gray-500">{p.nome.charAt(0)}</span>}
                                                     </div>
                                                     <div>
                                                         <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{p.apelido || p.nome}</p>

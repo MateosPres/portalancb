@@ -215,7 +215,7 @@ export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({
                 <div className="relative mb-3">
                     <div className="w-24 h-24 rounded-full overflow-hidden border-[3px] border-[#F27405] shadow-2xl shadow-orange-500/30">
                         {currentPlayer.foto ? (
-                            <img src={currentPlayer.foto} className="w-full h-full object-cover" alt={playerName} />
+                            <img src={currentPlayer.foto} loading="lazy" decoding="async" className="w-full h-full object-cover" alt={playerName} />
                         ) : (
                             <div className="w-full h-full bg-gradient-to-br from-[#062553] to-[#0a3a7a] flex items-center justify-center">
                                 <span className="text-3xl font-black text-white">{playerInitial}</span>

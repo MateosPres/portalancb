@@ -95,7 +95,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity" 
             onClick={onHomeClick}
           >
-            <img src={LOGO_URL} alt="ANCB Logo" className="h-10 md:h-13 w-auto relative z-10 drop-shadow-md" />
+            <img src={LOGO_URL} alt="ANCB Logo" decoding="async" className="h-10 md:h-13 w-auto relative z-10 drop-shadow-md" />
             <h1 className="text-white text-lg md:text-xl font-bold tracking-wide">
               Portal ANCB-MT
             </h1>
@@ -148,6 +148,8 @@ export const Header: React.FC<HeaderProps> = ({
                   {user.photo ? (
                     <img 
                       src={user.photo} 
+                      loading="lazy"
+                      decoding="async"
                       className="w-9 h-9 rounded-full border-2 border-[#F27405] object-cover bg-gray-200" 
                       alt="Perfil" 
                     />

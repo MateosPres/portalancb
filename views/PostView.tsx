@@ -96,6 +96,8 @@ export const PostView: React.FC<PostViewProps> = ({ post, onBack }) => {
                                 <img
                                     src={post.image_url}
                                     alt={post.content.titulo || 'Imagem do post'}
+                                    loading="lazy"
+                                    decoding="async"
                                     className="w-full max-h-[560px] object-cover rounded-xl shadow-sm"
                                 />
                             ) : null}
