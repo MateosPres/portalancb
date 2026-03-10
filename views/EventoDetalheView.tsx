@@ -1101,6 +1101,17 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                             <LucideNetwork size={16} /> Configurar Chaves
                         </button>
                     )}
+                    {event.type === 'torneio_externo' && event.status !== 'finalizado' && (
+                        <button
+                            onClick={() => {
+                                setShowPodiumModal(true);
+                                setShowHeaderAdminMenu(false);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 text-sm flex items-center gap-2 text-yellow-700 dark:text-yellow-400"
+                        >
+                            <LucideMedal size={16} /> Definir Pódio
+                        </button>
+                    )}
                     <button
                         onClick={() => {
                             handleDeleteEvent();
@@ -1374,11 +1385,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                     {event.formato === 'chaveamento' ? <LucideNetwork className="text-ancb-blue" /> : <LucideList className="text-ancb-blue" />}
                                     Classificação & Pódio
                                 </h3>
-                                {isAdmin && event.status !== 'finalizado' && (
-                                    <Button size="sm" onClick={() => setShowPodiumModal(true)} className="bg-yellow-500 hover:bg-yellow-600 text-white border-none">
-                                        <LucideMedal size={16} className="mr-1" /> Definir Pódio
-                                    </Button>
-                                )}
+
                             </div>
 
                             {event.podio && (

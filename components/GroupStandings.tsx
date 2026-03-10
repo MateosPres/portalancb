@@ -1,6 +1,5 @@
 import React from 'react';
 import { Time, Jogo } from '../types';
-import { LucideChevronRight, LucideMedal } from 'lucide-react';
 
 interface GroupStandingsProps {
     timesParticipantes: Time[];
@@ -154,7 +153,6 @@ export const GroupStandings: React.FC<GroupStandingsProps> = ({
                                 <th className="p-4 text-center">D</th>
                                 <th className="p-4 text-center">Saldo</th>
                                 <th className="p-4 text-center font-black">Pts</th>
-                                <th className="p-4 text-center">Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -213,28 +211,12 @@ export const GroupStandings: React.FC<GroupStandingsProps> = ({
                                     <td className="p-4 text-center font-black text-ancb-blue text-lg">
                                         {standing.totalPoints}
                                     </td>
-                                    <td className="p-4 text-center">
-                                        {standing.qualifies ? (
-                                            <div className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                                                <LucideChevronRight size={14} />
-                                                Avança
-                                            </div>
-                                        ) : (
-                                            <span className="text-gray-400 text-xs">—</span>
-                                        )}
-                                    </td>
+
                                 </tr>
                             ))}
                         </tbody>
                     </table>
 
-                    {/* Qualifiers Info */}
-                    <div className="bg-gray-50 dark:bg-gray-700/50 px-6 py-3 text-xs text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-600 flex items-center gap-2">
-                        <LucideMedal size={14} className="text-green-500" />
-                        <span>
-                            Os <strong>{qualifiersPerGroup}</strong> primeiros colocados avançam para a próxima fase
-                        </span>
-                    </div>
                 </div>
             ))}
 
