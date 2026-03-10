@@ -920,10 +920,6 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
     const getGameResultClass = (game: Jogo) => {
         const base = "border-2";
-        if (game.status !== 'finalizado') return `${base} border-gray-200 dark:border-gray-700`;
-
-        const scoreA = resolveScore(game.placarTimeA_final, game.placarANCB_final);
-        const scoreB = resolveScore(game.placarTimeB_final, game.placarAdversario_final);
 
         const hasANCBInName = (name?: string) => (name || '').toUpperCase().includes('ANCB');
 
@@ -943,22 +939,26 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
         const teamAIsANCB = isTeamANCB(game.timeA_id, game.timeA_nome, 'A');
         const teamBIsANCB = isTeamANCB(game.timeB_id, game.timeB_nome || game.adversario, 'B');
+        const isANCBGame = teamAIsANCB || teamBIsANCB;
 
-        if (teamAIsANCB && teamBIsANCB) return `${base} border-green-500 dark:border-green-500`;
-        if (!teamAIsANCB && !teamBIsANCB) return `${base} border-gray-400 dark:border-gray-600`;
-
-        if (teamAIsANCB) {
-            if (scoreA > scoreB) return `${base} border-green-500 dark:border-green-500`;
-            if (scoreA < scoreB) return `${base} border-red-500 dark:border-red-500`;
-            return `${base} border-gray-400 dark:border-gray-600`;
+        // Jogos não finalizados: destaque azul se envolver a ANCB
+        if (game.status !== 'finalizado') {
+            if (isANCBGame) return `${base} border-ancb-blue bg-blue-50 dark:bg-blue-950/40 dark:border-blue-700`;
+            return `${base} border-gray-200 dark:border-gray-700`;
         }
 
-        if (teamBIsANCB) {
-            if (scoreB > scoreA) return `${base} border-green-500 dark:border-green-500`;
-            if (scoreB < scoreA) return `${base} border-red-500 dark:border-red-500`;
-            return `${base} border-gray-400 dark:border-gray-600`;
-        }
+        // Jogos finalizados: verde/vermelho conforme resultado da ANCB
+        const scoreA = resolveScore(game.placarTimeA_final, game.placarANCB_final);
+        const scoreB = resolveScore(game.placarTimeB_final, game.placarAdversario_final);
 
+        if (teamAIsANCB && teamBIsANCB) return `${base} border-green-500 dark:border-green-500 bg-green-50 dark:bg-green-950/30`;
+        if (!isANCBGame) return `${base} border-gray-400 dark:border-gray-600`;
+
+        const ancbScore  = teamAIsANCB ? scoreA : scoreB;
+        const rivalScore = teamAIsANCB ? scoreB : scoreA;
+
+        if (ancbScore > rivalScore) return `${base} border-green-500 dark:border-green-500 bg-green-50 dark:bg-green-950/30`;
+        if (ancbScore < rivalScore) return `${base} border-red-500 dark:border-red-500 bg-red-50 dark:bg-red-950/30`;
         return `${base} border-gray-400 dark:border-gray-600`;
     };
 
@@ -1174,32 +1174,37 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                         <div 
                                                             key={game.id} 
                                                             onClick={() => event.type === 'torneio_externo' ? handleOpenGame(game) : setSelectedGameForSummary(game)}
-                                                            className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors relative ${getGameResultClass(game)}`}
+                                                            className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors ${getGameResultClass(game)}`}
                                                         >
-                                                            <div className="flex-1 relative">
+                                                            {/* HORÁRIO — coluna própria, nunca sobrepõe os nomes */}
+                                                            <div className="shrink-0 w-12 text-center">
                                                                 {game.horaJogo && (
-                                                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-gray-500 dark:text-gray-400 leading-none">
+                                                                    <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 tabular-nums leading-none">
                                                                         {game.horaJogo}
-                                                                    </div>
+                                                                    </span>
                                                                 )}
+                                                            </div>
+
+                                                            {/* LINHA DE JOGO */}
+                                                            <div className="flex-1 min-w-0">
                                                                 <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
-                                                                    <span className="font-bold text-xs md:text-sm text-right leading-tight text-gray-900 dark:text-gray-100 break-words whitespace-normal line-clamp-2">
+                                                                    <span className="font-bold text-xs md:text-sm text-right leading-tight text-gray-900 dark:text-gray-100 break-words line-clamp-2">
                                                                         {game.timeA_nome || 'ANCB'}
                                                                     </span>
                                                                     
-                                                                    <div className="flex items-center justify-center">
-                                                                        <div className={`px-2 py-1 rounded font-mono font-bold text-base md:text-lg whitespace-nowrap text-center min-w-[60px] ${isGameLive ? 'bg-red-100 text-red-600 animate-pulse border border-red-200' : 'bg-gray-100 dark:bg-gray-700'}`}>
-                                                                            {sA} - {sB}
+                                                                    <div className="flex items-center justify-center shrink-0">
+                                                                        <div className={`px-2 py-1 rounded font-mono font-bold text-sm md:text-base whitespace-nowrap text-center min-w-[56px] ${isGameLive ? 'bg-red-100 text-red-600 animate-pulse border border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>
+                                                                            {sA} – {sB}
                                                                         </div>
                                                                     </div>
                                                                     
-                                                                    <span className="font-bold text-xs md:text-sm text-left leading-tight text-gray-900 dark:text-gray-100 break-words whitespace-normal line-clamp-2">
+                                                                    <span className="font-bold text-xs md:text-sm text-left leading-tight text-gray-900 dark:text-gray-100 break-words line-clamp-2">
                                                                         {game.timeB_nome || game.adversario || 'ADV'}
                                                                     </span>
                                                                 </div>
                                                             </div>
                                                             
-                                                            <div className="ml-2 pl-2 border-l border-gray-200 dark:border-gray-700 flex items-center relative">
+                                                            <div className="shrink-0 pl-2 border-l border-gray-200 dark:border-gray-700 flex items-center relative">
                                                                 {isAdmin ? (
                                                                     <div 
                                                                         className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"

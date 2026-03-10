@@ -49,13 +49,27 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
                     return `${safeDate}T${safeTime}`;
                 };
                 
-                // Find priority: 1. Live, 2. Finished (for results), 3. Scheduled (for next)
+                // Detecta se um jogo envolve a ANCB (por flag isANCB, nome ou tipo de evento)
+                const isANCBGame = (g: Jogo) => {
+                    if (event.type === 'amistoso') return true;
+                    if (event.type === 'torneio_interno') return true;
+                    const teams = event.timesParticipantes || [];
+                    const teamA = teams.find(t => t.id === g.timeA_id);
+                    const teamB = teams.find(t => t.id === g.timeB_id);
+                    if (teamA?.isANCB || teamB?.isANCB) return true;
+                    const nameA = (g.timeA_nome || '').toUpperCase();
+                    const nameB = (g.timeB_nome || g.adversario || '').toUpperCase();
+                    return nameA.includes('ANCB') || nameB.includes('ANCB');
+                };
+
+                // Find priority: 1. Live, 2. Finished (for results), 3. Next ANCB game only
                 const live = games.find(g => g.status === 'andamento');
                 const finished = games
                     .filter(g => g.status === 'finalizado')
                     .sort((a, b) => getGameSortKey(b).localeCompare(getGameSortKey(a)))[0];
+                // Só exibe o próximo jogo se envolver a ANCB
                 const next = games
-                    .filter(g => g.status !== 'finalizado' && g.status !== 'andamento')
+                    .filter(g => g.status !== 'finalizado' && g.status !== 'andamento' && isANCBGame(g))
                     .sort((a, b) => getGameSortKey(a).localeCompare(getGameSortKey(b)))[0];
 
                 setActiveGame(live || null);
@@ -254,17 +268,25 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
                         {event.nome}
                     </h2>
                     
-                    <div className="mt-6 flex items-center justify-between bg-white/5 rounded-xl p-6 border border-white/5">
-                        <span className="text-xl font-black text-white w-1/3 text-right">
-                            {isInternal(nextGame) ? nextGame.timeA_nome : 'ANCB'}
-                        </span>
-                        <div className="flex flex-col items-center px-4">
-                            <span className="text-3xl font-black text-ancb-orange">VS</span>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase mt-1">{nextGame.dataJogo ? nextGame.dataJogo.split('-').reverse().join('/') : 'EM BREVE'}{nextGame.horaJogo ? ` • ${nextGame.horaJogo}` : ''}</span>
+                    <div className="mt-6 bg-white/5 rounded-xl border border-white/5 overflow-hidden">
+                        {/* Data e hora no topo da caixa */}
+                        <div className="flex items-center justify-center gap-2 py-2 border-b border-white/5">
+                            <LucideCalendar size={11} className="text-gray-400" />
+                            <span className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">
+                                {nextGame.dataJogo ? nextGame.dataJogo.split('-').reverse().join('/') : 'EM BREVE'}
+                                {nextGame.horaJogo ? ` • ${nextGame.horaJogo}` : ''}
+                            </span>
                         </div>
-                        <span className="text-xl font-black text-white w-1/3 text-left">
-                            {isInternal(nextGame) ? nextGame.timeB_nome : (nextGame.adversario || 'ADV')}
-                        </span>
+                        {/* Times e VS */}
+                        <div className="flex items-center justify-between p-6">
+                            <span className="text-xl font-black text-white w-1/3 text-right">
+                                {isInternal(nextGame) ? nextGame.timeA_nome : 'ANCB'}
+                            </span>
+                            <span className="text-3xl font-black text-ancb-orange px-4">VS</span>
+                            <span className="text-xl font-black text-white w-1/3 text-left">
+                                {isInternal(nextGame) ? nextGame.timeB_nome : (nextGame.adversario || 'ADV')}
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -309,7 +331,11 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
                 <h2 className="text-2xl font-bold text-white mb-2 leading-tight opacity-90 truncate">
                     {event.nome}
                 </h2>
-                <p className="text-gray-300 text-sm mb-6">Acompanhe os resultados e próximos jogos.</p>
+                <p className="text-gray-300 text-sm mb-6">
+                    {isNext && !latestFinishedGame
+                        ? 'Nenhum jogo da ANCB agendado no momento.'
+                        : 'Acompanhe os resultados e próximos jogos.'}
+                </p>
 
                 {latestFinishedGame ? (
                     <div className="bg-black/20 rounded-xl p-3 border border-white/10 flex items-center justify-between">
