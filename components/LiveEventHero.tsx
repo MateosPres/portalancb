@@ -175,7 +175,6 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
 
                         <div className="flex items-center justify-between bg-black/20 rounded-xl p-4 border border-white/10 backdrop-blur-md">
                             <div className="text-center w-1/3">
-                                <span className="block text-4xl md:text-6xl font-black text-white leading-none mb-1">{liveScore.scoreA}</span>
                                 <span className="block text-[10px] md:text-xs font-bold uppercase text-blue-300 truncate px-1">
                                     {isInternal(activeGame) ? activeGame.timeA_nome : 'ANCB'}
                                 </span>
@@ -184,7 +183,7 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
                             <div className="text-center w-1/3">
                                 <span className="block text-4xl md:text-6xl font-black text-white leading-none mb-1">{liveScore.scoreB}</span>
                                 <span className="block text-[10px] md:text-xs font-bold uppercase text-blue-300 truncate px-1">
-                                    {isInternal(activeGame) ? activeGame.timeB_nome : (activeGame.adversario || 'ADV')}
+                                    {activeGame.timeB_nome || activeGame.adversario || 'Time B'}
                                 </span>
                             </div>
                         </div>
@@ -280,11 +279,11 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
                         {/* Times e VS */}
                         <div className="flex items-center justify-between p-6">
                             <span className="text-xl font-black text-white w-1/3 text-right">
-                                {isInternal(nextGame) ? nextGame.timeA_nome : 'ANCB'}
+                                {nextGame.timeA_nome || 'Time A'}
                             </span>
                             <span className="text-3xl font-black text-ancb-orange px-4">VS</span>
                             <span className="text-xl font-black text-white w-1/3 text-left">
-                                {isInternal(nextGame) ? nextGame.timeB_nome : (nextGame.adversario || 'ADV')}
+                                {nextGame.timeB_nome || nextGame.adversario || 'Time B'}
                             </span>
                         </div>
                     </div>
@@ -341,11 +340,11 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
                     <div className="bg-black/20 rounded-xl p-3 border border-white/10 flex items-center justify-between">
                         <div className="text-xs uppercase font-bold text-green-400 mb-1">Último Resultado</div>
                         <div className="flex items-center gap-3">
-                            <span className="font-bold text-white">{isInternal(latestFinishedGame) ? latestFinishedGame.timeA_nome : 'ANCB'}</span>
+                            <span className="font-bold text-white">{latestFinishedGame.timeA_nome || 'Time A'}</span>
                             <span className="bg-white/10 px-2 py-1 rounded text-lg font-black text-white">
-                                {latestFinishedGame.placarTimeA_final || latestFinishedGame.placarANCB_final || 0} - {latestFinishedGame.placarTimeB_final || latestFinishedGame.placarAdversario_final || 0}
+                              {latestFinishedGame.placarTimeA_final || latestFinishedGame.placarANCB_final || 0} - {latestFinishedGame.placarTimeB_final || latestFinishedGame.placarAdversario_final || 0}
                             </span>
-                            <span className="font-bold text-white">{isInternal(latestFinishedGame) ? latestFinishedGame.timeB_nome : (latestFinishedGame.adversario || 'ADV')}</span>
+                            <span className="font-bold text-white">{latestFinishedGame.timeB_nome || latestFinishedGame.adversario || 'Time B'}</span>
                         </div>
                     </div>
                 ) : (

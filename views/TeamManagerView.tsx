@@ -22,7 +22,7 @@ import {
 import { fileToBase64 } from '../utils/imageUtils';
 import imageCompression from 'browser-image-compression';
 import { ImageCropperModal } from '../components/ImageCropperModal';
-import { doc, updateDoc, arrayUnion, arrayRemove, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, writeBatch, query, where, getDocs, arrayUnion, arrayRemove, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
 interface TeamManagerViewProps {
     eventId: string;
@@ -137,22 +137,10 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
             
             let updatedTeams;
             let newPlayers: string[] = [];
+            let isNameChanged = false; // Flag para saber se o nome mudou
 
-            // Identify new players for notification
-            // We only notify if it's an ANCB team and the player is 'pendente'
             if (team.isANCB) {
                 const currentRoster = team.jogadores || [];
-                // If editing, exclude players already in the team before edit
-                // But here 'team' state already has the new players.
-                // We need to compare with the 'original' team from DB, but we don't have it stored separately in state.
-                // However, we can check if the player has been notified? No.
-                // Best approach: Check if status is 'pendente'. If so, send notification.
-                // To avoid spam, we should only send if we haven't sent recently? 
-                // For simplicity: Send notification for all 'pendente' players in the list.
-                // Ideally, we should track who was just added.
-                
-                // Let's rely on the fact that we set status to 'pendente' when adding.
-                // We can filter by status 'pendente'.
                 newPlayers = currentRoster.filter(pid => team.rosterStatus?.[pid] === 'pendente');
             }
 
@@ -160,6 +148,9 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
 
             if (team.id) {
                 // Update existing
+                const oldTeam = currentTeams.find(t => t.id === team.id);
+                isNameChanged = !!(oldTeam && oldTeam.nomeTime !== team.nomeTime);
+                
                 updatedTeams = currentTeams.map(t => t.id === team.id ? team as Time : t);
             } else {
                 // Create new
@@ -169,22 +160,84 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                 updatedTeams = [...currentTeams, newTeam];
             }
 
+            // 1. Salva o time no evento
             await updateDoc(doc(db, "eventos", eventId), {
                 [collectionField]: updatedTeams
             });
 
-            // Send Notifications
+            // 2. PROPAGAÇÃO DO NOME PARA OS JOGOS (Se for edição e o nome mudou)
+            if (isNameChanged) {
+                try {
+                    const gamesBatch = writeBatch(db);
+                    let atualizacoes = 0;
+                    
+                    // Pega o nome antigo para caso os jogos tenham sido salvos sem o ID
+                    const oldTeamName = currentTeams.find(t => t.id === savedTeamId)?.nomeTime || "";
+                    console.log(`🔍 PENTE FINO: Buscando ID "${savedTeamId}" OU Nome Antigo "${oldTeamName}"...`);
+
+                    // Função que varre a lista de jogos procurando o time
+                    const processarJogos = (docsSnap: any) => {
+                        docsSnap.forEach((d: any) => {
+                            const data = d.data();
+                            let changes: any = {};
+                            let vaiAtualizar = false;
+
+                            // Checa Mandante (pelo ID ou pelo Nome Antigo em qualquer variável)
+                            if (data.timeA_id === savedTeamId || data.timeA_nome === oldTeamName || data.timeA === oldTeamName) {
+                                changes.timeA_nome = team.nomeTime;
+                                changes.timeA = team.nomeTime;
+                                vaiAtualizar = true;
+                            }
+                            
+                            // Checa Visitante (pelo ID ou pelo Nome Antigo em qualquer variável)
+                            if (data.timeB_id === savedTeamId || data.timeB_nome === oldTeamName || data.timeB === oldTeamName) {
+                                changes.timeB_nome = team.nomeTime;
+                                changes.timeB = team.nomeTime;
+                                vaiAtualizar = true;
+                            }
+
+                            if (vaiAtualizar) {
+                                gamesBatch.update(d.ref, changes);
+                                atualizacoes++;
+                            }
+                        });
+                    };
+
+                    // 1. Vasculha a coleção global 'jogos'
+                    const qGlobal = query(collection(db, 'jogos'), where("eventoId", "==", eventId));
+                    const globalSnap = await getDocs(qGlobal);
+                    processarJogos(globalSnap);
+
+                    // 2. Vasculha subcoleção 'jogos'
+                    const subJogosSnap = await getDocs(collection(db, 'eventos', eventId, 'jogos'));
+                    processarJogos(subJogosSnap);
+
+                    // 3. Vasculha subcoleção 'partidas'
+                    const subPartidasSnap = await getDocs(collection(db, 'eventos', eventId, 'partidas'));
+                    processarJogos(subPartidasSnap);
+
+                    // Salva tudo de uma vez
+                    if (atualizacoes > 0) {
+                        await gamesBatch.commit();
+                        console.log(`✅ PENTE FINO CONCLUÍDO: Atualizados ${atualizacoes} jogos com sucesso!`);
+                    } else {
+                        console.warn("⚠️ PENTE FINO FALHOU: O sistema varreu todas as pastas e não achou nenhum jogo com esse nome/ID.");
+                    }
+                } catch (err) {
+                    console.error("Erro no Pente Fino:", err);
+                }
+            }
+
+            // 3. Send Notifications
             if (newPlayers.length > 0) {
-                const batch = db.batch();
-                
-                // We need to find the UserProfile for each player
-                // Send notification to each player with their userId
+                // IMPORTANTE: Estou mudando db.batch() para writeBatch(db) para manter o padrão moderno do Firebase v9 que você usou acima com updateDoc e doc.
+                const notifBatch = writeBatch(db); 
                 
                 newPlayers.forEach(playerId => {
                     const player = allPlayers.find(p => p.id === playerId);
                     if (player && player.userId) {
                         const notifRef = doc(collection(db, "notifications"));
-                        batch.set(notifRef as any, {
+                        notifBatch.set(notifRef, {
                             type: 'roster_invite',
                             title: 'Convocação!',
                             message: `Você foi convocado para o time ${team.nomeTime} no evento ${event.nome}.`,
@@ -200,7 +253,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                         });
                     }
                 });
-                await batch.commit();
+                await notifBatch.commit();
             }
 
             onBack();

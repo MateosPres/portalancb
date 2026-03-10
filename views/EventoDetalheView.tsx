@@ -14,7 +14,7 @@ import {
     LucideLoader2, LucideStar, LucideChevronRight, LucideEdit2, LucideChevronDown, LucideChevronUp, LucideShield, LucidePlay, LucideUpload, LucideSave, LucideSearch, LucideX, LucideShare2, LucideMoreVertical,
     LucideRotateCcw, LucideList, LucideNetwork, LucideMedal, LucideAward, LucideDownload
 } from 'lucide-react';
-import { collection, doc, onSnapshot, updateDoc, setDoc, serverTimestamp, query, getDocs, addDoc, deleteDoc, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, setDoc, serverTimestamp, query, getDocs, addDoc, deleteDoc, writeBatch, where } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
 import { SimpleScorePanel } from '../components/SimpleScorePanel';
 import { GroupStandings } from '../components/GroupStandings';
@@ -411,12 +411,16 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
             const currentTeams = event.timesParticipantes || [];
             let updatedTeams;
             let newPlayers: string[] = [];
+            let isNameChanged = false; // Flag para rastrear mudança de nome
 
             if (editingTeam.id) {
                 // Edit existing
                 const oldTeam = currentTeams.find(t => t.id === editingTeam.id);
                 updatedTeams = currentTeams.map(t => t.id === editingTeam.id ? editingTeam as Time : t);
                 
+                // Verifica se o nome mudou
+                isNameChanged = !!(oldTeam && oldTeam.nomeTime !== editingTeam.nomeTime);
+
                 // Calculate new players for notification
                 if (editingTeam.isANCB && editingTeam.jogadores && oldTeam) {
                     const oldPlayers = oldTeam.jogadores || [];
@@ -438,13 +442,54 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                 }
             }
             
+            // 1. Salva a atualização no array do evento
             await updateDoc(doc(db, "eventos", eventId), {
                 timesParticipantes: updatedTeams
             });
             
-            // Send Notifications
+            // ====================================================================
+            // 2. PROPAGAÇÃO DO NOME PARA OS JOGOS (Se for edição e o nome mudou)
+            // ====================================================================
+            if (isNameChanged && editingTeam.id) {
+                try {
+                    // AQUI ESTÁ A MÁGICA: Caminho exato apontando para a subcoleção 'partidas'
+                    const partidasRef = collection(db, 'eventos', eventId, 'partidas');
+                    const batch = writeBatch(db);
+                    
+                    // Buscando jogos onde o time é mandante
+                    const qA = query(partidasRef, where("timeA_id", "==", editingTeam.id));
+                    const snapA = await getDocs(qA);
+                    
+                    snapA.forEach((d) => {
+                        batch.update(d.ref, { 
+                            timeA_nome: editingTeam.nomeTime,
+                            timeA: editingTeam.nomeTime // Atualizando os dois campos por garantia
+                        });
+                    });
+
+                    // Buscando jogos onde o time é visitante
+                    const qB = query(partidasRef, where("timeB_id", "==", editingTeam.id));
+                    const snapB = await getDocs(qB);
+                    
+                    snapB.forEach((d) => {
+                        batch.update(d.ref, { 
+                            timeB_nome: editingTeam.nomeTime,
+                            timeB: editingTeam.nomeTime 
+                        });
+                    });
+                    
+                    if (snapA.size > 0 || snapB.size > 0) {
+                        await batch.commit();
+                        console.log(`✅ Atualizados ${snapA.size + snapB.size} jogos com o novo nome!`);
+                    }
+                } catch (err) {
+                    console.error("❌ Erro na propagação dos nomes:", err);
+                }
+            }
+            // ====================================================================
+
+            // 3. Send Notifications
             if (newPlayers.length > 0) {
-                // Using addDoc directly since writeBatch is not imported
                 const notificationsPromises = newPlayers.map(playerId => {
                     const player = allPlayers.find(p => p.id === playerId);
                     if (player && player.userId) {
@@ -565,12 +610,12 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                 gameData.timeA_nome = teamA.nomeTime;
                 gameData.timeB_id = teamB.id;
                 gameData.timeB_nome = teamB.nomeTime;
-                gameData.adversario = teamB.nomeTime; // Legacy support
+                // REMOVIDO: gameData.adversario = teamB.nomeTime; 
             } else {
                 // Friendly
                 gameData.timeA_nome = 'ANCB'; // Default
                 gameData.timeB_nome = newGameTimeB || 'Adversário';
-                gameData.adversario = newGameTimeB || 'Adversário';
+                // REMOVIDO: gameData.adversario = newGameTimeB || 'Adversário';
             }
 
             await addDoc(collection(db, "eventos", eventId, "jogos"), gameData);
