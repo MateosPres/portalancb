@@ -149,97 +149,96 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
                     />
                 )}
 
-            <div 
-                onClick={() => onOpenLiveGame ? onOpenLiveGame(activeGame) : onClick()}
-                className="w-full bg-gradient-to-r from-[#062553] to-blue-900 rounded-2xl shadow-xl overflow-hidden cursor-pointer relative group border border-blue-800 transition-all hover:shadow-2xl hover:scale-[1.01]"
-            >
-                {/* Background Pattern */}
-                <div className="absolute top-0 right-0 opacity-10 pointer-events-none">
-                    <LucideTrophy size={200} className="transform rotate-12 -translate-y-10 translate-x-10 text-white" />
-                </div>
-
-                <div className="p-6 md:p-8 relative z-10 flex flex-col lg:flex-row items-stretch justify-between gap-6">
-                    {/* LEFT: Event & Scoreboard */}
-                    <div className="flex-1 flex flex-col justify-center">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-600 text-white text-xs font-bold uppercase tracking-wider animate-pulse shadow-sm">
-                                <span className="w-2 h-2 bg-white rounded-full"></span>
-                                AO VIVO AGORA
-                            </div>
-                            <span className="text-blue-200 text-xs font-bold uppercase tracking-wide">{event.modalidade}</span>
-                        </div>
-
-                        <h2 className="text-xl md:text-2xl font-bold text-white mb-6 leading-tight opacity-90 truncate">
-                            {event.nome}
-                        </h2>
-
-                        <div className="flex items-center justify-between bg-black/20 rounded-xl p-4 border border-white/10 backdrop-blur-md">
-                            <div className="text-center w-1/3">
-                                <span className="block text-[10px] md:text-xs font-bold uppercase text-blue-300 truncate px-1">
-                                    {isInternal(activeGame) ? activeGame.timeA_nome : 'ANCB'}
-                                </span>
-                            </div>
-                            <div className="text-2xl font-bold text-white/20">:</div>
-                            <div className="text-center w-1/3">
-                                <span className="block text-4xl md:text-6xl font-black text-white leading-none mb-1">{liveScore.scoreB}</span>
-                                <span className="block text-[10px] md:text-xs font-bold uppercase text-blue-300 truncate px-1">
-                                    {activeGame.timeB_nome || activeGame.adversario || 'Time B'}
-                                </span>
-                            </div>
-                        </div>
+                <div 
+                    onClick={() => onOpenLiveGame ? onOpenLiveGame(activeGame) : onClick()}
+                    className="w-full bg-gradient-to-r from-[#062553] to-blue-900 rounded-2xl shadow-xl overflow-hidden cursor-pointer relative group border border-blue-800 transition-all hover:shadow-2xl hover:scale-[1.01]"
+                >
+                    {/* Background Pattern */}
+                    <div className="absolute top-0 right-0 opacity-10 pointer-events-none">
+                        <LucideTrophy size={200} className="transform rotate-12 -translate-y-10 translate-x-10 text-white" />
                     </div>
 
-                    {/* RIGHT: Live Feed */}
-                    <div className="lg:w-80 bg-white/5 border-l border-white/10 lg:-my-8 lg:py-8 lg:pl-6 flex flex-col justify-center">
-                        <div className="flex items-center gap-2 mb-3 text-blue-200/70 text-xs font-bold uppercase tracking-widest">
-                            <LucideActivity size={14} /> Últimos Lances
+                    <div className="p-6 md:p-8 relative z-10 flex flex-col lg:flex-row items-stretch justify-between gap-6">
+                        {/* LEFT: Event & Scoreboard */}
+                        <div className="flex-1 flex flex-col justify-center">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-600 text-white text-xs font-bold uppercase tracking-wider animate-pulse shadow-sm">
+                                    <span className="w-2 h-2 bg-white rounded-full"></span>
+                                    AO VIVO AGORA
+                                </div>
+                                <span className="text-blue-200 text-xs font-bold uppercase tracking-wide">{event.modalidade}</span>
+                            </div>
+
+                            <h2 className="text-xl md:text-2xl font-bold text-white mb-6 leading-tight opacity-90 truncate">
+                                {event.nome}
+                            </h2>
+
+                            <div className="flex items-center justify-between bg-black/20 rounded-xl p-4 border border-white/10 backdrop-blur-md">
+                                <div className="text-center w-1/3">
+                                    <span className="block text-4xl md:text-6xl font-black text-white leading-none mb-1">{liveScore.scoreA}</span>
+                                    <span className="block text-[10px] md:text-xs font-bold uppercase text-blue-300 truncate px-1">
+                                        {activeGame.timeA_nome || 'Time A'}
+                                    </span>
+                                </div>
+                                <div className="text-2xl font-bold text-white/20">:</div>
+                                <div className="text-center w-1/3">
+                                    <span className="block text-4xl md:text-6xl font-black text-white leading-none mb-1">{liveScore.scoreB}</span>
+                                    <span className="block text-[10px] md:text-xs font-bold uppercase text-blue-300 truncate px-1">
+                                        {activeGame.timeB_nome || activeGame.adversario || 'Time B'}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                        
-                        <div className="space-y-3">
-                            {feedItems.length === 0 ? (
-                                <p className="text-white/30 text-xs italic">Aguardando pontuação...</p>
-                            ) : (
-                                feedItems.map((cesta, idx) => {
-                                    const teamName = getTeamNameForFeed(cesta);
-                                    const shotType = getShotDescription(Number(cesta.pontos));
-                                    
-                                    // Determine Team Side for Color
-                                    // Team A (Orange), Team B (White/Other)
-                                    const isTeamA = cesta.timeId === activeGame.timeA_id || cesta.timeId === 'A';
-                                    
-                                    return (
-                                        <div key={cesta.id} className="flex items-start justify-between text-xs animate-slideDown" style={{animationDelay: `${idx * 100}ms`}}>
-                                            <div className="flex items-start gap-2 overflow-hidden mr-2">
-                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${isTeamA ? 'bg-ancb-orange' : 'bg-white shadow-sm shadow-white/50'}`}></div>
-                                                <div className="font-medium text-white/90 leading-tight">
-                                                    {cesta.nomeJogador && cesta.nomeJogador !== 'Unknown' ? (
-                                                        <>
-                                                            <span className="font-bold text-white">{cesta.nomeJogador}</span> 
-                                                            <span className="text-blue-200 opacity-80 mx-1">({teamName})</span>
-                                                        </>
-                                                    ) : (
-                                                        <span className="font-bold text-white">{teamName}</span>
-                                                    )}
-                                                    <span className="text-white/60 block">fez {shotType}</span>
+
+                        {/* RIGHT: Live Feed */}
+                        <div className="lg:w-80 bg-white/5 border-l border-white/10 lg:-my-8 lg:py-8 lg:pl-6 flex flex-col justify-center">
+                            <div className="flex items-center gap-2 mb-3 text-blue-200/70 text-xs font-bold uppercase tracking-widest">
+                                <LucideActivity size={14} /> Últimos Lances
+                            </div>
+                            
+                            <div className="space-y-3">
+                                {feedItems.length === 0 ? (
+                                    <p className="text-white/30 text-xs italic">Aguardando pontuação...</p>
+                                ) : (
+                                    feedItems.map((cesta, idx) => {
+                                        const teamName = getTeamNameForFeed(cesta);
+                                        const shotType = getShotDescription(Number(cesta.pontos));
+                                        
+                                        const isTeamA = cesta.timeId === activeGame.timeA_id || cesta.timeId === 'A';
+                                        
+                                        return (
+                                            <div key={cesta.id} className="flex items-start justify-between text-xs animate-slideDown" style={{animationDelay: `${idx * 100}ms`}}>
+                                                <div className="flex items-start gap-2 overflow-hidden mr-2">
+                                                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${isTeamA ? 'bg-ancb-orange' : 'bg-white shadow-sm shadow-white/50'}`}></div>
+                                                    <div className="font-medium text-white/90 leading-tight">
+                                                        {cesta.nomeJogador && cesta.nomeJogador !== 'Unknown' ? (
+                                                            <>
+                                                                <span className="font-bold text-white">{cesta.nomeJogador}</span> 
+                                                                <span className="text-blue-200 opacity-80 mx-1">({teamName})</span>
+                                                            </>
+                                                        ) : (
+                                                            <span className="font-bold text-white">{teamName}</span>
+                                                        )}
+                                                        <span className="text-white/60 block">fez {shotType}</span>
+                                                    </div>
                                                 </div>
+                                                <span className={`font-bold text-sm whitespace-nowrap ${Number(cesta.pontos) === 3 ? 'text-ancb-orange' : 'text-blue-300'}`}>
+                                                    +{cesta.pontos}
+                                                </span>
                                             </div>
-                                            <span className={`font-bold text-sm whitespace-nowrap ${Number(cesta.pontos) === 3 ? 'text-ancb-orange' : 'text-blue-300'}`}>
-                                                +{cesta.pontos}
-                                            </span>
-                                        </div>
-                                    );
-                                })
-                            )}
-                        </div>
-                        
-                        <div className="mt-4 pt-3 border-t border-white/10 text-right">
-                            <span className="text-[10px] text-white/50 uppercase font-bold tracking-wider hover:text-white transition-colors flex items-center justify-end gap-1">
-                                Acompanhar <LucideChevronRight size={12}/>
-                            </span>
+                                        );
+                                    })
+                                )}
+                            </div>
+                            
+                            <div className="mt-4 pt-3 border-t border-white/10 text-right">
+                                <span className="text-[10px] text-white/50 uppercase font-bold tracking-wider hover:text-white transition-colors flex items-center justify-end gap-1">
+                                    Acompanhar <LucideChevronRight size={12}/>
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
             </div>
         );
     }
