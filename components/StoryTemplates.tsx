@@ -195,17 +195,20 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
                 </div>
 
                 {/* ══════════════════════════════════════════════════════
-                    ZONA 4 — FOOTER (evento + data/local)
-                    Na parte mais baixa, bem legível sobre o dark gradient.
-                    Menos crítico — usuário que curte quer saber mais detalhes.
+                    ZONA 4 — FOOTER
+                    Nome do evento + hora/data/local em destaque total
                 ══════════════════════════════════════════════════════ */}
-                <div className="z-10 relative px-14 pb-20 pt-6">
-                    <div className="mb-6" style={{
+                <div className="z-10 relative px-14 pb-20 pt-4">
+
+                    {/* Separador */}
+                    <div className="mb-7" style={{
                         height: '2px',
-                        background: 'linear-gradient(90deg, rgba(249,115,22,0.7) 0%, rgba(249,115,22,0.1) 80%, transparent 100%)'
+                        background: 'linear-gradient(90deg, rgba(249,115,22,0.8) 0%, rgba(249,115,22,0.15) 80%, transparent 100%)'
                     }} />
-                    <h2 className="font-black uppercase leading-none break-words" style={{
-                        fontSize: '5rem',
+
+                    {/* Nome do evento */}
+                    <h2 className="font-black uppercase leading-none break-words mb-6" style={{
+                        fontSize: '4.6rem',
                         background: 'linear-gradient(135deg, #fb923c 0%, #f97316 50%, #ea580c 100%)',
                         WebkitBackgroundClip: 'text',
                         WebkitTextFillColor: 'transparent',
@@ -216,19 +219,57 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
                     }}>
                         {event.nome}
                     </h2>
-                    <div className="flex items-center gap-4 mt-4 flex-wrap">
-                        {[
-                            game.hora || timeStr || null,
-                            dateStr || null,
-                            location || null,
-                        ].filter(Boolean).map((item, idx, arr) => (
-                            <React.Fragment key={idx}>
-                                <span className="text-3xl font-semibold text-white/65 tracking-wide">{item}</span>
-                                {idx < arr.length - 1 && (
-                                    <span className="text-orange-400 font-black text-3xl leading-none">•</span>
-                                )}
-                            </React.Fragment>
-                        ))}
+
+                    {/* Hora + data + local — card de destaque */}
+                    <div className="flex items-stretch gap-0 rounded-2xl overflow-hidden" style={{
+                        border: '1.5px solid rgba(255,255,255,0.13)',
+                        background: 'rgba(0,0,0,0.35)',
+                        backdropFilter: 'blur(12px)',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                    }}>
+                        {/* Hora — destaque máximo */}
+                        {(game.hora || timeStr) && (
+                            <>
+                                <div className="flex flex-col items-center justify-center px-8 py-6" style={{
+                                    background: 'linear-gradient(135deg, rgba(249,115,22,0.25) 0%, rgba(249,115,22,0.08) 100%)',
+                                    borderRight: '1px solid rgba(255,255,255,0.1)',
+                                    minWidth: '220px',
+                                }}>
+                                    <span className="text-2xl font-bold uppercase tracking-[0.2em] text-orange-400/80 mb-1">Horário</span>
+                                    <span className="font-black text-white tabular-nums" style={{
+                                        fontSize: '5rem',
+                                        lineHeight: 1,
+                                        textShadow: '0 0 30px rgba(249,115,22,0.4)',
+                                    }}>
+                                        {game.hora || timeStr}
+                                    </span>
+                                </div>
+                                {/* Divisor vertical com dot */}
+                                <div className="flex items-center justify-center px-2">
+                                    <div className="w-2 h-2 rounded-full bg-orange-500/50" />
+                                </div>
+                            </>
+                        )}
+
+                        {/* Data + local */}
+                        <div className="flex-1 flex flex-col justify-center px-7 py-6 gap-3">
+                            {dateStr && (
+                                <div className="flex items-center gap-3">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(249,115,22,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                                    </svg>
+                                    <span className="text-3xl font-bold text-white/80 tracking-wide">{dateStr}</span>
+                                </div>
+                            )}
+                            {location && (
+                                <div className="flex items-center gap-3">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(249,115,22,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                                    </svg>
+                                    <span className="text-3xl font-bold text-white/80 tracking-wide truncate">{location}</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
