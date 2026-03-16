@@ -359,6 +359,243 @@ exports.adminResetPassword = functions.https.onCall(async (data, context) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// 5. SISTEMA DE CONQUISTAS (BADGES)
+//
+// Disparado quando um evento é marcado como 'finalizado'.
+// Calcula conquistas baseadas em performance real:
+//   - Pódio (campeão, vice, 3º lugar)
+//   - Participação no evento
+//   - Artilheiro do evento
+//   - Cestinha / Máquina de Pontos (por jogo)
+//   - Cestas de 3 (acumulado no evento)
+//
+// IDs de badge são únicos por evento (ex: campiao_jogos_abertos_2025)
+// para que o jogador possa acumular a mesma conquista em eventos diferentes.
+//
+// PROTEÇÃO: Campo 'badgesAwardedAt' previne reprocessamento.
+// ─────────────────────────────────────────────────────────────
+
+exports.onEventFinishedAwardBadges = functions.firestore
+    .document('eventos/{eventId}')
+    .onUpdate(async (change, context) => {
+        const newData = change.after.data();
+        const oldData = change.before.data();
+
+        if (!newData || !oldData) return null;
+
+        // Só dispara na transição → finalizado
+        const justFinished = oldData.status !== 'finalizado' && newData.status === 'finalizado';
+        if (!justFinished) return null;
+
+        // Proteção contra reprocessamento
+        if (newData.badgesAwardedAt) {
+            console.log(`Badges já foram processadas para o evento ${context.params.eventId}. Pulando.`);
+            return null;
+        }
+
+        const eventId = context.params.eventId;
+        const eventName = newData.nome || 'Evento';
+        const eventSlug = eventName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+
+        console.log(`🏆 Iniciando distribuição de badges para evento: ${eventName} (${eventId})`);
+
+        // ── 1. Resolve todos os jogadores ANCB do evento ─────────
+        let allAncbPlayerIds = [];
+
+        if (newData.timesParticipantes && newData.timesParticipantes.length > 0) {
+            newData.timesParticipantes
+                .filter(t => t.isANCB)
+                .forEach(t => allAncbPlayerIds.push(...(t.jogadores || [])));
+        } else if (newData.times && newData.times.length > 0) {
+            newData.times.forEach(t => allAncbPlayerIds.push(...(t.jogadores || [])));
+        } else {
+            allAncbPlayerIds = (newData.jogadoresEscalados || []).map(extractPlayerId).filter(Boolean);
+        }
+
+        allAncbPlayerIds = [...new Set(allAncbPlayerIds.filter(Boolean))];
+
+        if (allAncbPlayerIds.length === 0) {
+            console.log('Nenhum jogador ANCB encontrado no evento. Encerrando.');
+            return null;
+        }
+
+        console.log(`   ${allAncbPlayerIds.length} jogador(es) ANCB encontrados.`);
+
+        // ── 2. Busca todos os jogos e cestas do evento ───────────
+        const jogosSnap = await admin.firestore()
+            .collection('eventos').doc(eventId).collection('jogos').get();
+
+        // Mapas: playerId → totalPontos, totalPontos3pts, maxPontosJogo
+        const pontosNoEvento = {};   // total de pontos no evento
+        const cestas3NoEvento = {};  // total de cestas de 3 no evento
+        const maxPontosJogo = {};    // maior pontuação em um único jogo
+
+        for (const jogoDoc of jogosSnap.docs) {
+            const cestasSnap = await admin.firestore()
+                .collection('eventos').doc(eventId)
+                .collection('jogos').doc(jogoDoc.id)
+                .collection('cestas').get();
+
+            // Pontos por jogador neste jogo
+            const pontosNesteJogo = {};
+
+            for (const cestaDoc of cestasSnap.docs) {
+                const cesta = cestaDoc.data();
+                const pid = cesta.jogadorId;
+                if (!pid || !allAncbPlayerIds.includes(pid)) continue;
+
+                const pts = Number(cesta.pontos) || 0;
+
+                pontosNoEvento[pid]  = (pontosNoEvento[pid]  || 0) + pts;
+                pontosNesteJogo[pid] = (pontosNesteJogo[pid] || 0) + pts;
+
+                if (pts === 3) {
+                    cestas3NoEvento[pid] = (cestas3NoEvento[pid] || 0) + 1;
+                }
+            }
+
+            // Atualiza máximo por jogo
+            for (const [pid, pts] of Object.entries(pontosNesteJogo)) {
+                if (pts > (maxPontosJogo[pid] || 0)) {
+                    maxPontosJogo[pid] = pts;
+                }
+            }
+        }
+
+        // ── 3. Determina artilheiro ───────────────────────────────
+        let artilheiroId = null;
+        let maxPontos = 0;
+        for (const [pid, pts] of Object.entries(pontosNoEvento)) {
+            if (pts > maxPontos) { maxPontos = pts; artilheiroId = pid; }
+        }
+
+        // ── 4. Resolve times do pódio ─────────────────────────────
+        // podio: { primeiro: nomeTime, segundo: nomeTime, terceiro: nomeTime }
+        const podio = newData.podio || {};
+
+        const resolvePodioPLayerIds = (nomeTime) => {
+            if (!nomeTime) return [];
+            // Tenta casar pelo nome em timesParticipantes ou times
+            const allTimes = newData.timesParticipantes || newData.times || [];
+            const time = allTimes.find(t =>
+                t.nomeTime?.toLowerCase().trim() === nomeTime.toLowerCase().trim()
+            );
+            return (time?.jogadores || []).filter(pid => allAncbPlayerIds.includes(pid));
+        };
+
+        const campeaoIds   = resolvePodioPLayerIds(podio.primeiro);
+        const viceIds      = resolvePodioPLayerIds(podio.segundo);
+        const terceiroIds  = resolvePodioPLayerIds(podio.terceiro);
+
+        // ── 5. Monta badges para cada jogador ─────────────────────
+        const today = new Date().toISOString().split('T')[0];
+
+        const buildBadge = (id, nome, emoji, raridade, categoria, descricao) => ({
+            id, nome, emoji, raridade, categoria, descricao, data: today,
+        });
+
+        // Mapa: playerId → Badge[]
+        const badgesByPlayer = {};
+        const add = (pid, badge) => {
+            if (!badgesByPlayer[pid]) badgesByPlayer[pid] = [];
+            badgesByPlayer[pid].push(badge);
+        };
+
+        for (const pid of allAncbPlayerIds) {
+            // Estava Lá
+            add(pid, buildBadge(
+                `estava_la_${eventSlug}`,
+                `Estava Lá (${eventName})`,
+                '🏀', 'comum', 'partida',
+                `Participou do evento ${eventName}.`
+            ));
+
+            // Pódio
+            if (campeaoIds.includes(pid)) {
+                add(pid, buildBadge(`campiao_${eventSlug}`,  `Campeão (${eventName})`, '🏆', 'epica', 'temporada', `Integrou o time campeão do evento ${eventName}.`));
+            } else if (viceIds.includes(pid)) {
+                add(pid, buildBadge(`vice_${eventSlug}`,     `Vice (${eventName})`,    '🥈', 'rara',  'temporada', `Integrou o time vice-campeão do evento ${eventName}.`));
+            } else if (terceiroIds.includes(pid)) {
+                add(pid, buildBadge(`podio_${eventSlug}`,    `Pódio (${eventName})`,   '🥉', 'rara',  'temporada', `Integrou o time que ficou em 3º lugar no evento ${eventName}.`));
+            }
+
+            // Cestinha (artilheiro do evento)
+            if (pid === artilheiroId && maxPontos > 0) {
+                add(pid, buildBadge(`cestinha_ev_${eventSlug}`, `Cestinha (${eventName})`, '👑', 'rara', 'partida', `Maior pontuador do evento ${eventName} com ${maxPontos} pontos.`));
+            }
+
+            // Bola Quente / Imparável (por jogo)
+            const melhorJogo = maxPontosJogo[pid] || 0;
+            if (melhorJogo >= 20) {
+                add(pid, buildBadge(`imparavel_${eventSlug}`,   `Imparável (${eventName})`,   '☄️', 'rara',  'partida', `Marcou 20+ pontos em um único jogo no evento ${eventName}.`));
+            } else if (melhorJogo >= 10) {
+                add(pid, buildBadge(`bola_quente_${eventSlug}`, `Bola Quente (${eventName})`, '💥', 'comum', 'partida', `Marcou 10+ pontos em um único jogo no evento ${eventName}.`));
+            }
+
+            // Cestas de 3
+            const total3 = cestas3NoEvento[pid] || 0;
+            if (total3 >= 5) {
+                add(pid, buildBadge(`atirador_elite_${eventSlug}`, `Mira Calibrada (${eventName})`,  '🎯', 'epica', 'partida', `Converteu 5+ cestas de 3 pontos no evento ${eventName}.`));
+            } else if (total3 >= 3) {
+                add(pid, buildBadge(`atirador_${eventSlug}`,       `Mão Quente (${eventName})`,      '👌', 'rara',  'partida', `Converteu 3+ cestas de 3 pontos no evento ${eventName}.`));
+            } else if (total3 >= 1) {
+                add(pid, buildBadge(`primeira_bomba_${eventSlug}`, `Tiro Certo (${eventName})`,      '🏹', 'comum', 'partida', `Converteu uma cesta de 3 pontos no evento ${eventName}.`));
+            }
+        }
+
+        // ── 6. Salva badges e notifica cada jogador ───────────────
+        let totalConcedidas = 0;
+
+        for (const [pid, newBadges] of Object.entries(badgesByPlayer)) {
+            if (!newBadges.length) continue;
+
+            // Lê badges atuais para evitar duplicatas
+            const playerSnap = await admin.firestore().collection('jogadores').doc(pid).get();
+            if (!playerSnap.exists) continue;
+
+            const existingIds = new Set((playerSnap.data().badges || []).map(b => b.id));
+            const toAdd = newBadges.filter(b => !existingIds.has(b.id));
+            if (!toAdd.length) continue;
+
+            await admin.firestore().collection('jogadores').doc(pid).update({
+                badges: admin.firestore.FieldValue.arrayUnion(...toAdd),
+            });
+
+            totalConcedidas += toAdd.length;
+            console.log(`   ✅ ${playerSnap.data().nome || pid}: ${toAdd.map(b => b.emoji + b.nome).join(', ')}`);
+
+            // Notifica o usuário vinculado
+            const usersSnap = await admin.firestore().collection('usuarios')
+                .where('linkedPlayerId', '==', pid).limit(1).get();
+
+            if (!usersSnap.empty) {
+                const targetUserId = usersSnap.docs[0].id;
+                for (const badge of toAdd) {
+                    const notifId = `badge_${targetUserId}_${badge.id}`;
+                    await admin.firestore().collection('notifications').doc(notifId).set({
+                        targetUserId,
+                        type: 'evaluation',
+                        title: `Nova conquista desbloqueada! ${badge.emoji}`,
+                        message: `Você ganhou "${badge.nome}": ${badge.descricao}`,
+                        data: { badgeId: badge.id },
+                        read: false,
+                        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                    }, { merge: true });
+                }
+            }
+        }
+
+        // Marca como processado
+        await admin.firestore().collection('eventos').doc(eventId)
+            .update({ badgesAwardedAt: admin.firestore.FieldValue.serverTimestamp() });
+
+        console.log(`\n🏆 ${totalConcedidas} badge(s) concedida(s) no evento ${eventName}.`);
+        return null;
+    });
+
+
+
+// ─────────────────────────────────────────────────────────────
 // HELPERS PRIVADOS
 // ─────────────────────────────────────────────────────────────
 

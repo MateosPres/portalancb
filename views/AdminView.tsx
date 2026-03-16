@@ -8,20 +8,16 @@ import imageCompression from 'browser-image-compression';
 import { ApoiadoresManager } from '../components/ApoiadoresManager';
 import { LiveStreamAdmin } from '../components/LiveStreamAdmin';
 import { normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
+import {
+    REVIEW_TAG_MULTIPLIERS,
+    REVIEW_TAG_IMPACTS,
+    BADGE_CATALOG,
+    evaluateNewBadges,
+    buildBadge,
+    getRarityStyles,
+} from '../utils/badges';
 
-const REVIEW_TAG_MULTIPLIERS: Record<number, number> = { 1: 1.0, 2: 0.75, 3: 0.55 };
-const REVIEW_TAG_IMPACTS: Record<string, Partial<Record<'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao', number>>> = {
-    muralha: { defesa: 3, forca: 1 },
-    sniper: { ataque: 3, visao: 1 },
-    garcom: { visao: 3, ataque: 1 },
-    flash: { velocidade: 3, ataque: 1 },
-    lider: { visao: 3, defesa: 1, forca: 1 },
-    guerreiro: { forca: 3, defesa: 1 },
-    avenida: { defesa: -1, velocidade: -0.5 },
-    fominha: { visao: -1, ataque: -0.5 },
-    tijoleiro: { ataque: -1, visao: -0.5 },
-    cone: { velocidade: -1, forca: -0.5 },
-};
+
 
 interface AdminViewProps {
     onBack: () => void;
@@ -30,7 +26,15 @@ interface AdminViewProps {
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, userProfile }) => {
-    const [adminTab, setAdminTab] = useState<'home' | 'posts' | 'users' | 'apoiadores' | 'live' | 'reviews'>('home');
+    const [adminTab, setAdminTab] = useState<'home' | 'posts' | 'users' | 'apoiadores' | 'live' | 'reviews' | 'badges'>('home');
+    // Badge management state
+    const [badgeTargetId, setBadgeTargetId] = useState('');
+    const [badgeSelectedDef, setBadgeSelectedDef] = useState('');
+    const [badgeLoading, setBadgeLoading] = useState(false);
+    const [badgeSuccess, setBadgeSuccess] = useState<string | null>(null);
+    const [seasonYear, setSeasonYear] = useState(String(new Date().getFullYear()));
+    const [seasonLoading, setSeasonLoading] = useState(false);
+    const [seasonResult, setSeasonResult] = useState<{ awarded: number; log: string[] } | null>(null);
     const [events, setEvents] = useState<Evento[]>([]);
     
     // Forms
@@ -1212,6 +1216,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                             </div>
                             <p className="text-sm text-gray-500 dark:text-gray-400">Gerenciar avaliações e reverter impactos quando necessário.</p>
                         </button>
+
+                        <button onClick={() => setAdminTab('badges')} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-purple-400 dark:hover:border-purple-500 transition-all shadow-sm hover:shadow-md">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-300 flex items-center justify-center"><LucideTrophy size={18} /></div>
+                                <h3 className="font-bold text-gray-800 dark:text-gray-200">Conquistas</h3>
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Conceder conquistas manualmente aos atletas.</p>
+                        </button>
                     </div>
                 </div>
             )}
@@ -1294,6 +1306,361 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                     )}
                 </div>
             )}
+
+            {/* TAB: CONQUISTAS */}
+            {adminTab === 'badges' && (() => {
+                const handleAwardBadge = async () => {
+                    if (!badgeTargetId || !badgeSelectedDef) return;
+                    const def = BADGE_CATALOG.find(b => b.id === badgeSelectedDef);
+                    if (!def) return;
+                    const player = activePlayers.find(p => p.id === badgeTargetId);
+                    if (!player) return;
+                    const alreadyHas = (player.badges || []).some(b => b.id === def.id);
+                    if (alreadyHas) { alert(`${player.nome} já possui a conquista "${def.nome}".`); return; }
+                    setBadgeLoading(true);
+                    setBadgeSuccess(null);
+                    try {
+                        const badge = buildBadge(def);
+                        await db.collection('jogadores').doc(badgeTargetId).update({
+                            badges: firebase.firestore.FieldValue.arrayUnion(badge),
+                        });
+                        // Notifica o jogador vinculado
+                        const usersSnap = await db.collection('usuarios').where('linkedPlayerId', '==', badgeTargetId).limit(1).get();
+                        if (!usersSnap.empty) {
+                            const targetUserId = usersSnap.docs[0].id;
+                            const notifId = `badge_${targetUserId}_${def.id}`;
+                            await db.collection('notifications').doc(notifId).set({
+                                targetUserId,
+                                type: 'evaluation',
+                                title: `Nova conquista desbloqueada! ${def.emoji}`,
+                                message: `Você ganhou a conquista "${def.nome}": ${def.descricao}`,
+                                data: { badgeId: def.id },
+                                read: false,
+                                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                            }, { merge: true });
+                        }
+                        setBadgeSuccess(`✅ Conquista "${def.nome}" concedida a ${player.nome}!`);
+                        setBadgeTargetId('');
+                        setBadgeSelectedDef('');
+                    } catch (e) {
+                        alert('Erro ao conceder conquista.');
+                    } finally {
+                        setBadgeLoading(false);
+                    }
+                };
+
+                const handleRevokeBadge = async (playerId: string, badgeId: string) => {
+                    const player = activePlayers.find(p => p.id === playerId);
+                    if (!player) return;
+                    const badge = (player.badges || []).find(b => b.id === badgeId);
+                    if (!badge) return;
+                    if (!window.confirm(`Remover a conquista "${badge.nome}" de ${player.nome}?`)) return;
+                    try {
+                        await db.collection('jogadores').doc(playerId).update({
+                            badges: firebase.firestore.FieldValue.arrayRemove(badge),
+                            pinnedBadgeIds: firebase.firestore.FieldValue.arrayRemove(badgeId),
+                        });
+                    } catch (e) {
+                        alert('Erro ao revogar conquista.');
+                    }
+                };
+
+                const selectedPlayer = activePlayers.find(p => p.id === badgeTargetId);
+                const selectedDef = BADGE_CATALOG.find(b => b.id === badgeSelectedDef);
+
+                return (
+                    <div className="animate-fadeIn space-y-6">
+                        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                            <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
+                                <LucideTrophy size={18} className="text-purple-500" /> Conceder Conquista Manual
+                            </h3>
+
+                            {badgeSuccess && (
+                                <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm font-semibold">
+                                    {badgeSuccess}
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                {/* Seleção de atleta */}
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Atleta</label>
+                                    <select
+                                        value={badgeTargetId}
+                                        onChange={e => { setBadgeTargetId(e.target.value); setBadgeSuccess(null); }}
+                                        className="w-full border border-gray-200 dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                                    >
+                                        <option value="">Selecionar atleta...</option>
+                                        {activePlayers.map(p => (
+                                            <option key={p.id} value={p.id}>{p.nome}{p.apelido ? ` (${p.apelido})` : ''}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Seleção de conquista */}
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Conquista</label>
+                                    <select
+                                        value={badgeSelectedDef}
+                                        onChange={e => { setBadgeSelectedDef(e.target.value); setBadgeSuccess(null); }}
+                                        className="w-full border border-gray-200 dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                                    >
+                                        <option value="">Selecionar conquista...</option>
+                                        {BADGE_CATALOG.map(def => {
+                                            const alreadyHas = (selectedPlayer?.badges || []).some(b => b.id === def.id);
+                                            return (
+                                                <option key={def.id} value={def.id} disabled={alreadyHas}>
+                                                    {def.emoji} {def.nome} ({def.raridade}){alreadyHas ? ' — já possui' : ''}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Preview da conquista selecionada */}
+                            {selectedDef && (
+                                <div className={`mb-4 p-3 rounded-lg border flex items-center gap-3 ${getRarityStyles(selectedDef.raridade).classes}`}>
+                                    <span className="text-3xl">{selectedDef.emoji}</span>
+                                    <div>
+                                        <div className="font-bold text-sm">{selectedDef.nome}</div>
+                                        <div className="text-xs opacity-80">{selectedDef.descricao}</div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <Button
+                                onClick={handleAwardBadge}
+                                disabled={!badgeTargetId || !badgeSelectedDef || badgeLoading}
+                                className="w-full md:w-auto"
+                            >
+                                <LucideTrophy size={16} />
+                                {badgeLoading ? 'Concedendo...' : 'Conceder Conquista'}
+                            </Button>
+                        </div>
+
+                        {/* Lista de conquistas por atleta */}
+                        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                            <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
+                                <LucideStar size={18} className="text-amber-500" /> Conquistas por Atleta
+                            </h3>
+                            <div className="space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
+                                {activePlayers
+                                    .filter(p => (p.badges || []).length > 0)
+                                    .sort((a, b) => (b.badges?.length ?? 0) - (a.badges?.length ?? 0))
+                                    .map(player => (
+                                        <div key={player.id} className="p-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="font-bold text-sm text-gray-800 dark:text-white">{player.nome}</span>
+                                                <span className="text-xs text-gray-400">{player.badges!.length} conquista(s)</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {player.badges!.map(badge => {
+                                                    const style = getRarityStyles(badge.raridade);
+                                                    return (
+                                                        <div key={badge.id} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-bold ${style.classes}`}>
+                                                            <span>{badge.emoji}</span>
+                                                            <span>{badge.nome}</span>
+                                                            <button
+                                                                onClick={() => handleRevokeBadge(player.id, badge.id)}
+                                                                className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
+                                                                title="Revogar conquista"
+                                                            >
+                                                                <LucideX size={10} />
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                {activePlayers.every(p => !(p.badges || []).length) && (
+                                    <p className="text-center text-gray-400 py-8 text-sm">Nenhum atleta possui conquistas ainda.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* ── FECHAR TEMPORADA ───────────────────────────── */}
+                        {(() => {
+                            const handleCloseSeason = async () => {
+                                if (!window.confirm(`Fechar temporada ${seasonYear} e distribuir conquistas? Esta ação não pode ser desfeita.`)) return;
+                                setSeasonLoading(true);
+                                setSeasonResult(null);
+                                const log: string[] = [];
+                                let totalAwarded = 0;
+
+                                try {
+                                    // 1. Busca todos os eventos finalizados do ano
+                                    const eventosSnap = await db.collection('eventos').where('status', '==', 'finalizado').get();
+                                    const eventosDoAno = eventosSnap.docs.filter(d => {
+                                        const data = String(d.data().data || '');
+                                        return data.includes(seasonYear) || data.endsWith('/' + seasonYear.slice(2));
+                                    });
+
+                                    if (eventosDoAno.length === 0) {
+                                        alert(`Nenhum evento finalizado encontrado em ${seasonYear}.`);
+                                        setSeasonLoading(false);
+                                        return;
+                                    }
+                                    log.push(`📋 ${eventosDoAno.length} evento(s) em ${seasonYear}`);
+
+                                    // 2. Agrega pontos, cestas de 3 e participações por jogador
+                                    const pontosTotais: Record<string, number> = {};
+                                    const cestas3Totais: Record<string, number> = {};
+                                    const eventosParticipados: Record<string, Set<string>> = {};
+
+                                    // Conta badges de evento já concedidas nesta temporada (para Colecionador)
+                                    const badgesDeEvento: Record<string, number> = {};
+                                    for (const player of activePlayers) {
+                                        const count = (player.badges || []).filter(b => b.data?.includes(seasonYear)).length;
+                                        if (count > 0) badgesDeEvento[player.id] = count;
+                                    }
+
+                                    for (const eventoDoc of eventosDoAno) {
+                                        const eventId = eventoDoc.id;
+                                        const eventData = eventoDoc.data();
+
+                                        let ancbIds: string[] = [];
+                                        if (eventData.timesParticipantes?.length > 0) {
+                                            eventData.timesParticipantes.filter((t: any) => t.isANCB)
+                                                .forEach((t: any) => ancbIds.push(...(t.jogadores || [])));
+                                        } else if (eventData.times?.length > 0) {
+                                            eventData.times.forEach((t: any) => ancbIds.push(...(t.jogadores || [])));
+                                        } else {
+                                            ancbIds = (eventData.jogadoresEscalados || [])
+                                                .map((e: any) => typeof e === 'string' ? e : e?.id).filter(Boolean);
+                                        }
+                                        ancbIds = [...new Set(ancbIds.filter(Boolean))];
+
+                                        for (const pid of ancbIds) {
+                                            if (!eventosParticipados[pid]) eventosParticipados[pid] = new Set();
+                                            eventosParticipados[pid].add(eventId);
+                                        }
+
+                                        const jogosSnap = await db.collection('eventos').doc(eventId).collection('jogos').get();
+                                        for (const jogoDoc of jogosSnap.docs) {
+                                            const cestasSnap = await db.collection('eventos').doc(eventId)
+                                                .collection('jogos').doc(jogoDoc.id).collection('cestas').get();
+                                            for (const cestaDoc of cestasSnap.docs) {
+                                                const cesta = cestaDoc.data();
+                                                const pid = cesta.jogadorId;
+                                                if (!pid || !ancbIds.includes(pid)) continue;
+                                                const pts = Number(cesta.pontos) || 0;
+                                                pontosTotais[pid] = (pontosTotais[pid] || 0) + pts;
+                                                if (pts === 3) cestas3Totais[pid] = (cestas3Totais[pid] || 0) + 1;
+                                            }
+                                        }
+                                    }
+
+                                    // 3. Rankeia e monta badges
+                                    const rankPontos = Object.entries(pontosTotais).sort((a, b) => b[1] - a[1]).map(([id]) => id);
+                                    const rankCestas3 = Object.entries(cestas3Totais).sort((a, b) => b[1] - a[1]).map(([id]) => id);
+                                    const today = new Date().toISOString().split('T')[0];
+                                    const yr = seasonYear;
+                                    const seasonBadges: Record<string, any[]> = {};
+                                    const addS = (pid: string, badge: any) => { if (!seasonBadges[pid]) seasonBadges[pid] = []; seasonBadges[pid].push(badge); };
+                                    const mk = (id: string, nome: string, emoji: string, raridade: string, descricao: string) =>
+                                        ({ id, nome, emoji, raridade, categoria: 'temporada', descricao, data: today });
+
+                                    if (rankPontos[0]) addS(rankPontos[0], mk(`rei_quadra_${yr}`,  `Rei da Quadra ${yr}`,  '👑', 'lendaria', `Maior pontuador da temporada ${yr} com ${pontosTotais[rankPontos[0]]} pontos.`));
+                                    if (rankPontos[1]) addS(rankPontos[1], mk(`chama_viva_${yr}`,  `Chama Viva ${yr}`,     '🔥', 'epica',    `2º maior pontuador da temporada ${yr} com ${pontosTotais[rankPontos[1]]} pontos.`));
+                                    if (rankPontos[2]) addS(rankPontos[2], mk(`forca_bruta_${yr}`, `Força Bruta ${yr}`,    '⚡', 'epica',    `3º maior pontuador da temporada ${yr} com ${pontosTotais[rankPontos[2]]} pontos.`));
+
+                                    if (rankCestas3[0]) addS(rankCestas3[0], mk(`mao_ouro_${yr}`,   `Sniper de Elite ${yr}`,  '🏹', 'lendaria', `O melhor da liga em bolas de 3 na temporada ${yr} com ${cestas3Totais[rankCestas3[0]]} bolas longas.`));
+                                    if (rankCestas3[1]) addS(rankCestas3[1], mk(`mao_prata_${yr}`,  `Sniper ${yr}`,           '🎯', 'epica',    `2º em cestas de 3 da temporada ${yr} com ${cestas3Totais[rankCestas3[1]]} bolas longas. Sempre perigoso.`));
+                                    if (rankCestas3[2]) addS(rankCestas3[2], mk(`mao_bronze_${yr}`, `Mão Calibrada ${yr}`,    '🪃', 'epica',    `3º em cestas de 3 da temporada ${yr} com ${cestas3Totais[rankCestas3[2]]} bolas longas. Precisão técnica.`));
+
+                                    const totalEventos = eventosDoAno.length;
+                                    for (const [pid, evSet] of Object.entries(eventosParticipados)) {
+                                        if (evSet.size >= totalEventos)
+                                            addS(pid, mk(`guerreiro_${yr}`, `Guerreiro da Temporada ${yr}`, '🗓️', 'rara', `Participou de todos os ${totalEventos} eventos da temporada ${yr}.`));
+                                    }
+                                    for (const [pid, count] of Object.entries(badgesDeEvento)) {
+                                        if (count >= 5)
+                                            addS(pid, mk(`colecionador_${yr}`, `Colecionador ${yr}`, '🏅', 'rara', `Acumulou ${count} conquistas de evento na temporada ${yr}.`));
+                                    }
+
+                                    // 4. Salva e notifica
+                                    for (const [pid, newBadges] of Object.entries(seasonBadges)) {
+                                        if (!newBadges.length) continue;
+                                        const playerSnap = await db.collection('jogadores').doc(pid).get();
+                                        if (!playerSnap.exists) continue;
+                                        const existingIds = new Set((playerSnap.data()!.badges || []).map((b: any) => b.id));
+                                        const toAdd = newBadges.filter(b => !existingIds.has(b.id));
+                                        if (!toAdd.length) continue;
+                                        await db.collection('jogadores').doc(pid).update({
+                                            badges: firebase.firestore.FieldValue.arrayUnion(...toAdd),
+                                        });
+                                        totalAwarded += toAdd.length;
+                                        log.push(`🏆 ${playerSnap.data()!.nome || pid}: ${toAdd.map((b: any) => b.emoji + ' ' + b.nome).join(', ')}`);
+                                        const usersSnap = await db.collection('usuarios').where('linkedPlayerId', '==', pid).limit(1).get();
+                                        if (!usersSnap.empty) {
+                                            const targetUserId = usersSnap.docs[0].id;
+                                            for (const badge of toAdd) {
+                                                await db.collection('notifications').doc(`badge_${targetUserId}_${badge.id}`).set({
+                                                    targetUserId, type: 'evaluation',
+                                                    title: `Nova conquista desbloqueada! ${badge.emoji}`,
+                                                    message: `Você ganhou "${badge.nome}": ${badge.descricao}`,
+                                                    data: { badgeId: badge.id }, read: false,
+                                                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                                                }, { merge: true });
+                                            }
+                                        }
+                                    }
+
+                                    // 5. Registra temporada como fechada no Firestore
+                                    await db.collection('temporadas').doc(yr).set({
+                                        ano: yr, fechadaEm: firebase.firestore.FieldValue.serverTimestamp(),
+                                        totalEventos: eventosDoAno.length, totalBadges: totalAwarded,
+                                    }, { merge: true });
+
+                                    log.push(`✅ ${totalAwarded} conquista(s) distribuída(s)`);
+                                    setSeasonResult({ awarded: totalAwarded, log });
+                                } catch (e) {
+                                    alert('Erro ao fechar temporada. Veja o console.');
+                                    console.error(e);
+                                } finally {
+                                    setSeasonLoading(false);
+                                }
+                            };
+
+                            return (
+                                <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                                    <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-1 border-b border-gray-100 dark:border-gray-700 pb-3">
+                                        <LucideCrown size={18} className="text-yellow-500" /> Fechar Temporada
+                                    </h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 pt-3">
+                                        Agrega todos os eventos finalizados do ano e distribui conquistas de temporada. Seguro para rodar mais de uma vez — nunca duplica badges.
+                                    </p>
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <select
+                                            value={seasonYear}
+                                            onChange={e => { setSeasonYear(e.target.value); setSeasonResult(null); }}
+                                            className="border border-gray-200 dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                                        >
+                                            {['2025', '2026', '2027'].map(y => <option key={y} value={y}>{y}</option>)}
+                                        </select>
+                                        <Button onClick={handleCloseSeason} disabled={seasonLoading} variant="secondary">
+                                            <LucideTrophy size={16} />
+                                            {seasonLoading ? 'Processando...' : `Fechar Temporada ${seasonYear}`}
+                                        </Button>
+                                    </div>
+                                    {seasonResult && (
+                                        <div className="mt-2 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                            <p className="font-bold text-green-600 dark:text-green-400 mb-2">
+                                                ✅ {seasonResult.awarded} conquista(s) distribuída(s)
+                                            </p>
+                                            <div className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5 max-h-48 overflow-y-auto custom-scrollbar font-mono">
+                                                {seasonResult.log.map((line, i) => <div key={i}>{line}</div>)}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
+                    </div>
+                );
+            })()}
 
             {/* TAB: APOIADORES */}
             {adminTab === 'apoiadores' && (

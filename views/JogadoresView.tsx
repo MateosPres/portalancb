@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { formatCpf, formatPhoneForDisplay, normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
+import { getRarityStyles, getBadgeWeight, getDisplayBadges } from '../utils/badges';
 import imageCompression from 'browser-image-compression';
 
 interface JogadoresViewProps {
@@ -510,52 +511,16 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         }
     };
 
-    const getRarityStyles = (rarity: Badge['raridade']) => {
-        switch(rarity) {
-            case 'lendaria': 
-                return { label: 'Lendária', classes: 'bg-gradient-to-r from-purple-600 to-pink-600 text-white border-purple-400' };
-            case 'epica': 
-                return { label: 'Ouro', classes: 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white border-yellow-300' };
-            case 'rara': 
-                return { label: 'Prata', classes: 'bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800 border-gray-200' };
-            default: 
-                return { label: 'Bronze', classes: 'bg-gradient-to-r from-orange-700 to-orange-800 text-white border-orange-900' };
-        }
-    };
-
-    const getBadgeWeight = (rarity: Badge['raridade']) => {
-        switch(rarity) {
-            case 'lendaria': return 4;
-            case 'epica': return 3;
-            case 'rara': return 2;
-            default: return 1;
-        }
-    };
-
     const radarStats = selectedPlayer 
         ? calculateRadarStats(selectedPlayer.stats_tags, selectedPlayer.stats_atributos)
         : { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
     const hasRadarData = selectedPlayer
         ? Object.values(selectedPlayer.stats_atributos || {}).some(value => Number(value) !== 0) || Object.values(selectedPlayer.stats_tags || {}).some(value => Number(value) > 0)
         : false;
-    
-    // BADGE DISPLAY LOGIC
-    let displayBadges: Badge[] = [];
-    if (selectedPlayer?.badges) {
-        const allBadges = selectedPlayer.badges;
-        const pinnedIds = selectedPlayer.pinnedBadgeIds || [];
-        
-        if (pinnedIds.length > 0) {
-            displayBadges = allBadges.filter(b => pinnedIds.includes(b.id));
-        } else {
-            displayBadges = [...allBadges].sort((a, b) => {
-                const weightA = getBadgeWeight(a.raridade);
-                const weightB = getBadgeWeight(b.raridade);
-                if (weightA !== weightB) return weightB - weightA;
-                return b.data.localeCompare(a.data);
-            }).slice(0, 3);
-        }
-    }
+
+    const displayBadges = selectedPlayer?.badges
+        ? getDisplayBadges(selectedPlayer.badges, selectedPlayer.pinnedBadgeIds || [])
+        : [];
 
     if (selectedPlayer) {
         return (
@@ -804,42 +769,57 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                     )}
                 </div>
 
-                {/* DETAIL MODAL (Single Badge) */}
-                <Modal isOpen={!!selectedBadge} onClose={() => setSelectedBadge(null)} title="Detalhes da Conquista">
-                    {selectedBadge && (
-                        <div className="text-center p-4">
-                            <div className="text-8xl mb-4 animate-bounce-slow drop-shadow-xl">{selectedBadge.emoji}</div>
-                            <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 uppercase tracking-wide">{selectedBadge.nome}</h3>
-                            <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 border ${getRarityStyles(selectedBadge.raridade).classes}`}>
-                                {getRarityStyles(selectedBadge.raridade).label}
+                {/* CONQUISTAS: modal único com navegação interna galeria ↔ detalhe */}
+                <Modal
+                    isOpen={showAllBadges || !!selectedBadge}
+                    onClose={() => { setShowAllBadges(false); setSelectedBadge(null); }}
+                    title={selectedBadge ? 'Detalhes da Conquista' : 'Galeria de Troféus'}
+                >
+                    {selectedBadge ? (
+                        /* ── TELA DE DETALHE ── */
+                        <div className="p-2">
+                            <button
+                                onClick={() => setSelectedBadge(null)}
+                                className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 mb-4 transition-colors"
+                            >
+                                <LucideArrowLeft size={15} /> Voltar para conquistas
+                            </button>
+                            <div className="text-center">
+                                <div className="text-8xl mb-4 animate-bounce-slow drop-shadow-xl">{selectedBadge.emoji}</div>
+                                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 uppercase tracking-wide">{selectedBadge.nome}</h3>
+                                <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 border ${getRarityStyles(selectedBadge.raridade).classes}`}>
+                                    {getRarityStyles(selectedBadge.raridade).label}
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-600 mb-4">
+                                    <p className="text-gray-600 dark:text-gray-300 text-sm font-medium leading-relaxed">{selectedBadge.descricao}</p>
+                                </div>
+                                <p className="text-xs text-gray-400 uppercase font-bold tracking-widest">Conquistado em: {formatDate(selectedBadge.data)}</p>
                             </div>
-                            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-600 mb-4">
-                                <p className="text-gray-600 dark:text-gray-300 text-sm font-medium leading-relaxed">{selectedBadge.descricao}</p>
+                        </div>
+                    ) : (
+                        /* ── TELA DE GALERIA ── */
+                        <div className="p-2">
+                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar p-1">
+                                {selectedPlayer?.badges && selectedPlayer.badges.length > 0 ? (
+                                    [...selectedPlayer.badges].reverse().map((badge, idx) => {
+                                        const style = getRarityStyles(badge.raridade);
+                                        return (
+                                            <div
+                                                key={idx}
+                                                onClick={() => setSelectedBadge(badge)}
+                                                className={`rounded-xl p-2 flex flex-col items-center justify-center text-center cursor-pointer hover:scale-105 transition-transform shadow-sm border ${style.classes}`}
+                                            >
+                                                <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>
+                                                <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <p className="col-span-full text-center text-gray-500 py-10">Nenhuma conquista ainda.</p>
+                                )}
                             </div>
-                            <p className="text-xs text-gray-400 uppercase font-bold tracking-widest">Conquistado em: {formatDate(selectedBadge.data)}</p>
                         </div>
                     )}
-                </Modal>
-
-                {/* GALLERY MODAL (All Badges for Viewing in Player Modal) */}
-                <Modal isOpen={showAllBadges} onClose={() => setShowAllBadges(false)} title="Galeria de Troféus">
-                    <div className="p-2">
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar p-1">
-                            {selectedPlayer?.badges && selectedPlayer.badges.length > 0 ? (
-                                [...selectedPlayer.badges].reverse().map((badge, idx) => {
-                                    const style = getRarityStyles(badge.raridade);
-                                    return (
-                                        <div key={idx} onClick={() => setSelectedBadge(badge)} className={`rounded-xl p-2 flex flex-col items-center justify-center text-center cursor-pointer hover:scale-105 transition-transform shadow-sm border ${style.classes}`}>
-                                            <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>
-                                            <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
-                                        </div>
-                                    );
-                                })
-                            ) : (
-                                <p className="col-span-full text-center text-gray-500 py-10">Nenhuma conquista ainda.</p>
-                            )}
-                        </div>
-                    </div>
                 </Modal>
 
                 {showCropper && imageToCrop && (

@@ -10,6 +10,7 @@ import imageCompression from 'browser-image-compression';
 import { RadarChart } from '../components/RadarChart';
 import { ImageCropperModal } from '../components/ImageCropperModal';
 import { normalizePhoneForStorage } from '../utils/contactFormat';
+import { getRarityStyles, getBadgeWeight, getDisplayBadges } from '../utils/badges';
 
 interface ProfileViewProps {
     userProfile: UserProfile;
@@ -117,6 +118,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     // Badge Management
     const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
     const [showAllBadges, setShowAllBadges] = useState(false);
+    const [pinMode, setPinMode] = useState(false);
 
     const [isUploading, setIsUploading] = useState(false);
     
@@ -411,12 +413,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const radarStats = calculateRadarStats(formData.stats_tags, formData.stats_atributos);
     const hasAttributeDeltas = Object.values(formData.stats_atributos || {}).some(value => Number(value) !== 0);
     const hasRadarData = hasAttributeDeltas || Object.values(formData.stats_tags || {}).some(value => Number(value) > 0);
-    const getBadgeWeight = (rarity: Badge['raridade']) => { switch(rarity) { case 'lendaria': return 4; case 'epica': return 3; case 'rara': return 2; default: return 1; } };
     const allBadges = formData.badges || [];
     const pinnedIds = formData.pinnedBadgeIds || [];
-    let displayBadges: Badge[] = [];
-    if (pinnedIds.length > 0) { displayBadges = allBadges.filter(b => pinnedIds.includes(b.id)); } else { displayBadges = [...allBadges].sort((a, b) => { const weightA = getBadgeWeight(a.raridade); const weightB = getBadgeWeight(b.raridade); if (weightA !== weightB) return weightB - weightA; return b.data.localeCompare(a.data); }).slice(0, 3); }
-    const getRarityStyles = (rarity: Badge['raridade']) => { switch(rarity) { case 'lendaria': return { label: 'Lendária', classes: 'bg-gradient-to-r from-purple-600 to-pink-600 text-white border-purple-400' }; case 'epica': return { label: 'Ouro', classes: 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white border-yellow-300' }; case 'rara': return { label: 'Prata', classes: 'bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800 border-gray-200' }; default: return { label: 'Bronze', classes: 'bg-gradient-to-r from-orange-700 to-orange-800 text-white border-orange-900' }; } };
+    const displayBadges = getDisplayBadges(allBadges, pinnedIds);
 
     return (
         <div className="animate-fadeIn pb-20">
@@ -746,53 +745,99 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 </form>
             </Modal>
 
-            <Modal isOpen={!!selectedBadge} onClose={() => setSelectedBadge(null)} title="Detalhes da Conquista">
-                {selectedBadge && (
-                    <div className="text-center p-6">
-                        <div className="text-8xl mb-6 animate-bounce-slow">{selectedBadge.emoji}</div>
-                        <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">{selectedBadge.nome}</h3>
-                        
-                        <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 ${getRarityStyles(selectedBadge.raridade).classes} border`}>
-                            {getRarityStyles(selectedBadge.raridade).label}
+            {/* CONQUISTAS: modal único com navegação interna galeria ↔ detalhe */}
+            <Modal
+                isOpen={showAllBadges || !!selectedBadge}
+                onClose={() => { setShowAllBadges(false); setSelectedBadge(null); setPinMode(false); }}
+                title={selectedBadge ? 'Detalhes da Conquista' : 'Galeria de Troféus'}
+            >
+                {selectedBadge ? (
+                    /* ── TELA DE DETALHE ── */
+                    <div className="p-2">
+                        <button
+                            onClick={() => setSelectedBadge(null)}
+                            className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 mb-4 transition-colors"
+                        >
+                            <LucideArrowLeft size={15} /> Voltar para conquistas
+                        </button>
+                        <div className="text-center">
+                            <div className="text-8xl mb-6 animate-bounce-slow">{selectedBadge.emoji}</div>
+                            <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">{selectedBadge.nome}</h3>
+                            <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 ${getRarityStyles(selectedBadge.raridade).classes} border`}>
+                                {getRarityStyles(selectedBadge.raridade).label}
+                            </div>
+                            <p className="text-gray-600 dark:text-gray-300 mb-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">{selectedBadge.descricao}</p>
+                            <p className="text-xs text-gray-400 font-bold uppercase mb-4">Conquistado em {formatDate(selectedBadge.data)}</p>
                         </div>
-                        
-                        <p className="text-gray-600 dark:text-gray-300 mb-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl">{selectedBadge.descricao}</p>
-                        <p className="text-xs text-gray-400 font-bold uppercase mb-6">Conquistado em {formatDate(selectedBadge.data)}</p>
+                    </div>
+                ) : (
+                    /* ── TELA DE GALERIA ── */
+                    <div className="p-2">
+                        {/* Barra de controle: contador + botão de modo seleção */}
+                        <div className="flex items-center justify-between mb-4">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {(formData.badges || []).length} conquista(s)
+                            </span>
+                            <button
+                                onClick={() => setPinMode(m => !m)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all border ${
+                                    pinMode
+                                        ? 'bg-ancb-blue text-white border-ancb-blue shadow-sm'
+                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                }`}
+                            >
+                                {pinMode
+                                    ? `✓ Selecionando (${(formData.pinnedBadgeIds || []).length}/3)`
+                                    : '⭐ Selecionar principais'
+                                }
+                            </button>
+                        </div>
+
+                        {/* Instrução contextual */}
+                        <p className="text-xs text-gray-400 dark:text-gray-500 text-center mb-3">
+                            {pinMode
+                                ? 'Toque para marcar/desmarcar · Máx. 3 exibidas no perfil'
+                                : 'Toque em uma conquista para ver os detalhes'
+                            }
+                        </p>
+
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[55vh] overflow-y-auto custom-scrollbar p-1">
+                            {formData.badges && formData.badges.length > 0 ? (
+                                [...formData.badges].reverse().map((badge, idx) => {
+                                    const style = getRarityStyles(badge.raridade);
+                                    const isPinned = formData.pinnedBadgeIds?.includes(badge.id);
+                                    return (
+                                        <div
+                                            key={idx}
+                                            onClick={() => pinMode ? handleTogglePin(badge.id) : setSelectedBadge(badge)}
+                                            className={`rounded-xl p-2 flex flex-col items-center justify-center text-center cursor-pointer transition-all shadow-sm border-2 relative select-none
+                                                ${style.classes}
+                                                ${pinMode && isPinned ? '!border-green-400 ring-2 ring-green-400/40 scale-105' : ''}
+                                                ${pinMode && !isPinned ? 'opacity-70' : ''}
+                                                ${!pinMode ? 'hover:scale-105 active:scale-95' : 'active:scale-95'}
+                                            `}
+                                        >
+                                            {/* Indicador de seleção — só visível no modo pin */}
+                                            {pinMode && (
+                                                <div className={`absolute top-1 right-1 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                                                    isPinned
+                                                        ? 'bg-green-500 border-green-500'
+                                                        : 'bg-white/20 border-white/50'
+                                                }`}>
+                                                    {isPinned && <LucideCheckCircle2 size={10} className="text-white" fill="white" />}
+                                                </div>
+                                            )}
+                                            <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>
+                                            <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <p className="col-span-full text-center text-gray-500 py-10">Nenhuma conquista ainda.</p>
+                            )}
+                        </div>
                     </div>
                 )}
-            </Modal>
-
-            <Modal isOpen={showAllBadges} onClose={() => setShowAllBadges(false)} title="Galeria de Troféus">
-                <div className="p-2">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-4">
-                        Toque para selecionar até 3 conquistas para exibir no seu perfil.
-                    </p>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar p-1">
-                        {formData.badges && formData.badges.length > 0 ? (
-                            [...formData.badges].reverse().map((badge, idx) => {
-                                const style = getRarityStyles(badge.raridade);
-                                const isPinned = formData.pinnedBadgeIds?.includes(badge.id);
-                                return (
-                                    <div 
-                                        key={idx} 
-                                        onClick={() => handleTogglePin(badge.id)} 
-                                        className={`rounded-xl p-2 flex flex-col items-center justify-center text-center cursor-pointer transition-all shadow-sm border-2 relative ${style.classes} ${isPinned ? '!border-green-500 ring-2 ring-green-500/30 transform scale-105 z-10' : 'hover:scale-105'}`}
-                                    >
-                                        {isPinned && (
-                                            <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full p-0.5 shadow-md">
-                                                <LucideCheckCircle2 size={12} fill="white" className="text-green-600" />
-                                            </div>
-                                        )}
-                                        <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>
-                                        <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
-                                    </div>
-                                );
-                            })
-                        ) : (
-                            <p className="col-span-full text-center text-gray-500 py-10">Nenhuma conquista ainda.</p>
-                        )}
-                    </div>
-                </div>
             </Modal>
 
             {/* Image Cropper Modal */}
