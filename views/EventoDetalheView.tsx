@@ -1436,22 +1436,22 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                             {event.podio && (
                                 <div className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 p-6 rounded-2xl border border-yellow-500/20 mb-6 text-center">
                                     <h4 className="text-lg font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-widest mb-6">Pódio Final</h4>
-                                    <div className="flex flex-col md:flex-row items-end justify-center gap-4 md:gap-8">
+                                    <div className="flex flex-row items-end justify-center gap-3 md:gap-8">
                                         {/* 2nd Place */}
-                                        <div className="order-2 md:order-1 flex flex-col items-center">
-                                            <div className="w-16 h-16 rounded-full bg-gray-300 border-4 border-white shadow-lg flex items-center justify-center text-2xl font-black text-gray-600 mb-2">2</div>
-                                            <span className="font-bold text-gray-800 dark:text-white">{event.timesParticipantes?.find(t => t.id === event.podio?.segundo)?.nomeTime || 'Time'}</span>
+                                        <div className="flex flex-col items-center flex-1 max-w-[120px]">
+                                            <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gray-300 border-4 border-white shadow-lg flex items-center justify-center text-xl md:text-2xl font-black text-gray-600 mb-2">2</div>
+                                            <span className="font-bold text-xs md:text-sm text-gray-800 dark:text-white leading-tight">{event.timesParticipantes?.find(t => t.id === event.podio?.segundo)?.nomeTime || event.podio?.segundo || 'Time'}</span>
                                         </div>
-                                        {/* 1st Place */}
-                                        <div className="order-1 md:order-2 flex flex-col items-center mb-4 md:mb-0">
-                                            <LucideTrophy size={32} className="text-yellow-500 mb-2 animate-bounce" />
-                                            <div className="w-24 h-24 rounded-full bg-yellow-400 border-4 border-white shadow-xl flex items-center justify-center text-4xl font-black text-yellow-800 mb-2">1</div>
-                                            <span className="font-black text-xl text-gray-900 dark:text-white">{event.timesParticipantes?.find(t => t.id === event.podio?.primeiro)?.nomeTime || 'Campeão'}</span>
+                                        {/* 1st Place — taller */}
+                                        <div className="flex flex-col items-center flex-1 max-w-[140px] mb-0 pb-2">
+                                            <LucideTrophy size={28} className="text-yellow-500 mb-2 animate-bounce" />
+                                            <div className="w-16 h-16 md:w-24 md:h-24 rounded-full bg-yellow-400 border-4 border-white shadow-xl flex items-center justify-center text-3xl md:text-4xl font-black text-yellow-800 mb-2">1</div>
+                                            <span className="font-black text-sm md:text-xl text-gray-900 dark:text-white leading-tight">{event.timesParticipantes?.find(t => t.id === event.podio?.primeiro)?.nomeTime || event.podio?.primeiro || 'Campeão'}</span>
                                         </div>
                                         {/* 3rd Place */}
-                                        <div className="order-3 flex flex-col items-center">
-                                            <div className="w-16 h-16 rounded-full bg-orange-300 border-4 border-white shadow-lg flex items-center justify-center text-2xl font-black text-orange-800 mb-2">3</div>
-                                            <span className="font-bold text-gray-800 dark:text-white">{event.timesParticipantes?.find(t => t.id === event.podio?.terceiro)?.nomeTime || 'Time'}</span>
+                                        <div className="flex flex-col items-center flex-1 max-w-[120px]">
+                                            <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-orange-300 border-4 border-white shadow-lg flex items-center justify-center text-xl md:text-2xl font-black text-orange-800 mb-2">3</div>
+                                            <span className="font-bold text-xs md:text-sm text-gray-800 dark:text-white leading-tight">{event.timesParticipantes?.find(t => t.id === event.podio?.terceiro)?.nomeTime || event.podio?.terceiro || 'Time'}</span>
                                         </div>
                                     </div>
                                 </div>
