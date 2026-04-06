@@ -22,8 +22,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeItem, 
     <nav className="fixed inset-x-0 bottom-0 z-50 bg-transparent block md:hidden">
       <div 
         className="mx-auto grid w-full max-w-5xl grid-cols-5 gap-0 bg-[#041b3d]/95 border-t border-white/10 px-2 shadow-[0_-10px_24px_rgba(0,0,0,0.18)]" 
-        // Margem inferior reduzida pela metade (0.8rem)
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.8rem)', paddingTop: '0.4rem' }} 
+        // Margem inferior mantida (0.8rem). Margem superior quase zerada (0.15rem) para "descer" o teto da barra.
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.8rem)', paddingTop: '0.15rem' }} 
       >
         {items.map((item) => {
           const isActive = activeItem === item.key;
@@ -38,8 +38,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeItem, 
             >
               {isCenter ? (
                 <div className="relative flex h-7 w-full items-center justify-center">
-                  {/* Posição da bola ajustada para -2px para compensar a descida da barra */}
-                  <span className="absolute bottom-[-2px] flex h-16 w-16 items-center justify-center drop-shadow-xl transition-transform active:scale-95">
+                  {/* Bola empurrada mais para baixo (-8px) para colar no texto */}
+                  <span className="absolute bottom-[-8px] flex h-16 w-16 items-center justify-center drop-shadow-xl transition-transform active:scale-95">
                     {item.icon}
                   </span>
                 </div>
