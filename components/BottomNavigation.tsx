@@ -22,8 +22,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeItem, 
     <nav className="fixed inset-x-0 bottom-0 z-50 bg-transparent block md:hidden">
       <div 
         className="mx-auto grid w-full max-w-5xl grid-cols-5 gap-0 bg-[#041b3d]/95 border-t border-white/10 px-2 shadow-[0_-10px_24px_rgba(0,0,0,0.18)]" 
-        // 1. Reduzimos o paddingTop (de 0.75rem para 0.4rem) e aumentamos o paddingBottom (de 1.25rem para 1.6rem). Isso empurra tudo para cima.
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.6rem)', paddingTop: '0.4rem' }} 
+        // Margem inferior reduzida pela metade (0.8rem)
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.8rem)', paddingTop: '0.4rem' }} 
       >
         {items.map((item) => {
           const isActive = activeItem === item.key;
@@ -38,8 +38,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeItem, 
             >
               {isCenter ? (
                 <div className="relative flex h-7 w-full items-center justify-center">
-                  {/* 2. Como o botão subiu, compensamos empurrando a bola mais para baixo (de -4px para -10px) para ancorá-la no lugar original */}
-                  <span className="absolute bottom-[-10px] flex h-16 w-16 items-center justify-center drop-shadow-xl transition-transform active:scale-95">
+                  {/* Posição da bola ajustada para -2px para compensar a descida da barra */}
+                  <span className="absolute bottom-[-2px] flex h-16 w-16 items-center justify-center drop-shadow-xl transition-transform active:scale-95">
                     {item.icon}
                   </span>
                 </div>
@@ -49,7 +49,6 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeItem, 
                 </span>
               )}
               
-              {/* Texto: Todos (inclusive o do Início) sobem juntos porque o padding do container os empurrou */}
               <span className={`text-[9px] font-bold uppercase tracking-[0.1em] transition-colors ${isActive || isCenter ? 'text-white' : 'text-slate-400'}`}>
                 {item.label}
               </span>
