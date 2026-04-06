@@ -11,6 +11,8 @@ import { ApoiadoresCarousel } from './components/ApoiadoresCarousel';
 import { LucideCalendar, LucideUsers, LucideTrophy, LucideLoader2, LucideMegaphone, LucideDownload, LucideShare, LucideX, LucideExternalLink, LucideStar, LucidePlusSquare } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { Header } from './components/Header';
+import { LandingScreen } from './components/LandingScreen';
+import { BottomNavigation } from './components/BottomNavigation';
 import { formatCpf, formatPhoneForDisplay, normalizeCpfForStorage, normalizePhoneForStorage } from './utils/contactFormat';
 import { fileToBase64 } from './utils/imageUtils';
 import { useScrollToTop } from './hooks/useScrollToTop';
@@ -951,34 +953,76 @@ const App: React.FC = () => {
     
     return (
         <div className="min-h-screen flex flex-col font-sans text-ancb-black dark:text-gray-100 bg-gray-50 dark:bg-gray-900 transition-colors">
-            
-            <Header 
-                user={headerUser} 
-                isDarkMode={isDarkMode}
-                onToggleTheme={handleToggleTheme}
-                onLogin={handleLogin} 
-                onRegister={handleOpenRegister}
-                onLogout={handleLogout}
-                onProfileClick={handleProfileClick}
-                onAdminClick={handleAdminClick}
-                onHomeClick={handleHomeClick}
-                onNossaHistoriaClick={handleNossaHistoriaClick}
-                notifications={notifications}
-                onNotificationsClick={() => setShowNotificationsView(true)}
-                showInstallAppLink={showInstallInMenu}
-                onInstallApp={handleInstallPortal}
-                onInstallPranchetaApp={handleInstallPrancheta}
-            />
-
-            <main className={`flex-grow ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' || currentView === 'post-view' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
-                <Suspense fallback={
-                    <div className="w-full py-16 flex items-center justify-center">
-                        <div className="w-10 h-10 border-4 border-gray-200 dark:border-gray-700 border-t-ancb-orange rounded-full animate-spin" />
+            {!userProfile ? (
+                currentView === 'home' ? (
+                    <div className="flex-grow">
+                        <LandingScreen
+                            onLogin={handleLogin}
+                            onRegister={handleOpenRegister}
+                            onNossaHistoriaClick={handleNossaHistoriaClick}
+                            onRankingClick={() => setCurrentView('ranking')}
+                            onJogadoresClick={() => setCurrentView('jogadores')}
+                            onEventClick={() => handleOpenEventDetail(ongoingEvents[0]?.id)}
+                            onVerTodosApoiadores={() => setCurrentView('apoiadores')}
+                        />
                     </div>
-                }>
-                    {renderContent()}
-                </Suspense>
-            </main>
+                ) : (
+                    <div className="flex-grow">
+                        <main className="container mx-auto px-4 py-6 max-w-6xl">
+                            <button 
+                                onClick={() => setCurrentView('home')}
+                                className="flex items-center gap-2 mb-6 px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-[#F27405] hover:bg-white/10 transition"
+                            >
+                                <span>←</span>
+                                <span>Voltar</span>
+                            </button>
+                            <Suspense fallback={
+                                <div className="w-full py-16 flex items-center justify-center">
+                                    <div className="w-10 h-10 border-4 border-gray-200 dark:border-gray-700 border-t-ancb-orange rounded-full animate-spin" />
+                                </div>
+                            }>
+                                {renderContent()}
+                            </Suspense>
+                        </main>
+                    </div>
+                )
+            ) : (
+                <>
+                    <Header 
+                        user={headerUser} 
+                        isDarkMode={isDarkMode}
+                        onToggleTheme={handleToggleTheme}
+                        onLogin={handleLogin} 
+                        onRegister={handleOpenRegister}
+                        onLogout={handleLogout}
+                        onProfileClick={handleProfileClick}
+                        onAdminClick={handleAdminClick}
+                        onHomeClick={handleHomeClick}
+                        onNossaHistoriaClick={handleNossaHistoriaClick}
+                        notifications={notifications}
+                        onNotificationsClick={() => setShowNotificationsView(true)}
+                        showInstallAppLink={showInstallInMenu}
+                        onInstallApp={handleInstallPortal}
+                        onInstallPranchetaApp={handleInstallPrancheta}
+                    />
+
+                    <main className={`flex-grow pt-16 pb-24 ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' || currentView === 'post-view' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
+                        <Suspense fallback={
+                            <div className="w-full py-16 flex items-center justify-center">
+                                <div className="w-10 h-10 border-4 border-gray-200 dark:border-gray-700 border-t-ancb-orange rounded-full animate-spin" />
+                            </div>
+                        }>
+                            {renderContent()}
+                        </Suspense>
+                    </main>
+
+                    <BottomNavigation
+                        activeItem={['eventos','jogadores','home','ranking','profile'].includes(currentView) ? currentView as any : 'home'}
+                        onSelect={(item) => setCurrentView(item)}
+                        profilePhoto={headerUser?.photo}
+                    />
+                </>
+            )}
 
             {foregroundNotification && (
                 <div 
@@ -1001,14 +1045,6 @@ const App: React.FC = () => {
                     </div>
                     <button onClick={(e) => { e.stopPropagation(); setForegroundNotification(null); }} className="text-gray-400 hover:text-red-500 p-1 rounded-full"><LucideX size={20} /></button>
                 </div>
-            )}
-
-            {currentView !== 'evento-detalhe' && currentView !== 'painel-jogo' && (
-                <footer className="bg-[#062553] text-white text-center py-8 mt-10">
-                    <p className="font-bold mb-1">Associação Nova Canaã de Basquete - MT</p>
-                    <p className="text-sm text-gray-400">&copy; 2025 Todos os direitos reservados.</p>
-                    {(!isStandalone && (deferredPrompt || isIos)) && (<button onClick={handleInstallPortal} className="mt-4 inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-xs font-bold transition-all"><LucideDownload size={14} /> Instalar Portal</button>)}
-                </footer>
             )}
 
             {showNotificationsView && userProfile && (

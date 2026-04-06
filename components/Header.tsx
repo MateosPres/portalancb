@@ -89,93 +89,66 @@ export const Header: React.FC<HeaderProps> = ({
     <>
       <header className="bg-[#062553] border-b border-white/10 shadow-lg fixed w-full top-0 z-50 h-16 md:h-20 transition-colors">
         <div className="max-w-7xl mx-auto px-4 h-full flex justify-between items-center">
-          
-          {/* 1. LOGO E NOME (Esquerda) */}
-          <div 
-            className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity" 
-            onClick={onHomeClick}
-          >
-            <img src={LOGO_URL} alt="ANCB Logo" decoding="async" className="h-10 md:h-13 w-auto relative z-10 drop-shadow-md" />
-            <h1 className="text-white text-lg md:text-xl font-bold tracking-wide">
-              Portal ANCB-MT
-            </h1>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white transition hover:text-slate-200 focus:outline-none"
+              aria-label="Abrir menu"
+            >
+              {isMenuOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+            <div className="hidden md:flex items-center gap-3">
+              <img src={LOGO_URL} alt="ANCB" className="h-10 w-10 object-contain" />
+              <button onClick={onHomeClick} className="inline-flex items-center justify-center text-white hover:text-slate-200 focus:outline-none">
+                <span className="text-lg font-bold tracking-[0.02em]">Portal ANCB</span>
+              </button>
+            </div>
           </div>
 
-          {/* 2. ÁREA DA DIREITA (Tema + Notificações + User + Menu) */}
-          <div className="flex items-center gap-3">
-            
-            {/* TEMA */}
-            <button 
-              onClick={onToggleTheme} 
-              className="w-9 h-9 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-              title="Alternar Tema"
-            >
-              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          <div className="flex-1 text-center md:hidden">
+            <button onClick={onHomeClick} className="inline-flex items-center justify-center text-white hover:text-slate-200 focus:outline-none">
+              <span className="text-lg font-bold tracking-[0.02em]">Portal ANCB</span>
             </button>
+          </div>
 
-            {/* SINO DE NOTIFICAÇÕES (apenas se estiver logado) */}
+          <div className="flex items-center gap-3">
             {user && onNotificationsClick && (
               <button
                 onClick={onNotificationsClick}
-                className="relative w-9 h-9 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white transition hover:text-slate-200 focus:outline-none"
                 title="Notificações"
               >
                 <Bell size={20} />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1 shadow-md">
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-red-500 px-1 text-[10px] font-black text-white flex items-center justify-center shadow-md">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
               </button>
             )}
 
-            {/* USUÁRIO */}
-            {user ? (
-              <div 
-                className="flex items-center gap-3 cursor-pointer group"
+            {user && (
+              <button
                 onClick={onProfileClick}
+                className="hidden md:flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-2 text-white transition hover:bg-white/10 focus:outline-none"
               >
-                {/* Texto (Escondido em telas muito pequenas) */}
-                <div className="hidden md:flex flex-col text-right leading-tight group-hover:opacity-80 transition-opacity">
-                  <span className="text-white text-sm font-semibold">{user.name}</span>
-                  <span className="text-[10px] text-gray-300 uppercase font-bold tracking-wider">
-                    {user.role}
-                  </span>
-                </div>
-
-                {/* Avatar */}
-                <div className="relative">
-                  {user.photo ? (
-                    <img 
-                      src={user.photo} 
-                      loading="lazy"
-                      decoding="async"
-                      className="w-9 h-9 rounded-full border-2 border-[#F27405] object-cover bg-gray-200" 
-                      alt="Perfil" 
-                    />
-                  ) : (
-                    <div className="w-9 h-9 rounded-full border-2 border-white/20 bg-white/10 flex items-center justify-center">
-                      <User size={18} className="text-white" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <button 
-                onClick={onLogin}
-                className="flex items-center gap-2 text-sm font-bold text-gray-300 hover:text-white transition-colors mr-2"
-              >
-                <LogIn size={18} /> <span className="hidden xs:inline">Entrar</span>
+                {user.photo ? (
+                  <img src={user.photo} alt={user.name} className="h-8 w-8 rounded-full object-cover" />
+                ) : (
+                  <User size={20} />
+                )}
+                <span className="font-semibold text-sm">{user.name}</span>
               </button>
             )}
 
-            {/* BOTÃO HAMBÚRGUER */}
-            <button 
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="text-white p-2 hover:bg-white/10 rounded-lg transition-colors active:scale-95 focus:outline-none"
-            >
-              {isMenuOpen ? <X size={28} /> : <Menu size={28} />}
-            </button>
+            {!user && (
+              <button
+                onClick={onLogin}
+                className="flex h-11 items-center rounded-2xl bg-transparent px-4 text-sm font-semibold text-white transition hover:text-slate-200 focus:outline-none"
+              >
+                Entrar
+              </button>
+            )}
           </div>
         </div>
       </header>
