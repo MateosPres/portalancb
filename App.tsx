@@ -962,8 +962,13 @@ const App: React.FC = () => {
                             onNossaHistoriaClick={handleNossaHistoriaClick}
                             onRankingClick={() => setCurrentView('ranking')}
                             onJogadoresClick={() => setCurrentView('jogadores')}
-                            onEventClick={() => handleOpenEventDetail(ongoingEvents[0]?.id)}
+                            onEventClick={() => setCurrentView('eventos')}
                             onVerTodosApoiadores={() => setCurrentView('apoiadores')}
+                            publicEvent={ongoingEvents[0]}
+                            onOpenPublicGame={(game) => {
+                                setSelectedPublicGame({ game, eventId: ongoingEvents[0]?.id || '' });
+                                setCurrentView('public-game');
+                            }}
                         />
                     </div>
                 ) : (

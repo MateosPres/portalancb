@@ -1,6 +1,8 @@
 import React from 'react';
 import { LucideArrowRight, LucideBookOpen, LucideTrophy, LucideUsers, LucideCalendar } from 'lucide-react';
 import { ApoiadoresCarousel } from './ApoiadoresCarousel';
+import { LiveEventHero } from './LiveEventHero';
+import { Evento } from '../types';
 
 interface LandingScreenProps {
   onLogin: () => void;
@@ -8,8 +10,10 @@ interface LandingScreenProps {
   onNossaHistoriaClick: () => void;
   onRankingClick: () => void;
   onJogadoresClick: () => void;
-  onEventClick?: () => void;
+  onEventClick: () => void;
   onVerTodosApoiadores: () => void;
+  publicEvent?: Evento | null;
+  onOpenPublicGame?: (game: any) => void;
 }
 
 export const LandingScreen: React.FC<LandingScreenProps> = ({
@@ -20,6 +24,8 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   onJogadoresClick,
   onEventClick,
   onVerTodosApoiadores,
+  publicEvent,
+  onOpenPublicGame,
 }) => {
   return (
     <div className="relative min-h-screen bg-[#020915] text-white flex flex-col pb-[130px]">
@@ -43,6 +49,17 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               <p className="mt-3 text-base text-slate-300 sm:text-lg">Basquete é nossa história. Acompanhe jogos, rankings e atletas em uma experiência móvel imersiva.</p>
             </div>
           </div>
+
+          {/* Event Hero */}
+          {publicEvent && (
+            <div className="mb-8">
+              <LiveEventHero
+                event={publicEvent}
+                onClick={onEventClick}
+                onOpenLiveGame={onOpenPublicGame}
+              />
+            </div>
+          )}
 
           {/* Public Access Buttons */}
           <div className="rounded-[24px] border border-white/10 bg-slate-950/80 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)] mb-8">
