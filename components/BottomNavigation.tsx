@@ -20,7 +20,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeItem, 
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 bg-transparent block md:hidden">
-      <div className="mx-auto flex h-12 max-w-5xl items-end justify-between bg-[#041b3d]/95 border-t border-white/10 px-4 pb-1 shadow-[0_-10px_24px_rgba(0,0,0,0.18)]">
+      <div className="mx-auto flex h-[72px] max-w-5xl items-end justify-between bg-[#041b3d]/95 border-t border-white/10 px-4 pb-6 shadow-[0_-10px_24px_rgba(0,0,0,0.18)]" style={{ paddingBottom: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-bottom)))' }}>
         {items.map((item) => {
           const isActive = activeItem === item.key;
           const isCenter = item.key === 'home';
@@ -29,7 +29,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeItem, 
               key={item.key}
               type="button"
               onClick={() => onSelect(item.key)}
-              className={`flex flex-1 flex-col items-center justify-end ${isCenter ? 'mt-[-12px]' : ''} h-20 transition ${isActive ? 'opacity-90' : 'opacity-100'}`}
+              className={`flex flex-1 flex-col items-center justify-end ${isCenter ? 'mt-[-14px]' : ''} h-28 transition ${isActive ? 'opacity-90' : 'opacity-100'}`}
             >
               <span className={`relative text-[20px] ${isCenter ? 'mb-0' : 'mb-1'}`}>
                 {isCenter ? (

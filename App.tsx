@@ -1011,7 +1011,7 @@ const App: React.FC = () => {
                         onInstallPranchetaApp={handleInstallPrancheta}
                     />
 
-                    <main className={`flex-grow pt-16 pb-24 ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' || currentView === 'post-view' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
+                    <main className={`flex-grow pt-16 pb-40 ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' || currentView === 'post-view' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
                         <Suspense fallback={
                             <div className="w-full py-16 flex items-center justify-center">
                                 <div className="w-10 h-10 border-4 border-gray-200 dark:border-gray-700 border-t-ancb-orange rounded-full animate-spin" />
