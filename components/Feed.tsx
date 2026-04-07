@@ -150,7 +150,7 @@ const Caption = ({ text, title }: { text: string; title?: string }) => {
         {title || "ANCB"}
     </div>
 
-    <div className="text-justify leading-relaxed">
+    <div className="leading-relaxed">
         {displayText}
     </div>
 

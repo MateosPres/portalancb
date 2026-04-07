@@ -40,7 +40,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {/* 3. BASE: FEED DE NOTÍCIAS */}
             <div className="mt-8">
                 <div className="flex items-center justify-between mb-6">
-                    
+                    <h2 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+    <LucideMegaphone className="text-ancb-blue" />
+    Mural da ANCB
+</h2>
                 </div>
                 {/* Repassamos a função para o Feed aqui */}
                 <Feed onOpenPost={onOpenPost} />
