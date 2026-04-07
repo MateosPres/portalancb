@@ -1071,7 +1071,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col">
             {/* HERO HEADER */}
-            <div className={`relative z-30 w-full ${getGradient()} text-white p-4 pt-4 md:p-12 shadow-xl overflow-hidden`}>
+            <div className={`relative z-30 w-full ${getGradient()} text-white p-4 pt-4 md:p-12 md:pt-20 shadow-xl overflow-hidden`}>
                 <div className="absolute top-0 right-0 opacity-10 pointer-events-none transform translate-x-10 -translate-y-10">
                     <LucideTrophy size={300} />
                 </div>
@@ -1101,7 +1101,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                             )}
                         </div>
                     </div>
-                    <h1 className="text-3xl md:text-5xl font-black mb-3 leading-tight">{event.nome}</h1>
+                    <h1 className="text-3xl md:text-[2.85rem] font-extrabold mb-3 leading-[1.08] tracking-tight">{event.nome}</h1>
                     <div className="flex flex-wrap gap-6 text-sm md:text-base font-medium opacity-90">
                         <div className="flex items-center gap-2"><LucideCalendar className="opacity-70" /> {event.data.split('-').reverse().join('/')}</div>
                         <div className="flex items-center gap-2"><LucideMapPin className="opacity-70" /> {event.modalidade}</div>
