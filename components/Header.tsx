@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, User, LogIn, ClipboardList, Home, Shield, Moon, Sun, LogOut, Bell, Heart, UserPlus, Download } from 'lucide-react';
+import { Menu, X, User, LogIn, ClipboardList, Home, Shield, Moon, Sun, LogOut, Bell, Heart, UserPlus, Download, LucideCalendar, LucideUsers, LucideTrophy } from 'lucide-react';
 import { NotificationItem } from '../types';
 
 const PRANCHETA_URL = "https://prancheta.ancb.app.br";
@@ -26,6 +26,8 @@ interface HeaderProps {
   showInstallAppLink?: boolean;
   onInstallApp?: () => void;
   onInstallPranchetaApp?: () => void;
+  desktopNavActiveItem?: 'eventos' | 'jogadores' | 'home' | 'ranking' | 'profile';
+  onDesktopNavSelect?: (item: 'eventos' | 'jogadores' | 'home' | 'ranking' | 'profile') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -44,6 +46,8 @@ export const Header: React.FC<HeaderProps> = ({
   showInstallAppLink = false,
   onInstallApp,
   onInstallPranchetaApp,
+  desktopNavActiveItem = 'home',
+  onDesktopNavSelect,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeMenu = () => setIsMenuOpen(false);
@@ -84,6 +88,13 @@ export const Header: React.FC<HeaderProps> = ({
     onInstallPranchetaApp?.();
     closeMenu();
   };
+
+  const desktopNavItems: Array<{ key: 'eventos' | 'jogadores' | 'ranking' | 'profile'; label: string; icon: React.ReactNode }> = [
+    { key: 'eventos', label: 'Eventos', icon: <LucideCalendar size={18} /> },
+    { key: 'jogadores', label: 'Jogadores', icon: <LucideUsers size={18} /> },
+    { key: 'ranking', label: 'Ranking', icon: <LucideTrophy size={18} /> },
+    { key: 'profile', label: 'Perfil', icon: user?.photo ? <img src={user.photo} alt={user.name} className="h-6 w-6 rounded-full object-cover" /> : <User size={18} /> },
+  ];
 
   return (
     <>
@@ -127,10 +138,30 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {user && onDesktopNavSelect && (
+              <div className="hidden lg:flex items-center gap-1">
+                {desktopNavItems.map((item) => {
+                  const isActive = desktopNavActiveItem === item.key;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => onDesktopNavSelect(item.key)}
+                      title={item.label}
+                      className={`inline-flex h-11 items-center gap-2 rounded-2xl px-3 text-sm font-semibold transition focus:outline-none ${isActive ? 'bg-white/15 text-white' : 'bg-transparent text-white hover:bg-white/10 hover:text-slate-200'}`}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {user && (
               <button
                 onClick={onProfileClick}
-                className="hidden md:flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-2 text-white transition hover:bg-white/10 focus:outline-none"
+                className="hidden md:flex lg:hidden items-center gap-3 rounded-2xl bg-white/5 px-3 py-2 text-white transition hover:bg-white/10 focus:outline-none"
               >
                 {user.photo ? (
                   <img src={user.photo} alt={user.name} className="h-8 w-8 rounded-full object-cover" />

@@ -975,6 +975,8 @@ const App: React.FC = () => {
                         showInstallAppLink={showInstallInMenu}
                         onInstallApp={handleInstallPortal}
                         onInstallPranchetaApp={handleInstallPrancheta}
+                        desktopNavActiveItem={['eventos','jogadores','home','ranking','profile'].includes(currentView) ? currentView as 'eventos' | 'jogadores' | 'home' | 'ranking' | 'profile' : 'home'}
+                        onDesktopNavSelect={(item) => setCurrentView(item)}
                     />
 
                     <main className={`flex-grow pt-16 pb-40 ${currentView === 'evento-detalhe' || currentView === 'painel-jogo' || currentView === 'post-view' ? 'w-full' : 'container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
