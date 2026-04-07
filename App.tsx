@@ -827,7 +827,20 @@ const App: React.FC = () => {
             case 'profile': return userProfile ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} onOpenReview={handleOpenReviewQuiz} onOpenEvent={handleOpenEventDetail} /> : null;
             case 'team-manager': return teamManagerEventId ? <TeamManagerView eventId={teamManagerEventId} teamId={teamManagerTeamId} onBack={() => { setCurrentView('evento-detalhe'); }} userProfile={userProfile} /> : null;
             case 'apoiadores': return <ApoiadoresView onBack={() => setCurrentView('home')} userProfile={userProfile} />;
-            case 'post-view': return selectedPost ? <PostView post={selectedPost} onBack={() => { setCurrentView(postReturnView || 'home'); setSelectedPost(null); }} /> : null;
+            case 'post-view': return selectedPost ? (
+                <PostView
+                    post={selectedPost}
+                    userProfile={userProfile}
+                    onBack={() => {
+                        setCurrentView(postReturnView || 'home');
+                        setSelectedPost(null);
+                    }}
+                    onDeleted={() => {
+                        setCurrentView(postReturnView || 'home');
+                        setSelectedPost(null);
+                    }}
+                />
+            ) : null;
             default: return <div>404</div>;
         }
     };

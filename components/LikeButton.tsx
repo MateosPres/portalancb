@@ -12,8 +12,6 @@ export const LikeButton: React.FC<LikeButtonProps> = ({ postId, userId }) => {
     const [count, setCount] = useState(0);
 
     useEffect(() => {
-        if (!userId) return;
-
         const ref = db
             .collection("feed_posts")
             .doc(postId)
@@ -21,7 +19,7 @@ export const LikeButton: React.FC<LikeButtonProps> = ({ postId, userId }) => {
 
         const unsubscribe = ref.onSnapshot((snap) => {
             setCount(snap.size);
-            setLiked(snap.docs.some(doc => doc.id === userId));
+            setLiked(Boolean(userId) && snap.docs.some(doc => doc.id === userId));
         });
 
         return () => unsubscribe();
@@ -47,13 +45,16 @@ export const LikeButton: React.FC<LikeButtonProps> = ({ postId, userId }) => {
     };
 
     return (
-        <button onClick={toggleLike} className="flex items-center gap-1">
+        <button
+            onClick={toggleLike}
+            className="inline-flex items-center gap-1.5 rounded-full px-1 py-0.5 text-slate-300 transition hover:bg-white/5"
+        >
             <Heart
-                size={22}
+                size={18}
                 className={liked ? "text-red-500" : "text-slate-300"}
                 fill={liked ? "currentColor" : "none"}
             />
-            <span className="text-xs text-slate-400">{count}</span>
+            <span className="text-sm text-slate-300">{count}</span>
         </button>
     );
 };

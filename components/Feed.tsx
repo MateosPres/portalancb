@@ -3,23 +3,25 @@ import { db } from '../services/firebase';
 import { FeedPost, UserProfile } from '../types';
 import { LikeButton } from "../components/LikeButton";
 import { Comments } from "../components/Comments";
-import { FaRegComment } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
+import { PostImageCarousel } from './PostImageCarousel';
+import { LucideMessageCircle, LucideTrash2 } from 'lucide-react';
 
 interface FeedProps {
   userProfile: UserProfile | null;
+  onOpenPost?: (post: FeedPost) => void;
 }
 
 /* LEGENDA SIMPLES */
 const Caption: React.FC<{ text: string }> = ({ text }) => {
   return (
-    <p className="px-3 py-1 text-white text-sm leading-relaxed text-left">
+    <p className="px-3 py-1 pl-[3.9rem] text-white text-sm leading-relaxed text-left">
       {text}
     </p>
   );
 };
 
-export const Feed: React.FC<FeedProps> = ({ userProfile }) => {
+export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost }) => {
   const [posts, setPosts] = useState<(FeedPost & { authorName?: string; authorPhoto?: string | null })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showComments, setShowComments] = useState<Record<string, boolean>>({});
@@ -91,6 +93,47 @@ export const Feed: React.FC<FeedProps> = ({ userProfile }) => {
     }
   };
 
+  const getPostText = (post: FeedPost): string => {
+    const content = post.content || {};
+    if (content.text?.trim()) return content.text;
+    if (content.resumo?.trim()) return content.resumo;
+
+    const legacyScore =
+      content.placar_ancb !== undefined || content.placar_adv !== undefined
+        ? `ANCB ${content.placar_ancb ?? '-'} x ${content.placar_adv ?? '-'} ${content.time_adv ? `(${content.time_adv})` : ''}`
+        : '';
+
+    const legacyPieces = [content.titulo, legacyScore, content.resultado_detalhes]
+      .filter(Boolean)
+      .map((item) => String(item).trim())
+      .filter(Boolean);
+
+    return legacyPieces.join('\n') || 'Post sem texto';
+  };
+
+  const canDeletePost = (post: FeedPost): boolean => {
+    if (!userProfile?.uid) return false;
+    const isAdmin = userProfile.role === 'admin' || userProfile.role === 'super-admin';
+    const isAuthor = post.author_id === userProfile.uid || post.userId === userProfile.uid;
+    return isAdmin || isAuthor;
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    if (!window.confirm('Deseja realmente apagar este post?')) return;
+    try {
+      await db.collection('feed_posts').doc(postId).delete();
+      setPosts((prev) => prev.filter((post) => post.id !== postId));
+      setShowComments((prev) => {
+        const next = { ...prev };
+        delete next[postId];
+        return next;
+      });
+    } catch (error) {
+      console.error('Erro ao apagar post:', error);
+      alert('Não foi possível apagar o post. Tente novamente.');
+    }
+  };
+
   if (loading) return <div className="text-center py-10 opacity-50">Carregando feed...</div>;
   if (!posts.length) return <div className="text-center py-10 text-slate-400">Nenhum post disponível.</div>;
 
@@ -101,29 +144,53 @@ export const Feed: React.FC<FeedProps> = ({ userProfile }) => {
           const videoUrl = post.content?.link_video;
           const youtubeId = videoUrl ? getYoutubeId(videoUrl) : null;
           const dateStr = formatTime(post.timestamp);
+          const postText = getPostText(post);
+          const postImages = (post.images && post.images.length ? post.images : post.image_url ? [post.image_url] : []).filter(Boolean) as string[];
 
           return (
-            <div key={post.id} className="flex flex-col border-b border-white/10 pb-4 mb-4 last:mb-0 last:border-b-0">
+            <div key={post.id} className="flex flex-col border-b border-white/10 pb-8 mb-8 last:mb-0 last:border-b-0">
               {/* HEADER */}
               <div className="flex items-start gap-3 px-3">
                 <img
                   src={post.authorPhoto || `https://ui-avatars.com/api/?name=${post.authorName}`}
                   className="w-10 h-10 rounded-full object-cover"
                 />
-                <div className="flex flex-col">
+                <div className="flex flex-1 items-start justify-between gap-3">
                   <div className="flex items-center gap-1">
                     <span className="font-bold text-white text-sm">{post.authorName}</span>
                     <span className="text-slate-400 text-xs">· {dateStr}</span>
                   </div>
+                  {canDeletePost(post) && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePost(post.id)}
+                      className="rounded-full p-1.5 text-slate-400 transition hover:bg-red-500/15 hover:text-red-300"
+                      title="Apagar post"
+                    >
+                      <LucideTrash2 size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* CONTEÚDO */}
-              <Caption text={post.content?.resumo || ""} />
-
               {/* MÍDIA COM MARGEM VISUAL */}
+              {!!postImages.length && (
+                <div className="w-full mt-2 pl-[3.9rem] pr-3">
+                  <PostImageCarousel images={postImages} imageClassName="max-h-[340px]" />
+                </div>
+              )}
+
+              {/* CONTEÚDO */}
+              <button
+                type="button"
+                className="text-left"
+                onClick={() => onOpenPost?.(post)}
+              >
+                <Caption text={postText} />
+              </button>
+
               {youtubeId && (
-                <div className="w-full mt-2 px-3">
+                <div className="w-full mt-2 pl-[3.9rem] pr-3">
                   <div className="relative pb-[56.25%] rounded-lg overflow-hidden">
                     <iframe
                       src={`https://www.youtube.com/embed/${youtubeId}?rel=0`}
@@ -134,24 +201,16 @@ export const Feed: React.FC<FeedProps> = ({ userProfile }) => {
                   </div>
                 </div>
               )}
-              {!youtubeId && post.image_url && (
-                <div className="w-full mt-2 px-3">
-                  <img
-                    src={post.image_url}
-                    className="w-full max-h-[300px] object-cover rounded-lg"
-                  />
-                </div>
-              )}
 
               {/* AÇÕES */}
-              <div className="flex items-center mt-2 px-3 text-slate-400 text-sm gap-4">
+              <div className="mt-2 flex items-center gap-3 pl-[3.9rem] pr-3 text-sm text-slate-300">
                 <LikeButton postId={post.id} userId={userProfile?.uid} />
                 <button
-                  className="flex items-center gap-1"
+                  className="inline-flex items-center gap-1.5 rounded-full px-1 py-0.5 transition hover:bg-white/5"
                   onClick={() => setShowComments((prev) => ({ ...prev, [post.id]: !prev[post.id] }))}
                 >
-                  <FaRegComment />
-                  <span className="text-sm">{commentsCount[post.id] || 0}</span>
+                  <LucideMessageCircle size={18} />
+                  <span className="text-sm text-slate-300">{commentsCount[post.id] || 0}</span>
                 </button>
               </div>
 
@@ -163,7 +222,7 @@ export const Feed: React.FC<FeedProps> = ({ userProfile }) => {
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="mt-2 px-3"
+                    className="mt-2 pl-[3.9rem] pr-3"
                   >
                     <Comments
                       postId={post.id}
