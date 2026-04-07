@@ -16,6 +16,7 @@ import { BottomNavigation } from './components/BottomNavigation';
 import { formatCpf, formatPhoneForDisplay, normalizeCpfForStorage, normalizePhoneForStorage } from './utils/contactFormat';
 import { fileToBase64 } from './utils/imageUtils';
 import { useScrollToTop } from './hooks/useScrollToTop';
+import { HomeView } from "./views/HomeView";
 
 // Chave VAPID fornecida para autenticação do Push Notification
 const VAPID_KEY = "BI9T9nLXUjdJHqOSZEoORZ7UDyWQoIMcrQ5Oz-7KeKif19LoGx_Db5AdY4zi0yXT5zTdvZRbJy6nF65Dv-8ncKk"; 
@@ -777,64 +778,16 @@ const App: React.FC = () => {
     const renderContent = () => {
         switch (currentView) {
             case 'home': return (
-                <div className="space-y-8 animate-fadeIn">
-                    {ongoingEvents.length > 0 && ongoingEvents[0] && (
-                        <LiveEventHero 
-                            event={ongoingEvents[0]} 
-                            onClick={() => handleOpenEventDetail(ongoingEvents[0].id)} 
-                            onOpenLiveGame={(game) => {
-                                setSelectedPublicGame({ game, eventId: ongoingEvents[0].id });
-                                setCurrentView('public-game');
-                            }}
-                        />
-                    )}
-
-                    {/* ✅ Carrossel de Apoiadores — entre o hero e os cards */}
-                    <ApoiadoresCarousel onVerTodos={() => setCurrentView('apoiadores')} />
-
-                    <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <Card onClick={() => setCurrentView('eventos')} className="cursor-pointer group hover:border-blue-300 transition-colors" emoji="📅">
-                            <div className="flex flex-col h-full">
-                                <div className="flex items-center gap-4 mb-4">
-                                    <div className="w-12 h-12 rounded-full bg-blue-100 text-ancb-blue flex items-center justify-center shrink-0">
-                                        <LucideCalendar size={24} />
-                                    </div>
-                                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Eventos</h3>
-                                </div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                                    Veja o calendário completo de jogos, torneios e partidas amistosas.
-                                </p>
-                            </div>
-                        </Card>
-                        <Card onClick={() => setCurrentView('jogadores')} className="cursor-pointer group hover:border-orange-300 transition-colors" emoji="🏀">
-                            <div className="flex flex-col h-full">
-                                <div className="flex items-center gap-4 mb-4">
-                                    <div className="w-12 h-12 rounded-full bg-orange-100 text-ancb-orange flex items-center justify-center shrink-0">
-                                        <LucideUsers size={24} />
-                                    </div>
-                                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Jogadores</h3>
-                                </div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                                    Conheça os atletas, estatísticas individuais e fichas técnicas.
-                                </p>
-                            </div>
-                        </Card>
-                        <Card onClick={() => setCurrentView('ranking')} className="cursor-pointer group hover:border-yellow-300 transition-colors" emoji="🏆">
-                            <div className="flex flex-col h-full">
-                                <div className="flex items-center gap-4 mb-4">
-                                    <div className="w-12 h-12 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center shrink-0">
-                                        <LucideTrophy size={24} />
-                                    </div>
-                                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Ranking Global</h3>
-                                </div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                                    Acompanhe a classificação geral, cestinhas e estatísticas da temporada.
-                                </p>
-                            </div>
-                        </Card>
-                    </section>
-                    <Feed onOpenPost={handleOpenPostView} />
-                </div>
+                <HomeView 
+                    highlightEvent={ongoingEvents.length > 0 ? ongoingEvents[0] : null}
+                    onViewEvent={handleOpenEventDetail}
+                    onOpenLiveGame={(game, eventId) => {
+                        setSelectedPublicGame({ game, eventId });
+                        setCurrentView('public-game');
+                    }}
+                    userProfile={userProfile}
+                    onOpenPost={handleOpenPostView}
+                />
             );
             case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onSelectEvent={handleOpenEventDetail} onOpenFriendlyAdminPanel={(eventId, game) => handleOpenGamePanel(game, eventId, true)} initialFriendlyEventId={pendingFriendlyEventId} onFriendlySummaryOpened={() => setPendingFriendlyEventId(null)} />;
             case 'evento-detalhe': return selectedEventId ? <EventoDetalheView 
