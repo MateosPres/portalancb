@@ -113,7 +113,6 @@ export const Feed: React.FC<FeedProps> = ({ userProfile }) => {
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1">
                     <span className="font-bold text-white text-sm">{post.authorName}</span>
-                    <span className="text-slate-400 text-sm">@{post.authorName?.toLowerCase() || 'ancb'}</span>
                     <span className="text-slate-400 text-xs">· {dateStr}</span>
                   </div>
                 </div>
