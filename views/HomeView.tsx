@@ -46,7 +46,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 </h2>
                 </div>
                 {/* Repassamos a função para o Feed aqui */}
-                <Feed onOpenPost={onOpenPost} />
+                <Feed userProfile={userProfile} />
             </div>
             
         </div>
