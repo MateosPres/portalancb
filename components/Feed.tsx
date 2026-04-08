@@ -69,6 +69,38 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
     getPosts();
   }, []);
 
+  useEffect(() => {
+    if (!posts.length) {
+      setCommentsCount({});
+      return;
+    }
+
+    const unsubscribes = posts.map((post) => {
+      return db
+        .collection('feed_posts')
+        .doc(post.id)
+        .collection('comments')
+        .onSnapshot(
+          (snapshot) => {
+            setCommentsCount((prev) => ({
+              ...prev,
+              [post.id]: snapshot.size,
+            }));
+          },
+          () => {
+            setCommentsCount((prev) => ({
+              ...prev,
+              [post.id]: prev[post.id] || 0,
+            }));
+          }
+        );
+    });
+
+    return () => {
+      unsubscribes.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [posts]);
+
   const formatTime = (timestamp: any) => {
     if (!timestamp) return '';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -127,6 +159,11 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
       await db.collection('feed_posts').doc(postId).delete();
       setPosts((prev) => prev.filter((post) => post.id !== postId));
       setShowComments((prev) => {
+        const next = { ...prev };
+        delete next[postId];
+        return next;
+      });
+      setCommentsCount((prev) => {
         const next = { ...prev };
         delete next[postId];
         return next;
