@@ -123,6 +123,7 @@ export interface Jogo {
     timeA_nome?: string;
     timeB_id?: string;
     timeB_nome?: string;
+    opponentMode?: 'external_string' | 'internal_team';
     placarTimeA_final?: number;
     placarTimeB_final?: number;
 }

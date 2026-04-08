@@ -51,11 +51,16 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [formMode, setFormMode] = useState<'3x3'|'5x5'>('5x5');
     const [formType, setFormType] = useState<'amistoso'|'torneio_interno'|'torneio_externo'>('amistoso');
     const [formStatus, setFormStatus] = useState<'proximo'|'andamento'|'finalizado'>('proximo');
+    const [formFriendlyMode, setFormFriendlyMode] = useState<'external_string' | 'internal_team'>('external_string');
     const [formOpponent, setFormOpponent] = useState(''); // Only for Amistoso
+    const [formTeamAName, setFormTeamAName] = useState('ANCB');
+    const [formTeamBName, setFormTeamBName] = useState('');
     
     // Roster Selection State
     const [selectedRosterMap, setSelectedRosterMap] = useState<Record<string, number>>({});
+    const [selectedRosterMapTeamB, setSelectedRosterMapTeamB] = useState<Record<string, number>>({});
     const [rosterSearch, setRosterSearch] = useState('');
+    const [rosterSearchTeamB, setRosterSearchTeamB] = useState('');
 
     useEffect(() => {
         const unsubscribe = db.collection("eventos").orderBy("data", "desc").onSnapshot((snapshot) => {
@@ -208,12 +213,14 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
             const existingGame = friendlyGamesMap[editingFriendlyEventId];
             if (existingGame?.id) {
+                const keepInternalMode = existingGame.opponentMode === 'internal_team' || (!!existingGame.timeA_id && !!existingGame.timeB_id);
                 await updateDoc(doc(db, "eventos", editingFriendlyEventId, "jogos", existingGame.id), {
                     dataJogo: editFriendlyDate,
                     horaJogo: editFriendlyHour,
-                    timeA_nome: 'ANCB',
+                    timeA_nome: keepInternalMode ? (existingGame.timeA_nome || 'Time A') : 'ANCB',
                     timeB_nome: editFriendlyOpponent,
                     adversario: editFriendlyOpponent,
+                    opponentMode: keepInternalMode ? 'internal_team' : 'external_string',
                 });
             } else {
                 await addDoc(collection(db, "eventos", editingFriendlyEventId, "jogos"), {
@@ -344,56 +351,141 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         }));
     };
 
+    const toggleRosterPlayerTeamB = (player: Player) => {
+        setSelectedRosterMapTeamB(prev => {
+            const newMap = { ...prev };
+            if (newMap[player.id] !== undefined) {
+                delete newMap[player.id];
+            } else {
+                newMap[player.id] = player.numero_uniforme || 0;
+            }
+            return newMap;
+        });
+    };
+
+    const updateRosterNumberTeamB = (playerId: string, number: string) => {
+        setSelectedRosterMapTeamB(prev => ({
+            ...prev,
+            [playerId]: Number(number)
+        }));
+    };
+
     const handleCreateEvent = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            // Build new roster structure: Array of objects { id, numero }
-            const rosterArray: EscaladoInfo[] = Object.entries(selectedRosterMap).map(([id, num]) => ({
+            const rosterArrayTeamA: EscaladoInfo[] = Object.entries(selectedRosterMap).map(([id, num]) => ({
+                id,
+                numero: Number(num)
+            }));
+            const rosterArrayTeamB: EscaladoInfo[] = Object.entries(selectedRosterMapTeamB).map(([id, num]) => ({
                 id,
                 numero: Number(num)
             }));
 
-            const eventDocRef = await db.collection("eventos").add({
+            const friendlyIsInternal = formType === 'amistoso' && formFriendlyMode === 'internal_team';
+            const internalInvalidNames = friendlyIsInternal && (!formTeamAName.trim() || !formTeamBName.trim());
+            const sameTeamName = friendlyIsInternal && formTeamAName.trim().toUpperCase() === formTeamBName.trim().toUpperCase();
+            const overlapPlayers = friendlyIsInternal && Object.keys(selectedRosterMap).some(id => Object.keys(selectedRosterMapTeamB).includes(id));
+
+            if (friendlyIsInternal && internalInvalidNames) {
+                alert('Informe nome do Time A e Time B.');
+                return;
+            }
+            if (sameTeamName) {
+                alert('Time A e Time B precisam ser diferentes.');
+                return;
+            }
+            if (overlapPlayers) {
+                alert('O mesmo jogador não pode estar nos dois elencos.');
+                return;
+            }
+            if (formType === 'amistoso' && formFriendlyMode === 'external_string' && !formOpponent.trim()) {
+                alert('Informe o adversário do amistoso.');
+                return;
+            }
+
+            const combinedRosterMap = friendlyIsInternal
+                ? { ...selectedRosterMap, ...selectedRosterMapTeamB }
+                : selectedRosterMap;
+            const combinedRosterArray: EscaladoInfo[] = Object.entries(combinedRosterMap).map(([id, num]) => ({
+                id,
+                numero: Number(num)
+            }));
+
+            const eventPayload: any = {
                 nome: formName,
                 data: formDate,
                 modalidade: formMode,
                 type: formType,
                 status: formStatus,
-                jogadoresEscalados: rosterArray // Save specific jersey numbers for legacy/backup
-            });
+                jogadoresEscalados: combinedRosterArray
+            };
 
-            // CRITICAL FIX: Write to subcollection immediately as 'pendente'
-            if (rosterArray.length > 0) {
+            if (friendlyIsInternal) {
+                const teamAId = `fr_a_${Date.now()}`;
+                const teamBId = `fr_b_${Date.now()}`;
+                eventPayload.timesParticipantes = [
+                    {
+                        id: teamAId,
+                        nomeTime: formTeamAName.trim(),
+                        jogadores: rosterArrayTeamA.map(p => p.id),
+                        isANCB: true
+                    },
+                    {
+                        id: teamBId,
+                        nomeTime: formTeamBName.trim(),
+                        jogadores: rosterArrayTeamB.map(p => p.id),
+                        isANCB: true
+                    }
+                ];
+                eventPayload.adversario = formTeamBName.trim();
+            }
+
+            const eventDocRef = await db.collection("eventos").add(eventPayload);
+
+            if (combinedRosterArray.length > 0) {
                 const batch = writeBatch(db);
-                rosterArray.forEach(p => {
+                combinedRosterArray.forEach(p => {
                     const rosterRef = eventDocRef.collection('roster').doc(p.id) as any;
-                    batch.set(rosterRef, { 
-                        playerId: p.id, 
-                        status: 'pendente', // Force pending on creation
-                        updatedAt: new Date() 
+                    batch.set(rosterRef, {
+                        playerId: p.id,
+                        status: 'pendente',
+                        updatedAt: new Date()
                     });
                 });
                 await batch.commit();
             }
 
-            if (formType === 'amistoso' && rosterArray.length > 0) {
-                await sendFriendlyRosterInvites(eventDocRef.id, formName, rosterArray.map(p => p.id));
+            if (formType === 'amistoso' && combinedRosterArray.length > 0) {
+                await sendFriendlyRosterInvites(eventDocRef.id, formName, combinedRosterArray.map(p => p.id));
             }
 
-            // If Amistoso, automatically create the single match
-            if (formType === 'amistoso' && formOpponent) {
-                const gamePayload = {
+            if (formType === 'amistoso') {
+                const gamePayload: any = {
                     dataJogo: formDate,
                     horaJogo: formGameHour,
                     status: 'agendado',
-                    timeA_nome: 'ANCB',
-                    timeB_nome: formOpponent,
-                    adversario: formOpponent,
                     placarTimeA_final: 0,
                     placarTimeB_final: 0,
                     placarANCB_final: 0,
                     placarAdversario_final: 0
                 };
+
+                if (friendlyIsInternal) {
+                    const teamA = eventPayload.timesParticipantes[0];
+                    const teamB = eventPayload.timesParticipantes[1];
+                    gamePayload.timeA_id = teamA.id;
+                    gamePayload.timeA_nome = teamA.nomeTime;
+                    gamePayload.timeB_id = teamB.id;
+                    gamePayload.timeB_nome = teamB.nomeTime;
+                    gamePayload.adversario = teamB.nomeTime;
+                    gamePayload.opponentMode = 'internal_team';
+                } else {
+                    gamePayload.timeA_nome = 'ANCB';
+                    gamePayload.timeB_nome = formOpponent.trim();
+                    gamePayload.adversario = formOpponent.trim();
+                    gamePayload.opponentMode = 'external_string';
+                }
 
                 const newGameRef = await eventDocRef.collection('jogos').add(gamePayload);
                 setFriendlyGamesMap(prev => ({
@@ -406,8 +498,17 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             }
 
             setShowEventForm(false);
-            // Reset form
-            setFormName(''); setFormDate(''); setFormGameHour(''); setFormOpponent(''); setSelectedRosterMap({});
+            setFormName('');
+            setFormDate('');
+            setFormGameHour('');
+            setFormOpponent('');
+            setFormFriendlyMode('external_string');
+            setFormTeamAName('ANCB');
+            setFormTeamBName('');
+            setSelectedRosterMap({});
+            setSelectedRosterMapTeamB({});
+            setRosterSearch('');
+            setRosterSearchTeamB('');
         } catch (e) { alert("Erro ao criar evento"); }
     };
 
@@ -488,6 +589,11 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const filteredRosterPlayers = allPlayers.filter(p => 
         (p.nome || '').toLowerCase().includes(rosterSearch.toLowerCase()) || 
         (p.apelido || '').toLowerCase().includes(rosterSearch.toLowerCase())
+    );
+
+    const filteredRosterPlayersTeamB = allPlayers.filter(p => 
+        (p.nome || '').toLowerCase().includes(rosterSearchTeamB.toLowerCase()) || 
+        (p.apelido || '').toLowerCase().includes(rosterSearchTeamB.toLowerCase())
     );
 
     const filteredEditFriendlyRosterPlayers = allPlayers.filter(p => 
@@ -624,8 +730,42 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                         </div>
                         {formType === 'amistoso' && (
                             <div className="md:col-span-2 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
-                                <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Adversário</label>
-                                <input className="w-full p-3 border rounded-xl mt-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-400 outline-none transition-all" placeholder="Nome do time rival" value={formOpponent} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormOpponent(e.target.value)} required />
+                                <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-2">Modelo do Amistoso</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormFriendlyMode('external_string')}
+                                        className={`p-2 rounded-lg border text-xs font-bold uppercase ${formFriendlyMode === 'external_string' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/70 dark:bg-gray-700 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-700'}`}
+                                    >
+                                        ANCB x Externo
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormFriendlyMode('internal_team')}
+                                        className={`p-2 rounded-lg border text-xs font-bold uppercase ${formFriendlyMode === 'internal_team' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/70 dark:bg-gray-700 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-700'}`}
+                                    >
+                                        TimeA x TimeB (ANCB)
+                                    </button>
+                                </div>
+
+                                {formFriendlyMode === 'external_string' ? (
+                                    <>
+                                        <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Adversário</label>
+                                        <input className="w-full p-3 border rounded-xl mt-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-400 outline-none transition-all" placeholder="Nome do time rival" value={formOpponent} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormOpponent(e.target.value)} required />
+                                    </>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Nome do Time A</label>
+                                            <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-400 outline-none transition-all" value={formTeamAName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormTeamAName(e.target.value)} required />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Nome do Time B</label>
+                                            <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-400 outline-none transition-all" value={formTeamBName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormTeamBName(e.target.value)} required />
+                                        </div>
+                                    </div>
+                                )}
+
                                 <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mt-3 mb-1">Hora do Jogo</label>
                                 <input
                                     type="time"
@@ -641,48 +781,129 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                         {/* ROSTER SELECTION (Only for Amistoso) */}
                         {formType === 'amistoso' && (
                             <div className="md:col-span-2 mt-2 border-t pt-4 dark:border-gray-700">
-                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">
-                                    Jogadores (Opcional)
-                                </label>
-                                <div className="relative mb-2">
-                                    <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
-                                    <input 
-                                        className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600" 
-                                        placeholder="Buscar para escalar..." 
-                                        value={rosterSearch} 
-                                        onChange={e => setRosterSearch(e.target.value)} 
-                                    />
-                                </div>
-                                <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
-                                    {filteredRosterPlayers.map(p => {
-                                        const isSelected = selectedRosterMap[p.id] !== undefined;
-                                        return (
-                                            <div key={p.id} className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${isSelected ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
-                                                <div className="flex items-center gap-2 flex-1" onClick={() => toggleRosterPlayer(p)}>
-                                                    <div className={`w-4 h-4 border rounded flex items-center justify-center ${isSelected ? 'bg-ancb-orange border-ancb-orange' : 'border-gray-400'}`}>
-                                                        {isSelected && <LucideCheckSquare size={10} className="text-white"/>}
+                                {formFriendlyMode === 'external_string' ? (
+                                    <>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">
+                                            Jogadores ANCB (Opcional)
+                                        </label>
+                                        <div className="relative mb-2">
+                                            <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
+                                            <input 
+                                                className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600" 
+                                                placeholder="Buscar para escalar..." 
+                                                value={rosterSearch} 
+                                                onChange={e => setRosterSearch(e.target.value)} 
+                                            />
+                                        </div>
+                                        <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
+                                            {filteredRosterPlayers.map(p => {
+                                                const isSelected = selectedRosterMap[p.id] !== undefined;
+                                                return (
+                                                    <div key={p.id} className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${isSelected ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                                                        <div className="flex items-center gap-2 flex-1" onClick={() => toggleRosterPlayer(p)}>
+                                                            <div className={`w-4 h-4 border rounded flex items-center justify-center ${isSelected ? 'bg-ancb-orange border-ancb-orange' : 'border-gray-400'}`}>
+                                                                {isSelected && <LucideCheckSquare size={10} className="text-white"/>}
+                                                            </div>
+                                                            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{p.nome}</span>
+                                                        </div>
+                                                        {isSelected && (
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-[10px] text-gray-500 uppercase">Nº</span>
+                                                                <input 
+                                                                    type="number" 
+                                                                    className="w-12 p-1 text-center border rounded text-xs font-bold dark:bg-gray-700 dark:text-white"
+                                                                    value={selectedRosterMap[p.id]}
+                                                                    onChange={(e) => updateRosterNumber(p.id, e.target.value)}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                />
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{p.nome}</span>
-                                                </div>
-                                                {isSelected && (
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-[10px] text-gray-500 uppercase">Nº</span>
-                                                        <input 
-                                                            type="number" 
-                                                            className="w-12 p-1 text-center border rounded text-xs font-bold dark:bg-gray-700 dark:text-white"
-                                                            value={selectedRosterMap[p.id]}
-                                                            onChange={(e) => updateRosterNumber(p.id, e.target.value)}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        />
-                                                    </div>
-                                                )}
+                                                );
+                                            })}
+                                        </div>
+                                        <p className="text-[10px] text-gray-400 mt-1">
+                                            {Object.keys(selectedRosterMap).length} jogadores selecionados.
+                                        </p>
+                                    </>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Elenco Time A</label>
+                                            <div className="relative mb-2">
+                                                <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
+                                                <input 
+                                                    className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600" 
+                                                    placeholder="Buscar Time A..." 
+                                                    value={rosterSearch} 
+                                                    onChange={e => setRosterSearch(e.target.value)} 
+                                                />
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                                <p className="text-[10px] text-gray-400 mt-1">
-                                    {Object.keys(selectedRosterMap).length} jogadores selecionados. Os números podem ser editados especificamente para este evento.
-                                </p>
+                                            <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
+                                                {filteredRosterPlayers.map(p => {
+                                                    const isSelected = selectedRosterMap[p.id] !== undefined;
+                                                    return (
+                                                        <div key={`a_${p.id}`} className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${isSelected ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                                                            <div className="flex items-center gap-2 flex-1" onClick={() => toggleRosterPlayer(p)}>
+                                                                <div className={`w-4 h-4 border rounded flex items-center justify-center ${isSelected ? 'bg-ancb-orange border-ancb-orange' : 'border-gray-400'}`}>
+                                                                    {isSelected && <LucideCheckSquare size={10} className="text-white"/>}
+                                                                </div>
+                                                                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{p.nome}</span>
+                                                            </div>
+                                                            {isSelected && (
+                                                                <input 
+                                                                    type="number" 
+                                                                    className="w-12 p-1 text-center border rounded text-xs font-bold dark:bg-gray-700 dark:text-white"
+                                                                    value={selectedRosterMap[p.id]}
+                                                                    onChange={(e) => updateRosterNumber(p.id, e.target.value)}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Elenco Time B</label>
+                                            <div className="relative mb-2">
+                                                <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
+                                                <input 
+                                                    className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600" 
+                                                    placeholder="Buscar Time B..." 
+                                                    value={rosterSearchTeamB} 
+                                                    onChange={e => setRosterSearchTeamB(e.target.value)} 
+                                                />
+                                            </div>
+                                            <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
+                                                {filteredRosterPlayersTeamB.map(p => {
+                                                    const isSelected = selectedRosterMapTeamB[p.id] !== undefined;
+                                                    const alreadyOnTeamA = selectedRosterMap[p.id] !== undefined;
+                                                    return (
+                                                        <div key={`b_${p.id}`} className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${alreadyOnTeamA ? 'opacity-40 pointer-events-none' : isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                                                            <div className="flex items-center gap-2 flex-1" onClick={() => toggleRosterPlayerTeamB(p)}>
+                                                                <div className={`w-4 h-4 border rounded flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-400'}`}>
+                                                                    {isSelected && <LucideCheckSquare size={10} className="text-white"/>}
+                                                                </div>
+                                                                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{p.nome}</span>
+                                                            </div>
+                                                            {isSelected && (
+                                                                <input 
+                                                                    type="number" 
+                                                                    className="w-12 p-1 text-center border rounded text-xs font-bold dark:bg-gray-700 dark:text-white"
+                                                                    value={selectedRosterMapTeamB[p.id]}
+                                                                    onChange={(e) => updateRosterNumberTeamB(p.id, e.target.value)}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

@@ -107,6 +107,7 @@ exports.onGameFinished = functions.firestore
         await upsertAutoGameFeedPost(eventId, gameId, eventData, newData, teamAName, scoreA, teamBName, scoreB);
 
         let ancbPlayerIds = [];
+        let teamNotifications = [];
         const gameTeamIds = [newData.timeA_id, newData.timeB_id].filter(Boolean);
 
         // 1) Modelo novo (torneio_externo e internos evoluídos): timesParticipantes + isANCB
@@ -125,7 +126,9 @@ exports.onGameFinished = functions.firestore
             }
 
             ancbTeams.forEach(team => {
-                ancbPlayerIds.push(...(team.jogadores || []));
+                const ids = (team.jogadores || []).filter(Boolean);
+                ancbPlayerIds.push(...ids);
+                teamNotifications.push({ teamId: team.id, playerIds: ids });
             });
 
             console.log(`Modelo timesParticipantes: ${ancbTeams.length} time(s) ANCB, ${ancbPlayerIds.length} jogador(es).`);
@@ -134,11 +137,19 @@ exports.onGameFinished = functions.firestore
         else if (eventData.times && eventData.times.length > 0) {
             if (gameTeamIds.length > 0) {
                 const participantTeams = eventData.times.filter(t => gameTeamIds.includes(t.id));
-                participantTeams.forEach(team => ancbPlayerIds.push(...(team.jogadores || [])));
+                participantTeams.forEach(team => {
+                    const ids = (team.jogadores || []).filter(Boolean);
+                    ancbPlayerIds.push(...ids);
+                    teamNotifications.push({ teamId: team.id, playerIds: ids });
+                });
                 console.log(`Torneio interno (times): ${ancbPlayerIds.length} jogador(es) dos times da partida.`);
             } else {
                 // fallback seguro
-                eventData.times.forEach(team => ancbPlayerIds.push(...(team.jogadores || [])));
+                eventData.times.forEach(team => {
+                    const ids = (team.jogadores || []).filter(Boolean);
+                    ancbPlayerIds.push(...ids);
+                    teamNotifications.push({ teamId: team.id, playerIds: ids });
+                });
                 console.log(`Torneio interno (fallback): ${ancbPlayerIds.length} jogador(es).`);
             }
         }
@@ -162,6 +173,10 @@ exports.onGameFinished = functions.firestore
                 }
             }
 
+            if (ancbPlayerIds.length > 0) {
+                teamNotifications.push({ teamId: null, playerIds: ancbPlayerIds });
+            }
+
             console.log(`Amistoso/legado: ${ancbPlayerIds.length} jogador(es) no roster.`);
         }
 
@@ -176,8 +191,27 @@ exports.onGameFinished = functions.firestore
 
         console.log(`Notificando ${ancbPlayerIds.length} jogadores ANCB sobre o quiz pós-jogo.`);
 
+        const teamByPlayer = new Map();
+        teamNotifications.forEach((bucket) => {
+            (bucket.playerIds || []).forEach((playerId) => {
+                if (!teamByPlayer.has(playerId)) {
+                    teamByPlayer.set(playerId, bucket.teamId || null);
+                }
+            });
+        });
+
         const promises = ancbPlayerIds.map(playerId =>
-            notifyPlayerQuizPosJogo(playerId, eventId, gameId, eventName, teamAName, scoreA, teamBName, scoreB)
+            notifyPlayerQuizPosJogo(
+                playerId,
+                eventId,
+                gameId,
+                eventName,
+                teamAName,
+                scoreA,
+                teamBName,
+                scoreB,
+                teamByPlayer.get(playerId) || null
+            )
         );
 
         await Promise.all(promises);
@@ -670,7 +704,7 @@ async function notifyPlayerConvocado(playerId, eventName, eventId) {
  * Envia notificação de quiz pós-jogo para um jogador.
  * Busca o usuário pelo linkedPlayerId e envia via FCM.
  */
-async function notifyPlayerQuizPosJogo(playerId, eventId, gameId, eventName, teamAName, scoreA, teamBName, scoreB) {
+async function notifyPlayerQuizPosJogo(playerId, eventId, gameId, eventName, teamAName, scoreA, teamBName, scoreB, reviewerTeamId) {
     try {
         const usersRef = admin.firestore().collection('usuarios');
         const querySnapshot = await usersRef.where('linkedPlayerId', '==', playerId).get();
@@ -712,6 +746,7 @@ async function notifyPlayerQuizPosJogo(playerId, eventId, gameId, eventName, tea
             data: {
                 eventId: eventId,
                 gameId: gameId,
+                teamId: reviewerTeamId || null,
             },
             read: false,
             timestamp: admin.firestore.FieldValue.serverTimestamp(),

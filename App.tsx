@@ -489,6 +489,15 @@ const App: React.FC = () => {
             let ancbPlayerIds: string[] = [];
             const reviewerPlayerId = userProfile?.linkedPlayerId || allPlayers.find(p => p.userId === userProfile?.uid)?.id;
             const gameTeamIds = gameData ? [gameData.timeA_id, gameData.timeB_id].filter(Boolean) : [];
+            let reviewerTeamIdFromNotification: string | null = null;
+
+            if (notificationId) {
+                const notifSnap = await getDoc(doc(db, 'notifications', notificationId));
+                if (notifSnap.exists()) {
+                    const notifData: any = notifSnap.data();
+                    reviewerTeamIdFromNotification = notifData?.data?.teamId || null;
+                }
+            }
 
             if (eventData.timesParticipantes && eventData.timesParticipantes.length > 0) {
                 const participantTeams = gameTeamIds.length > 0
@@ -497,30 +506,32 @@ const App: React.FC = () => {
 
                 const ancbTeams = participantTeams.filter(t => t.isANCB);
 
-                const reviewerTeam = reviewerPlayerId
+                const reviewerTeam = reviewerTeamIdFromNotification
+                    ? ancbTeams.find(team => team.id === reviewerTeamIdFromNotification)
+                    : reviewerPlayerId
                     ? ancbTeams.find(team => (team.jogadores || []).includes(reviewerPlayerId))
                     : undefined;
 
                 if (reviewerTeam) {
                     ancbPlayerIds = reviewerTeam.jogadores || [];
                 } else {
-                    ancbTeams.forEach(team => {
-                        ancbPlayerIds.push(...(team.jogadores || []));
-                    });
+                    alert("Não foi possível identificar seu time para avaliação nesta partida.");
+                    return;
                 }
             } else if (eventData.times && eventData.times.length > 0) {
                 if (gameTeamIds.length > 0) {
                     const participantTeams = eventData.times.filter(t => gameTeamIds.includes(t.id));
-                    const reviewerTeam = reviewerPlayerId
+                    const reviewerTeam = reviewerTeamIdFromNotification
+                        ? participantTeams.find(team => team.id === reviewerTeamIdFromNotification)
+                        : reviewerPlayerId
                         ? participantTeams.find(team => (team.jogadores || []).includes(reviewerPlayerId))
                         : undefined;
 
                     if (reviewerTeam) {
                         ancbPlayerIds = reviewerTeam.jogadores || [];
                     } else {
-                        participantTeams.forEach(team => {
-                            ancbPlayerIds.push(...(team.jogadores || []));
-                        });
+                        alert("Não foi possível identificar seu time para avaliação nesta partida.");
+                        return;
                     }
                 } else {
                     eventData.times.forEach(team => {

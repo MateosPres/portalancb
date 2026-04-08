@@ -93,8 +93,8 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                     const teamB = eData.times.find(t => t.id === game.timeB_id);
                     if (teamA) setTeamAPlayers(allPlayers.filter(p => teamA.jogadores.includes(p.id)));
                     if (teamB) setTeamBPlayers(allPlayers.filter(p => teamB.jogadores.includes(p.id)));
-                } else if (eData.type === 'torneio_externo' && eData.timesParticipantes) {
-                    // External Tournament with Team Manager
+                } else if (eData.timesParticipantes && game.timeA_id && game.timeB_id) {
+                    // External tournaments and new friendly internal mode can both use timesParticipantes.
                     const teamA = eData.timesParticipantes.find(t => t.id === game.timeA_id);
                     const teamB = eData.timesParticipantes.find(t => t.id === game.timeB_id);
                     
