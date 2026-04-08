@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { doc, setDoc, getDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Evento, Jogo } from '../types';
-import { LucideRadio, LucideYoutube, LucideClock, LucideCheck, LucideX, LucideLoader2, LucideSearch } from 'lucide-react';
+import { LucideCopy, LucideExternalLink, LucideRadio, LucideYoutube, LucideClock, LucideCheck, LucideX, LucideLoader2 } from 'lucide-react';
 import { checkYouTubeLive } from '../hooks/useLiveStream';
 
 export const LiveStreamAdmin: React.FC = () => {
@@ -17,6 +17,21 @@ export const LiveStreamAdmin: React.FC = () => {
   const [checkingYT, setCheckingYT] = useState(false);
   const [ytLiveId, setYtLiveId] = useState<string | null>(null);
   const [ytChecked, setYtChecked] = useState(false);
+
+  const overlayUrl = useMemo(() => {
+    if (!selectedEventId || !selectedJogoId) return '';
+
+    const currentPath = window.location.pathname;
+    const folderPath = currentPath.endsWith('/')
+      ? currentPath
+      : currentPath.slice(0, currentPath.lastIndexOf('/') + 1);
+
+    const url = new URL(`${folderPath}overlay.html`, window.location.origin);
+    url.searchParams.set('evento', selectedEventId);
+    url.searchParams.set('jogo', selectedJogoId);
+
+    return url.toString();
+  }, [selectedEventId, selectedJogoId]);
 
   // Load current config
   useEffect(() => {
@@ -106,6 +121,16 @@ export const LiveStreamAdmin: React.FC = () => {
       alert('⏹ Transmissão encerrada.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCopyOverlayUrl = async () => {
+    if (!overlayUrl) return;
+    try {
+      await navigator.clipboard.writeText(overlayUrl);
+      alert('URL do widget copiada. Cole no PRISM Live em fonte Web/Widget.');
+    } catch (_) {
+      alert('Não foi possível copiar automaticamente. Copie manualmente a URL exibida.');
     }
   };
 
@@ -202,6 +227,43 @@ export const LiveStreamAdmin: React.FC = () => {
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {overlayUrl && (
+          <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-900/20 p-4">
+            <label className="block text-sm font-semibold text-blue-900 dark:text-blue-200 mb-1.5">
+              URL do Widget Overlay (PRISM)
+            </label>
+            <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
+              Essa URL substitui o overlay antigo: use no PRISM Live como fonte Web/Widget.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={overlayUrl}
+                readOnly
+                className="flex-1 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 text-xs text-blue-900 dark:text-blue-100"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCopyOverlayUrl}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors"
+                >
+                  <LucideCopy size={14} />
+                  Copiar
+                </button>
+                <a
+                  href={overlayUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-blue-100 dark:bg-gray-800 dark:hover:bg-gray-700 border border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200 text-xs font-bold rounded-lg transition-colors"
+                >
+                  <LucideExternalLink size={14} />
+                  Abrir
+                </a>
+              </div>
+            </div>
           </div>
         )}
 

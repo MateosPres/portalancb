@@ -5,6 +5,8 @@ import { ApoiadoresCarousel } from '../components/ApoiadoresCarousel';
 import { Feed } from '../components/Feed';
 import { LucideMegaphone } from 'lucide-react';
 import { CreatePost } from '../components/CreatePost'; // ajuste o caminho se estiver em outra pasta
+import { useLiveStream } from '../hooks/useLiveStream';
+import { LiveYouTubePlayer } from '../components/LiveYouTubePlayer';
 
 interface HomeViewProps {
     highlightEvent: Evento | null;
@@ -24,7 +26,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
     onOpenPlayer,
 }) => {
     const [showCreatePost, setShowCreatePost] = useState(false);
+    const [showStandaloneLivePlayer, setShowStandaloneLivePlayer] = useState(true);
     const canCreatePost = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
+    const { config: streamConfig, game: streamGame } = useLiveStream();
+    const shouldShowStandaloneLive = !highlightEvent && !!(streamConfig?.active && streamConfig.videoId && streamGame && showStandaloneLivePlayer);
 
     return (
         <div className="space-y-8 animate-fadeIn pb-24">
@@ -35,6 +40,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
 
             {/* 2. MEIO: EVENTO EM DESTAQUE (SE HOUVER) */}
+            {shouldShowStandaloneLive && streamConfig && streamGame && (
+                <div className="mb-2">
+                    <LiveYouTubePlayer
+                        videoId={streamConfig.videoId}
+                        game={streamGame}
+                        eventId={streamConfig.eventId}
+                        delaySeconds={streamConfig.delaySeconds}
+                        onClose={() => setShowStandaloneLivePlayer(false)}
+                    />
+                </div>
+            )}
+
             {highlightEvent && (
                 <LiveEventHero 
                     event={highlightEvent} 

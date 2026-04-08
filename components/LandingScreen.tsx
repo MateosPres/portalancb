@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { LucideArrowRight, LucideBookOpen, LucideTrophy, LucideUsers, LucideCalendar } from 'lucide-react';
 import { ApoiadoresCarousel } from './ApoiadoresCarousel';
 import { LiveEventHero } from './LiveEventHero';
 import { Evento } from '../types';
+import { useLiveStream } from '../hooks/useLiveStream';
+import { LiveYouTubePlayer } from './LiveYouTubePlayer';
 
 interface LandingScreenProps {
   onLogin: () => void;
@@ -27,6 +29,10 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   publicEvent,
   onOpenPublicGame,
 }) => {
+  const [showStandaloneLivePlayer, setShowStandaloneLivePlayer] = useState(true);
+  const { config: streamConfig, game: streamGame } = useLiveStream();
+  const shouldShowStandaloneLive = !publicEvent && !!(streamConfig?.active && streamConfig.videoId && streamGame && showStandaloneLivePlayer);
+
   return (
     <div className="relative min-h-screen bg-[#020915] text-white flex flex-col pb-[130px]">
       {/* Background gradients */}
@@ -51,6 +57,18 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
           </div>
 
           {/* Event Hero */}
+          {shouldShowStandaloneLive && streamConfig && streamGame && (
+            <div className="mb-8">
+              <LiveYouTubePlayer
+                videoId={streamConfig.videoId}
+                game={streamGame}
+                eventId={streamConfig.eventId}
+                delaySeconds={streamConfig.delaySeconds}
+                onClose={() => setShowStandaloneLivePlayer(false)}
+              />
+            </div>
+          )}
+
           {publicEvent && (
             <div className="mb-8">
               <LiveEventHero

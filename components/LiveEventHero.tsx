@@ -25,6 +25,16 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
     const { config: streamConfig, game: streamGame } = useLiveStream();
     const hasLiveStream = !!(streamConfig?.active && streamConfig.videoId && streamGame);
 
+    const livePlayerNode = hasLiveStream && streamGame && streamConfig && showPlayer ? (
+        <LiveYouTubePlayer
+            videoId={streamConfig.videoId}
+            game={streamGame}
+            eventId={streamConfig.eventId}
+            delaySeconds={streamConfig.delaySeconds}
+            onClose={() => setShowPlayer(false)}
+        />
+    ) : null;
+
     // 1. Fetch Games
     useEffect(() => {
         const gamesRef = collection(db, "eventos", event.id, "jogos");
@@ -138,16 +148,7 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
     if (activeGame) {
         return (
             <div className="w-full mb-8 space-y-4">
-                {/* YouTube Live Player — shown only when admin activates it */}
-                {hasLiveStream && streamGame && streamConfig && showPlayer && (
-                    <LiveYouTubePlayer
-                        videoId={streamConfig.videoId}
-                        game={streamGame}
-                        eventId={streamConfig.eventId}
-                        delaySeconds={streamConfig.delaySeconds}
-                        onClose={() => setShowPlayer(false)}
-                    />
-                )}
+                {livePlayerNode}
 
                 <div 
                     onClick={() => onOpenLiveGame ? onOpenLiveGame(activeGame) : onClick()}
@@ -246,44 +247,48 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
     // RENDER: SCENARIO 2 - UPCOMING GAME (NOT LIVE)
     if (nextGame && !activeGame) {
         return (
-            <div 
-                onClick={onClick}
-                className="w-full bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl shadow-xl overflow-hidden cursor-pointer relative group border border-slate-700 transition-all hover:shadow-2xl hover:scale-[1.01] mb-8"
-            >
-                <div className="absolute top-0 right-0 opacity-10 pointer-events-none">
-                    <LucideClock size={200} className="transform rotate-12 -translate-y-10 translate-x-10 text-white" />
-                </div>
+            <div className="w-full mb-8 space-y-4">
+                {livePlayerNode}
 
-                <div className="p-6 md:p-8 relative z-10 flex flex-col justify-center">
-                    <div className="flex items-center justify-between mb-6">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-600/30 text-blue-200 text-xs font-bold uppercase tracking-wider border border-blue-500/30">
-                            <LucideCalendar size={12}/> PRÓXIMO JOGO
-                        </div>
-                        <span className="text-gray-400 text-xs font-bold uppercase tracking-wide">{event.modalidade}</span>
+                <div 
+                    onClick={onClick}
+                    className="w-full bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl shadow-xl overflow-hidden cursor-pointer relative group border border-slate-700 transition-all hover:shadow-2xl hover:scale-[1.01]"
+                >
+                    <div className="absolute top-0 right-0 opacity-10 pointer-events-none">
+                        <LucideClock size={200} className="transform rotate-12 -translate-y-10 translate-x-10 text-white" />
                     </div>
 
-                    <h2 className="text-2xl font-bold text-white mb-2 leading-tight opacity-90 truncate">
-                        {event.nome}
-                    </h2>
-                    
-                    <div className="mt-6 bg-white/5 rounded-xl border border-white/5 overflow-hidden">
-                        {/* Data e hora no topo da caixa */}
-                        <div className="flex items-center justify-center gap-2 py-2 border-b border-white/5">
-                            <LucideCalendar size={11} className="text-gray-400" />
-                            <span className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">
-                                {nextGame.dataJogo ? nextGame.dataJogo.split('-').reverse().join('/') : 'EM BREVE'}
-                                {nextGame.horaJogo ? ` • ${nextGame.horaJogo}` : ''}
-                            </span>
+                    <div className="p-6 md:p-8 relative z-10 flex flex-col justify-center">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-600/30 text-blue-200 text-xs font-bold uppercase tracking-wider border border-blue-500/30">
+                                <LucideCalendar size={12}/> PRÓXIMO JOGO
+                            </div>
+                            <span className="text-gray-400 text-xs font-bold uppercase tracking-wide">{event.modalidade}</span>
                         </div>
-                        {/* Times e VS */}
-                        <div className="flex items-center justify-between p-6">
-                            <span className="text-xl font-black text-white w-1/3 text-right">
-                                {nextGame.timeA_nome || 'Time A'}
-                            </span>
-                            <span className="text-3xl font-black text-ancb-orange px-4">VS</span>
-                            <span className="text-xl font-black text-white w-1/3 text-left">
-                                {nextGame.timeB_nome || nextGame.adversario || 'Time B'}
-                            </span>
+
+                        <h2 className="text-2xl font-bold text-white mb-2 leading-tight opacity-90 truncate">
+                            {event.nome}
+                        </h2>
+                        
+                        <div className="mt-6 bg-white/5 rounded-xl border border-white/5 overflow-hidden">
+                            {/* Data e hora no topo da caixa */}
+                            <div className="flex items-center justify-center gap-2 py-2 border-b border-white/5">
+                                <LucideCalendar size={11} className="text-gray-400" />
+                                <span className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">
+                                    {nextGame.dataJogo ? nextGame.dataJogo.split('-').reverse().join('/') : 'EM BREVE'}
+                                    {nextGame.horaJogo ? ` • ${nextGame.horaJogo}` : ''}
+                                </span>
+                            </div>
+                            {/* Times e VS */}
+                            <div className="flex items-center justify-between p-6">
+                                <span className="text-xl font-black text-white w-1/3 text-right">
+                                    {nextGame.timeA_nome || 'Time A'}
+                                </span>
+                                <span className="text-3xl font-black text-ancb-orange px-4">VS</span>
+                                <span className="text-xl font-black text-white w-1/3 text-left">
+                                    {nextGame.timeB_nome || nextGame.adversario || 'Time B'}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -309,15 +314,18 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
     const badgeText = isLive ? "EVENTO EM ANDAMENTO" : "PRÓXIMO EVENTO";
 
     return (
-        <div 
-            onClick={onClick}
-            className={`w-full rounded-2xl shadow-xl overflow-hidden cursor-pointer relative group border transition-all hover:shadow-2xl hover:scale-[1.01] mb-8 ${bgClass}`}
-        >
-            <div className="absolute top-0 right-0 opacity-10 pointer-events-none">
-                <LucideTrophy size={200} className="transform rotate-12 -translate-y-10 translate-x-10 text-white" />
-            </div>
+        <div className="w-full mb-8 space-y-4">
+            {livePlayerNode}
 
-            <div className="p-6 md:p-8 relative z-10">
+            <div 
+                onClick={onClick}
+                className={`w-full rounded-2xl shadow-xl overflow-hidden cursor-pointer relative group border transition-all hover:shadow-2xl hover:scale-[1.01] ${bgClass}`}
+            >
+                <div className="absolute top-0 right-0 opacity-10 pointer-events-none">
+                    <LucideTrophy size={200} className="transform rotate-12 -translate-y-10 translate-x-10 text-white" />
+                </div>
+
+                <div className="p-6 md:p-8 relative z-10">
                 <div className="flex items-center justify-between mb-4">
                     <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm ${badgeClass}`}>
                         {isLive && <span className="w-2 h-2 bg-white rounded-full"></span>}
@@ -351,6 +359,7 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
                         Nenhum jogo finalizado ainda.
                     </div>
                 )}
+                </div>
             </div>
         </div>
     );
