@@ -1,16 +1,19 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { db } from '../services/firebase';
 import { FeedPost } from '../types';
 import { Button } from '../components/Button';
 import { LucideArrowLeft, LucideCalendar, LucideTrash2, LucideYoutube } from 'lucide-react';
 import { PostImageCarousel } from '../components/PostImageCarousel';
 import { UserProfile } from '../types';
+import { Comments } from '../components/Comments';
+import { LikeButton } from '../components/LikeButton';
 
 interface PostViewProps {
     post: FeedPost;
     onBack: () => void;
     userProfile?: UserProfile | null;
     onDeleted?: () => void;
+    onOpenPlayer?: (playerId: string) => void;
 }
 
 const getYoutubeId = (url: string) => {
@@ -46,7 +49,54 @@ const formatTime = (timestamp: any) => {
     }).format(date);
 };
 
-export const PostView: React.FC<PostViewProps> = ({ post, onBack, userProfile, onDeleted }) => {
+export const PostView: React.FC<PostViewProps> = ({ post, onBack, userProfile, onDeleted, onOpenPlayer }) => {
+    const [authorName, setAuthorName] = useState('ANCB');
+    const [authorPhoto, setAuthorPhoto] = useState<string | null>(null);
+    const [authorPlayerId, setAuthorPlayerId] = useState<string | null>(null);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const resolveAuthor = async () => {
+            if (!post.author_id) {
+                if (isMounted) {
+                    setAuthorName('ANCB');
+                    setAuthorPhoto(null);
+                    setAuthorPlayerId(null);
+                }
+                return;
+            }
+
+            try {
+                const userDoc = await db.collection('usuarios').doc(post.author_id).get();
+                if (!isMounted) return;
+
+                if (!userDoc.exists) {
+                    setAuthorName('ANCB');
+                    setAuthorPhoto(null);
+                    setAuthorPlayerId(null);
+                    return;
+                }
+
+                const userData = userDoc.data();
+                setAuthorName(userData?.apelido || userData?.nome || 'Usuário');
+                setAuthorPhoto(userData?.foto || null);
+                setAuthorPlayerId(userData?.linkedPlayerId || null);
+            } catch {
+                if (!isMounted) return;
+                setAuthorName('ANCB');
+                setAuthorPhoto(null);
+                setAuthorPlayerId(null);
+            }
+        };
+
+        resolveAuthor();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [post.author_id]);
+
     const videoSrc = post.content.link_video ? getYoutubeEmbed(post.content.link_video) : null;
     const postText =
         post.content.text?.trim() ||
@@ -79,14 +129,19 @@ export const PostView: React.FC<PostViewProps> = ({ post, onBack, userProfile, o
     };
 
     return (
-        <section className="min-h-screen py-6 md:py-10 bg-gray-50 dark:bg-gray-900">
-            <div className="max-w-5xl mx-auto px-4">
-                <div className="mb-6">
-                    <div className="flex items-center justify-between gap-3">
+        <section className="relative min-h-screen py-1 md:py-4">
+            <div className="pointer-events-none absolute inset-0 -z-10 opacity-60">
+                <div className="absolute -top-28 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-cyan-200/40 blur-3xl dark:bg-cyan-900/30" />
+                <div className="absolute bottom-0 right-0 h-56 w-56 rounded-full bg-amber-200/30 blur-3xl dark:bg-amber-900/20" />
+            </div>
+
+            <div className="max-w-3xl mx-auto px-3 md:px-4">
+                <div className="mb-3 sticky top-1 z-10">
+                    <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200/70 bg-white/80 px-3 py-2 backdrop-blur-md dark:border-gray-700/70 dark:bg-gray-900/70">
                         <Button
                             variant="secondary"
                             onClick={onBack}
-                            className="inline-flex items-center gap-2"
+                            className="inline-flex items-center gap-2 !border-0 !bg-transparent hover:!bg-gray-100 dark:hover:!bg-gray-800"
                         >
                             <LucideArrowLeft size={18} />
                             Voltar
@@ -96,7 +151,7 @@ export const PostView: React.FC<PostViewProps> = ({ post, onBack, userProfile, o
                             <Button
                                 variant="secondary"
                                 onClick={handleDelete}
-                                className="inline-flex items-center gap-2 !border-red-300 !text-red-600 hover:!bg-red-50"
+                                className="inline-flex items-center gap-2 !border-0 !bg-transparent !text-red-600 hover:!bg-red-50 dark:hover:!bg-red-950/30"
                             >
                                 <LucideTrash2 size={16} />
                                 Apagar post
@@ -105,17 +160,28 @@ export const PostView: React.FC<PostViewProps> = ({ post, onBack, userProfile, o
                     </div>
                 </div>
 
-                <article className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                    <header className="px-5 md:px-8 pt-6 md:pt-8 pb-5 border-b border-gray-100 dark:border-gray-700">
-                        <h1 className="text-2xl md:text-4xl font-extrabold text-gray-900 dark:text-white leading-tight">
-                            {post.content.titulo || 'Post da ANCB'}
-                        </h1>
-                        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+                <article className="overflow-hidden rounded-3xl border border-gray-200/70 bg-white/85 shadow-sm backdrop-blur-md dark:border-gray-700/70 dark:bg-gray-900/75">
+                    <header className="px-4 md:px-6 pt-5 md:pt-6 pb-4 border-b border-gray-200/70 dark:border-gray-700/70">
+                        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+                            <button
+                                type="button"
+                                onClick={() => authorPlayerId && onOpenPlayer?.(authorPlayerId)}
+                                disabled={!authorPlayerId || !onOpenPlayer}
+                                className="inline-flex items-center gap-2"
+                            >
+                                <img
+                                    src={authorPhoto || `https://ui-avatars.com/api/?name=${authorName}`}
+                                    alt={authorName}
+                                    className="h-7 w-7 rounded-full object-cover"
+                                />
+                                <span className={authorPlayerId && onOpenPlayer ? 'text-gray-500 hover:underline dark:text-gray-400' : 'text-gray-400 dark:text-gray-500'}>
+                                    {authorName}
+                                </span>
+                            </button>
                             <span className="inline-flex items-center gap-1.5">
                                 <LucideCalendar size={14} />
                                 {formatTime(post.timestamp)}
                             </span>
-                            <span className="text-gray-400 dark:text-gray-500">por ANCB</span>
                             {post.content.link_video && (
                                 <span className="inline-flex items-center gap-1 text-red-500 font-semibold">
                                     <LucideYoutube size={14} />
@@ -123,12 +189,16 @@ export const PostView: React.FC<PostViewProps> = ({ post, onBack, userProfile, o
                                 </span>
                             )}
                         </div>
+
+                        <h1 className="mt-4 text-2xl md:text-3xl font-black tracking-tight text-gray-900 dark:text-white leading-tight">
+                            {post.content.titulo || 'Post da ANCB'}
+                        </h1>
                     </header>
 
                     {(videoSrc || postImages.length > 0) && (
-                        <div className="px-5 md:px-8 pt-6">
+                        <div className="px-4 md:px-6 pt-5">
                             {videoSrc && (
-                                <div className="w-full aspect-video rounded-xl overflow-hidden bg-black shadow-sm">
+                                <div className="w-full aspect-video rounded-2xl overflow-hidden bg-black shadow-sm ring-1 ring-black/5 dark:ring-white/10">
                                     <iframe
                                         src={videoSrc}
                                         className="w-full h-full"
@@ -147,9 +217,22 @@ export const PostView: React.FC<PostViewProps> = ({ post, onBack, userProfile, o
                         </div>
                     )}
 
-                    <div className="px-5 md:px-8 py-8 md:py-10">
-                        <div className="max-w-3xl mx-auto text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed text-base md:text-lg">
+                    <div className="px-4 md:px-6 py-6 md:py-8">
+                        <div className="max-w-2xl mx-auto text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed text-base md:text-lg">
                             {postText}
+                        </div>
+
+                        <div className="max-w-2xl mx-auto mt-6 border-t border-gray-200/80 dark:border-gray-700/80 pt-4">
+                            <LikeButton postId={post.id} userId={userProfile?.uid} variant="light" />
+                        </div>
+
+                        <div className="max-w-2xl mx-auto mt-5 rounded-2xl border border-gray-200/70 bg-white/60 px-3 py-2 dark:border-gray-700/70 dark:bg-gray-900/55">
+                            <Comments
+                                postId={post.id}
+                                user={userProfile || null}
+                                onOpenPlayer={onOpenPlayer}
+                                variant="light"
+                            />
                         </div>
                     </div>
                 </article>

@@ -10,6 +10,7 @@ import { LucideMessageCircle, LucideTrash2 } from 'lucide-react';
 interface FeedProps {
   userProfile: UserProfile | null;
   onOpenPost?: (post: FeedPost) => void;
+  onOpenPlayer?: (playerId: string) => void;
 }
 
 /* LEGENDA SIMPLES */
@@ -21,8 +22,8 @@ const Caption: React.FC<{ text: string }> = ({ text }) => {
   );
 };
 
-export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost }) => {
-  const [posts, setPosts] = useState<(FeedPost & { authorName?: string; authorPhoto?: string | null })[]>([]);
+export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlayer }) => {
+  const [posts, setPosts] = useState<(FeedPost & { authorName?: string; authorPhoto?: string | null; authorPlayerId?: string | null })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showComments, setShowComments] = useState<Record<string, boolean>>({});
   const [commentsCount, setCommentsCount] = useState<Record<string, number>>({});
@@ -40,6 +41,7 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost }) => {
 
           let authorName = "ANCB";
           let authorPhoto: string | null = null;
+          let authorPlayerId: string | null = null;
 
           if (data.author_id) {
             const userDoc = await db.collection("usuarios").doc(data.author_id).get();
@@ -47,10 +49,11 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost }) => {
               const userData = userDoc.data();
               authorName = userData?.apelido || userData?.nome || "Usuário";
               authorPhoto = userData?.foto || null;
+              authorPlayerId = userData?.linkedPlayerId || null;
             }
           }
 
-          return { ...data, id: doc.id, authorName, authorPhoto };
+          return { ...data, id: doc.id, authorName, authorPhoto, authorPlayerId };
         })
       );
 
@@ -151,13 +154,27 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost }) => {
             <div key={post.id} className="flex flex-col border-b border-white/10 pb-8 mb-8 last:mb-0 last:border-b-0">
               {/* HEADER */}
               <div className="flex items-start gap-3 px-3">
-                <img
-                  src={post.authorPhoto || `https://ui-avatars.com/api/?name=${post.authorName}`}
-                  className="w-10 h-10 rounded-full object-cover"
-                />
+                <button
+                  type="button"
+                  onClick={() => post.authorPlayerId && onOpenPlayer?.(post.authorPlayerId)}
+                  disabled={!post.authorPlayerId || !onOpenPlayer}
+                  className="rounded-full"
+                >
+                  <img
+                    src={post.authorPhoto || `https://ui-avatars.com/api/?name=${post.authorName}`}
+                    className="w-10 h-10 rounded-full object-cover"
+                  />
+                </button>
                 <div className="flex flex-1 items-start justify-between gap-3">
                   <div className="flex items-center gap-1">
-                    <span className="font-bold text-white text-sm">{post.authorName}</span>
+                    <button
+                      type="button"
+                      onClick={() => post.authorPlayerId && onOpenPlayer?.(post.authorPlayerId)}
+                      disabled={!post.authorPlayerId || !onOpenPlayer}
+                      className={post.authorPlayerId && onOpenPlayer ? 'font-bold text-white text-sm hover:underline' : 'font-bold text-white text-sm cursor-default'}
+                    >
+                      {post.authorName}
+                    </button>
                     <span className="text-slate-400 text-xs">· {dateStr}</span>
                   </div>
                   {canDeletePost(post) && (
@@ -227,6 +244,7 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost }) => {
                     <Comments
                       postId={post.id}
                       user={userProfile}
+                      onOpenPlayer={onOpenPlayer}
                       onChangeCount={(count) =>
                         setCommentsCount(prev => ({ ...prev, [post.id]: count }))
                       }

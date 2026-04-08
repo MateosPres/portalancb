@@ -610,6 +610,10 @@ const App: React.FC = () => {
         setCurrentView('jogadores');
     };
 
+    const handleOpenPlayerFromFeed = (playerId: string) => {
+        handleOpenPlayerDetail(playerId);
+    };
+
     const handleOpenPostView = (post: FeedPost) => {
         setSelectedPost(post);
         setPostReturnView(currentView);
@@ -787,6 +791,7 @@ const App: React.FC = () => {
                     }}
                     userProfile={userProfile}
                     onOpenPost={handleOpenPostView}
+                    onOpenPlayer={handleOpenPlayerFromFeed}
                 />
             );
             case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onSelectEvent={handleOpenEventDetail} onOpenFriendlyAdminPanel={(eventId, game) => handleOpenGamePanel(game, eventId, true)} initialFriendlyEventId={pendingFriendlyEventId} onFriendlySummaryOpened={() => setPendingFriendlyEventId(null)} />;
@@ -831,6 +836,7 @@ const App: React.FC = () => {
                 <PostView
                     post={selectedPost}
                     userProfile={userProfile}
+                    onOpenPlayer={handleOpenPlayerFromFeed}
                     onBack={() => {
                         setCurrentView(postReturnView || 'home');
                         setSelectedPost(null);
@@ -979,7 +985,7 @@ const App: React.FC = () => {
                         onDesktopNavSelect={(item) => setCurrentView(item)}
                     />
 
-                    <main className={`flex-grow pb-40 ${currentView === 'evento-detalhe' ? 'pt-0 w-full' : currentView === 'painel-jogo' || currentView === 'post-view' ? 'pt-16 w-full' : 'pt-16 container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
+                    <main className={`flex-grow pb-40 ${currentView === 'evento-detalhe' ? 'pt-0 w-full' : currentView === 'painel-jogo' ? 'pt-16 w-full' : currentView === 'post-view' ? 'pt-2 md:pt-12 w-full' : 'pt-16 container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
                         <Suspense fallback={
                             <div className="w-full py-16 flex items-center justify-center">
                                 <div className="w-10 h-10 border-4 border-gray-200 dark:border-gray-700 border-t-ancb-orange rounded-full animate-spin" />

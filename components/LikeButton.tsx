@@ -5,9 +5,10 @@ import { Heart } from "lucide-react";
 interface LikeButtonProps {
     postId: string;
     userId?: string;
+    variant?: 'dark' | 'light';
 }
 
-export const LikeButton: React.FC<LikeButtonProps> = ({ postId, userId }) => {
+export const LikeButton: React.FC<LikeButtonProps> = ({ postId, userId, variant = 'dark' }) => {
     const [liked, setLiked] = useState(false);
     const [count, setCount] = useState(0);
 
@@ -47,14 +48,18 @@ export const LikeButton: React.FC<LikeButtonProps> = ({ postId, userId }) => {
     return (
         <button
             onClick={toggleLike}
-            className="inline-flex items-center gap-1.5 rounded-full px-1 py-0.5 text-slate-300 transition hover:bg-white/5"
+            className={
+                variant === 'light'
+                    ? 'inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5'
+                    : 'inline-flex items-center gap-1.5 rounded-full px-1 py-0.5 text-slate-300 transition hover:bg-white/5'
+            }
         >
             <Heart
                 size={18}
-                className={liked ? "text-red-500" : "text-slate-300"}
+                className={liked ? 'text-red-500' : variant === 'light' ? 'text-slate-500 dark:text-slate-300' : 'text-slate-300'}
                 fill={liked ? "currentColor" : "none"}
             />
-            <span className="text-sm text-slate-300">{count}</span>
+            <span className={variant === 'light' ? 'text-sm text-slate-600 dark:text-slate-300' : 'text-sm text-slate-300'}>{count}</span>
         </button>
     );
 };

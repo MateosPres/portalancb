@@ -12,6 +12,7 @@ interface HomeViewProps {
     onOpenLiveGame: (game: Jogo, eventId: string) => void;
     userProfile: UserProfile | null;
     onOpenPost: (post: FeedPost) => void;
+    onOpenPlayer: (playerId: string) => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({ 
@@ -19,7 +20,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
     onViewEvent, 
     onOpenLiveGame, 
     userProfile,
-    onOpenPost 
+    onOpenPost,
+    onOpenPlayer,
 }) => {
     const [showCreatePost, setShowCreatePost] = useState(false);
     const canCreatePost = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
@@ -62,7 +64,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </div>
 
                 {/* FEED */}
-                <Feed userProfile={userProfile} onOpenPost={onOpenPost} />
+                <Feed userProfile={userProfile} onOpenPost={onOpenPost} onOpenPlayer={onOpenPlayer} />
             </div>
 
             {/* MODAL DE CRIAÇÃO DE POST */}
