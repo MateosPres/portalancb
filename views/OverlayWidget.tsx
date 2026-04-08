@@ -91,7 +91,7 @@ const TeamName: React.FC<{ name: string; align: 'left' | 'right' }> = ({ name, a
 
   return (
     <span
-      className={`${sizeClass} font-bold uppercase text-blue-200 leading-[1.05] whitespace-pre-line break-words w-[72px] sm:w-[98px] ${align === 'right' ? 'text-right' : 'text-left'}`}
+      className={`${sizeClass} font-bold uppercase text-blue-200 leading-[1.05] whitespace-pre-line break-words max-w-[66px] sm:max-w-[92px] ${align === 'right' ? 'text-right' : 'text-left'}`}
       title={name}
     >
       {formatted}
@@ -224,13 +224,13 @@ export const OverlayWidget: React.FC = () => {
                 Live
               </span>
 
-              <div className="min-w-0 flex-1 flex items-center gap-1 sm:gap-2">
+              <div className="min-w-0 flex-1 flex items-center gap-1 sm:gap-1.5">
                 <TeamMark name={getTeamAName(jogo)} logo={teamALogo} />
-                <TeamName name={getTeamAName(jogo)} align="right" />
+                <TeamName name={getTeamAName(jogo)} align="left" />
                 <span className="text-base sm:text-xl font-black text-ancb-orange tabular-nums leading-none shrink-0">{getScoreA(jogo)}</span>
                 <span className="text-[10px] sm:text-[11px] font-black text-white/90 tracking-widest shrink-0">VS</span>
                 <span className="text-base sm:text-xl font-black text-white tabular-nums leading-none shrink-0">{getScoreB(jogo)}</span>
-                <TeamName name={getTeamBName(jogo)} align="left" />
+                <TeamName name={getTeamBName(jogo)} align="right" />
                 <TeamMark name={getTeamBName(jogo)} logo={teamBLogo} />
               </div>
             </div>
