@@ -210,7 +210,7 @@ export const OverlayWidget: React.FC = () => {
         </div>
       )}
 
-      <div className="fixed left-2 right-2 bottom-2 sm:left-4 sm:right-4 sm:bottom-4 z-20 rounded-xl overflow-hidden border border-white/20 shadow-[0_14px_40px_rgba(0,0,0,0.72)]">
+      <div className="fixed left-2 right-2 bottom-10 sm:left-4 sm:right-4 sm:bottom-12 z-20 rounded-xl overflow-hidden border border-white/20 shadow-[0_14px_40px_rgba(0,0,0,0.72)]">
         <div
           className="h-14 sm:h-16 px-2 sm:px-3"
           style={{
