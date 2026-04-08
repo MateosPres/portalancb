@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { collection, doc, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Cesta, Evento, Jogo } from '../types';
-import { LucideHeartHandshake, LucidePlay } from 'lucide-react';
+import { LucideHeart, LucidePlay } from 'lucide-react';
 
 type OverlayApoiador = {
   id?: string;
@@ -33,6 +33,34 @@ const getTeamFromCesta = (cesta: Cesta, game: Jogo) => {
 const getDisplayLanceName = (cesta: Cesta, game: Jogo) => {
   if (cesta.nomeJogador && cesta.nomeJogador !== 'Unknown') return cesta.nomeJogador;
   return getTeamFromCesta(cesta, game);
+};
+
+const getTeamLogo = (game: Jogo, evento: EventoOverlay | null, side: 'A' | 'B'): string | null => {
+  const raw = game as any;
+  const directLogo = side === 'A'
+    ? (raw.timeA_logo || raw.timeALogo || raw.logoTimeA || null)
+    : (raw.timeB_logo || raw.timeBLogo || raw.logoTimeB || null);
+
+  if (directLogo) return String(directLogo);
+
+  const teamId = side === 'A' ? game.timeA_id : game.timeB_id;
+  if (!teamId || !evento) return null;
+
+  const teams = ([...(evento.times || []), ...(evento.timesParticipantes || [])] as any[]).filter(Boolean);
+  const matched = teams.find((team) => team.id === teamId);
+  return matched?.logoUrl || null;
+};
+
+const TeamMark: React.FC<{ name: string; logo?: string | null }> = ({ name, logo }) => {
+  if (logo) {
+    return <img src={logo} alt={name} className="w-5 h-5 sm:w-6 sm:h-6 object-contain shrink-0" />;
+  }
+
+  return (
+    <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/15 border border-white/30 text-white text-[10px] sm:text-xs font-black flex items-center justify-center shrink-0">
+      {name.charAt(0).toUpperCase()}
+    </span>
+  );
 };
 
 export const OverlayWidget: React.FC = () => {
@@ -119,25 +147,29 @@ export const OverlayWidget: React.FC = () => {
 
   const currentSponsor = apoiadores.length > 0 ? apoiadores[sponsorIndex % apoiadores.length] : null;
   const latestLances = cestas.slice(0, MAX_FEED);
+  const teamALogo = getTeamLogo(jogo, evento, 'A');
+  const teamBLogo = getTeamLogo(jogo, evento, 'B');
 
   return (
     <div className="w-screen h-screen bg-transparent pointer-events-none">
       {currentSponsor && (
         <div className="fixed top-2 left-2 sm:top-4 sm:left-4 z-30 rounded-lg bg-black/70 border border-white/20 backdrop-blur-sm px-2 py-1.5 sm:px-3 sm:py-2 animate-fadeIn">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] text-white/80 font-bold uppercase tracking-wider">
-              <LucideHeartHandshake size={11} />
+            <span className="inline-flex items-center gap-1 text-[8px] sm:text-[9px] text-white/75 font-bold uppercase tracking-wider">
+              <LucideHeart size={10} className="text-ancb-orange" fill="currentColor" />
               Apoio
             </span>
-            {currentSponsor.logo || currentSponsor.logoBase64 ? (
-              <img
-                src={currentSponsor.logo || currentSponsor.logoBase64}
-                alt={currentSponsor.nome}
-                className="h-5 sm:h-6 object-contain max-w-[90px] sm:max-w-[130px]"
-              />
-            ) : (
-              <span className="text-[10px] sm:text-xs font-bold text-white max-w-[140px] truncate">{currentSponsor.nome}</span>
-            )}
+            <div className="w-[120px] h-[32px] sm:w-[150px] sm:h-[40px] flex items-center justify-center rounded bg-white/5 border border-white/10">
+              {currentSponsor.logo || currentSponsor.logoBase64 ? (
+                <img
+                  src={currentSponsor.logo || currentSponsor.logoBase64}
+                  alt={currentSponsor.nome}
+                  className="max-w-[105px] max-h-[26px] sm:max-w-[132px] sm:max-h-[34px] object-contain"
+                />
+              ) : (
+                <span className="text-[10px] sm:text-xs font-bold text-white max-w-[130px] truncate text-center">{currentSponsor.nome}</span>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -157,11 +189,13 @@ export const OverlayWidget: React.FC = () => {
               </span>
 
               <div className="min-w-0 flex-1 flex items-center gap-1.5 sm:gap-2 overflow-hidden whitespace-nowrap">
+                <TeamMark name={getTeamAName(jogo)} logo={teamALogo} />
                 <span className="text-[10px] sm:text-[11px] font-bold uppercase text-blue-200 truncate">{getTeamAName(jogo)}</span>
                 <span className="text-base sm:text-xl font-black text-ancb-orange tabular-nums leading-none shrink-0">{getScoreA(jogo)}</span>
                 <span className="text-[10px] sm:text-[11px] font-black text-white/90 tracking-widest shrink-0">VS</span>
                 <span className="text-base sm:text-xl font-black text-white tabular-nums leading-none shrink-0">{getScoreB(jogo)}</span>
                 <span className="text-[10px] sm:text-[11px] font-bold uppercase text-blue-200 truncate">{getTeamBName(jogo)}</span>
+                <TeamMark name={getTeamBName(jogo)} logo={teamBLogo} />
               </div>
             </div>
 
