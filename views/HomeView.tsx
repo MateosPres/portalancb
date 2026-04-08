@@ -44,9 +44,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <div className="mb-2">
                     <LiveYouTubePlayer
                         videoId={streamConfig.videoId}
-                        game={streamGame}
-                        eventId={streamConfig.eventId}
-                        delaySeconds={streamConfig.delaySeconds}
                         onClose={() => setShowStandaloneLivePlayer(false)}
                     />
                 </div>

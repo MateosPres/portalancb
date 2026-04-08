@@ -61,9 +61,6 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
             <div className="mb-8">
               <LiveYouTubePlayer
                 videoId={streamConfig.videoId}
-                game={streamGame}
-                eventId={streamConfig.eventId}
-                delaySeconds={streamConfig.delaySeconds}
                 onClose={() => setShowStandaloneLivePlayer(false)}
               />
             </div>

@@ -7,6 +7,7 @@ import { PostImageCarousel } from '../components/PostImageCarousel';
 import { UserProfile } from '../types';
 import { Comments } from '../components/Comments';
 import { LikeButton } from '../components/LikeButton';
+import { extractYouTubeVideoId } from '../utils/youtube';
 
 interface PostViewProps {
     post: FeedPost;
@@ -16,24 +17,8 @@ interface PostViewProps {
     onOpenPlayer?: (playerId: string) => void;
 }
 
-const getYoutubeId = (url: string) => {
-    try {
-        const parsed = new URL(url);
-        const host = parsed.hostname.replace('www.', '').toLowerCase();
-        if (host === 'youtu.be') return parsed.pathname.replace('/', '').split('/')[0] || null;
-        if (host === 'youtube.com' || host === 'm.youtube.com') {
-            if (parsed.pathname === '/watch') return parsed.searchParams.get('v');
-            if (parsed.pathname.startsWith('/shorts/')) return parsed.pathname.split('/shorts/')[1]?.split('/')[0] || null;
-            if (parsed.pathname.startsWith('/embed/')) return parsed.pathname.split('/embed/')[1]?.split('/')[0] || null;
-        }
-        return null;
-    } catch {
-        return null;
-    }
-};
-
 const getYoutubeEmbed = (url: string) => {
-    const videoId = getYoutubeId(url);
+    const videoId = extractYouTubeVideoId(url);
     return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
 };
 

@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Jogo } from '../types';
+import { extractYouTubeVideoId } from '../utils/youtube';
 
 export interface LiveStreamConfig {
   active: boolean;
-  videoId: string;       // YouTube video ID (ex: "dQw4w9WgXcQ")
+  videoId: string;       // YouTube video ID normalizado
+  videoUrlInput?: string; // Valor original digitado no admin (URL ou ID)
   eventId: string;       // ID do evento no Firebase
   jogoId: string;        // ID do jogo no Firebase
-  delaySeconds: number;  // Atraso em segundos para sincronizar placar com vídeo
+  delaySeconds?: number;
   updatedAt?: any;
 }
 
@@ -46,7 +48,20 @@ export const useLiveStream = (): LiveStreamState => {
     const ref = doc(db, 'config', 'liveStream');
     const unsub = onSnapshot(ref, (snap) => {
       if (snap.exists() && snap.data()?.active) {
-        setConfig(snap.data() as LiveStreamConfig);
+        const raw = snap.data() as Partial<LiveStreamConfig> & { videoId?: string; videoUrlInput?: string };
+        const normalizedVideoId =
+          extractYouTubeVideoId(raw.videoId || '') ||
+          extractYouTubeVideoId(raw.videoUrlInput || '') ||
+          '';
+
+        setConfig({
+          ...raw,
+          active: true,
+          videoId: normalizedVideoId,
+          eventId: raw.eventId || '',
+          jogoId: raw.jogoId || '',
+          delaySeconds: 0,
+        });
       } else {
         setConfig(null);
         setGame(null);

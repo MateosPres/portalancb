@@ -111,9 +111,6 @@ export const PublicGameView: React.FC<PublicGameViewProps> = ({ game, eventId, o
                 {hasLiveStream && streamConfig && streamGame && showPlayer && (
                     <LiveYouTubePlayer
                         videoId={streamConfig.videoId}
-                        game={streamGame}
-                        eventId={streamConfig.eventId}
-                        delaySeconds={streamConfig.delaySeconds}
                         onClose={() => setShowPlayer(false)}
                     />
                 )}

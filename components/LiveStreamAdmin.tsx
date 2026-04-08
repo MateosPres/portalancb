@@ -2,16 +2,16 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { doc, setDoc, getDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Evento, Jogo } from '../types';
-import { LucideCopy, LucideExternalLink, LucideRadio, LucideYoutube, LucideClock, LucideCheck, LucideX, LucideLoader2 } from 'lucide-react';
+import { LucideCopy, LucideExternalLink, LucideRadio, LucideYoutube, LucideCheck, LucideX, LucideLoader2 } from 'lucide-react';
 import { checkYouTubeLive } from '../hooks/useLiveStream';
+import { extractYouTubeVideoId, toYouTubeWatchUrl } from '../utils/youtube';
 
 export const LiveStreamAdmin: React.FC = () => {
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [jogos, setJogos] = useState<Jogo[]>([]);
   const [selectedEventId, setSelectedEventId] = useState('');
   const [selectedJogoId, setSelectedJogoId] = useState('');
-  const [videoId, setVideoId] = useState('');
-  const [delaySeconds, setDelaySeconds] = useState(30);
+  const [videoInput, setVideoInput] = useState('');
   const [isActive, setIsActive] = useState(false);
   const [saving, setSaving] = useState(false);
   const [checkingYT, setCheckingYT] = useState(false);
@@ -41,10 +41,9 @@ export const LiveStreamAdmin: React.FC = () => {
       if (snap.exists()) {
         const data = snap.data();
         setIsActive(data.active ?? false);
-        setVideoId(data.videoId ?? '');
+        setVideoInput(data.videoUrlInput ?? data.videoId ?? '');
         setSelectedEventId(data.eventId ?? '');
         setSelectedJogoId(data.jogoId ?? '');
-        setDelaySeconds(data.delaySeconds ?? 30);
       }
     };
     loadConfig();
@@ -76,13 +75,15 @@ export const LiveStreamAdmin: React.FC = () => {
     setYtChecked(false);
     const liveId = await checkYouTubeLive();
     setYtLiveId(liveId);
-    if (liveId) setVideoId(liveId);
+    if (liveId) setVideoInput(toYouTubeWatchUrl(liveId));
     setYtChecked(true);
     setCheckingYT(false);
   };
 
   const handleSave = async () => {
-    if (!selectedEventId || !selectedJogoId || !videoId) {
+    const normalizedVideoId = extractYouTubeVideoId(videoInput);
+
+    if (!selectedEventId || !selectedJogoId || !normalizedVideoId) {
       alert('Preencha todos os campos antes de ativar.');
       return;
     }
@@ -90,10 +91,11 @@ export const LiveStreamAdmin: React.FC = () => {
     try {
       await setDoc(doc(db, 'config', 'liveStream'), {
         active: isActive,
-        videoId: videoId.trim(),
+        videoId: normalizedVideoId,
+        videoUrlInput: videoInput.trim(),
         eventId: selectedEventId,
         jogoId: selectedJogoId,
-        delaySeconds,
+        delaySeconds: 0,
         updatedAt: new Date(),
       });
       alert(isActive ? '✅ Transmissão ativada!' : '⏹ Transmissão desativada.');
@@ -110,13 +112,14 @@ export const LiveStreamAdmin: React.FC = () => {
       await setDoc(doc(db, 'config', 'liveStream'), {
         active: false,
         videoId: '',
+        videoUrlInput: '',
         eventId: '',
         jogoId: '',
-        delaySeconds: 30,
+        delaySeconds: 0,
         updatedAt: new Date(),
       });
       setIsActive(false);
-      setVideoId('');
+      setVideoInput('');
       setSelectedJogoId('');
       alert('⏹ Transmissão encerrada.');
     } finally {
@@ -178,17 +181,17 @@ export const LiveStreamAdmin: React.FC = () => {
         {/* Manual Video ID */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
-            Video ID do YouTube
+            URL ou ID do YouTube
           </label>
           <input
             type="text"
-            value={videoId}
-            onChange={e => setVideoId(e.target.value)}
-            placeholder="Ex: dQw4w9WgXcQ"
+            value={videoInput}
+            onChange={e => setVideoInput(e.target.value)}
+            placeholder="https://youtube.com/watch?v=... ou dQw4w9WgXcQ"
             className="w-full px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
           />
           <p className="text-xs text-gray-400 mt-1">
-            O ID está na URL: youtube.com/watch?v=<strong>ESTE_TRECHO</strong>
+            Cole a URL completa para facilitar operação. O sistema extrai o ID automaticamente.
           </p>
         </div>
 
@@ -266,28 +269,6 @@ export const LiveStreamAdmin: React.FC = () => {
             </div>
           </div>
         )}
-
-        {/* Delay */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center gap-1.5">
-            <LucideClock size={14} />
-            Atraso do placar: <strong>{delaySeconds}s</strong>
-          </label>
-          <input
-            type="range" min={0} max={120} step={5}
-            value={delaySeconds}
-            onChange={e => setDelaySeconds(Number(e.target.value))}
-            className="w-full accent-blue-600"
-          />
-          <div className="flex justify-between text-[10px] text-gray-400 mt-0.5">
-            <span>0s (sem atraso)</span>
-            <span>60s</span>
-            <span>120s</span>
-          </div>
-          <p className="text-xs text-gray-400 mt-1">
-            Ajuste conforme o delay da transmissão. Celular sem OBS ≈ 20–40s.
-          </p>
-        </div>
 
         {/* Active toggle */}
         <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">

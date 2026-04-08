@@ -1,20 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Jogo } from '../types';
 import { LucideMaximize2, LucideMinimize2, LucidePlay, LucideX } from 'lucide-react';
 
 interface LiveYouTubePlayerProps {
   videoId: string;
-  game: Jogo;
-  eventId: string;
-  delaySeconds: number;
   onClose?: () => void;
 }
 
 export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
   videoId,
-  game: _game,
-  eventId: _eventId,
-  delaySeconds: _delaySeconds,
   onClose,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);

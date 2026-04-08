@@ -28,9 +28,6 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
     const livePlayerNode = hasLiveStream && streamGame && streamConfig && showPlayer ? (
         <LiveYouTubePlayer
             videoId={streamConfig.videoId}
-            game={streamGame}
-            eventId={streamConfig.eventId}
-            delaySeconds={streamConfig.delaySeconds}
             onClose={() => setShowPlayer(false)}
         />
     ) : null;
