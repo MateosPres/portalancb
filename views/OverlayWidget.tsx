@@ -39,6 +39,7 @@ export const OverlayWidget: React.FC = () => {
   const [jogo, setJogo] = useState<Jogo | null>(null);
   const [evento, setEvento] = useState<EventoOverlay | null>(null);
   const [cestas, setCestas] = useState<Cesta[]>([]);
+  const [fallbackApoiadores, setFallbackApoiadores] = useState<OverlayApoiador[]>([]);
   const [sponsorIndex, setSponsorIndex] = useState(0);
 
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
@@ -83,11 +84,26 @@ export const OverlayWidget: React.FC = () => {
     };
   }, [eventoId, jogoId]);
 
+  useEffect(() => {
+    const apoiadoresRef = collection(db, 'apoiadores');
+    const apoiadoresQuery = query(apoiadoresRef, orderBy('ordem', 'asc'));
+    const unsub = onSnapshot(apoiadoresQuery, (snap) => {
+      const list = snap.docs.map((item) => ({ id: item.id, ...item.data() } as OverlayApoiador));
+      setFallbackApoiadores(list);
+    });
+
+    return () => unsub();
+  }, []);
+
   const apoiadores = useMemo(() => {
-    return (evento?.apoiadores ?? [])
+    const source = (evento?.apoiadores && evento.apoiadores.length > 0)
+      ? evento.apoiadores
+      : fallbackApoiadores;
+
+    return source
       .slice()
       .sort((a, b) => (a.ordem ?? 999) - (b.ordem ?? 999));
-  }, [evento?.apoiadores]);
+  }, [evento?.apoiadores, fallbackApoiadores]);
 
   useEffect(() => {
     if (apoiadores.length <= 1) return;
@@ -104,83 +120,73 @@ export const OverlayWidget: React.FC = () => {
   const currentSponsor = apoiadores.length > 0 ? apoiadores[sponsorIndex % apoiadores.length] : null;
 
   return (
-    <div className="w-screen h-screen bg-transparent pointer-events-none flex items-center justify-center p-2 sm:p-4">
-      <div className="relative w-full max-w-[min(96vw,calc(96vh*16/9))] aspect-video">
-        {currentSponsor && (
-          <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-20 rounded-lg bg-black/65 border border-white/15 backdrop-blur-sm px-2 py-1.5 sm:px-3 sm:py-2 animate-fadeIn">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] text-white/80 font-bold uppercase tracking-wider">
-                <LucideHeartHandshake size={11} />
-                Apoio
-              </span>
-              {currentSponsor.logo || currentSponsor.logoBase64 ? (
-                <img
-                  src={currentSponsor.logo || currentSponsor.logoBase64}
-                  alt={currentSponsor.nome}
-                  className="h-5 sm:h-6 object-contain max-w-[90px] sm:max-w-[120px]"
-                />
-              ) : (
-                <span className="text-[10px] sm:text-xs font-bold text-white max-w-[120px] truncate">{currentSponsor.nome}</span>
-              )}
-            </div>
+    <div className="w-screen h-screen bg-transparent pointer-events-none">
+      {currentSponsor && (
+        <div className="fixed top-2 left-2 sm:top-4 sm:left-4 z-30 rounded-lg bg-black/70 border border-white/20 backdrop-blur-sm px-2 py-1.5 sm:px-3 sm:py-2 animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] text-white/80 font-bold uppercase tracking-wider">
+              <LucideHeartHandshake size={11} />
+              Apoio
+            </span>
+            {currentSponsor.logo || currentSponsor.logoBase64 ? (
+              <img
+                src={currentSponsor.logo || currentSponsor.logoBase64}
+                alt={currentSponsor.nome}
+                className="h-5 sm:h-6 object-contain max-w-[90px] sm:max-w-[130px]"
+              />
+            ) : (
+              <span className="text-[10px] sm:text-xs font-bold text-white max-w-[140px] truncate">{currentSponsor.nome}</span>
+            )}
           </div>
-        )}
+        </div>
+      )}
 
-        <div className="absolute left-2 right-2 bottom-2 sm:left-3 sm:right-3 sm:bottom-3 z-10 rounded-xl overflow-hidden border border-white/15 shadow-[0_14px_40px_rgba(0,0,0,0.72)]">
-          <div
-            className="px-2.5 py-2 sm:px-3 sm:py-2.5"
-            style={{
-              background: 'linear-gradient(135deg, rgba(3,17,43,0.96) 0%, rgba(6,37,83,0.96) 68%, rgba(10,56,128,0.96) 100%)'
-            }}
-          >
-            <div className="flex items-stretch gap-2 sm:gap-3 min-w-0">
-              <div className="flex-[0_0_44%] min-w-0 rounded-lg bg-black/35 border border-white/10 px-2 py-1.5 sm:px-2.5 sm:py-2">
-                <div className="flex items-center gap-1.5 mb-1 sm:mb-1.5">
-                  <span className="inline-flex items-center gap-1 rounded bg-red-600 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-white">
-                    <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
-                    Live
-                  </span>
-                </div>
+      <div className="fixed left-2 right-2 bottom-2 sm:left-4 sm:right-4 sm:bottom-4 z-20 rounded-xl overflow-hidden border border-white/20 shadow-[0_14px_40px_rgba(0,0,0,0.72)]">
+        <div
+          className="h-14 sm:h-16 px-2 sm:px-3"
+          style={{
+            background: 'linear-gradient(135deg, rgba(3,17,43,0.96) 0%, rgba(6,37,83,0.96) 68%, rgba(10,56,128,0.96) 100%)'
+          }}
+        >
+          <div className="h-full flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="flex-[0_0_44%] min-w-0 h-full flex items-center gap-2 sm:gap-3 rounded-lg bg-black/30 border border-white/10 px-2 sm:px-3">
+              <span className="inline-flex items-center gap-1 rounded bg-red-600 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-white shrink-0">
+                <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
+                Live
+              </span>
 
-                <div className="flex items-center justify-between gap-2 min-w-0">
-                  <div className="min-w-0 flex-1 text-right">
-                    <p className="text-[9px] sm:text-[10px] font-bold uppercase text-blue-200 truncate">{getTeamAName(jogo)}</p>
-                    <p className="text-xl sm:text-3xl font-black text-ancb-orange tabular-nums leading-none">{getScoreA(jogo)}</p>
-                  </div>
-
-                  <div className="shrink-0 px-1">
-                    <span className="text-[11px] sm:text-sm font-black text-white tracking-widest">VS</span>
-                  </div>
-
-                  <div className="min-w-0 flex-1 text-left">
-                    <p className="text-[9px] sm:text-[10px] font-bold uppercase text-blue-200 truncate">{getTeamBName(jogo)}</p>
-                    <p className="text-xl sm:text-3xl font-black text-white tabular-nums leading-none">{getScoreB(jogo)}</p>
-                  </div>
-                </div>
+              <div className="min-w-0 flex-1 flex items-center justify-between gap-2">
+                <span className="text-[10px] sm:text-xs font-bold uppercase text-blue-200 truncate text-right">{getTeamAName(jogo)}</span>
+                <span className="text-lg sm:text-2xl font-black text-ancb-orange tabular-nums leading-none shrink-0">{getScoreA(jogo)}</span>
+                <span className="text-[11px] sm:text-sm font-black text-white tracking-widest shrink-0">VS</span>
+                <span className="text-lg sm:text-2xl font-black text-white tabular-nums leading-none shrink-0">{getScoreB(jogo)}</span>
+                <span className="text-[10px] sm:text-xs font-bold uppercase text-blue-200 truncate text-left">{getTeamBName(jogo)}</span>
               </div>
+            </div>
 
-              <div className="flex-1 min-w-0 rounded-lg bg-black/28 border border-white/10 px-2 py-1.5 sm:px-2.5 sm:py-2">
-                <div className="flex items-center gap-1.5 mb-1 sm:mb-1.5 text-[8px] sm:text-[10px] font-bold tracking-widest uppercase text-blue-200/90">
+            <div className="flex-1 min-w-0 h-full flex items-center rounded-lg bg-black/25 border border-white/10 px-2 sm:px-3">
+              <div className="flex items-center gap-2 w-full min-w-0 whitespace-nowrap overflow-hidden">
+                <span className="inline-flex items-center gap-1 text-[8px] sm:text-[10px] font-bold tracking-widest uppercase text-blue-200/90 shrink-0">
                   <LucidePlay size={10} />
-                  <span>Ultimos lances</span>
-                </div>
+                  Ultimos lances
+                </span>
 
                 {cestas.length === 0 ? (
-                  <p className="text-[10px] sm:text-xs text-white/55 italic">Aguardando lances...</p>
+                  <span className="text-[10px] sm:text-xs text-white/55 italic truncate">Aguardando lances...</span>
                 ) : (
-                  <div className="space-y-1">
-                    {cestas.slice(0, MAX_FEED).map((cesta) => (
-                      <div
-                        key={cesta.id}
-                        className="flex items-center justify-between gap-2 rounded bg-white/10 px-1.5 py-1 sm:px-2 sm:py-1 animate-slideDown"
-                      >
-                        <p className="min-w-0 text-[10px] sm:text-xs text-white truncate font-bold">
+                  <div className="flex items-center gap-2 min-w-0 overflow-hidden whitespace-nowrap">
+                    {cestas.slice(0, MAX_FEED).map((cesta, index) => (
+                      <React.Fragment key={cesta.id}>
+                        <span className="text-[10px] sm:text-xs text-white font-bold truncate max-w-[110px] sm:max-w-[160px]">
                           {getDisplayLanceName(cesta, jogo)}
-                        </p>
-                        <span className={`shrink-0 text-[11px] sm:text-sm font-black ${Number(cesta.pontos) === 3 ? 'text-ancb-orange' : 'text-blue-200'}`}>
+                        </span>
+                        <span className={`text-[11px] sm:text-sm font-black shrink-0 ${Number(cesta.pontos) === 3 ? 'text-ancb-orange' : 'text-blue-200'}`}>
                           +{cesta.pontos}
                         </span>
-                      </div>
+                        {index < cestas.slice(0, MAX_FEED).length - 1 && (
+                          <span className="text-white/35 text-xs shrink-0">|</span>
+                        )}
+                      </React.Fragment>
                     ))}
                   </div>
                 )}
