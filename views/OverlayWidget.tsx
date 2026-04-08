@@ -118,6 +118,7 @@ export const OverlayWidget: React.FC = () => {
   if (!eventoId || !jogoId || !jogo) return null;
 
   const currentSponsor = apoiadores.length > 0 ? apoiadores[sponsorIndex % apoiadores.length] : null;
+  const latestLances = cestas.slice(0, MAX_FEED);
 
   return (
     <div className="w-screen h-screen bg-transparent pointer-events-none">
@@ -143,47 +144,47 @@ export const OverlayWidget: React.FC = () => {
 
       <div className="fixed left-2 right-2 bottom-2 sm:left-4 sm:right-4 sm:bottom-4 z-20 rounded-xl overflow-hidden border border-white/20 shadow-[0_14px_40px_rgba(0,0,0,0.72)]">
         <div
-          className="h-14 sm:h-16 px-2 sm:px-3"
+          className="h-11 sm:h-12 px-2 sm:px-3"
           style={{
             background: 'linear-gradient(135deg, rgba(3,17,43,0.96) 0%, rgba(6,37,83,0.96) 68%, rgba(10,56,128,0.96) 100%)'
           }}
         >
           <div className="h-full flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="flex-[0_0_44%] min-w-0 h-full flex items-center gap-2 sm:gap-3 rounded-lg bg-black/30 border border-white/10 px-2 sm:px-3">
+            <div className="flex-[0_0_46%] min-w-0 h-full flex items-center gap-1.5 sm:gap-2 rounded-lg bg-black/40 border border-white/10 px-2 sm:px-3">
               <span className="inline-flex items-center gap-1 rounded bg-red-600 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-white shrink-0">
                 <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
                 Live
               </span>
 
-              <div className="min-w-0 flex-1 flex items-center justify-between gap-2">
-                <span className="text-[10px] sm:text-xs font-bold uppercase text-blue-200 truncate text-right">{getTeamAName(jogo)}</span>
-                <span className="text-lg sm:text-2xl font-black text-ancb-orange tabular-nums leading-none shrink-0">{getScoreA(jogo)}</span>
-                <span className="text-[11px] sm:text-sm font-black text-white tracking-widest shrink-0">VS</span>
-                <span className="text-lg sm:text-2xl font-black text-white tabular-nums leading-none shrink-0">{getScoreB(jogo)}</span>
-                <span className="text-[10px] sm:text-xs font-bold uppercase text-blue-200 truncate text-left">{getTeamBName(jogo)}</span>
+              <div className="min-w-0 flex-1 flex items-center gap-1.5 sm:gap-2 overflow-hidden whitespace-nowrap">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase text-blue-200 truncate">{getTeamAName(jogo)}</span>
+                <span className="text-base sm:text-xl font-black text-ancb-orange tabular-nums leading-none shrink-0">{getScoreA(jogo)}</span>
+                <span className="text-[10px] sm:text-[11px] font-black text-white/90 tracking-widest shrink-0">VS</span>
+                <span className="text-base sm:text-xl font-black text-white tabular-nums leading-none shrink-0">{getScoreB(jogo)}</span>
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase text-blue-200 truncate">{getTeamBName(jogo)}</span>
               </div>
             </div>
 
-            <div className="flex-1 min-w-0 h-full flex items-center rounded-lg bg-black/25 border border-white/10 px-2 sm:px-3">
-              <div className="flex items-center gap-2 w-full min-w-0 whitespace-nowrap overflow-hidden">
+            <div className="flex-1 min-w-0 h-full flex items-center rounded-lg bg-black/28 border border-white/10 px-2 sm:px-3">
+              <div className="flex items-center gap-1.5 sm:gap-2 w-full min-w-0 whitespace-nowrap overflow-hidden">
                 <span className="inline-flex items-center gap-1 text-[8px] sm:text-[10px] font-bold tracking-widest uppercase text-blue-200/90 shrink-0">
                   <LucidePlay size={10} />
                   Ultimos lances
                 </span>
 
-                {cestas.length === 0 ? (
+                {latestLances.length === 0 ? (
                   <span className="text-[10px] sm:text-xs text-white/55 italic truncate">Aguardando lances...</span>
                 ) : (
-                  <div className="flex items-center gap-2 min-w-0 overflow-hidden whitespace-nowrap">
-                    {cestas.slice(0, MAX_FEED).map((cesta, index) => (
+                  <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 overflow-hidden whitespace-nowrap">
+                    {latestLances.map((cesta, index) => (
                       <React.Fragment key={cesta.id}>
-                        <span className="text-[10px] sm:text-xs text-white font-bold truncate max-w-[110px] sm:max-w-[160px]">
+                        <span className="text-[10px] sm:text-xs text-white font-bold truncate max-w-[90px] sm:max-w-[130px]">
                           {getDisplayLanceName(cesta, jogo)}
                         </span>
-                        <span className={`text-[11px] sm:text-sm font-black shrink-0 ${Number(cesta.pontos) === 3 ? 'text-ancb-orange' : 'text-blue-200'}`}>
+                        <span className={`text-[10px] sm:text-xs font-black shrink-0 ${Number(cesta.pontos) === 3 ? 'text-ancb-orange' : 'text-blue-200'}`}>
                           +{cesta.pontos}
                         </span>
-                        {index < cestas.slice(0, MAX_FEED).length - 1 && (
+                        {index < latestLances.length - 1 && (
                           <span className="text-white/35 text-xs shrink-0">|</span>
                         )}
                       </React.Fragment>
