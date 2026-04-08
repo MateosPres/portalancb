@@ -212,13 +212,13 @@ export const OverlayWidget: React.FC = () => {
 
       <div className="fixed left-2 right-2 bottom-10 sm:left-4 sm:right-4 sm:bottom-12 z-20 rounded-xl overflow-hidden border border-white/20 shadow-[0_14px_40px_rgba(0,0,0,0.72)]">
         <div
-          className="h-14 sm:h-16 px-2 sm:px-3"
+          className="h-12 sm:h-14 px-2 sm:px-3"
           style={{
             background: 'linear-gradient(135deg, rgba(3,17,43,0.96) 0%, rgba(6,37,83,0.96) 68%, rgba(10,56,128,0.96) 100%)'
           }}
         >
           <div className="h-full flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="flex-[0_0_46%] min-w-0 h-full flex items-center gap-1.5 sm:gap-2 rounded-lg bg-black/40 border border-white/10 px-2 sm:px-3">
+            <div className="flex-[0_0_40%] sm:flex-[0_0_42%] min-w-0 h-full flex items-center gap-1.5 sm:gap-2 rounded-lg bg-black/40 border border-white/10 px-2 sm:px-3">
               <span className="inline-flex items-center gap-1 rounded bg-red-600 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-white shrink-0">
                 <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
                 Live
