@@ -19,9 +19,9 @@ import {
     LucideShield,
     LucideMoreVertical
 } from 'lucide-react';
-import { fileToBase64 } from '../utils/imageUtils';
 import imageCompression from 'browser-image-compression';
 import { ImageCropperModal } from '../components/ImageCropperModal';
+import { uploadImageToImgBB } from '../utils/imgbb';
 import { doc, updateDoc, writeBatch, query, where, getDocs, arrayUnion, arrayRemove, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
 interface TeamManagerViewProps {
@@ -111,14 +111,16 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
             const compressedFile = await imageCompression(file, {
                 maxSizeMB: 0.1,
                 maxWidthOrHeight: 500,
-                useWebWorker: true
+                useWebWorker: true,
+                fileType: 'image/jpeg'
             });
-            
-            const base64 = await fileToBase64(compressedFile);
-            setTeam(prev => ({ ...prev, logoUrl: base64 }));
+
+            const compressedAsFile = new File([compressedFile], 'team_logo.jpg', { type: 'image/jpeg' });
+            const { imageUrl } = await uploadImageToImgBB(compressedAsFile);
+            setTeam(prev => ({ ...prev, logoUrl: imageUrl }));
         } catch (error) {
             console.error("Error processing logo:", error);
-            alert("Erro ao processar logo.");
+            alert("Erro ao processar ou enviar logo.");
         } finally {
             setIsUploadingLogo(false);
             setShowCropper(false);

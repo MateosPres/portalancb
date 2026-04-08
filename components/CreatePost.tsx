@@ -6,6 +6,7 @@ import { Modal } from './Modal';
 import { LucideUpload, LucideLoader2, LucideTrash2, LucideLink2 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { FeedPost } from '../types';
+import { uploadImageToImgBB } from '../utils/imgbb';
 
 interface CreatePostProps {
   isOpen: boolean;
@@ -13,21 +14,6 @@ interface CreatePostProps {
   userProfile: UserProfile | null;
   onPostCreated?: (post: FeedPost) => void;
 }
-
-interface ImgBBUploadResponse {
-  data: {
-    url: string;
-    delete_url?: string;
-    id?: string;
-  };
-  success: boolean;
-  status: number;
-}
-
-// URL do Worker já funcionando como no ApoiadoresView
-const IMGBB_WORKER_URL =
-  import.meta.env.VITE_IMGBB_WORKER_URL?.trim() ||
-  'https://proxy-imgbb-ancb.mateospres.workers.dev';
 
 export const CreatePost: React.FC<CreatePostProps> = ({
   isOpen,
@@ -52,31 +38,6 @@ export const CreatePost: React.FC<CreatePostProps> = ({
       imagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
     };
   }, [imagePreviews]);
-
-  const uploadImageToImgBB = async (file: File): Promise<{ imageUrl: string; deleteUrl?: string }> => {
-    if (!IMGBB_WORKER_URL || IMGBB_WORKER_URL.includes('seu-usuario.workers.dev')) {
-      throw new Error('URL do Worker não configurada corretamente.');
-    }
-
-    const formData = new FormData();
-    formData.append('image', file);
-
-    const response = await fetch(IMGBB_WORKER_URL, {
-      method: 'POST',
-      body: formData,
-    });
-
-    const result: ImgBBUploadResponse = await response.json();
-
-    if (!response.ok || !result.success || !result.data?.url) {
-      throw new Error('Falha ao enviar imagem para o ImgBB.');
-    }
-
-    return {
-      imageUrl: result.data.url,
-      deleteUrl: result.data.delete_url,
-    };
-  };
 
   const isValidYoutubeUrl = (url: string): boolean => {
     try {

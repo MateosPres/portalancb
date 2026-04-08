@@ -7,9 +7,12 @@ import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { ShareModal } from '../components/ShareModal';
 import { GameSummaryModal } from '../components/GameSummaryModal';
+import { ImageCropperModal } from '../components/ImageCropperModal';
 import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucideTrash2, LucideStar, LucideMessageSquare, LucidePlayCircle, LucideShield, LucideCamera, LucideLoader2, LucideCalendar, LucideMapPin, LucideShare2, LucideSearch } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
-import { collection, doc, getDocs, getDoc, writeBatch, updateDoc, addDoc, serverTimestamp, setDoc, query, where, limit } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, writeBatch, updateDoc, addDoc, serverTimestamp, setDoc, query, where, limit, deleteField } from 'firebase/firestore';
+import { fileToBase64 } from '../utils/imageUtils';
+import { uploadImageToImgBB } from '../utils/imgbb';
 
 interface EventosViewProps {
     onBack: () => void;
@@ -38,10 +41,17 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [editFriendlyDate, setEditFriendlyDate] = useState('');
     const [editFriendlyHour, setEditFriendlyHour] = useState('');
     const [editFriendlyMode, setEditFriendlyMode] = useState<'3x3'|'5x5'>('5x5');
+    const [editFriendlyOpponentMode, setEditFriendlyOpponentMode] = useState<'external_string' | 'internal_team'>('external_string');
     const [editFriendlyStatus, setEditFriendlyStatus] = useState<'proximo'|'andamento'|'finalizado'>('proximo');
     const [editFriendlyOpponent, setEditFriendlyOpponent] = useState('');
+    const [editFriendlyTeamAName, setEditFriendlyTeamAName] = useState('ANCB');
+    const [editFriendlyTeamBName, setEditFriendlyTeamBName] = useState('');
+    const [editFriendlyTeamALogo, setEditFriendlyTeamALogo] = useState('');
+    const [editFriendlyTeamBLogo, setEditFriendlyTeamBLogo] = useState('');
     const [editFriendlyRosterMap, setEditFriendlyRosterMap] = useState<Record<string, number>>({});
+    const [editFriendlyRosterMapTeamB, setEditFriendlyRosterMapTeamB] = useState<Record<string, number>>({});
     const [editFriendlyRosterSearch, setEditFriendlyRosterSearch] = useState('');
+    const [editFriendlyRosterSearchTeamB, setEditFriendlyRosterSearchTeamB] = useState('');
     
     // For admin creating events only
     const [showEventForm, setShowEventForm] = useState(false);
@@ -55,12 +65,18 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [formOpponent, setFormOpponent] = useState(''); // Only for Amistoso
     const [formTeamAName, setFormTeamAName] = useState('ANCB');
     const [formTeamBName, setFormTeamBName] = useState('');
+    const [formTeamALogo, setFormTeamALogo] = useState('');
+    const [formTeamBLogo, setFormTeamBLogo] = useState('');
     
     // Roster Selection State
     const [selectedRosterMap, setSelectedRosterMap] = useState<Record<string, number>>({});
     const [selectedRosterMapTeamB, setSelectedRosterMapTeamB] = useState<Record<string, number>>({});
     const [rosterSearch, setRosterSearch] = useState('');
     const [rosterSearchTeamB, setRosterSearchTeamB] = useState('');
+    const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+    const [showLogoCropModal, setShowLogoCropModal] = useState(false);
+    const [logoCropImageSrc, setLogoCropImageSrc] = useState<string | null>(null);
+    const [logoCropTarget, setLogoCropTarget] = useState<'create_team_a' | 'create_team_b' | 'edit_team_a' | 'edit_team_b' | null>(null);
 
     useEffect(() => {
         const unsubscribe = db.collection("eventos").orderBy("data", "desc").onSnapshot((snapshot) => {
@@ -168,28 +184,117 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         }));
     };
 
+    const toggleFriendlyEditRosterPlayerTeamB = (player: Player) => {
+        setEditFriendlyRosterMapTeamB(prev => {
+            const next = { ...prev };
+            if (next[player.id] !== undefined) {
+                delete next[player.id];
+            } else {
+                next[player.id] = player.numero_uniforme || 0;
+            }
+            return next;
+        });
+    };
+
+    const updateFriendlyEditRosterNumberTeamB = (playerId: string, number: string) => {
+        setEditFriendlyRosterMapTeamB(prev => ({
+            ...prev,
+            [playerId]: Number(number)
+        }));
+    };
+
+    const handleOpenLogoCrop = async (file: File, target: 'create_team_a' | 'create_team_b' | 'edit_team_a' | 'edit_team_b') => {
+        try {
+            const rawBase64 = await fileToBase64(file);
+            setLogoCropTarget(target);
+            setLogoCropImageSrc(rawBase64);
+            setShowLogoCropModal(true);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao carregar imagem para recorte.');
+        }
+    };
+
+    const handleLogoCropComplete = async (croppedImageBlob: Blob) => {
+        if (!logoCropTarget) return;
+
+        setIsUploadingLogo(true);
+        try {
+            const file = new File([croppedImageBlob], 'team-logo.jpg', { type: 'image/jpeg' });
+            const compressed = await imageCompression(file, {
+                maxSizeMB: 0.1,
+                maxWidthOrHeight: 256,
+                useWebWorker: true,
+                fileType: 'image/jpeg'
+            });
+            const compressedFile = new File([compressed], 'team-logo.jpg', { type: 'image/jpeg' });
+            const { imageUrl } = await uploadImageToImgBB(compressedFile);
+
+            if (logoCropTarget === 'create_team_a') setFormTeamALogo(imageUrl);
+            if (logoCropTarget === 'create_team_b') setFormTeamBLogo(imageUrl);
+            if (logoCropTarget === 'edit_team_a') setEditFriendlyTeamALogo(imageUrl);
+            if (logoCropTarget === 'edit_team_b') setEditFriendlyTeamBLogo(imageUrl);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao processar ou enviar logo.');
+        } finally {
+            setIsUploadingLogo(false);
+            setShowLogoCropModal(false);
+            setLogoCropImageSrc(null);
+            setLogoCropTarget(null);
+        }
+    };
+
     const handleOpenFriendlyEdit = (evento: Evento) => {
         const game = friendlyGamesMap[evento.id];
+        const gameRaw: any = game || {};
+        const isInternal = game?.opponentMode === 'internal_team' || (!!game?.timeA_id && !!game?.timeB_id);
+        const allTimes = evento.timesParticipantes || [];
+        const teamA = allTimes.find(t => t.id === game?.timeA_id) || allTimes[0];
+        const teamB = allTimes.find(t => t.id === game?.timeB_id) || allTimes[1];
+
+        const numberByPlayerId: Record<string, number> = {};
+        (evento.jogadoresEscalados || []).forEach(entry => {
+            if (typeof entry === 'string') {
+                const player = allPlayers.find(p => p.id === entry);
+                numberByPlayerId[entry] = player?.numero_uniforme || 0;
+            } else {
+                numberByPlayerId[entry.id] = Number(entry.numero || 0);
+            }
+        });
+
+        const teamAIds = isInternal ? (teamA?.jogadores || []) : Object.keys(numberByPlayerId);
+        const teamBIds = isInternal ? (teamB?.jogadores || []) : [];
+
+        const rosterMapTeamA: Record<string, number> = {};
+        teamAIds.forEach(playerId => {
+            const player = allPlayers.find(p => p.id === playerId);
+            rosterMapTeamA[playerId] = numberByPlayerId[playerId] ?? player?.numero_uniforme ?? 0;
+        });
+
+        const rosterMapTeamB: Record<string, number> = {};
+        teamBIds.forEach(playerId => {
+            const player = allPlayers.find(p => p.id === playerId);
+            rosterMapTeamB[playerId] = numberByPlayerId[playerId] ?? player?.numero_uniforme ?? 0;
+        });
+
         setEditingFriendlyEventId(evento.id);
         setEditFriendlyName(evento.nome || '');
         setEditFriendlyDate(evento.data || '');
         setEditFriendlyMode(evento.modalidade || '5x5');
+        setEditFriendlyOpponentMode(isInternal ? 'internal_team' : 'external_string');
         setEditFriendlyStatus(evento.status || 'proximo');
         setEditFriendlyOpponent(game?.adversario || game?.timeB_nome || '');
         setEditFriendlyHour(game?.horaJogo || '');
+        setEditFriendlyTeamAName(teamA?.nomeTime || game?.timeA_nome || 'ANCB');
+        setEditFriendlyTeamBName(teamB?.nomeTime || game?.timeB_nome || game?.adversario || '');
+        setEditFriendlyTeamALogo(String(gameRaw.timeA_logo || gameRaw.timeALogo || teamA?.logoUrl || ''));
+        setEditFriendlyTeamBLogo(String(gameRaw.timeB_logo || gameRaw.timeBLogo || teamB?.logoUrl || ''));
 
-        const rosterMap: Record<string, number> = {};
-        (evento.jogadoresEscalados || []).forEach(entry => {
-            if (typeof entry === 'string') {
-                const player = allPlayers.find(p => p.id === entry);
-                rosterMap[entry] = player?.numero_uniforme || 0;
-            } else {
-                rosterMap[entry.id] = Number(entry.numero || 0);
-            }
-        });
-
-        setEditFriendlyRosterMap(rosterMap);
+        setEditFriendlyRosterMap(rosterMapTeamA);
+        setEditFriendlyRosterMapTeamB(rosterMapTeamB);
         setEditFriendlyRosterSearch('');
+        setEditFriendlyRosterSearchTeamB('');
         setShowFriendlyEditModal(true);
     };
 
@@ -198,58 +303,165 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         if (!editingFriendlyEventId) return;
 
         try {
-            const rosterArray: EscaladoInfo[] = Object.entries(editFriendlyRosterMap).map(([id, num]) => ({
+            const isInternal = editFriendlyOpponentMode === 'internal_team';
+            const rosterArrayTeamA: EscaladoInfo[] = Object.entries(editFriendlyRosterMap).map(([id, num]) => ({
+                id,
+                numero: Number(num)
+            }));
+            const rosterArrayTeamB: EscaladoInfo[] = Object.entries(editFriendlyRosterMapTeamB).map(([id, num]) => ({
                 id,
                 numero: Number(num)
             }));
 
-            await updateDoc(doc(db, "eventos", editingFriendlyEventId), {
+            if (isInternal && (!editFriendlyTeamAName.trim() || !editFriendlyTeamBName.trim())) {
+                alert('Informe nome do Time A e Time B.');
+                return;
+            }
+            if (isInternal && editFriendlyTeamAName.trim().toUpperCase() === editFriendlyTeamBName.trim().toUpperCase()) {
+                alert('Time A e Time B precisam ser diferentes.');
+                return;
+            }
+            if (isInternal && Object.keys(editFriendlyRosterMap).some(id => Object.keys(editFriendlyRosterMapTeamB).includes(id))) {
+                alert('O mesmo jogador nao pode estar nos dois elencos.');
+                return;
+            }
+            if (!isInternal && !editFriendlyOpponent.trim()) {
+                alert('Informe o adversario do amistoso.');
+                return;
+            }
+
+            const combinedRosterMap = isInternal
+                ? { ...editFriendlyRosterMap, ...editFriendlyRosterMapTeamB }
+                : editFriendlyRosterMap;
+            const combinedRosterArray: EscaladoInfo[] = Object.entries(combinedRosterMap).map(([id, num]) => ({
+                id,
+                numero: Number(num)
+            }));
+
+            const existingGame = friendlyGamesMap[editingFriendlyEventId];
+            const timestampBase = Date.now();
+            const teamAId = isInternal
+                ? (existingGame?.timeA_id || `fr_a_${timestampBase}`)
+                : null;
+            const teamBId = isInternal
+                ? (existingGame?.timeB_id || `fr_b_${timestampBase}`)
+                : null;
+
+            const eventUpdate: any = {
                 nome: editFriendlyName,
                 data: editFriendlyDate,
                 modalidade: editFriendlyMode,
                 status: editFriendlyStatus,
-                jogadoresEscalados: rosterArray
-            });
+                jogadoresEscalados: combinedRosterArray,
+                adversario: isInternal ? editFriendlyTeamBName.trim() : editFriendlyOpponent.trim(),
+            };
 
-            const existingGame = friendlyGamesMap[editingFriendlyEventId];
-            if (existingGame?.id) {
-                const keepInternalMode = existingGame.opponentMode === 'internal_team' || (!!existingGame.timeA_id && !!existingGame.timeB_id);
-                await updateDoc(doc(db, "eventos", editingFriendlyEventId, "jogos", existingGame.id), {
-                    dataJogo: editFriendlyDate,
-                    horaJogo: editFriendlyHour,
-                    timeA_nome: keepInternalMode ? (existingGame.timeA_nome || 'Time A') : 'ANCB',
-                    timeB_nome: editFriendlyOpponent,
-                    adversario: editFriendlyOpponent,
-                    opponentMode: keepInternalMode ? 'internal_team' : 'external_string',
-                });
+            if (isInternal && teamAId && teamBId) {
+                eventUpdate.timesParticipantes = [
+                    {
+                        id: teamAId,
+                        nomeTime: editFriendlyTeamAName.trim(),
+                        jogadores: rosterArrayTeamA.map(p => p.id),
+                        isANCB: true,
+                        logoUrl: editFriendlyTeamALogo || '',
+                    },
+                    {
+                        id: teamBId,
+                        nomeTime: editFriendlyTeamBName.trim(),
+                        jogadores: rosterArrayTeamB.map(p => p.id),
+                        isANCB: true,
+                        logoUrl: editFriendlyTeamBLogo || '',
+                    }
+                ];
             } else {
-                await addDoc(collection(db, "eventos", editingFriendlyEventId, "jogos"), {
+                eventUpdate.timesParticipantes = deleteField();
+            }
+
+            await updateDoc(doc(db, 'eventos', editingFriendlyEventId), eventUpdate);
+
+            const mappedStatus = editFriendlyStatus === 'finalizado'
+                ? 'finalizado'
+                : editFriendlyStatus === 'andamento'
+                    ? 'andamento'
+                    : 'agendado';
+
+            if (existingGame?.id) {
+                const gameUpdate: any = {
                     dataJogo: editFriendlyDate,
                     horaJogo: editFriendlyHour,
-                    status: editFriendlyStatus === 'finalizado' ? 'finalizado' : 'agendado',
-                    timeA_nome: 'ANCB',
-                    timeB_nome: editFriendlyOpponent,
-                    adversario: editFriendlyOpponent,
+                    status: mappedStatus,
+                    placarANCB_final: existingGame.placarANCB_final ?? 0,
+                    placarAdversario_final: existingGame.placarAdversario_final ?? 0,
+                    placarTimeA_final: existingGame.placarTimeA_final ?? 0,
+                    placarTimeB_final: existingGame.placarTimeB_final ?? 0,
+                };
+
+                if (isInternal && teamAId && teamBId) {
+                    gameUpdate.timeA_id = teamAId;
+                    gameUpdate.timeA_nome = editFriendlyTeamAName.trim();
+                    gameUpdate.timeB_id = teamBId;
+                    gameUpdate.timeB_nome = editFriendlyTeamBName.trim();
+                    gameUpdate.adversario = editFriendlyTeamBName.trim();
+                    gameUpdate.opponentMode = 'internal_team';
+                    gameUpdate.timeA_logo = editFriendlyTeamALogo || '';
+                    gameUpdate.timeB_logo = editFriendlyTeamBLogo || '';
+                } else {
+                    gameUpdate.timeA_id = deleteField();
+                    gameUpdate.timeB_id = deleteField();
+                    gameUpdate.timeA_nome = editFriendlyTeamAName.trim() || 'ANCB';
+                    gameUpdate.timeB_nome = editFriendlyOpponent.trim();
+                    gameUpdate.adversario = editFriendlyOpponent.trim();
+                    gameUpdate.opponentMode = 'external_string';
+                    gameUpdate.timeA_logo = editFriendlyTeamALogo || '';
+                    gameUpdate.timeB_logo = editFriendlyTeamBLogo || '';
+                }
+
+                await updateDoc(doc(db, 'eventos', editingFriendlyEventId, 'jogos', existingGame.id), gameUpdate);
+            } else {
+                const gamePayload: any = {
+                    dataJogo: editFriendlyDate,
+                    horaJogo: editFriendlyHour,
+                    status: mappedStatus,
                     placarTimeA_final: 0,
                     placarTimeB_final: 0,
                     placarANCB_final: 0,
                     placarAdversario_final: 0
-                });
+                };
+
+                if (isInternal && teamAId && teamBId) {
+                    gamePayload.timeA_id = teamAId;
+                    gamePayload.timeA_nome = editFriendlyTeamAName.trim();
+                    gamePayload.timeB_id = teamBId;
+                    gamePayload.timeB_nome = editFriendlyTeamBName.trim();
+                    gamePayload.adversario = editFriendlyTeamBName.trim();
+                    gamePayload.opponentMode = 'internal_team';
+                    gamePayload.timeA_logo = editFriendlyTeamALogo || '';
+                    gamePayload.timeB_logo = editFriendlyTeamBLogo || '';
+                } else {
+                    gamePayload.timeA_nome = editFriendlyTeamAName.trim() || 'ANCB';
+                    gamePayload.timeB_nome = editFriendlyOpponent.trim();
+                    gamePayload.adversario = editFriendlyOpponent.trim();
+                    gamePayload.opponentMode = 'external_string';
+                    gamePayload.timeA_logo = editFriendlyTeamALogo || '';
+                    gamePayload.timeB_logo = editFriendlyTeamBLogo || '';
+                }
+
+                await addDoc(collection(db, 'eventos', editingFriendlyEventId, 'jogos'), gamePayload);
             }
 
-            const rosterSnap = await getDocs(collection(db, "eventos", editingFriendlyEventId, "roster"));
+            const rosterSnap = await getDocs(collection(db, 'eventos', editingFriendlyEventId, 'roster'));
             const existingRosterMap: Record<string, any> = {};
             rosterSnap.forEach(d => {
                 existingRosterMap[d.id] = d.data();
             });
 
-            const desiredIds = Object.keys(editFriendlyRosterMap);
+            const desiredIds = Object.keys(combinedRosterMap);
             const newInvitePlayerIds = desiredIds.filter(playerId => !existingRosterMap[playerId]);
             const batch = writeBatch(db);
 
             desiredIds.forEach(playerId => {
                 const existingData = existingRosterMap[playerId] || {};
-                batch.set(doc(db, "eventos", editingFriendlyEventId, "roster", playerId), {
+                batch.set(doc(db, 'eventos', editingFriendlyEventId, 'roster', playerId), {
                     playerId,
                     status: existingData.status || 'pendente',
                     updatedAt: serverTimestamp()
@@ -259,7 +471,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             Object.keys(existingRosterMap)
                 .filter(playerId => !desiredIds.includes(playerId))
                 .forEach(playerId => {
-                    batch.delete(doc(db, "eventos", editingFriendlyEventId, "roster", playerId));
+                    batch.delete(doc(db, 'eventos', editingFriendlyEventId, 'roster', playerId));
                 });
 
             await batch.commit();
@@ -272,7 +484,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             setEditingFriendlyEventId(null);
         } catch (error) {
             console.error(error);
-            alert("Erro ao atualizar amistoso.");
+            alert('Erro ao atualizar amistoso.');
         }
     };
 
@@ -429,13 +641,15 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                         id: teamAId,
                         nomeTime: formTeamAName.trim(),
                         jogadores: rosterArrayTeamA.map(p => p.id),
-                        isANCB: true
+                        isANCB: true,
+                        logoUrl: formTeamALogo || ''
                     },
                     {
                         id: teamBId,
                         nomeTime: formTeamBName.trim(),
                         jogadores: rosterArrayTeamB.map(p => p.id),
-                        isANCB: true
+                        isANCB: true,
+                        logoUrl: formTeamBLogo || ''
                     }
                 ];
                 eventPayload.adversario = formTeamBName.trim();
@@ -480,11 +694,15 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     gamePayload.timeB_nome = teamB.nomeTime;
                     gamePayload.adversario = teamB.nomeTime;
                     gamePayload.opponentMode = 'internal_team';
+                    gamePayload.timeA_logo = teamA.logoUrl || '';
+                    gamePayload.timeB_logo = teamB.logoUrl || '';
                 } else {
                     gamePayload.timeA_nome = 'ANCB';
                     gamePayload.timeB_nome = formOpponent.trim();
                     gamePayload.adversario = formOpponent.trim();
                     gamePayload.opponentMode = 'external_string';
+                    gamePayload.timeA_logo = formTeamALogo || '';
+                    gamePayload.timeB_logo = formTeamBLogo || '';
                 }
 
                 const newGameRef = await eventDocRef.collection('jogos').add(gamePayload);
@@ -505,6 +723,8 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             setFormFriendlyMode('external_string');
             setFormTeamAName('ANCB');
             setFormTeamBName('');
+            setFormTeamALogo('');
+            setFormTeamBLogo('');
             setSelectedRosterMap({});
             setSelectedRosterMapTeamB({});
             setRosterSearch('');
@@ -599,6 +819,11 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const filteredEditFriendlyRosterPlayers = allPlayers.filter(p => 
         (p.nome || '').toLowerCase().includes(editFriendlyRosterSearch.toLowerCase()) || 
         (p.apelido || '').toLowerCase().includes(editFriendlyRosterSearch.toLowerCase())
+    );
+
+    const filteredEditFriendlyRosterPlayersTeamB = allPlayers.filter(p => 
+        (p.nome || '').toLowerCase().includes(editFriendlyRosterSearchTeamB.toLowerCase()) || 
+        (p.apelido || '').toLowerCase().includes(editFriendlyRosterSearchTeamB.toLowerCase())
     );
 
     return (
@@ -705,9 +930,9 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 </div>
             )}
 
-            <Modal isOpen={showEventForm} onClose={() => setShowEventForm(false)} title="Novo Evento">
-                <form onSubmit={handleCreateEvent} className="space-y-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Modal isOpen={showEventForm} onClose={() => setShowEventForm(false)} title="Novo Evento" maxWidthClassName="max-w-4xl" maxHeightClassName="max-h-[95vh]" bodyClassName="p-3 sm:p-5 md:p-6">
+                <form onSubmit={handleCreateEvent} className="space-y-4 pb-20 sm:pb-24">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                         <div className="md:col-span-2">
                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nome do Evento</label>
                             <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none transition-all" value={formName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormName(e.target.value)} required placeholder="Ex: Copa Garantã 2025" />
@@ -729,39 +954,97 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                             <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none transition-all" value={formType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormType(e.target.value as any)}><option value="amistoso">Amistoso</option><option value="torneio_interno">Torneio Interno</option><option value="torneio_externo">Torneio Externo</option></select>
                         </div>
                         {formType === 'amistoso' && (
-                            <div className="md:col-span-2 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
+                            <div className="md:col-span-2 bg-blue-50 dark:bg-blue-900/20 p-3 sm:p-4 rounded-xl border border-blue-100 dark:border-blue-800">
                                 <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-2">Modelo do Amistoso</label>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                                     <button
                                         type="button"
                                         onClick={() => setFormFriendlyMode('external_string')}
-                                        className={`p-2 rounded-lg border text-xs font-bold uppercase ${formFriendlyMode === 'external_string' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/70 dark:bg-gray-700 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-700'}`}
+                                        className={`h-11 p-2 rounded-lg border text-xs font-bold uppercase ${formFriendlyMode === 'external_string' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/70 dark:bg-gray-700 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-700'}`}
                                     >
                                         ANCB x Externo
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setFormFriendlyMode('internal_team')}
-                                        className={`p-2 rounded-lg border text-xs font-bold uppercase ${formFriendlyMode === 'internal_team' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/70 dark:bg-gray-700 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-700'}`}
+                                        className={`h-11 p-2 rounded-lg border text-xs font-bold uppercase ${formFriendlyMode === 'internal_team' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/70 dark:bg-gray-700 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-700'}`}
                                     >
                                         TimeA x TimeB (ANCB)
                                     </button>
                                 </div>
 
                                 {formFriendlyMode === 'external_string' ? (
-                                    <>
-                                        <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Adversário</label>
-                                        <input className="w-full p-3 border rounded-xl mt-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-400 outline-none transition-all" placeholder="Nome do time rival" value={formOpponent} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormOpponent(e.target.value)} required />
-                                    </>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Adversário</label>
+                                            <input className="w-full p-3 border rounded-xl mt-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-400 outline-none transition-all" placeholder="Nome do time rival" value={formOpponent} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormOpponent(e.target.value)} required />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Logo Time A (ANCB)</label>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-12 h-12 rounded-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                                        {formTeamALogo ? <img src={formTeamALogo} alt="Logo Time A" className="w-full h-full object-cover" /> : <span className="text-xs font-bold text-blue-600">A</span>}
+                                                    </div>
+                                                    <label className="text-xs text-center font-bold px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-700 cursor-pointer bg-white/70 dark:bg-gray-700 w-full sm:w-auto">
+                                                        {isUploadingLogo ? 'Enviando...' : 'Upload logo'}
+                                                        <input type="file" accept="image/*" className="hidden" onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                                            const file = e.target.files?.[0];
+                                                            if (file) handleOpenLogoCrop(file, 'create_team_a');
+                                                        }} disabled={isUploadingLogo} />
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Logo Time B (Adversário)</label>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-12 h-12 rounded-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                                        {formTeamBLogo ? <img src={formTeamBLogo} alt="Logo Time B" className="w-full h-full object-cover" /> : <span className="text-xs font-bold text-blue-600">B</span>}
+                                                    </div>
+                                                    <label className="text-xs text-center font-bold px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-700 cursor-pointer bg-white/70 dark:bg-gray-700 w-full sm:w-auto">
+                                                        {isUploadingLogo ? 'Enviando...' : 'Upload logo'}
+                                                        <input type="file" accept="image/*" className="hidden" onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                                            const file = e.target.files?.[0];
+                                                            if (file) handleOpenLogoCrop(file, 'create_team_b');
+                                                        }} disabled={isUploadingLogo} />
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <div>
+                                        <div className="space-y-2">
                                             <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Nome do Time A</label>
                                             <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-400 outline-none transition-all" value={formTeamAName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormTeamAName(e.target.value)} required />
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 rounded-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                                    {formTeamALogo ? <img src={formTeamALogo} alt="Logo Time A" className="w-full h-full object-cover" /> : <span className="text-xs font-bold text-blue-600">A</span>}
+                                                </div>
+                                                <label className="text-xs text-center font-bold px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-700 cursor-pointer bg-white/70 dark:bg-gray-700 w-full sm:w-auto">
+                                                    {isUploadingLogo ? 'Enviando...' : 'Upload logo'}
+                                                    <input type="file" accept="image/*" className="hidden" onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) handleOpenLogoCrop(file, 'create_team_a');
+                                                    }} disabled={isUploadingLogo} />
+                                                </label>
+                                            </div>
                                         </div>
-                                        <div>
+                                        <div className="space-y-2">
                                             <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Nome do Time B</label>
                                             <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-400 outline-none transition-all" value={formTeamBName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormTeamBName(e.target.value)} required />
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 rounded-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                                    {formTeamBLogo ? <img src={formTeamBLogo} alt="Logo Time B" className="w-full h-full object-cover" /> : <span className="text-xs font-bold text-blue-600">B</span>}
+                                                </div>
+                                                <label className="text-xs text-center font-bold px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-700 cursor-pointer bg-white/70 dark:bg-gray-700 w-full sm:w-auto">
+                                                    {isUploadingLogo ? 'Enviando...' : 'Upload logo'}
+                                                    <input type="file" accept="image/*" className="hidden" onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) handleOpenLogoCrop(file, 'create_team_b');
+                                                    }} disabled={isUploadingLogo} />
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -795,7 +1078,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                                 onChange={e => setRosterSearch(e.target.value)} 
                                             />
                                         </div>
-                                        <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
+                                        <div className="max-h-64 md:max-h-72 lg:max-h-80 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
                                             {filteredRosterPlayers.map(p => {
                                                 const isSelected = selectedRosterMap[p.id] !== undefined;
                                                 return (
@@ -811,7 +1094,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                                                 <span className="text-[10px] text-gray-500 uppercase">Nº</span>
                                                                 <input 
                                                                     type="number" 
-                                                                    className="w-12 p-1 text-center border rounded text-xs font-bold dark:bg-gray-700 dark:text-white"
+                                                                    className="w-14 h-8 p-1 text-center border rounded text-sm font-bold dark:bg-gray-700 dark:text-white"
                                                                     value={selectedRosterMap[p.id]}
                                                                     onChange={(e) => updateRosterNumber(p.id, e.target.value)}
                                                                     onClick={(e) => e.stopPropagation()}
@@ -827,7 +1110,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                         </p>
                                     </>
                                 ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Elenco Time A</label>
                                             <div className="relative mb-2">
@@ -839,7 +1122,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                                     onChange={e => setRosterSearch(e.target.value)} 
                                                 />
                                             </div>
-                                            <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
+                                            <div className="max-h-64 md:max-h-72 lg:max-h-80 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
                                                 {filteredRosterPlayers.map(p => {
                                                     const isSelected = selectedRosterMap[p.id] !== undefined;
                                                     return (
@@ -853,7 +1136,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                                             {isSelected && (
                                                                 <input 
                                                                     type="number" 
-                                                                    className="w-12 p-1 text-center border rounded text-xs font-bold dark:bg-gray-700 dark:text-white"
+                                                                    className="w-14 h-8 p-1 text-center border rounded text-sm font-bold dark:bg-gray-700 dark:text-white"
                                                                     value={selectedRosterMap[p.id]}
                                                                     onChange={(e) => updateRosterNumber(p.id, e.target.value)}
                                                                     onClick={(e) => e.stopPropagation()}
@@ -876,7 +1159,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                                     onChange={e => setRosterSearchTeamB(e.target.value)} 
                                                 />
                                             </div>
-                                            <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
+                                            <div className="max-h-64 md:max-h-72 lg:max-h-80 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
                                                 {filteredRosterPlayersTeamB.map(p => {
                                                     const isSelected = selectedRosterMapTeamB[p.id] !== undefined;
                                                     const alreadyOnTeamA = selectedRosterMap[p.id] !== undefined;
@@ -891,7 +1174,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                                             {isSelected && (
                                                                 <input 
                                                                     type="number" 
-                                                                    className="w-12 p-1 text-center border rounded text-xs font-bold dark:bg-gray-700 dark:text-white"
+                                                                    className="w-14 h-8 p-1 text-center border rounded text-sm font-bold dark:bg-gray-700 dark:text-white"
                                                                     value={selectedRosterMapTeamB[p.id]}
                                                                     onChange={(e) => updateRosterNumberTeamB(p.id, e.target.value)}
                                                                     onClick={(e) => e.stopPropagation()}
@@ -907,7 +1190,9 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                             </div>
                         )}
                     </div>
-                    <Button type="submit" className="w-full h-12 text-lg">Criar Evento</Button>
+                    <div className="sticky bottom-0 -mx-3 sm:-mx-5 md:-mx-6 px-3 sm:px-5 md:px-6 py-3 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-t border-gray-200/70 dark:border-gray-700/70">
+                        <Button type="submit" className="w-full h-12 text-base sm:text-lg">Criar Evento</Button>
+                    </div>
                 </form>
             </Modal>
 
@@ -938,9 +1223,9 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 }}
             />
 
-            <Modal isOpen={showFriendlyEditModal} onClose={() => setShowFriendlyEditModal(false)} title="Editar Amistoso">
-                <form onSubmit={handleSaveFriendlyEdit} className="space-y-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Modal isOpen={showFriendlyEditModal} onClose={() => setShowFriendlyEditModal(false)} title="Editar Amistoso" maxWidthClassName="max-w-4xl" maxHeightClassName="max-h-[95vh]" bodyClassName="p-3 sm:p-5 md:p-6">
+                <form onSubmit={handleSaveFriendlyEdit} className="space-y-4 pb-20 sm:pb-24">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                         <div className="md:col-span-2">
                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nome do Evento</label>
                             <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFriendlyName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyName(e.target.value)} required />
@@ -968,59 +1253,248 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                 <option value="finalizado">Finalizado</option>
                             </select>
                         </div>
-                        <div className="md:col-span-2">
-                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Adversário</label>
-                            <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFriendlyOpponent} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyOpponent(e.target.value)} required />
+
+                        <div className="md:col-span-2 bg-blue-50 dark:bg-blue-900/20 p-3 sm:p-4 rounded-xl border border-blue-100 dark:border-blue-800">
+                            <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-2">Modelo do Amistoso</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setEditFriendlyOpponentMode('external_string')}
+                                    className={`h-11 p-2 rounded-lg border text-xs font-bold uppercase ${editFriendlyOpponentMode === 'external_string' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/70 dark:bg-gray-700 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-700'}`}
+                                >
+                                    ANCB x Externo
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setEditFriendlyOpponentMode('internal_team')}
+                                    className={`h-11 p-2 rounded-lg border text-xs font-bold uppercase ${editFriendlyOpponentMode === 'internal_team' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/70 dark:bg-gray-700 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-700'}`}
+                                >
+                                    TimeA x TimeB (ANCB)
+                                </button>
+                            </div>
+
+                            {editFriendlyOpponentMode === 'external_string' ? (
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Adversário</label>
+                                        <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFriendlyOpponent} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyOpponent(e.target.value)} required />
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Logo Time A (ANCB)</label>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 rounded-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                                    {editFriendlyTeamALogo ? <img src={editFriendlyTeamALogo} alt="Logo Time A" className="w-full h-full object-cover" /> : <span className="text-xs font-bold text-blue-600">A</span>}
+                                                </div>
+                                                <label className="text-xs text-center font-bold px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-700 cursor-pointer bg-white/70 dark:bg-gray-700 w-full sm:w-auto">
+                                                    {isUploadingLogo ? 'Enviando...' : 'Upload logo'}
+                                                    <input type="file" accept="image/*" className="hidden" onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) handleOpenLogoCrop(file, 'edit_team_a');
+                                                    }} disabled={isUploadingLogo} />
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Logo Time B (Adversário)</label>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 rounded-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                                    {editFriendlyTeamBLogo ? <img src={editFriendlyTeamBLogo} alt="Logo Time B" className="w-full h-full object-cover" /> : <span className="text-xs font-bold text-blue-600">B</span>}
+                                                </div>
+                                                <label className="text-xs text-center font-bold px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-700 cursor-pointer bg-white/70 dark:bg-gray-700 w-full sm:w-auto">
+                                                    {isUploadingLogo ? 'Enviando...' : 'Upload logo'}
+                                                    <input type="file" accept="image/*" className="hidden" onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) handleOpenLogoCrop(file, 'edit_team_b');
+                                                    }} disabled={isUploadingLogo} />
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="space-y-2">
+                                        <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Nome do Time A</label>
+                                        <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFriendlyTeamAName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyTeamAName(e.target.value)} required />
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-12 h-12 rounded-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                                {editFriendlyTeamALogo ? <img src={editFriendlyTeamALogo} alt="Logo Time A" className="w-full h-full object-cover" /> : <span className="text-xs font-bold text-blue-600">A</span>}
+                                            </div>
+                                                <label className="text-xs text-center font-bold px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-700 cursor-pointer bg-white/70 dark:bg-gray-700 w-full sm:w-auto">
+                                                {isUploadingLogo ? 'Enviando...' : 'Upload logo'}
+                                                <input type="file" accept="image/*" className="hidden" onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) handleOpenLogoCrop(file, 'edit_team_a');
+                                                }} disabled={isUploadingLogo} />
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="block text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-1">Nome do Time B</label>
+                                        <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFriendlyTeamBName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyTeamBName(e.target.value)} required />
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-12 h-12 rounded-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                                {editFriendlyTeamBLogo ? <img src={editFriendlyTeamBLogo} alt="Logo Time B" className="w-full h-full object-cover" /> : <span className="text-xs font-bold text-blue-600">B</span>}
+                                            </div>
+                                            <label className="text-xs text-center font-bold px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-700 cursor-pointer bg-white/70 dark:bg-gray-700 w-full sm:w-auto">
+                                                {isUploadingLogo ? 'Enviando...' : 'Upload logo'}
+                                                <input type="file" accept="image/*" className="hidden" onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) handleOpenLogoCrop(file, 'edit_team_b');
+                                                }} disabled={isUploadingLogo} />
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="md:col-span-2 mt-2 border-t pt-4 dark:border-gray-700">
-                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Escalação</label>
-                            <div className="relative mb-2">
-                                <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
-                                <input 
-                                    className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600" 
-                                    placeholder="Buscar para escalar..." 
-                                    value={editFriendlyRosterSearch} 
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyRosterSearch(e.target.value)} 
-                                />
-                            </div>
-                            <div className="max-h-48 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
-                                {filteredEditFriendlyRosterPlayers.map(p => {
-                                    const isSelected = editFriendlyRosterMap[p.id] !== undefined;
-                                    return (
-                                        <div key={p.id} className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${isSelected ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
-                                            <div className="flex items-center gap-2 flex-1" onClick={() => toggleFriendlyEditRosterPlayer(p)}>
-                                                <div className={`w-4 h-4 border rounded flex items-center justify-center ${isSelected ? 'bg-ancb-orange border-ancb-orange' : 'border-gray-400'}`}>
-                                                    {isSelected && <LucideCheckSquare size={10} className="text-white"/>}
+                            {editFriendlyOpponentMode === 'external_string' ? (
+                                <>
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Jogadores ANCB</label>
+                                    <div className="relative mb-2">
+                                        <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
+                                        <input
+                                            className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600"
+                                            placeholder="Buscar para escalar..."
+                                            value={editFriendlyRosterSearch}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyRosterSearch(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="max-h-64 lg:max-h-80 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
+                                        {filteredEditFriendlyRosterPlayers.map(p => {
+                                            const isSelected = editFriendlyRosterMap[p.id] !== undefined;
+                                            return (
+                                                <div key={p.id} className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${isSelected ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                                                    <div className="flex items-center gap-2 flex-1" onClick={() => toggleFriendlyEditRosterPlayer(p)}>
+                                                        <div className={`w-4 h-4 border rounded flex items-center justify-center ${isSelected ? 'bg-ancb-orange border-ancb-orange' : 'border-gray-400'}`}>
+                                                            {isSelected && <LucideCheckSquare size={10} className="text-white"/>}
+                                                        </div>
+                                                        <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{p.nome}</span>
+                                                    </div>
+                                                    {isSelected && (
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-[10px] text-gray-500 uppercase">Nº</span>
+                                                            <input
+                                                                type="number"
+                                                                className="w-14 h-8 p-1 text-center border rounded text-sm font-bold dark:bg-gray-700 dark:text-white"
+                                                                value={editFriendlyRosterMap[p.id]}
+                                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFriendlyEditRosterNumber(p.id, e.target.value)}
+                                                                onClick={(e: React.MouseEvent<HTMLInputElement>) => e.stopPropagation()}
+                                                            />
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{p.nome}</span>
-                                            </div>
-                                            {isSelected && (
-                                                <div className="flex items-center gap-1">
-                                                    <span className="text-[10px] text-gray-500 uppercase">Nº</span>
-                                                    <input 
-                                                        type="number" 
-                                                        className="w-12 p-1 text-center border rounded text-xs font-bold dark:bg-gray-700 dark:text-white"
-                                                        value={editFriendlyRosterMap[p.id]}
-                                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFriendlyEditRosterNumber(p.id, e.target.value)}
-                                                        onClick={(e: React.MouseEvent<HTMLInputElement>) => e.stopPropagation()}
-                                                    />
-                                                </div>
-                                            )}
+                                            );
+                                        })}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Elenco Time A</label>
+                                        <div className="relative mb-2">
+                                            <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
+                                            <input
+                                                className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600"
+                                                placeholder="Buscar Time A..."
+                                                value={editFriendlyRosterSearch}
+                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyRosterSearch(e.target.value)}
+                                            />
                                         </div>
-                                    );
-                                })}
-                            </div>
+                                        <div className="max-h-64 lg:max-h-80 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
+                                            {filteredEditFriendlyRosterPlayers.map(p => {
+                                                const isSelected = editFriendlyRosterMap[p.id] !== undefined;
+                                                return (
+                                                    <div key={`edit_a_${p.id}`} className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${isSelected ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                                                        <div className="flex items-center gap-2 flex-1" onClick={() => toggleFriendlyEditRosterPlayer(p)}>
+                                                            <div className={`w-4 h-4 border rounded flex items-center justify-center ${isSelected ? 'bg-ancb-orange border-ancb-orange' : 'border-gray-400'}`}>
+                                                                {isSelected && <LucideCheckSquare size={10} className="text-white"/>}
+                                                            </div>
+                                                            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{p.nome}</span>
+                                                        </div>
+                                                        {isSelected && (
+                                                            <input
+                                                                type="number"
+                                                                className="w-14 h-8 p-1 text-center border rounded text-sm font-bold dark:bg-gray-700 dark:text-white"
+                                                                value={editFriendlyRosterMap[p.id]}
+                                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFriendlyEditRosterNumber(p.id, e.target.value)}
+                                                                onClick={(e: React.MouseEvent<HTMLInputElement>) => e.stopPropagation()}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Elenco Time B</label>
+                                        <div className="relative mb-2">
+                                            <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
+                                            <input
+                                                className="w-full pl-9 p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600"
+                                                placeholder="Buscar Time B..."
+                                                value={editFriendlyRosterSearchTeamB}
+                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyRosterSearchTeamB(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="max-h-64 lg:max-h-80 overflow-y-auto custom-scrollbar border rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
+                                            {filteredEditFriendlyRosterPlayersTeamB.map(p => {
+                                                const isSelected = editFriendlyRosterMapTeamB[p.id] !== undefined;
+                                                const alreadyOnTeamA = editFriendlyRosterMap[p.id] !== undefined;
+                                                return (
+                                                    <div key={`edit_b_${p.id}`} className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${alreadyOnTeamA ? 'opacity-40 pointer-events-none' : isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                                                        <div className="flex items-center gap-2 flex-1" onClick={() => toggleFriendlyEditRosterPlayerTeamB(p)}>
+                                                            <div className={`w-4 h-4 border rounded flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-400'}`}>
+                                                                {isSelected && <LucideCheckSquare size={10} className="text-white"/>}
+                                                            </div>
+                                                            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{p.nome}</span>
+                                                        </div>
+                                                        {isSelected && (
+                                                            <input
+                                                                type="number"
+                                                                className="w-14 h-8 p-1 text-center border rounded text-sm font-bold dark:bg-gray-700 dark:text-white"
+                                                                value={editFriendlyRosterMapTeamB[p.id]}
+                                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFriendlyEditRosterNumberTeamB(p.id, e.target.value)}
+                                                                onClick={(e: React.MouseEvent<HTMLInputElement>) => e.stopPropagation()}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                        <Button type="submit" className="flex-1">Salvar alterações</Button>
-                        <Button type="button" variant="secondary" className="flex-1 !text-red-500 !border-red-200 hover:!bg-red-50 dark:hover:!bg-red-900/20" onClick={handleDeleteFriendlyEvent}>
-                            <LucideTrash2 size={14} /> Excluir amistoso
-                        </Button>
+                    <div className="sticky bottom-0 -mx-3 sm:-mx-5 md:-mx-6 px-3 sm:px-5 md:px-6 py-3 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-t border-gray-200/70 dark:border-gray-700/70">
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <Button type="submit" className="flex-1 h-12">Salvar alterações</Button>
+                            <Button type="button" variant="secondary" className="flex-1 h-12 !text-red-500 !border-red-200 hover:!bg-red-50 dark:hover:!bg-red-900/20" onClick={handleDeleteFriendlyEvent}>
+                                <LucideTrash2 size={14} /> Excluir amistoso
+                            </Button>
+                        </div>
                     </div>
                 </form>
             </Modal>
+
+            {showLogoCropModal && logoCropImageSrc && (
+                <ImageCropperModal
+                    isOpen={showLogoCropModal}
+                    onClose={() => {
+                        setShowLogoCropModal(false);
+                        setLogoCropImageSrc(null);
+                        setLogoCropTarget(null);
+                    }}
+                    imageSrc={logoCropImageSrc}
+                    onCropComplete={handleLogoCropComplete}
+                    aspect={1}
+                />
+            )}
         </div>
     );
 };

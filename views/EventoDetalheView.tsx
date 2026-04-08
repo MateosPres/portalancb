@@ -20,6 +20,7 @@ import { SimpleScorePanel } from '../components/SimpleScorePanel';
 import { GroupStandings } from '../components/GroupStandings';
 import { ChaaveConfigurator } from '../components/ChaaveConfigurator';
 import { formatCpf } from '../utils/contactFormat';
+import { uploadImageToImgBB } from '../utils/imgbb';
 
 interface EventoDetalheViewProps {
     eventId: string;
@@ -202,8 +203,6 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         return pos; 
     };
     
-    const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
-
     const handleGenerateTeamSheetPdf = (team: Time) => {
         if (!event || !team.isANCB) return;
         const teamDisplayName = 'ANCB - Nova Canaã do Norte';
@@ -764,7 +763,6 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const handleCropComplete = async (croppedImageBlob: Blob) => {
         setIsUploadingLogo(true);
         try {
-            // Aggressive compression
             const file = new File([croppedImageBlob], "team_logo.jpg", { type: "image/jpeg" });
             const options = {
                 maxSizeMB: 0.1, 
@@ -774,12 +772,13 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
             };
             
             const compressedFile = await imageCompression(file, options);
-            const base64 = await fileToBase64(compressedFile);
-            
-            setEditingTeam(prev => ({ ...prev, logoUrl: base64 }));
+            const compressedAsFile = new File([compressedFile], 'team_logo.jpg', { type: 'image/jpeg' });
+            const { imageUrl } = await uploadImageToImgBB(compressedAsFile);
+
+            setEditingTeam(prev => ({ ...prev, logoUrl: imageUrl }));
         } catch (error) {
             console.error(error);
-            alert("Erro ao processar imagem.");
+            alert("Erro ao processar ou enviar imagem do logo.");
         } finally {
             setIsUploadingLogo(false);
             setShowCropper(false);
