@@ -24,6 +24,24 @@ const getScoreB = (game: Jogo) => game.placarTimeB_final ?? game.placarAdversari
 const getTeamAName = (game: Jogo) => game.timeA_nome || 'ANCB';
 const getTeamBName = (game: Jogo) => game.timeB_nome || game.adversario || 'Adversario';
 
+const formatTeamNameForOverlay = (name: string) => {
+  const cleaned = (name || '').trim();
+  if (!cleaned) return '';
+
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return cleaned;
+
+  const middle = Math.ceil(words.length / 2);
+  return `${words.slice(0, middle).join(' ')}\n${words.slice(middle).join(' ')}`;
+};
+
+const getTeamNameSizeClass = (name: string) => {
+  const len = (name || '').trim().length;
+  if (len > 28) return 'text-[8px] sm:text-[9px]';
+  if (len > 18) return 'text-[9px] sm:text-[10px]';
+  return 'text-[10px] sm:text-[11px]';
+};
+
 const getTeamFromCesta = (cesta: Cesta, game: Jogo) => {
   if (cesta.timeId === game.timeA_id || cesta.timeId === 'A') return getTeamAName(game);
   if (cesta.timeId === game.timeB_id || cesta.timeId === 'B') return getTeamBName(game);
@@ -53,12 +71,30 @@ const getTeamLogo = (game: Jogo, evento: EventoOverlay | null, side: 'A' | 'B'):
 
 const TeamMark: React.FC<{ name: string; logo?: string | null }> = ({ name, logo }) => {
   if (logo) {
-    return <img src={logo} alt={name} className="w-5 h-5 sm:w-6 sm:h-6 object-contain shrink-0" />;
+    return (
+      <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full overflow-hidden border border-white/25 bg-white/10 shrink-0 flex items-center justify-center">
+        <img src={logo} alt={name} className="w-full h-full object-cover" />
+      </span>
+    );
   }
 
   return (
     <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/15 border border-white/30 text-white text-[10px] sm:text-xs font-black flex items-center justify-center shrink-0">
       {name.charAt(0).toUpperCase()}
+    </span>
+  );
+};
+
+const TeamName: React.FC<{ name: string; align: 'left' | 'right' }> = ({ name, align }) => {
+  const formatted = formatTeamNameForOverlay(name);
+  const sizeClass = getTeamNameSizeClass(name);
+
+  return (
+    <span
+      className={`${sizeClass} font-bold uppercase text-blue-200 leading-[1.05] whitespace-pre-line break-words w-[72px] sm:w-[98px] ${align === 'right' ? 'text-right' : 'text-left'}`}
+      title={name}
+    >
+      {formatted}
     </span>
   );
 };
@@ -176,7 +212,7 @@ export const OverlayWidget: React.FC = () => {
 
       <div className="fixed left-2 right-2 bottom-2 sm:left-4 sm:right-4 sm:bottom-4 z-20 rounded-xl overflow-hidden border border-white/20 shadow-[0_14px_40px_rgba(0,0,0,0.72)]">
         <div
-          className="h-11 sm:h-12 px-2 sm:px-3"
+          className="h-14 sm:h-16 px-2 sm:px-3"
           style={{
             background: 'linear-gradient(135deg, rgba(3,17,43,0.96) 0%, rgba(6,37,83,0.96) 68%, rgba(10,56,128,0.96) 100%)'
           }}
@@ -188,13 +224,13 @@ export const OverlayWidget: React.FC = () => {
                 Live
               </span>
 
-              <div className="min-w-0 flex-1 flex items-center gap-1.5 sm:gap-2 overflow-hidden whitespace-nowrap">
+              <div className="min-w-0 flex-1 flex items-center gap-1 sm:gap-2">
                 <TeamMark name={getTeamAName(jogo)} logo={teamALogo} />
-                <span className="text-[10px] sm:text-[11px] font-bold uppercase text-blue-200 truncate">{getTeamAName(jogo)}</span>
+                <TeamName name={getTeamAName(jogo)} align="right" />
                 <span className="text-base sm:text-xl font-black text-ancb-orange tabular-nums leading-none shrink-0">{getScoreA(jogo)}</span>
                 <span className="text-[10px] sm:text-[11px] font-black text-white/90 tracking-widest shrink-0">VS</span>
                 <span className="text-base sm:text-xl font-black text-white tabular-nums leading-none shrink-0">{getScoreB(jogo)}</span>
-                <span className="text-[10px] sm:text-[11px] font-bold uppercase text-blue-200 truncate">{getTeamBName(jogo)}</span>
+                <TeamName name={getTeamBName(jogo)} align="left" />
                 <TeamMark name={getTeamBName(jogo)} logo={teamBLogo} />
               </div>
             </div>
