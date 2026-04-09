@@ -399,7 +399,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         setEditFormData({
             nascimento: selectedPlayer.nascimento,
             cpf: formatCpf(selectedPlayer.cpf),
-            emailContato: selectedPlayer.emailContato,
+            email: selectedPlayer.email || selectedPlayer.emailContato,
             telefone: formatPhoneForDisplay(selectedPlayer.telefone)
         });
         setIsEditing(true);
@@ -413,13 +413,28 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const handleSavePlayer = async () => {
         if (!selectedPlayer) return;
         try {
+            const canonicalEmail = String(editFormData.email || '').trim();
             const normalizedData = {
                 ...editFormData,
                 cpf: normalizeCpfForStorage(editFormData.cpf || ''),
                 telefone: normalizePhoneForStorage(editFormData.telefone || ''),
+                email: canonicalEmail,
+                // Legacy temporary mirror.
+                emailContato: canonicalEmail,
             };
 
             await db.collection("jogadores").doc(selectedPlayer.id).update(normalizedData);
+
+            if (selectedPlayer.userId) {
+                await db.collection("usuarios").doc(selectedPlayer.userId).set({
+                    email: canonicalEmail,
+                    emailContato: canonicalEmail,
+                    dataNascimento: normalizedData.nascimento || '',
+                    cpf: normalizedData.cpf || '',
+                    whatsapp: normalizedData.telefone || '',
+                }, { merge: true });
+            }
+
             const updatedPlayer = { ...selectedPlayer, ...normalizedData };
             setPlayers(prev => prev.map(p => p.id === updatedPlayer.id ? updatedPlayer : p));
             setSelectedPlayer(updatedPlayer);
@@ -741,7 +756,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                             <div className="space-y-4">
                                 <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Data Nascimento</label><input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.nascimento || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, nascimento: e.target.value})} /></div>
                                 <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">CPF</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.cpf || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, cpf: formatCpf(e.target.value)})} /></div>
-                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Email Contato</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.emailContato || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, emailContato: e.target.value})} /></div>
+                                <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">Email</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFormData.email || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, email: e.target.value})} /></div>
                                 <div><label className="text-xs font-bold text-gray-500 dark:text-gray-400">WhatsApp</label><input className="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600" placeholder="(66) 999999999" value={editFormData.telefone || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFormData({...editFormData, telefone: formatPhoneForDisplay(e.target.value)})} /></div>
                                 <div className="flex gap-2 mt-4"><Button className="flex-1" onClick={handleSavePlayer}><LucideSave size={14} /> Salvar</Button><Button variant="secondary" className="flex-1" onClick={handleCancelEdit}><LucideX size={14} /> Cancelar</Button></div>
                             </div>
@@ -758,7 +773,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                     <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Nascimento</p><p className="text-sm font-semibold text-gray-900 dark:text-white">{selectedPlayer.nascimento ? formatDate(selectedPlayer.nascimento) : '-'}</p></div>
                                     <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Documento (CPF)</p><p className="text-sm font-semibold text-gray-900 dark:text-white break-words">{selectedPlayer.cpf ? formatCpf(selectedPlayer.cpf) : '-'}</p></div>
                                     <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Telefone</p><p className="text-sm font-semibold text-gray-900 dark:text-white break-words">{selectedPlayer.telefone ? formatPhoneForDisplay(selectedPlayer.telefone) : '-'}</p></div>
-                                    <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Email de contato</p><p className="text-sm font-semibold text-gray-900 dark:text-white break-words">{selectedPlayer.emailContato || '-'}</p></div>
+                                    <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Email</p><p className="text-sm font-semibold text-gray-900 dark:text-white break-words">{selectedPlayer.email || selectedPlayer.emailContato || '-'}</p></div>
                                     <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">ID do usuário vinculado</p><p className="text-sm font-semibold text-gray-900 dark:text-white break-all">{selectedPlayer.userId || '-'}</p></div>
                                     <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Posição</p><p className="text-sm font-semibold text-gray-900 dark:text-white">{normalizePosition(selectedPlayer.posicao) || '-'}</p></div>
                                     <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Nº Uniforme</p><p className="text-sm font-semibold text-gray-900 dark:text-white">{selectedPlayer.numero_uniforme ?? '-'}</p></div>

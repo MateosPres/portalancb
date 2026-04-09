@@ -125,12 +125,45 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     // Image Cropper State
     const [showCropper, setShowCropper] = useState(false);
     const [imageToCrop, setImageToCrop] = useState<string | null>(null);
-
-    const playerDocId = userProfile.linkedPlayerId || userProfile.uid;
+    const [playerDocId, setPlayerDocId] = useState<string>(userProfile.linkedPlayerId || '');
 
     const POSITIONS = ["Armador (1)", "Ala/Armador (2)", "Ala (3)", "Ala/Pivô (4)", "Pivô (5)"];
 
     useEffect(() => {
+        let active = true;
+
+        const resolvePlayerDocId = async () => {
+            if (userProfile.linkedPlayerId) {
+                setPlayerDocId(userProfile.linkedPlayerId);
+                return;
+            }
+
+            try {
+                const byUserSnap = await db.collection('jogadores').where('userId', '==', userProfile.uid).limit(1).get();
+                if (!active) return;
+
+                if (!byUserSnap.empty) {
+                    const resolvedId = byUserSnap.docs[0].id;
+                    setPlayerDocId(resolvedId);
+                    await db.collection('usuarios').doc(userProfile.uid).set({ linkedPlayerId: resolvedId }, { merge: true });
+                    return;
+                }
+            } catch (error) {
+                console.warn('Falha ao resolver linkedPlayerId por userId:', error);
+            }
+
+            if (active) {
+                // Fallback legado: usa uid como id da ficha quando nao existir vinculo.
+                setPlayerDocId(userProfile.uid);
+            }
+        };
+
+        resolvePlayerDocId();
+        return () => { active = false; };
+    }, [userProfile.linkedPlayerId, userProfile.uid]);
+
+    useEffect(() => {
+        if (!playerDocId) return;
         let isMounted = true;
         let unsubPlayer: () => void;
 
@@ -140,11 +173,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                 unsubPlayer = onSnapshot(docRef, (docSnap) => {
                     if (!isMounted) return;
                     if (docSnap.exists()) {
-                        setFormData(docSnap.data() as Player);
+                        const playerData = docSnap.data() as Player;
+                        setFormData({
+                            ...playerData,
+                            email: playerData.email || playerData.emailContato || userProfile.email || userProfile.emailContato || '',
+                            userId: playerData.userId || userProfile.uid,
+                        });
                     } else {
                         setFormData({
                             id: playerDocId,
                             nome: userProfile.nome,
+                            apelido: userProfile.apelido || '',
+                            email: userProfile.email || userProfile.emailContato || '',
+                            userId: userProfile.uid,
                             numero_uniforme: 0,
                             posicao: 'Ala (3)',
                             foto: ''
@@ -317,6 +358,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     };
 
     const handleCropComplete = async (croppedImageBlob: Blob) => {
+        if (!playerDocId) return;
         setIsUploading(true);
         try {
             // Aggressive compression
@@ -359,6 +401,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!playerDocId) return;
 
         // Validação de senha
         if (showPasswordFields && newPassword) {
@@ -385,7 +428,23 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
 
             const dataToSave = { ...formData, telefone: fullPhone };
             if (!dataToSave.id) dataToSave.id = playerDocId;
+            const canonicalEmail = String(dataToSave.email || userProfile.email || userProfile.emailContato || '').trim();
+            dataToSave.email = canonicalEmail;
+            dataToSave.emailContato = canonicalEmail;
+            dataToSave.userId = dataToSave.userId || userProfile.uid;
             await setDoc(doc(db, 'jogadores', playerDocId), dataToSave, { merge: true });
+
+            await setDoc(doc(db, 'usuarios', userProfile.uid), {
+                nome: dataToSave.nome || userProfile.nome,
+                apelido: dataToSave.apelido || userProfile.apelido || '',
+                dataNascimento: dataToSave.nascimento || userProfile.dataNascimento || '',
+                cpf: dataToSave.cpf || '',
+                whatsapp: dataToSave.telefone || '',
+                email: canonicalEmail,
+                emailContato: canonicalEmail,
+                linkedPlayerId: playerDocId,
+                ...(dataToSave.foto ? { foto: dataToSave.foto } : {}),
+            }, { merge: true });
 
             if (showPasswordFields && newPassword && auth.currentUser) {
                 try {

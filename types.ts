@@ -4,6 +4,7 @@ export interface UserProfile {
     nome: string;
     apelido?: string;
     email: string;
+    emailContato?: string; // Legacy: manter durante migracao para email unico
     role: 'admin' | 'jogador' | 'super-admin';
     status: 'active' | 'banned';
     dataNascimento?: string;
@@ -27,6 +28,7 @@ export interface Player {
     id: string;
     nome: string;
     apelido?: string;
+    email?: string;
     foto?: string;
     posicao: string;
     numero_uniforme: number;
@@ -35,7 +37,7 @@ export interface Player {
     telefone?: string; // WhatsApp Format: 5566999999999
     userId?: string; // ID do usuário que reivindicou este perfil
     status?: 'active' | 'pending' | 'rejected' | 'banned'; // Controle de aprovação e banimento
-    emailContato?: string;
+    emailContato?: string; // Legacy: manter durante migracao para email unico
     // New Gamification Stats
     stats_tags?: Record<string, number>; // e.g. { 'muralha': 10, 'sniper': 5 }
     stats_atributos?: {

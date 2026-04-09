@@ -418,34 +418,69 @@ const App: React.FC = () => {
                 
                 try {
                     let userRef = doc(db, "usuarios", user.uid);
+                    let profileSource: 'usuarios' | 'jogadores' = 'usuarios';
                     let userSnap = await getDoc(userRef);
 
                     if (!userSnap.exists()) {
                         console.log("Não achou em 'usuarios', tentando 'jogadores'...");
                         userRef = doc(db, "jogadores", user.uid);
+                        profileSource = 'jogadores';
                         userSnap = await getDoc(userRef);
                     }
 
                     if (userSnap.exists()) {
                         const data = userSnap.data();
+                        let linkedPlayerId = data.linkedPlayerId || (profileSource === 'jogadores' ? userSnap.id : undefined);
+                        let linkedPlayerData: any = null;
                         
-                        let finalPhoto = data.foto || data.photoURL || data.avatar || null;
-                        
-                        if (!finalPhoto && data.linkedPlayerId) {
+                        let finalPhoto = null;
+
+                        if (!linkedPlayerId && profileSource === 'usuarios') {
                             try {
-                                const playerDoc = await getDoc(doc(db, "jogadores", data.linkedPlayerId));
+                                const playerByUser = await db.collection("jogadores").where("userId", "==", user.uid).limit(1).get();
+                                if (!playerByUser.empty) {
+                                    linkedPlayerId = playerByUser.docs[0].id;
+                                }
+                            } catch (e) {
+                                console.warn("Erro ao resolver jogador por userId", e);
+                            }
+                        }
+                        
+                        if (linkedPlayerId) {
+                            try {
+                                const playerDoc = await getDoc(doc(db, "jogadores", linkedPlayerId));
                                 if (playerDoc.exists()) {
-                                    const pData = playerDoc.data();
-                                    finalPhoto = pData.foto || pData.photoURL || null;
+                                    linkedPlayerData = playerDoc.data();
+                                    // Foto da ficha de jogador tem prioridade sobre avatar legado do usuario.
+                                    finalPhoto = linkedPlayerData.foto || linkedPlayerData.photoURL || null;
                                 }
                             } catch (e) { console.warn("Erro ao buscar link", e); }
                         }
 
+                        if (!finalPhoto) {
+                            finalPhoto = data.foto || data.photoURL || data.avatar || null;
+                        }
+
+                        const canonicalEmail = String(
+                            data.email ||
+                            linkedPlayerData?.email ||
+                            data.emailContato ||
+                            linkedPlayerData?.emailContato ||
+                            user.email ||
+                            ''
+                        ).trim();
+
+                        const displayName = linkedPlayerData?.nome || data.nome || data.apelido || user.displayName || "Usuário";
+                        const displayNickname = linkedPlayerData?.apelido || data.apelido || undefined;
+
                         setUserProfile({
                             uid: user.uid,
                             ...data,
-                            nome: data.nome || data.apelido || "Usuário",
-                            email: data.email,
+                            nome: displayName,
+                            apelido: displayNickname,
+                            email: canonicalEmail,
+                            emailContato: data.emailContato || linkedPlayerData?.emailContato || undefined,
+                            linkedPlayerId,
                             role: data.role || "jogador",
                             foto: finalPhoto,
                             status: data.status || "active"
@@ -763,6 +798,7 @@ const App: React.FC = () => {
                     nome: regName,
                     apelido: regNickname,
                     email: regEmail,
+                    // Legacy temporary mirror until migration is concluded.
                     emailContato: regEmail,
                     role: 'jogador',
                     status: 'pending',

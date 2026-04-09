@@ -7,6 +7,8 @@ import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideRadio, LucideGamepad2,
 import imageCompression from 'browser-image-compression';
 import { ApoiadoresManager } from '../components/ApoiadoresManager';
 import { LiveStreamAdmin } from '../components/LiveStreamAdmin';
+import { UserManagementCard } from '../components/UserManagementCard';
+import { UserDetailsPanel } from '../components/UserDetailsPanel';
 import { normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
 import {
     REVIEW_TAG_MULTIPLIERS,
@@ -75,6 +77,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [userSearch, setUserSearch] = useState('');
     const [showUserEditModal, setShowUserEditModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+    const [selectedUserDetails, setSelectedUserDetails] = useState<UserProfile | null>(null);
+    const [openUserMenuId, setOpenUserMenuId] = useState<string | null>(null);
     const [linkPlayerId, setLinkPlayerId] = useState('');
     const [userPhotoPreview, setUserPhotoPreview] = useState<string>('');
     const [isSavingUserPhoto, setIsSavingUserPhoto] = useState(false);
@@ -444,7 +448,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         try {
             const batch = db.batch();
             const newPlayerRef = db.collection("jogadores").doc();
-            const contactEmail = (user as any).emailContato || user.email || '';
+            const canonicalEmail = String((user as any).email || (user as any).emailContato || '').trim();
             const userPhoto = (user as any).foto || null;
             const playerData: any = {
                 nome: user.nome,
@@ -454,7 +458,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                 telefone: normalizePhoneForStorage((user as any).whatsapp || (user as any).telefone || ''),
                 nascimento: (user as any).dataNascimento || '',
                 cpf: normalizeCpfForStorage((user as any).cpf || ''),
-                emailContato: contactEmail,
+                email: canonicalEmail,
+                emailContato: canonicalEmail,
                 userId: user.uid,
                 status: 'active',
                 foto: userPhoto || ''
@@ -462,7 +467,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
 
             batch.set(newPlayerRef, playerData);
             const userRef = db.collection("usuarios").doc(user.uid);
-            batch.update(userRef, { status: 'active', linkedPlayerId: newPlayerRef.id, emailContato: contactEmail });
+            batch.update(userRef, { status: 'active', linkedPlayerId: newPlayerRef.id, email: canonicalEmail, emailContato: canonicalEmail });
             await batch.commit();
             alert("Usuário aprovado e perfil criado!");
         } catch (error) {
@@ -476,14 +481,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             const batch = db.batch();
             const userRef = db.collection("usuarios").doc(user.uid);
             const playerRef = db.collection("jogadores").doc(targetPlayerId);
-            const contactEmail = (user as any).emailContato || user.email || '';
+            const canonicalEmail = String((user as any).email || (user as any).emailContato || '').trim();
             const userPhoto = (user as any).foto || null;
 
-            batch.update(userRef, { linkedPlayerId: targetPlayerId, status: 'active', emailContato: contactEmail });
+            batch.update(userRef, { linkedPlayerId: targetPlayerId, status: 'active', email: canonicalEmail, emailContato: canonicalEmail });
             batch.update(playerRef, {
                 userId: user.uid,
                 status: 'active',
-                emailContato: contactEmail,
+                email: canonicalEmail,
+                emailContato: canonicalEmail,
                 ...(userPhoto ? { foto: userPhoto } : {})
             });
             await batch.commit();
@@ -499,14 +505,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             const batch = db.batch();
             const userRef = db.collection("usuarios").doc(selectedUser.uid);
             const playerRef = db.collection("jogadores").doc(linkPlayerId);
-            const contactEmail = (selectedUser as any).emailContato || selectedUser.email || '';
+            const canonicalEmail = String((selectedUser as any).email || (selectedUser as any).emailContato || '').trim();
             const userPhoto = (selectedUser as any).foto || null;
 
-            batch.update(userRef, { linkedPlayerId: linkPlayerId, status: 'active', emailContato: contactEmail });
+            batch.update(userRef, { linkedPlayerId: linkPlayerId, status: 'active', email: canonicalEmail, emailContato: canonicalEmail });
             batch.update(playerRef, {
                 userId: selectedUser.uid,
                 status: 'active',
-                emailContato: contactEmail,
+                email: canonicalEmail,
+                emailContato: canonicalEmail,
                 ...(userPhoto ? { foto: userPhoto } : {})
             });
             await batch.commit();
@@ -570,7 +577,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const handleDeleteUser = async (user: UserProfile) => { if (!window.confirm(`Excluir usuário ${user.nome}?`)) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(user.uid); batch.delete(userRef); if (user.linkedPlayerId) { const playerRef = db.collection("jogadores").doc(user.linkedPlayerId); const playerSnap = await playerRef.get(); if (playerSnap.exists) { batch.update(playerRef, { userId: null }); } } await batch.commit(); alert("Usuário excluído."); } catch (error) { alert("Erro."); } };
 
     const handleSyncLegacyContactEmails = async () => {
-        if (!window.confirm('Sincronizar email de contato com email de login para usuários/atletas vinculados?')) return;
+        if (!window.confirm('Sincronizar email dos usuários/atletas vinculados para o campo unificado?')) return;
 
         setIsSyncingContactEmails(true);
         try {
@@ -594,12 +601,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             };
 
             for (const u of users as any[]) {
-                const email = (u?.email || '').trim();
-                if (!u?.uid || !email) continue;
+                const canonicalEmail = String((u?.email || u?.emailContato || '')).trim();
+                if (!u?.uid || !canonicalEmail) continue;
 
-                const current = (u?.emailContato || '').trim();
-                if (current !== email) {
-                    batch.update(db.collection('usuarios').doc(u.uid), { emailContato: email });
+                const currentEmail = String(u?.email || '').trim();
+                const currentLegacy = String(u?.emailContato || '').trim();
+                if (currentEmail !== canonicalEmail || currentLegacy !== canonicalEmail) {
+                    batch.update(db.collection('usuarios').doc(u.uid), { email: canonicalEmail, emailContato: canonicalEmail });
                     operationCount++;
                     updatedUsers++;
                     await commitBatchIfNeeded();
@@ -613,12 +621,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                 if (!linkedUserId) continue;
 
                 const linkedUser = usersByUid.get(linkedUserId);
-                const userEmail = (linkedUser?.email || '').trim();
+                const userEmail = String((linkedUser?.email || linkedUser?.emailContato || '')).trim();
                 if (!userEmail) continue;
 
+                const currentEmail = String(player?.email || '').trim();
                 const currentContact = (player?.emailContato || '').trim();
-                if (currentContact !== userEmail) {
-                    batch.update(playerDoc.ref, { emailContato: userEmail });
+                if (currentContact !== userEmail || currentEmail !== userEmail) {
+                    batch.update(playerDoc.ref, { email: userEmail, emailContato: userEmail });
                     operationCount++;
                     updatedPlayers++;
                     await commitBatchIfNeeded();
@@ -628,7 +637,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             await commitBatchIfNeeded(true);
             alert(`Sincronização concluída. Usuários atualizados: ${updatedUsers}. Atletas atualizados: ${updatedPlayers}.`);
         } catch (error: any) {
-            alert('Erro ao sincronizar emails de contato: ' + (error?.message || 'desconhecido'));
+            alert('Erro ao sincronizar emails: ' + (error?.message || 'desconhecido'));
         } finally {
             setIsSyncingContactEmails(false);
         }
@@ -897,13 +906,34 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         } catch(e) { console.error(e); alert("Erro ao restaurar."); }
     };
 
-    const filteredUsers = users.filter(u => (u.nome || '').toLowerCase().includes(userSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(userSearch.toLowerCase()));
+    const openUserEdit = (user: UserProfile) => {
+        setSelectedUser(user);
+        setLinkPlayerId(user.linkedPlayerId || '');
+        setUserPhotoPreview((user as any).foto || '');
+        setShowUserEditModal(true);
+    };
+
+    const openUserDetails = (user: UserProfile) => {
+        setSelectedUserDetails(user);
+        setOpenUserMenuId(null);
+    };
+
+    const closeUserDetails = () => setSelectedUserDetails(null);
+
+    const filteredUsers = users.filter(u => {
+        const canonicalEmail = String((u as any).email || (u as any).emailContato || '').toLowerCase();
+        const searchTerm = userSearch.toLowerCase();
+        return (u.nome || '').toLowerCase().includes(searchTerm) || canonicalEmail.includes(searchTerm);
+    });
     const filteredPosts = posts.filter((post) => {
         const matchesType = postFilterType === 'todos' || post.type === postFilterType;
         const haystack = `${post.content?.titulo || ''} ${post.content?.resumo || ''}`.toLowerCase();
         const matchesSearch = haystack.includes(postSearch.toLowerCase());
         return matchesType && matchesSearch;
     });
+    const selectedUserLinkedPlayer = selectedUserDetails?.linkedPlayerId
+        ? activePlayers.find(p => p.id === selectedUserDetails.linkedPlayerId) || null
+        : null;
     const reviewSummaryByPlayer = useMemo(() => {
         const summaryMap = new Map<string, {
             targetId: string;
@@ -1005,7 +1035,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                     onClick={handleSyncLegacyContactEmails}
                                     disabled={isSyncingContactEmails}
                                     className="!border-orange-400 !text-orange-600 hover:!bg-orange-50"
-                                    title="Sincroniza emailContato de usuários e atletas vinculados"
+                                    title="Sincroniza o campo email de usuários e atletas vinculados"
                                 >
                                     <LucideRefreshCw size={14} className={isSyncingContactEmails ? 'animate-spin' : ''} />
                                     {isSyncingContactEmails ? 'Sincronizando...' : 'Sincronizar Emails'}
@@ -1013,40 +1043,40 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                 <div className="relative w-full md:w-64"><LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={16} /><input type="text" placeholder="Buscar..." className="w-full pl-9 p-2 text-sm border rounded bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600" value={userSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUserSearch(e.target.value)} /></div>
                             </div>
                         </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 uppercase font-bold text-xs">
-                                    <tr><th className="px-4 py-3">Nome</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Cargo</th><th className="px-4 py-3">Atleta</th><th className="px-4 py-3 text-right">Ações</th></tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                    {filteredUsers.map(user => {
-                                        const suggestedPlayer = !user.linkedPlayerId ? findMatchingPlayer(user) : null;
-                                        return (
-                                            <tr key={user.uid} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{user.nome}</td>
-                                                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{user.email}</td>
-                                                <td className="px-4 py-3">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.role === 'super-admin' ? 'bg-purple-600 text-white' : user.role === 'admin' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>
-                                                        {user.role === 'super-admin' ? 'DEV' : user.role}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{user.linkedPlayerId ? <span className="text-green-600 flex items-center gap-1"><LucideCheck size={12}/> {activePlayers.find(p => p.id === user.linkedPlayerId)?.nome || 'ID: ' + user.linkedPlayerId}</span> : (suggestedPlayer ? <span className="text-orange-500 text-xs font-bold flex items-center gap-1"><LucideRefreshCw size={12} /> Sugestão: {suggestedPlayer.nome}</span> : <span className="text-red-400">Não vinculado</span>)}</td>
-                                                <td className="px-4 py-3 text-right flex justify-end gap-2">
-                                                    {isSuperAdmin && user.role !== 'super-admin' && (
-                                                        user.role === 'admin' ? 
-                                                        <Button size="sm" variant="secondary" onClick={() => handleDemoteUser(user)} className="!py-1 !px-2 text-xs" title="Remover Admin"><LucideUserX size={14}/></Button> :
-                                                        <Button size="sm" variant="secondary" onClick={() => handlePromoteUser(user)} className="!py-1 !px-2 text-xs !border-purple-300 text-purple-600" title="Promover a Admin"><LucideCrown size={14}/></Button>
-                                                    )}
-                                                    <Button size="sm" variant="secondary" onClick={() => handleResetPassword(user)} className="!py-1 !px-2 text-xs !border-orange-500 !text-orange-600 hover:!bg-orange-50" title="Resetar Senha"><LucideKeyRound size={14} /></Button>
-                                                    {!user.linkedPlayerId && (suggestedPlayer ? <Button size="sm" onClick={() => handleAutoLinkUser(user, suggestedPlayer.id)} className="!py-1 !px-2 !bg-orange-500 hover:!bg-orange-600 text-xs" title={`Vincular a ${suggestedPlayer.nome}`}><LucideLink size={14} /> Vincular</Button> : <Button size="sm" onClick={() => handleApproveUser(user)} className="!py-1 !px-2 !bg-green-600 hover:!bg-green-700 text-xs" title="Criar nova ficha de atleta"><LucideUserPlus size={14} /> Criar Atleta</Button>)}
-                                                    <Button size="sm" variant="secondary" onClick={() => { setSelectedUser(user); setLinkPlayerId(user.linkedPlayerId || ''); setUserPhotoPreview((user as any).foto || ''); setShowUserEditModal(true); }} className="!py-1 !px-2 text-xs"><LucideEdit size={14} /></Button>
-                                                    <button onClick={() => handleDeleteUser(user)} className="p-1.5 rounded bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50" title="Excluir Usuário"><LucideTrash2 size={14} /></button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {filteredUsers.map(user => {
+                                const suggestedPlayer = !user.linkedPlayerId ? findMatchingPlayer(user) : null;
+                                const linkedPlayer = user.linkedPlayerId ? (activePlayers.find(p => p.id === user.linkedPlayerId) || null) : null;
+                                const linkedPlayerName = user.linkedPlayerId ? (linkedPlayer?.nome || `ID: ${user.linkedPlayerId}`) : null;
+
+                                return (
+                                    <UserManagementCard
+                                        key={user.uid}
+                                        user={user}
+                                        avatarUrl={linkedPlayer?.foto || (user as any).foto || null}
+                                        linkedPlayerName={linkedPlayerName}
+                                        suggestedPlayerName={suggestedPlayer?.nome || null}
+                                        suggestedPlayerId={suggestedPlayer?.id || null}
+                                        isSuperAdmin={isSuperAdmin}
+                                        menuOpen={openUserMenuId === user.uid}
+                                        onToggleMenu={setOpenUserMenuId}
+                                        onOpenDetails={openUserDetails}
+                                        onOpenEdit={openUserEdit}
+                                        onResetPassword={handleResetPassword}
+                                        onPromote={handlePromoteUser}
+                                        onDemote={handleDemoteUser}
+                                        onAutoLink={handleAutoLinkUser}
+                                        onApprove={handleApproveUser}
+                                        onDelete={handleDeleteUser}
+                                    />
+                                );
+                            })}
+
+                            {filteredUsers.length === 0 && (
+                                <div className="col-span-full rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                                    Nenhum usuário encontrado para a busca informada.
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1960,6 +1990,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                     )}
                 </div>
             </Modal>
+
+            <UserDetailsPanel
+                user={selectedUserDetails}
+                isOpen={Boolean(selectedUserDetails)}
+                linkedPlayer={selectedUserLinkedPlayer}
+                linkedPlayerName={selectedUserDetails?.linkedPlayerId ? (selectedUserLinkedPlayer?.nome || `ID: ${selectedUserDetails.linkedPlayerId}`) : null}
+                suggestedPlayerName={selectedUserDetails && !selectedUserDetails.linkedPlayerId ? (findMatchingPlayer(selectedUserDetails)?.nome || null) : null}
+                onClose={closeUserDetails}
+                onOpenEdit={(user) => {
+                    closeUserDetails();
+                    openUserEdit(user);
+                }}
+            />
 
             <Modal isOpen={showUserEditModal} onClose={() => setShowUserEditModal(false)} title="Editar Usuário">
                 <div className="space-y-4">
