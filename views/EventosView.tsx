@@ -530,7 +530,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 await setDoc(doc(db, 'notifications', notifId), {
                     type: 'roster_invite',
                     title: 'Convocação!',
-                    message: `Você foi convocado para o amistoso ${eventName}.`,
+                    message: `Você foi convocado para o jogo ${eventName}.`,
                     data: { eventId, playerId, inviteContext: 'friendly' },
                     playerId,
                     targetUserId,

@@ -213,4 +213,14 @@ export interface NotificationItem {
     timestamp: any;
 }
 
+export type MediaTemplate = 'story_game' | 'story_event' | 'story_lineup' | 'thumb_youtube';
+
+export interface MediaPreset {
+    width: number;
+    height: number;
+    ratioLabel: string;
+    title: string;
+    subtitle: string;
+}
+
 export type ViewState = 'home' | 'eventos' | 'evento-detalhe' | 'jogadores' | 'ranking' | 'admin' | 'painel-jogo' | 'public-game' | 'profile' | 'team-manager' | 'notifications' | 'apoiadores' | 'post-view';

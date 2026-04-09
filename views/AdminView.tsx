@@ -7,6 +7,7 @@ import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideRadio, LucideGamepad2,
 import imageCompression from 'browser-image-compression';
 import { ApoiadoresManager } from '../components/ApoiadoresManager';
 import { LiveStreamAdmin } from '../components/LiveStreamAdmin';
+import { MediaStudio } from '../components/MediaStudio';
 import { UserManagementCard } from '../components/UserManagementCard';
 import { UserDetailsPanel } from '../components/UserDetailsPanel';
 import { normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
@@ -28,7 +29,7 @@ interface AdminViewProps {
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, userProfile }) => {
-    const [adminTab, setAdminTab] = useState<'home' | 'posts' | 'users' | 'apoiadores' | 'live' | 'reviews' | 'badges'>('home');
+    const [adminTab, setAdminTab] = useState<'home' | 'posts' | 'users' | 'apoiadores' | 'live' | 'reviews' | 'badges' | 'midia'>('home');
     // Badge management state
     const [badgeTargetId, setBadgeTargetId] = useState('');
     const [badgeSelectedDef, setBadgeSelectedDef] = useState('');
@@ -1239,6 +1240,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                             <p className="text-sm text-gray-500 dark:text-gray-400">Configurar transmissão e controles do conteúdo ao vivo.</p>
                         </button>
 
+                        <button onClick={() => setAdminTab('midia')} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-cyan-400 dark:hover:border-cyan-500 transition-all shadow-sm hover:shadow-md">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-10 h-10 rounded-lg bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-300 flex items-center justify-center"><LucideImage size={18} /></div>
+                                <h3 className="font-bold text-gray-800 dark:text-gray-200">Mídia</h3>
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Criar stories e thumbs de jogos, eventos e escalações.</p>
+                        </button>
+
                         <button onClick={() => { setAdminTab('reviews'); loadReviews(); }} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-amber-400 dark:hover:border-amber-500 transition-all shadow-sm hover:shadow-md">
                             <div className="flex items-center gap-3 mb-2">
                                 <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 flex items-center justify-center"><LucideStar size={18} /></div>
@@ -1262,6 +1271,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             {adminTab === 'live' && (
                 <div className="animate-fadeIn">
                     <LiveStreamAdmin />
+                </div>
+            )}
+
+            {/* TAB: MEDIA STUDIO */}
+            {adminTab === 'midia' && (
+                <div className="animate-fadeIn">
+                    <MediaStudio events={events} players={activePlayers} />
                 </div>
             )}
 
