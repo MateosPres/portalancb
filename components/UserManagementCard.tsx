@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { UserProfile } from '../types';
 import {
+    LucideBellRing,
     LucideCheck,
     LucideCrown,
     LucideEdit,
@@ -28,6 +29,7 @@ interface UserManagementCardProps {
     onResetPassword: (user: UserProfile) => void;
     onPromote: (user: UserProfile) => void;
     onDemote: (user: UserProfile) => void;
+    onSendTestNotification: (user: UserProfile) => void;
     onAutoLink: (user: UserProfile, playerId: string) => void;
     onApprove: (user: UserProfile) => void;
     onDelete: (user: UserProfile) => void;
@@ -68,6 +70,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
     onResetPassword,
     onPromote,
     onDemote,
+    onSendTestNotification,
     onAutoLink,
     onApprove,
     onDelete,
@@ -144,6 +147,10 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
 
                             <button onClick={() => { onResetPassword(user); onToggleMenu(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-orange-700 hover:bg-orange-50 dark:text-orange-300 dark:hover:bg-orange-900/20">
                                 <LucideKeyRound size={14} /> Resetar senha
+                            </button>
+
+                            <button onClick={() => { onSendTestNotification(user); onToggleMenu(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-900/20">
+                                <LucideBellRing size={14} /> Enviar notificação teste
                             </button>
 
                             {!user.linkedPlayerId && (

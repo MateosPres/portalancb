@@ -255,34 +255,34 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
                         <LucideClock size={200} className="transform rotate-12 -translate-y-10 translate-x-10 text-white" />
                     </div>
 
-                    <div className="p-6 md:p-8 relative z-10 flex flex-col justify-center">
-                        <div className="flex items-center justify-between mb-6">
+                    <div className="p-4 md:p-8 relative z-10 flex flex-col justify-center">
+                        <div className="flex items-center justify-between mb-4">
                             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-600/30 text-blue-200 text-xs font-bold uppercase tracking-wider border border-blue-500/30">
                                 <LucideCalendar size={12}/> PRÓXIMO JOGO
                             </div>
                             <span className="text-gray-400 text-xs font-bold uppercase tracking-wide">{event.modalidade}</span>
                         </div>
 
-                        <h2 className="text-2xl font-bold text-white mb-2 leading-tight opacity-90 truncate">
+                        <h2 className="text-lg md:text-2xl font-bold text-white mb-1 leading-tight opacity-90 line-clamp-2 break-words">
                             {event.nome}
                         </h2>
                         
-                        <div className="mt-6 bg-white/5 rounded-xl border border-white/5 overflow-hidden">
+                        <div className="mt-3 bg-white/5 rounded-xl border border-white/5 overflow-hidden">
                             {/* Data e hora no topo da caixa */}
-                            <div className="flex items-center justify-center gap-2 py-2 border-b border-white/5">
+                            <div className="flex items-center justify-center gap-2 py-1.5 border-b border-white/5">
                                 <LucideCalendar size={11} className="text-gray-400" />
-                                <span className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">
+                                <span className="text-[10px] md:text-[11px] text-gray-400 font-bold uppercase tracking-wider">
                                     {nextGame.dataJogo ? nextGame.dataJogo.split('-').reverse().join('/') : 'EM BREVE'}
                                     {nextGame.horaJogo ? ` • ${nextGame.horaJogo}` : ''}
                                 </span>
                             </div>
                             {/* Times e VS */}
-                            <div className="flex items-center justify-between p-6">
-                                <span className="text-xl font-black text-white w-1/3 text-right">
+                            <div className="flex items-center justify-between gap-2 p-3 md:p-6">
+                                <span className="text-base md:text-xl font-black text-white w-[40%] text-right leading-tight break-words line-clamp-2">
                                     {nextGame.timeA_nome || 'Time A'}
                                 </span>
-                                <span className="text-3xl font-black text-ancb-orange px-4">VS</span>
-                                <span className="text-xl font-black text-white w-1/3 text-left">
+                                <span className="text-2xl md:text-3xl font-black text-ancb-orange px-1 md:px-4 shrink-0">VS</span>
+                                <span className="text-base md:text-xl font-black text-white w-[40%] text-left leading-tight break-words line-clamp-2">
                                     {nextGame.timeB_nome || nextGame.adversario || 'Time B'}
                                 </span>
                             </div>

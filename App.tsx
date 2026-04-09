@@ -108,6 +108,15 @@ const App: React.FC = () => {
         (typeof Notification !== 'undefined') ? Notification.permission : 'default'
     );
 
+    const isNotificationRead = (value: unknown) => {
+        if (value === true || value === 1) return true;
+        if (typeof value === 'string') {
+            const normalized = value.trim().toLowerCase();
+            return normalized === 'true' || normalized === '1';
+        }
+        return false;
+    };
+
     // PWA & Theme
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     const [showInstallModal, setShowInstallModal] = useState(false);
@@ -313,9 +322,19 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (!user) return;
-        const q = db.collection("notifications").where("targetUserId", "==", user.uid).orderBy("timestamp", "desc");
-        
-        const unsubscribe = q.onSnapshot((snapshot) => {
+        const getTimestampMillis = (value: any) => {
+            if (!value) return 0;
+            if (typeof value.toMillis === 'function') return value.toMillis();
+            if (value instanceof Date) return value.getTime();
+            if (typeof value === 'number') return value;
+            if (typeof value === 'string') {
+                const parsed = Date.parse(value);
+                return Number.isNaN(parsed) ? 0 : parsed;
+            }
+            return 0;
+        };
+
+        const applyNotificationSnapshot = (snapshot: any) => {
             const newNotifs: NotificationItem[] = [];
             const notifiedIds = JSON.parse(localStorage.getItem('ancb_notified_ids') || '[]');
 
@@ -342,28 +361,58 @@ const App: React.FC = () => {
 
             snapshot.forEach(doc => {
                 const data = doc.data();
+                const normalizedRead = isNotificationRead(data.read);
                 newNotifs.push({
                     id: doc.id,
                     type: data.type,
                     title: data.title,
                     message: data.message,
                     data: { gameId: data.gameId, eventId: data.eventId },
-                    read: data.read || false,
+                    read: normalizedRead,
                     timestamp: data.timestamp
                 });
             });
 
+            newNotifs.sort((a, b) => getTimestampMillis((b as any).timestamp) - getTimestampMillis((a as any).timestamp));
+
             setNotifications(prev => {
-                const rosterNotifs = prev.filter(n => n.type === 'roster_alert');
+                const rosterNotifs = prev
+                    .filter(n => n.type === 'roster_alert')
+                    .map(n => ({ ...n, read: isNotificationRead(n.read) }));
                 return [...newNotifs, ...rosterNotifs];
             });
 
+        };
+
+        let fallbackUnsubscribe: (() => void) | null = null;
+        let fallbackAttached = false;
+
+        const attachFallbackListener = () => {
+            if (fallbackAttached) return;
+            fallbackAttached = true;
+            const fallbackQuery = db.collection("notifications").where("targetUserId", "==", user.uid);
+            fallbackUnsubscribe = fallbackQuery.onSnapshot((snapshot) => {
+                applyNotificationSnapshot(snapshot);
+            }, (fallbackError) => {
+                console.warn("Fallback notification listener error:", fallbackError);
+                checkStaticNotifications();
+            });
+        };
+
+        const q = db.collection("notifications").where("targetUserId", "==", user.uid).orderBy("timestamp", "desc");
+        const unsubscribe = q.onSnapshot((snapshot) => {
+            applyNotificationSnapshot(snapshot);
+
         }, (error) => {
             console.warn("Notification listener error (likely missing index):", error);
+            attachFallbackListener();
             checkStaticNotifications();
         });
 
-        return () => unsubscribe();
+        return () => {
+            unsubscribe();
+            fallbackUnsubscribe?.();
+        };
     }, [user]);
 
     const checkStaticNotifications = async () => {
@@ -414,6 +463,7 @@ const App: React.FC = () => {
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged(async (user) => {
             if (user) {
+                setUser(user);
                 console.log("LOGIN DETECTADO. UID:", user.uid);
                 
                 try {
@@ -503,6 +553,7 @@ const App: React.FC = () => {
                     console.error("ERRO NO LOGIN:", error);
                 }
             } else {
+                setUser(null);
                 setUserProfile(null);
             }
             setLoading(false);

@@ -52,8 +52,17 @@ export const Header: React.FC<HeaderProps> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeMenu = () => setIsMenuOpen(false);
 
+  const isNotificationRead = (value: unknown) => {
+    if (value === true || value === 1) return true;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      return normalized === 'true' || normalized === '1';
+    }
+    return false;
+  };
+
   const isAdmin = user?.role === 'admin' || user?.role === 'super-admin';
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter(n => !isNotificationRead((n as any).read)).length;
   const isMobileDevice = /android|iphone|ipad|ipod/i.test(window.navigator.userAgent);
 
   // Detecta se a Prancheta está instalada como PWA
@@ -126,15 +135,17 @@ export const Header: React.FC<HeaderProps> = ({
             {user && onNotificationsClick && (
               <button
                 onClick={onNotificationsClick}
-                className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white transition hover:text-slate-200 focus:outline-none"
+                className="relative isolate overflow-visible flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white transition hover:text-slate-200 focus:outline-none"
                 title="Notificações"
               >
-                <Bell size={20} />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-red-500 px-1 text-[10px] font-black text-white flex items-center justify-center shadow-md">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
+                <span className="relative inline-flex h-5 w-5 items-center justify-center">
+                  <Bell size={20} className="relative z-10" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-2 -right-2 z-20 min-w-[18px] h-[18px] rounded-full bg-red-500 px-1 text-[10px] font-black text-white flex items-center justify-center shadow-md">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </span>
               </button>
             )}
 

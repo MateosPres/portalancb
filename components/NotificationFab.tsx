@@ -9,7 +9,16 @@ interface NotificationFabProps {
 }
 
 export const NotificationFab: React.FC<NotificationFabProps> = ({ notifications, onClick }) => {
-    const unreadCount = notifications.filter(n => !n.read).length;
+    const isNotificationRead = (value: unknown) => {
+        if (value === true || value === 1) return true;
+        if (typeof value === 'string') {
+            const normalized = value.trim().toLowerCase();
+            return normalized === 'true' || normalized === '1';
+        }
+        return false;
+    };
+
+    const unreadCount = notifications.filter(n => !isNotificationRead((n as any).read)).length;
 
     if (notifications.length === 0) return null;
 
@@ -21,7 +30,7 @@ export const NotificationFab: React.FC<NotificationFabProps> = ({ notifications,
             <LucideBell size={24} />
             {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-white dark:border-gray-900">
-                    {unreadCount}
+                    {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
             )}
         </button>

@@ -584,14 +584,14 @@ export const MediaStudio: React.FC<MediaStudioProps> = ({ events, players }) => 
             <div
                 className="absolute inset-0"
                 style={{
-                    background: bottomStoryGradient,
+                    background: topStoryGradient,
                     clipPath: 'polygon(0 0, 100% 0, 100% 46%, 0 54%)',
                 }}
             />
             <div
                 className="absolute inset-0"
                 style={{
-                    background: topStoryGradient,
+                    background: bottomStoryGradient,
                     clipPath: 'polygon(0 54%, 100% 46%, 100% 100%, 0 100%)',
                 }}
             />

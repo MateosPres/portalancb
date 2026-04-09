@@ -30,10 +30,9 @@ import {
     LucideMapPin,
     LucideGrid,
     LucideEdit2,
-    LucideTrash2,
     LucideCamera
 } from 'lucide-react';
-import { deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { formatCpf, formatPhoneForDisplay, normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
 import { getRarityStyles, getBadgeWeight, getDisplayBadges } from '../utils/badges';
 import imageCompression from 'browser-image-compression';
@@ -138,7 +137,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const [imageToCrop, setImageToCrop] = useState<string | null>(null);
 
     const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
-    const isSuperAdmin = userProfile?.role === 'super-admin';
 
     const FILTERS = [
         "Todos",
@@ -498,34 +496,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         }
     };
 
-    const handleDeletePlayer = async () => {
-        if (!selectedPlayer) return;
-        if (!window.confirm(`Tem certeza que deseja EXCLUIR PERMANENTEMENTE o perfil de ${selectedPlayer.nome}? Essa ação é irreversível.`)) return;
-        
-        try {
-            await deleteDoc(doc(db, "jogadores", selectedPlayer.id));
-            setPlayers(prev => prev.filter(p => p.id !== selectedPlayer.id));
-            setSelectedPlayer(null);
-            alert("Jogador excluído com sucesso.");
-        } catch (error) {
-            console.error(error);
-            alert("Erro ao excluir jogador.");
-        }
-    };
-
-    const handleDeletePlayerFromList = async (player: Player) => {
-        if (!window.confirm(`Tem certeza que deseja EXCLUIR PERMANENTEMENTE o perfil de ${player.nome}? Essa ação é irreversível.`)) return;
-        
-        try {
-            await deleteDoc(doc(db, "jogadores", player.id));
-            setPlayers(prev => prev.filter(p => p.id !== player.id));
-            alert("Jogador excluído com sucesso.");
-        } catch (error) {
-            console.error(error);
-            alert("Erro ao excluir jogador.");
-        }
-    };
-
     const radarStats = selectedPlayer 
         ? calculateRadarStats(selectedPlayer.stats_tags, selectedPlayer.stats_atributos)
         : { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
@@ -638,13 +608,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                             title="Visualizar dados completos do atleta"
                                         >
                                             <LucideInfo size={14} /> Ver dados
-                                        </button>
-                                        <button 
-                                            onClick={handleDeletePlayer}
-                                            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-red-500/50 bg-red-600/20 hover:bg-red-600 hover:text-white transition-colors text-xs font-bold uppercase tracking-wider text-red-300"
-                                            title="Excluir Jogador"
-                                        >
-                                            <LucideTrash2 size={14} />
                                         </button>
                                     </div>
                                 )}
@@ -853,23 +816,29 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     return (
         <div className="animate-fadeIn pb-20">
             {/* ... (Search and Grid JSX same as before) ... */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                  <div className="flex items-center gap-3">
                     <Button variant="secondary" size="sm" onClick={onBack} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
                         <LucideArrowLeft size={18} />
                     </Button>
                     <h2 className="text-2xl font-bold text-ancb-black dark:text-white">Elenco</h2>
                 </div>
-                <div className="relative">
-                    <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                    <input type="text" placeholder="Buscar atleta..." className="pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-ancb-blue outline-none w-40 md:w-auto" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} />
+                <div className="flex w-full items-center gap-2 md:w-auto md:justify-end">
+                    <select
+                        value={activeFilter}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setActiveFilter(e.target.value)}
+                        className="h-9 w-[110px] rounded-lg border border-gray-200 bg-white px-2.5 text-[11px] font-semibold text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-ancb-blue outline-none md:h-10 md:w-[180px] md:px-3 md:text-xs shrink-0"
+                        aria-label="Filtrar por posição"
+                    >
+                        {FILTERS.map(filter => (
+                            <option key={filter} value={filter}>{filter === 'Todos' ? 'Posição' : filter}</option>
+                        ))}
+                    </select>
+                    <div className="relative min-w-0 flex-1 md:flex-none">
+                        <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                        <input type="text" placeholder="Buscar atleta..." className="w-full pl-10 pr-3 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-ancb-blue outline-none md:w-[260px]" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} />
+                    </div>
                 </div>
-            </div>
-
-            <div className="flex gap-2 overflow-x-auto pb-4 mb-2 custom-scrollbar">
-                {FILTERS.map(filter => (
-                    <button key={filter} onClick={() => setActiveFilter(filter)} className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${activeFilter === filter ? 'bg-ancb-blue text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>{filter}</button>
-                ))}
             </div>
 
             {loading ? <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-ancb-blue"></div></div> : (
@@ -877,15 +846,6 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                     {filteredPlayers.map(player => (
                         <div key={player.id} className="relative group">
                             <PlayerCard player={player} onClick={() => handlePlayerClick(player)} />
-                            {isSuperAdmin && (
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); handleDeletePlayerFromList(player); }}
-                                    className="absolute top-2 left-2 bg-red-600 text-white p-1.5 rounded-full shadow-md opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10 hover:bg-red-700"
-                                    title="Excluir Jogador"
-                                >
-                                    <LucideTrash2 size={14} />
-                                </button>
-                            )}
                         </div>
                     ))}
                     {filteredPlayers.length === 0 && <div className="col-span-full text-center py-10 text-gray-400">Nenhum jogador encontrado.</div>}

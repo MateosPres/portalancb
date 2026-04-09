@@ -434,6 +434,37 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             alert("Erro ao resetar senha: " + error.message);
         }
     };
+
+    const handleSendTestNotification = async (user: UserProfile) => {
+        if (!user?.uid) {
+            alert('Usuário inválido para envio de notificação teste.');
+            return;
+        }
+
+        if (!window.confirm(`Enviar notificação teste para ${user.nome}?`)) return;
+
+        try {
+            await db.collection('notifications').add({
+                targetUserId: user.uid,
+                type: 'feed_alert',
+                title: 'Teste de notificação',
+                message: `Olá ${user.nome}, esta é uma notificação de teste enviada pelo painel administrativo.`,
+                data: {
+                    source: 'admin_test',
+                    adminUid: userProfile?.uid || null,
+                },
+                eventId: '',
+                gameId: '',
+                read: false,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+
+            alert(`Notificação teste enviada para ${user.nome}.`);
+        } catch (error) {
+            console.error('Erro ao enviar notificação teste:', error);
+            alert('Falha ao enviar notificação teste.');
+        }
+    };
     const findMatchingPlayer = (user: UserProfile) => {
         const normalize = (str: string) => str ? str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
         const cleanCpf = (str: string) => str ? str.replace(/\D/g, "") : "";
@@ -1001,13 +1032,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                     <Button variant="secondary" size="sm" onClick={() => isHome ? onBack() : setAdminTab('home')} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"><LucideArrowLeft size={18} /></Button>
                     <h2 className="text-2xl font-bold text-ancb-blue dark:text-blue-400">Painel Administrativo</h2>
                 </div>
-                <div className="flex gap-2 self-end md:self-auto">
-                    {!isHome && (
-                        <Button onClick={() => setAdminTab('home')} variant="secondary" className="!bg-blue-600 !text-white border-none">
-                            <LucideArrowLeft size={16} /> <span className="hidden sm:inline">Voltar ao Início</span>
-                        </Button>
-                    )}
-                </div>
             </div>
 
             {/* SUPER ADMIN CLAIM */}
@@ -1066,6 +1090,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                         onResetPassword={handleResetPassword}
                                         onPromote={handlePromoteUser}
                                         onDemote={handleDemoteUser}
+                                        onSendTestNotification={handleSendTestNotification}
                                         onAutoLink={handleAutoLinkUser}
                                         onApprove={handleApproveUser}
                                         onDelete={handleDeleteUser}
