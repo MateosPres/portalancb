@@ -646,7 +646,7 @@ export const MediaStudio: React.FC<MediaStudioProps> = ({ events, players }) => 
                         <p className="text-[4.15rem] font-bold italic tracking-[0.02em] leading-[0.86]" style={{ fontFamily: "'Teko', 'Barlow Condensed', sans-serif" }}>{leftTeamLines[0]}</p>
                         {leftTeamLines[1] && <p className="text-[4.15rem] font-bold italic tracking-[0.02em] leading-[0.86]" style={{ fontFamily: "'Teko', 'Barlow Condensed', sans-serif" }}>{leftTeamLines[1]}</p>}
                     </div>
-                    <div className="h-64 w-64 rounded-full bg-white p-3 shadow-[0_24px_60px_rgba(0,0,0,0.35)] border-[5px] border-black/20">
+                    <div className="h-64 w-64 rounded-full bg-white p-[2px] shadow-[0_24px_60px_rgba(0,0,0,0.35)] border-[2px] border-black/10">
                         <img src={activeLogoA} crossOrigin="anonymous" className="h-full w-full rounded-full object-contain" />
                     </div>
                 </div>
@@ -656,7 +656,7 @@ export const MediaStudio: React.FC<MediaStudioProps> = ({ events, players }) => 
                 </div>
 
                 <div className="absolute left-1/2 top-[65%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center text-center">
-                    <div className="h-64 w-64 rounded-full bg-white p-3 shadow-[0_24px_60px_rgba(0,0,0,0.35)] border-[5px] border-black/20">
+                    <div className="h-64 w-64 rounded-full bg-white p-[2px] shadow-[0_24px_60px_rgba(0,0,0,0.35)] border-[2px] border-black/10">
                         <img src={activeLogoB} crossOrigin="anonymous" className="h-full w-full rounded-full object-contain" />
                     </div>
                     <div className="leading-[0.86] mt-3 text-white drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]">
@@ -807,7 +807,7 @@ export const MediaStudio: React.FC<MediaStudioProps> = ({ events, players }) => 
 
                 <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-8 flex-1 -translate-y-12">
                     <div className="flex flex-col items-center text-center gap-3">
-                        <div className="h-80 w-80 rounded-full bg-white p-3 shadow-[0_24px_60px_rgba(0,0,0,0.35)] border-[5px] border-black/20">
+                        <div className="h-80 w-80 rounded-full bg-white p-[2px] shadow-[0_24px_60px_rgba(0,0,0,0.35)] border-[2px] border-black/10">
                             <img src={activeLogoA} crossOrigin="anonymous" className="h-full w-full rounded-full object-contain" />
                         </div>
                         <div className="leading-[0.85] mt-2 text-white drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]">
@@ -817,7 +817,7 @@ export const MediaStudio: React.FC<MediaStudioProps> = ({ events, players }) => 
                     </div>
                     <p className="text-[10rem] font-bold italic leading-none text-white/95 drop-shadow-[0_8px_16px_rgba(0,0,0,0.45)]">VS</p>
                     <div className="flex flex-col items-center text-center gap-3">
-                        <div className="h-80 w-80 rounded-full bg-white p-3 shadow-[0_24px_60px_rgba(0,0,0,0.35)] border-[5px] border-black/20">
+                        <div className="h-80 w-80 rounded-full bg-white p-[2px] shadow-[0_24px_60px_rgba(0,0,0,0.35)] border-[2px] border-black/10">
                             <img src={activeLogoB} crossOrigin="anonymous" className="h-full w-full rounded-full object-contain" />
                         </div>
                         <div className="leading-[0.85] mt-2 text-white drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]">
