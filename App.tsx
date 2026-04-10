@@ -41,6 +41,9 @@ const PeerReviewQuiz = React.lazy(() => import('./components/PeerReviewQuiz').th
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>('home');
     useScrollToTop(currentView);
+    const isRestoringFromHistoryRef = useRef(false);
+    const lastHomeBackPressAtRef = useRef(0);
+    const [showBackExitHint, setShowBackExitHint] = useState(false);
     
     const [returnToEventId, setReturnToEventId] = useState<string | null>(null);
     const [returnToTeamId, setReturnToTeamId] = useState<string | null>(null);
@@ -126,6 +129,24 @@ const App: React.FC = () => {
     const [isStandalone, setIsStandalone] = useState(false);
     const hasAutoReloadedForUpdate = useRef(false);
 
+    const buildNavigationState = () => ({
+        appNavigation: true,
+        view: currentView,
+        selectedEventId,
+        pendingFriendlyEventId,
+        targetPlayerId,
+        selectedPostId: selectedPost?.id || null,
+        postReturnView,
+        panelEventId,
+        panelGameId: panelGame?.id || null,
+        selectedPublicGame,
+        teamManagerEventId,
+        teamManagerTeamId,
+        returnToEventId,
+        returnToTeamId,
+        returnToTab,
+    });
+
     // --- AUTO UPDATE PWA LOGIC ---
     useEffect(() => {
         if (!('serviceWorker' in navigator)) return;
@@ -208,6 +229,132 @@ const App: React.FC = () => {
 
         return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     }, []);
+
+    useEffect(() => {
+        const timeout = setTimeout(() => setShowBackExitHint(false), 1600);
+        return () => clearTimeout(timeout);
+    }, [showBackExitHint]);
+
+    useEffect(() => {
+        if (isRestoringFromHistoryRef.current) {
+            isRestoringFromHistoryRef.current = false;
+            return;
+        }
+
+        const state = buildNavigationState();
+        const currentHistoryState = window.history.state;
+        if (currentHistoryState?.appNavigation) {
+            window.history.pushState(state, '', window.location.href);
+        } else {
+            window.history.replaceState(state, '', window.location.href);
+        }
+    }, [
+        currentView,
+        selectedEventId,
+        pendingFriendlyEventId,
+        targetPlayerId,
+        selectedPost,
+        postReturnView,
+        panelEventId,
+        panelGame,
+        selectedPublicGame,
+        teamManagerEventId,
+        teamManagerTeamId,
+        returnToEventId,
+        returnToTeamId,
+        returnToTab,
+    ]);
+
+    useEffect(() => {
+        const handlePopState = (event: PopStateEvent) => {
+            if (showQuiz) {
+                setShowQuiz(false);
+                window.history.pushState(buildNavigationState(), '', window.location.href);
+                return;
+            }
+            if (showNotificationsView) {
+                setShowNotificationsView(false);
+                window.history.pushState(buildNavigationState(), '', window.location.href);
+                return;
+            }
+            if (showRegisterCropModal) {
+                setShowRegisterCropModal(false);
+                setRegisterCropImageSrc(null);
+                window.history.pushState(buildNavigationState(), '', window.location.href);
+                return;
+            }
+            if (showRegister) {
+                setShowRegister(false);
+                window.history.pushState(buildNavigationState(), '', window.location.href);
+                return;
+            }
+            if (showLogin) {
+                setShowLogin(false);
+                window.history.pushState(buildNavigationState(), '', window.location.href);
+                return;
+            }
+            if (showInstallModal) {
+                setShowInstallModal(false);
+                window.history.pushState(buildNavigationState(), '', window.location.href);
+                return;
+            }
+            if (showPranchetaInstallModal) {
+                setShowPranchetaInstallModal(false);
+                window.history.pushState(buildNavigationState(), '', window.location.href);
+                return;
+            }
+
+            const state = event.state;
+            if (state?.appNavigation) {
+                isRestoringFromHistoryRef.current = true;
+                setCurrentView(state.view || 'home');
+                setSelectedEventId(state.selectedEventId || null);
+                setPendingFriendlyEventId(state.pendingFriendlyEventId || null);
+                setTargetPlayerId(state.targetPlayerId || null);
+                setPostReturnView(state.postReturnView || 'home');
+                setPanelEventId(state.panelEventId || null);
+                setSelectedPublicGame(state.selectedPublicGame || null);
+                setTeamManagerEventId(state.teamManagerEventId || null);
+                setTeamManagerTeamId(state.teamManagerTeamId || undefined);
+                setReturnToEventId(state.returnToEventId || null);
+                setReturnToTeamId(state.returnToTeamId || null);
+                setReturnToTab(state.returnToTab || 'jogos');
+                return;
+            }
+
+            if (!isAndroid) return;
+
+            if (currentView === 'home' && !showNotificationsView && !showQuiz) {
+                const now = Date.now();
+                const pressedTwice = now - lastHomeBackPressAtRef.current <= 1500;
+                if (!pressedTwice) {
+                    lastHomeBackPressAtRef.current = now;
+                    setShowBackExitHint(true);
+                    window.history.pushState(buildNavigationState(), '', window.location.href);
+                }
+                return;
+            }
+
+            isRestoringFromHistoryRef.current = true;
+            setCurrentView('home');
+            setTargetPlayerId(null);
+            setReturnToEventId(null);
+            setReturnToTeamId(null);
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [
+        currentView,
+        isAndroid,
+        showInstallModal,
+        showLogin,
+        showNotificationsView,
+        showPranchetaInstallModal,
+        showQuiz,
+        showRegister,
+        showRegisterCropModal,
+    ]);
 
     const handleEnableNotifications = async () => {
         if (!userProfile?.uid) return;
@@ -1289,6 +1436,12 @@ const App: React.FC = () => {
                     aspect={1}
                 />
             </Suspense>
+
+            {showBackExitHint && (
+                <div className="fixed bottom-24 left-1/2 z-[300] -translate-x-1/2 rounded-full bg-black/80 px-4 py-2 text-xs font-semibold text-white shadow-lg backdrop-blur-sm">
+                    Pressione voltar novamente para sair
+                </div>
+            )}
         </div>
     );
 };

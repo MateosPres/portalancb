@@ -6,11 +6,23 @@ import { Comments } from "../components/Comments";
 import { motion, AnimatePresence } from 'framer-motion';
 import { PostImageCarousel } from './PostImageCarousel';
 import { LucideMessageCircle, LucideTrash2 } from 'lucide-react';
+import { CommentLikeButton } from './CommentLikeButton';
 
 interface FeedProps {
   userProfile: UserProfile | null;
   onOpenPost?: (post: FeedPost) => void;
   onOpenPlayer?: (playerId: string) => void;
+}
+
+interface HighlightComment {
+  id: string;
+  text: string;
+  userName: string;
+  userPhoto?: string | null;
+  likesCount: number;
+  linkedPlayerId?: string | null;
+  userId?: string;
+  createdAt?: any;
 }
 
 /* LEGENDA SIMPLES */
@@ -27,6 +39,7 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
   const [loading, setLoading] = useState(true);
   const [showComments, setShowComments] = useState<Record<string, boolean>>({});
   const [commentsCount, setCommentsCount] = useState<Record<string, number>>({});
+  const [highlightComments, setHighlightComments] = useState<Record<string, HighlightComment | null>>({});
 
   const getPosts = async () => {
     try {
@@ -72,8 +85,16 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
   useEffect(() => {
     if (!posts.length) {
       setCommentsCount({});
+      setHighlightComments({});
       return;
     }
+
+    const getCreatedAtMs = (value: any) => {
+      if (!value) return 0;
+      if (typeof value?.toDate === 'function') return value.toDate().getTime();
+      const parsed = new Date(value).getTime();
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
 
     const unsubscribes = posts.map((post) => {
       return db
@@ -82,15 +103,45 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
         .collection('comments')
         .onSnapshot(
           (snapshot) => {
+            const comments = snapshot.docs.map((doc) => {
+              const data = doc.data() as HighlightComment;
+              return {
+                id: doc.id,
+                text: data.text || '',
+                userName: data.userName || 'Usuário',
+                userPhoto: data.userPhoto || null,
+                likesCount: Number(data.likesCount || 0),
+                linkedPlayerId: data.linkedPlayerId || null,
+                userId: data.userId,
+                createdAt: data.createdAt,
+              } as HighlightComment;
+            });
+
+            comments.sort((a, b) => {
+              const byLikes = Number(b.likesCount || 0) - Number(a.likesCount || 0);
+              if (byLikes !== 0) return byLikes;
+              return getCreatedAtMs(b.createdAt) - getCreatedAtMs(a.createdAt);
+            });
+
             setCommentsCount((prev) => ({
               ...prev,
               [post.id]: snapshot.size,
+            }));
+
+            setHighlightComments((prev) => ({
+              ...prev,
+              [post.id]: comments[0] || null,
             }));
           },
           () => {
             setCommentsCount((prev) => ({
               ...prev,
               [post.id]: prev[post.id] || 0,
+            }));
+
+            setHighlightComments((prev) => ({
+              ...prev,
+              [post.id]: prev[post.id] || null,
             }));
           }
         );
@@ -168,6 +219,11 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
         delete next[postId];
         return next;
       });
+      setHighlightComments((prev) => {
+        const next = { ...prev };
+        delete next[postId];
+        return next;
+      });
     } catch (error) {
       console.error('Erro ao apagar post:', error);
       alert('Não foi possível apagar o post. Tente novamente.');
@@ -186,6 +242,9 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
           const dateStr = formatTime(post.timestamp);
           const postText = getPostText(post);
           const postImages = (post.images && post.images.length ? post.images : post.image_url ? [post.image_url] : []).filter(Boolean) as string[];
+          const highlightComment = highlightComments[post.id];
+          const highlightPlayerId = highlightComment?.linkedPlayerId || null;
+          const canOpenHighlightPlayer = Boolean(highlightPlayerId && onOpenPlayer);
 
           return (
             <div key={post.id} className="flex flex-col border-b border-white/10 pb-8 mb-8 last:mb-0 last:border-b-0">
@@ -267,6 +326,52 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
                   <span className="text-sm text-slate-300">{commentsCount[post.id] || 0}</span>
                 </button>
               </div>
+
+              {highlightComment && !showComments[post.id] && (
+                <div className="mt-2 pl-[3.9rem] pr-3">
+                  <div className="relative flex items-start gap-2 border-b border-white/10 py-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (highlightPlayerId) onOpenPlayer?.(highlightPlayerId);
+                      }}
+                      disabled={!canOpenHighlightPlayer}
+                      className="rounded-full"
+                    >
+                      <img
+                        src={highlightComment.userPhoto || `https://ui-avatars.com/api/?name=${highlightComment.userName}`}
+                        alt={highlightComment.userName}
+                        className="mt-0.5 h-8 w-8 rounded-full object-cover"
+                      />
+                    </button>
+
+                    <div className="flex flex-1 flex-col pr-8">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (highlightPlayerId) onOpenPlayer?.(highlightPlayerId);
+                        }}
+                        disabled={!canOpenHighlightPlayer}
+                        className={canOpenHighlightPlayer ? 'w-fit text-left text-white text-sm font-semibold hover:underline' : 'w-fit text-left text-white text-sm font-semibold cursor-default'}
+                      >
+                        {highlightComment.userName}
+                      </button>
+
+                      <div className="mt-0.5">
+                        <span className="text-slate-300 text-sm line-clamp-2">{highlightComment.text}</span>
+                        <div className="mt-1">
+                          <CommentLikeButton
+                            postId={post.id}
+                            commentId={highlightComment.id}
+                            userId={userProfile?.uid}
+                            variant="dark"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* COMENTÁRIOS COM ANIMAÇÃO */}
               <AnimatePresence>
