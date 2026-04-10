@@ -22,6 +22,8 @@ import { ChaaveConfigurator } from '../components/ChaaveConfigurator';
 import { formatCpf } from '../utils/contactFormat';
 import { uploadImageToImgBB } from '../utils/imgbb';
 import { formatShortWeekdayDate, formatShortWeekdayDateTime, normalizeDateToIso } from '../utils/dateFormat';
+import { normalizeEvento, normalizeEventoWrite } from '../utils/eventNormalize';
+import { normalizeJogo, normalizeJogoWrite, normalizeRosterEntry } from '../utils/gameNormalize';
 
 interface EventoDetalheViewProps {
     eventId: string;
@@ -138,7 +140,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     useEffect(() => {
         const unsubEvent = onSnapshot(doc(db, "eventos", eventId), (doc) => {
             if (doc.exists()) {
-                const evData = { id: doc.id, ...doc.data() } as Evento;
+                const evData = normalizeEvento(doc.id, doc.data());
                 setEvent(evData);
                 // Pre-fill edit form
                 setEditName(evData.nome);
@@ -153,12 +155,12 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         });
 
         const unsubGames = onSnapshot(collection(db, "eventos", eventId, "jogos"), (snapshot) => {
-            const gamesData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Jogo));
+            const gamesData = snapshot.docs.map(d => normalizeJogo(d.id, d.data()));
             setGames(gamesData);
         });
 
         const unsubRoster = onSnapshot(collection(db, "eventos", eventId, "roster"), (snapshot) => {
-            const rosterData = snapshot.docs.map(d => ({ playerId: d.id, ...d.data() } as RosterEntry));
+            const rosterData = snapshot.docs.map(d => normalizeRosterEntry(d.id, d.data()));
             setRoster(rosterData);
         });
 
@@ -575,20 +577,31 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         if (!event) return;
 
         try {
-            const gameData: any = {
+            const normalizedBase = normalizeJogoWrite({
                 dataJogo: newGameDate,
                 horaJogo: newGameHour,
                 status: 'agendado',
                 placarTimeA_final: 0,
                 placarTimeB_final: 0,
-                placarANCB_final: 0, 
+                placarANCB_final: 0,
                 placarAdversario_final: 0,
-                localizacao: newGameLocation || 'Quadra Municipal'
+                localizacao: newGameLocation || 'Quadra Municipal',
+            });
+
+            const gameData: any = {
+                dataJogo: normalizedBase.dataJogo,
+                horaJogo: normalizedBase.horaJogo,
+                status: normalizedBase.status,
+                placarTimeA_final: normalizedBase.placarTimeA_final,
+                placarTimeB_final: normalizedBase.placarTimeB_final,
+                placarANCB_final: normalizedBase.placarANCB_final,
+                placarAdversario_final: normalizedBase.placarAdversario_final,
+                localizacao: normalizedBase.localizacao || 'Quadra Municipal',
             };
 
             // Add phase field for bracket tournaments
             if (event.formato === 'chaveamento') {
-                gameData.fase = newGamePhase;
+                gameData.fase = normalizeJogoWrite({ fase: newGamePhase }).fase;
             }
 
             if (event.type === 'torneio_interno') {
@@ -654,11 +667,22 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const handleUpdateEvent = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await updateDoc(doc(db, "eventos", eventId), {
+            const normalizedEvent = normalizeEventoWrite({
                 nome: editName,
                 data: editDate,
                 status: editStatus,
-                type: editType
+                type: editType,
+                modalidade: event?.modalidade,
+                logoUrl: event?.logoUrl,
+                adversario: event?.adversario,
+                formato: event?.formato,
+            });
+
+            await updateDoc(doc(db, "eventos", eventId), {
+                nome: normalizedEvent.nome,
+                data: normalizedEvent.data,
+                status: normalizedEvent.status,
+                type: normalizedEvent.type
             });
             setShowEditEvent(false);
             alert("Evento atualizado!");
@@ -1059,7 +1083,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col">
             {/* HERO HEADER */}
-            <div className={`relative z-30 w-full ${getGradient()} text-white p-4 pt-4 md:p-12 md:pt-20 shadow-xl overflow-hidden`}>
+            <div className={`relative z-30 w-full ${getGradient()} text-white p-4 pt-4 md:px-12 md:pt-8 md:pb-10 shadow-xl overflow-hidden`}>
                 <div className="absolute top-0 right-0 opacity-10 pointer-events-none transform translate-x-10 -translate-y-10">
                     <LucideTrophy size={300} />
                 </div>

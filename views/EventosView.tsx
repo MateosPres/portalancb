@@ -13,6 +13,8 @@ import { collection, doc, getDocs, getDoc, writeBatch, updateDoc, addDoc, server
 import { fileToBase64 } from '../utils/imageUtils';
 import { uploadImageToImgBB } from '../utils/imgbb';
 import { formatShortWeekdayDate, formatShortWeekdayDateTime } from '../utils/dateFormat';
+import { normalizeEvento, normalizeEventoWrite } from '../utils/eventNormalize';
+import { normalizeJogo, normalizeJogoWrite } from '../utils/gameNormalize';
 
 interface EventosViewProps {
     onBack: () => void;
@@ -88,7 +90,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
     useEffect(() => {
         const unsubscribe = db.collection("eventos").orderBy("data", "desc").onSnapshot((snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Evento));
+            const data = snapshot.docs.map(d => normalizeEvento(d.id, d.data()));
             setEvents(data);
             setLoading(false);
         });
@@ -114,7 +116,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             const entries = await Promise.all(
                 friendlyEvents.map(async (event) => {
                     const gamesSnap = await getDocs(collection(db, "eventos", event.id, "jogos"));
-                    const games = gamesSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Jogo));
+                    const games = gamesSnap.docs.map(d => normalizeJogo(d.id, d.data()));
                     if (games.length === 0) return [event.id, null] as const;
 
                     const sorted = [...games].sort((a, b) => {
@@ -152,7 +154,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
             if (!game) {
                 const gamesSnap = await getDocs(collection(db, "eventos", evento.id, "jogos"));
-                const games = gamesSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Jogo));
+                const games = gamesSnap.docs.map(d => normalizeJogo(d.id, d.data()));
                 if (games.length > 0) {
                     game = [...games].sort((a, b) => {
                         const keyA = `${a.dataJogo || ''}T${a.horaJogo || '00:00'}`;
@@ -359,14 +361,23 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 ? (existingGame?.timeB_id || `fr_b_${timestampBase}`)
                 : null;
 
-            const eventUpdate: any = {
+            const normalizedEvent = normalizeEventoWrite({
                 nome: editFriendlyName,
-                logoUrl: editFriendlyEventLogo || '',
+                logoUrl: editFriendlyEventLogo,
                 data: editFriendlyDate,
                 modalidade: editFriendlyMode,
                 status: editFriendlyStatus,
+                adversario: isInternal ? editFriendlyTeamBName : editFriendlyOpponent,
+            });
+
+            const eventUpdate: any = {
+                nome: normalizedEvent.nome,
+                logoUrl: normalizedEvent.logoUrl,
+                data: normalizedEvent.data,
+                modalidade: normalizedEvent.modalidade,
+                status: normalizedEvent.status,
                 jogadoresEscalados: combinedRosterArray,
-                adversario: isInternal ? editFriendlyTeamBName.trim() : editFriendlyOpponent.trim(),
+                adversario: normalizedEvent.adversario,
             };
 
             if (isInternal && teamAId && teamBId) {
@@ -399,14 +410,26 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                     : 'agendado';
 
             if (existingGame?.id) {
-                const gameUpdate: any = {
+                const normalizedGameBase = normalizeJogoWrite({
                     dataJogo: editFriendlyDate,
                     horaJogo: editFriendlyHour,
                     status: mappedStatus,
+                    adversario: isInternal ? editFriendlyTeamBName : editFriendlyOpponent,
                     placarANCB_final: existingGame.placarANCB_final ?? 0,
                     placarAdversario_final: existingGame.placarAdversario_final ?? 0,
                     placarTimeA_final: existingGame.placarTimeA_final ?? 0,
                     placarTimeB_final: existingGame.placarTimeB_final ?? 0,
+                });
+
+                const gameUpdate: any = {
+                    dataJogo: normalizedGameBase.dataJogo,
+                    horaJogo: normalizedGameBase.horaJogo,
+                    status: normalizedGameBase.status,
+                    adversario: normalizedGameBase.adversario,
+                    placarANCB_final: normalizedGameBase.placarANCB_final,
+                    placarAdversario_final: normalizedGameBase.placarAdversario_final,
+                    placarTimeA_final: normalizedGameBase.placarTimeA_final,
+                    placarTimeB_final: normalizedGameBase.placarTimeB_final,
                 };
 
                 if (isInternal && teamAId && teamBId) {
@@ -431,14 +454,26 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
                 await updateDoc(doc(db, 'eventos', editingFriendlyEventId, 'jogos', existingGame.id), gameUpdate);
             } else {
-                const gamePayload: any = {
+                const normalizedGameBase = normalizeJogoWrite({
                     dataJogo: editFriendlyDate,
                     horaJogo: editFriendlyHour,
                     status: mappedStatus,
+                    adversario: isInternal ? editFriendlyTeamBName : editFriendlyOpponent,
                     placarTimeA_final: 0,
                     placarTimeB_final: 0,
                     placarANCB_final: 0,
-                    placarAdversario_final: 0
+                    placarAdversario_final: 0,
+                });
+
+                const gamePayload: any = {
+                    dataJogo: normalizedGameBase.dataJogo,
+                    horaJogo: normalizedGameBase.horaJogo,
+                    status: normalizedGameBase.status,
+                    adversario: normalizedGameBase.adversario,
+                    placarTimeA_final: normalizedGameBase.placarTimeA_final,
+                    placarTimeB_final: normalizedGameBase.placarTimeB_final,
+                    placarANCB_final: normalizedGameBase.placarANCB_final,
+                    placarAdversario_final: normalizedGameBase.placarAdversario_final,
                 };
 
                 if (isInternal && teamAId && teamBId) {
@@ -544,12 +579,21 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         if (!editingEventId) return;
 
         try {
-            await updateDoc(doc(db, 'eventos', editingEventId), {
+            const normalizedEvent = normalizeEventoWrite({
                 nome: editEventName,
-                logoUrl: editEventLogo || '',
+                logoUrl: editEventLogo,
                 data: editEventDate,
                 modalidade: editEventMode,
                 status: editEventStatus,
+                type: editingEventType,
+            });
+
+            await updateDoc(doc(db, 'eventos', editingEventId), {
+                nome: normalizedEvent.nome,
+                logoUrl: normalizedEvent.logoUrl,
+                data: normalizedEvent.data,
+                modalidade: normalizedEvent.modalidade,
+                status: normalizedEvent.status,
             });
 
             setShowEventEditModal(false);
@@ -674,13 +718,23 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 numero: Number(num)
             }));
 
-            const eventPayload: any = {
+            const normalizedEvent = normalizeEventoWrite({
                 nome: formName,
-                logoUrl: formEventLogo || '',
+                logoUrl: formEventLogo,
                 data: formDate,
                 modalidade: formMode,
                 type: formType,
                 status: formStatus,
+                adversario: formFriendlyMode === 'internal_team' ? formTeamBName : formOpponent,
+            });
+
+            const eventPayload: any = {
+                nome: normalizedEvent.nome,
+                logoUrl: normalizedEvent.logoUrl,
+                data: normalizedEvent.data,
+                modalidade: normalizedEvent.modalidade,
+                type: normalizedEvent.type,
+                status: normalizedEvent.status,
                 jogadoresEscalados: combinedRosterArray
             };
 
@@ -726,14 +780,26 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             }
 
             if (formType === 'amistoso') {
-                const gamePayload: any = {
+                const normalizedGameBase = normalizeJogoWrite({
                     dataJogo: formDate,
                     horaJogo: formGameHour,
                     status: 'agendado',
+                    adversario: formFriendlyMode === 'internal_team' ? formTeamBName : formOpponent,
                     placarTimeA_final: 0,
                     placarTimeB_final: 0,
                     placarANCB_final: 0,
-                    placarAdversario_final: 0
+                    placarAdversario_final: 0,
+                });
+
+                const gamePayload: any = {
+                    dataJogo: normalizedGameBase.dataJogo,
+                    horaJogo: normalizedGameBase.horaJogo,
+                    status: normalizedGameBase.status,
+                    adversario: normalizedGameBase.adversario,
+                    placarTimeA_final: normalizedGameBase.placarTimeA_final,
+                    placarTimeB_final: normalizedGameBase.placarTimeB_final,
+                    placarANCB_final: normalizedGameBase.placarANCB_final,
+                    placarAdversario_final: normalizedGameBase.placarAdversario_final,
                 };
 
                 if (friendlyIsInternal) {
