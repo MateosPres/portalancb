@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../services/firebase';
 import { Evento, Time, Player, UserProfile } from '../types';
 import { Button } from '../components/Button';
@@ -45,6 +45,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [savingStep, setSavingStep] = useState('');
     
     // Image Upload State
     const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -53,6 +54,8 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
 
     const [showRefusalModal, setShowRefusalModal] = useState(false);
     const [refusalReason, setRefusalReason] = useState('');
+    const rosterScrollRef = useRef<HTMLDivElement | null>(null);
+    const rosterScrollTopRef = useRef(0);
 
     const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
 
@@ -130,6 +133,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
 
     const handleSaveTeam = async () => {
         if (!event || !team.nomeTime) return;
+        setSavingStep('Salvando time...');
         setSaving(true);
 
         try {
@@ -169,6 +173,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
 
             // 2. PROPAGAÇÃO DO NOME PARA OS JOGOS (Se for edição e o nome mudou)
             if (isNameChanged) {
+                setSavingStep('Sincronizando jogos...');
                 try {
                     const gamesBatch = writeBatch(db);
                     let atualizacoes = 0;
@@ -232,6 +237,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
 
             // 3. Send Notifications
             if (newPlayers.length > 0) {
+                setSavingStep('Enviando notificações...');
                 // IMPORTANTE: Estou mudando db.batch() para writeBatch(db) para manter o padrão moderno do Firebase v9 que você usou acima com updateDoc e doc.
                 const notifBatch = writeBatch(db); 
                 
@@ -258,44 +264,52 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                 await notifBatch.commit();
             }
 
+            setSavingStep('Concluindo...');
             onBack();
         } catch (error) {
             console.error("Error saving team:", error);
             alert("Erro ao salvar time.");
         } finally {
             setSaving(false);
+            setSavingStep('');
         }
     };
 
     const togglePlayer = (playerId: string) => {
-        const currentPlayers = team.jogadores || [];
-        const currentStatus = team.rosterStatus || {};
-        
-        if (currentPlayers.includes(playerId)) {
-            // Remove player
-            const newPlayers = currentPlayers.filter(id => id !== playerId);
-            const newStatus = { ...currentStatus };
-            delete newStatus[playerId];
-            setTeam({ ...team, jogadores: newPlayers, rosterStatus: newStatus });
-        } else {
-            // Add player
+        if (rosterScrollRef.current) {
+            rosterScrollTopRef.current = rosterScrollRef.current.scrollTop;
+        }
+
+        setTeam(prev => {
+            const currentPlayers = prev.jogadores || [];
+            const currentStatus = prev.rosterStatus || {};
+
+            if (currentPlayers.includes(playerId)) {
+                const newPlayers = currentPlayers.filter(id => id !== playerId);
+                const newStatus = { ...currentStatus };
+                delete newStatus[playerId];
+                return { ...prev, jogadores: newPlayers, rosterStatus: newStatus };
+            }
+
             // If ANCB team, status is 'pendente'. Else 'confirmado'.
-            const status = team.isANCB ? 'pendente' : 'confirmado';
-            
-            setTeam({ 
-                ...team, 
+            const status = prev.isANCB ? 'pendente' : 'confirmado';
+            return {
+                ...prev,
                 jogadores: [...currentPlayers, playerId],
                 rosterStatus: { ...currentStatus, [playerId]: status }
-            });
-        }
+            };
+        });
     };
 
     const updatePlayerStatus = (playerId: string, status: 'pendente' | 'confirmado' | 'recusado') => {
-        const currentStatus = team.rosterStatus || {};
-        setTeam({
-            ...team,
-            rosterStatus: { ...currentStatus, [playerId]: status }
-        });
+        if (rosterScrollRef.current) {
+            rosterScrollTopRef.current = rosterScrollRef.current.scrollTop;
+        }
+
+        setTeam(prev => ({
+            ...prev,
+            rosterStatus: { ...(prev.rosterStatus || {}), [playerId]: status }
+        }));
     };
 
     const handleUpdateMyStatus = async (status: 'confirmado' | 'recusado', reason?: string) => {
@@ -375,25 +389,24 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
         }
     };
 
-    const filteredPlayers = allPlayers.filter(p => 
-        p.nome.toLowerCase().includes(search.toLowerCase()) || 
+    useEffect(() => {
+        if (!rosterScrollRef.current) return;
+        if (rosterScrollTopRef.current <= 0) return;
+        rosterScrollRef.current.scrollTop = rosterScrollTopRef.current;
+    }, [team.jogadores, team.rosterStatus]);
+
+    const filteredPlayers = useMemo(() => allPlayers.filter(p =>
+        p.nome.toLowerCase().includes(search.toLowerCase()) ||
         (p.apelido && p.apelido.toLowerCase().includes(search.toLowerCase()))
-    );
+    ), [allPlayers, search]);
 
-    // Sort: Selected first (Confirmed > Pending > Refused), then alphabetical
-    const sortedFilteredPlayers = [...filteredPlayers].sort((a, b) => {
-        const aSelected = team.jogadores?.includes(a.id);
-        const bSelected = team.jogadores?.includes(b.id);
-
-        if (aSelected && !bSelected) return -1;
-        if (!aSelected && bSelected) return 1;
-
-        if (aSelected && bSelected) {
-            // Priority: Confirmado (0) > Pendente (1) > Recusado (2)
+    // Keep alphabetical order while editing to avoid visible list jumps.
+    const sortedFilteredPlayers = useMemo(() => [...filteredPlayers].sort((a, b) => {
+        if (team.jogadores?.includes(a.id) && team.jogadores?.includes(b.id)) {
             const statusOrder: Record<string, number> = { 'confirmado': 0, 'pendente': 1, 'recusado': 2 };
             const aStatus = team.rosterStatus?.[a.id] || 'pendente';
             const bStatus = team.rosterStatus?.[b.id] || 'pendente';
-            
+
             const orderA = statusOrder[aStatus] ?? 1;
             const orderB = statusOrder[bStatus] ?? 1;
 
@@ -403,7 +416,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
         }
 
         return a.nome.localeCompare(b.nome);
-    });
+    }), [filteredPlayers, team.jogadores, team.rosterStatus]);
 
     const formatPosition = (pos: string | undefined) => {
         if (!pos) return '-';
@@ -434,7 +447,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
             </div>
 
             {/* O pb-24 aqui em baixo garante que a lista não fique escondida atrás do novo botão salvar */}
-            <div className="max-w-3xl mx-auto p-4 space-y-4 sm:space-y-6 pb-24">
+            <div className="max-w-3xl mx-auto p-4 space-y-4 sm:space-y-6 pb-40 md:pb-24">
                 {/* User Status Banner */}
                 {userProfile?.linkedPlayerId && team.jogadores?.includes(userProfile.linkedPlayerId) && (
                     <>
@@ -493,8 +506,8 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                     </>
                 )}
 
-                {/* Team Info Card */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 sm:p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+                {/* Team Info */}
+                <div className="pb-4 sm:pb-6 border-b border-gray-200/80 dark:border-gray-700/80">
                     <div className="flex flex-row items-center gap-4">
                         <div className="relative shrink-0 group">
                             <div className={`w-16 h-16 sm:w-24 sm:h-24 rounded-full flex items-center justify-center overflow-hidden shadow-md ${team.logoUrl ? 'bg-white' : 'bg-gray-100 dark:bg-gray-700'}`}>
@@ -525,7 +538,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                             </div>
                             
                             {isAdmin && (
-                                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-100 dark:border-gray-700">
+                                <div className="flex items-center gap-3 py-1">
                                     <input 
                                         type="checkbox" 
                                         id="isANCB" 
@@ -545,8 +558,8 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
 
                 {/* Roster Management */}
                 {team.isANCB && (
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <section className="pt-2">
+                        <div className="pb-4 border-b border-gray-200/80 dark:border-gray-700/80 flex flex-col sm:flex-row justify-between items-center gap-4">
                             <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
                                 <LucideUserPlus className="text-ancb-orange" size={20} />
                                 {isAdmin ? 'Gerenciar Elenco' : 'Elenco'} <span className="text-sm font-normal text-gray-500">({team.jogadores?.length || 0})</span>
@@ -562,15 +575,15 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                             </div>
                         </div>
 
-                        <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
+                        <div ref={rosterScrollRef} className="max-h-[60vh] overflow-y-auto custom-scrollbar divide-y divide-gray-100 dark:divide-gray-700/80">
                             {(isAdmin ? sortedFilteredPlayers : sortedFilteredPlayers.filter(p => team.jogadores?.includes(p.id))).map(p => {
                                 const isSelected = team.jogadores?.includes(p.id);
                                 const status = team.rosterStatus?.[p.id];
                                 
                                 return (
-                                    <div 
-                                        key={p.id} 
-                                        className={`flex flex-row items-center justify-between p-3 sm:p-4 border-b border-gray-100 dark:border-gray-700 transition-colors ${isSelected ? 'bg-blue-50/50 dark:bg-blue-900/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
+                                    <div
+                                        key={p.id}
+                                        className={`flex flex-row items-center justify-between p-3 sm:p-4 transition-colors ${isSelected ? 'bg-blue-50/50 dark:bg-blue-900/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
                                     >
                                         <div className="flex items-center gap-3 cursor-pointer min-w-0 mr-2" onClick={() => isAdmin && !isSelected && togglePlayer(p.id)}>
                                             <div className="relative">
@@ -654,21 +667,26 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                                 <div className="p-8 text-center text-gray-500">Nenhum jogador encontrado.</div>
                             )}
                         </div>
-                    </div>
+                    </section>
                 )}
             </div>
             {/* Barra Inferior Fixa para Salvar */}
             {isAdmin && (
-                <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-40 flex justify-center">
-                    <div className="max-w-3xl w-full flex justify-end">
+                <div className="fixed left-0 right-0 bottom-[calc(env(safe-area-inset-bottom,0px)+5.2rem)] md:bottom-0 p-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-40 flex justify-center">
+                    <div className="max-w-3xl w-full flex flex-col items-end gap-2">
                         <Button 
                             onClick={handleSaveTeam} 
                             disabled={!team.nomeTime || saving} 
                             className="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md w-full sm:w-auto py-3 text-lg flex items-center justify-center gap-2"
                         >
                             {saving ? <LucideLoader2 className="animate-spin" size={24} /> : <LucideSave size={24} />}
-                            Salvar Time
+                            {saving ? (savingStep || 'Salvando...') : 'Salvar Time'}
                         </Button>
+                        {saving && (
+                            <p className="w-full text-center sm:text-right text-[11px] text-gray-500 dark:text-gray-400">
+                                Pode levar alguns segundos em conexões lentas.
+                            </p>
+                        )}
                     </div>
                 </div>
             )}

@@ -66,7 +66,9 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const isAdmin = user?.role === 'admin' || user?.role === 'super-admin';
-  const unreadCount = notifications.filter(n => !isNotificationRead((n as any).read)).length;
+  const unreadCount = notifications.filter(
+    n => !isNotificationRead((n as any).read) && n.type !== 'roster_alert' && n.type !== 'pending_review'
+  ).length;
   const isMobileDevice = /android|iphone|ipad|ipod/i.test(window.navigator.userAgent);
 
   // Detecta se a Prancheta está instalada como PWA

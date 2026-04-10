@@ -1229,7 +1229,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                             </div>
                             
                             {games.length === 0 ? (
-                                <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-xl border-dashed border-2 border-gray-200 dark:border-gray-700">
+                                <div className="text-center py-10 border-b border-dashed border-gray-300 dark:border-gray-700">
                                     <p className="text-gray-500">Nenhum jogo agendado.</p>
                                 </div>
                             ) : (
@@ -1246,10 +1246,10 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                     const sB = resolveScore(game.placarTimeB_final, game.placarAdversario_final);
                                                     const isGameLive = game.status === 'andamento';
                                                     return (
-                                                        <div 
+                                                        <div
                                                             key={game.id} 
                                                             onClick={() => event.type === 'torneio_externo' ? handleOpenGame(game) : setSelectedGameForSummary(game)}
-                                                            className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors ${getGameResultClass(game)}`}
+                                                            className={`p-3 flex items-center gap-3 cursor-pointer border-b border-gray-200/80 dark:border-gray-700/80 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors ${getGameResultClass(game)}`}
                                                         >
                                                             {/* HORÁRIO — coluna própria, nunca sobrepõe os nomes */}
                                                             <div className="shrink-0 w-24 md:w-28 text-center">
@@ -1362,7 +1362,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                 setViewingTeam(team);
                                             }
                                         }}
-                                        className={`${team.isANCB ? 'bg-ancb-blue border-blue-700' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'} p-4 rounded-xl shadow-sm border flex justify-between items-center group ${(isAdmin || team.isANCB) ? 'cursor-pointer hover:shadow-md transition-all' : ''}`}
+                                        className={`${team.isANCB ? 'bg-ancb-blue border-blue-700' : 'border-gray-200 dark:border-gray-700'} p-4 rounded-xl border flex justify-between items-center group ${(isAdmin || team.isANCB) ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors' : ''}`}
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg overflow-hidden border-2 ${team.isANCB ? 'bg-blue-800 border-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 border-gray-100 dark:border-gray-600 text-gray-600 dark:text-gray-300'}`}>

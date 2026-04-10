@@ -906,7 +906,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 )}
             </div>
 
-            <div className="bg-white dark:bg-gray-800 p-1.5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 inline-flex gap-1 mb-8 w-full md:w-auto">
+            <div className="inline-flex gap-1 mb-8 w-full md:w-auto border-b border-gray-200 dark:border-gray-700 pb-2">
                 <button onClick={() => setTab('proximos')} className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'proximos' ? 'bg-ancb-blue text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
                     <div className="flex items-center justify-center gap-2"><LucideCalendarClock size={16} /> Próximos</div>
                 </button>
@@ -995,7 +995,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                             </div>
                         </Card>
                     );}) : (
-                        <div className="col-span-full text-center py-16 bg-white/50 dark:bg-gray-800/50 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700"><LucideCalendarClock size={48} className="mx-auto text-gray-300 mb-4" /><p className="text-gray-500 dark:text-gray-400 font-medium">Nenhum evento encontrado.</p></div>
+                        <div className="col-span-full text-center py-16 border-b border-dashed border-gray-300 dark:border-gray-700"><LucideCalendarClock size={48} className="mx-auto text-gray-300 mb-4" /><p className="text-gray-500 dark:text-gray-400 font-medium">Nenhum evento encontrado.</p></div>
                     )}
                 </div>
             )}

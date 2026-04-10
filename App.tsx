@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player, FeedPost } from './types';
-import firebase, { auth, db, requestFCMToken, onMessageListener } from './services/firebase';
+import firebase, { auth, db, requestFCMToken } from './services/firebase';
 import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
@@ -8,7 +8,7 @@ import { Modal } from './components/Modal';
 import { Feed } from './components/Feed';
 import { LiveEventHero } from './components/LiveEventHero';
 import { ApoiadoresCarousel } from './components/ApoiadoresCarousel';
-import { LucideCalendar, LucideUsers, LucideTrophy, LucideLoader2, LucideMegaphone, LucideDownload, LucideShare, LucideX, LucideExternalLink, LucideStar, LucidePlusSquare } from 'lucide-react';
+import { LucideCalendar, LucideUsers, LucideTrophy, LucideLoader2, LucideDownload, LucideShare, LucideExternalLink, LucidePlusSquare } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { Header } from './components/Header';
 import { LandingScreen } from './components/LandingScreen';
@@ -146,7 +146,6 @@ const App: React.FC = () => {
     const [showQuiz, setShowQuiz] = useState(false);
     const [reviewTargetGame, setReviewTargetGame] = useState<{ gameId: string, eventId: string, playersToReview: Player[] } | null>(null);
     const [pendingReviewNotificationId, setPendingReviewNotificationId] = useState<string | null>(null);
-    const [foregroundNotification, setForegroundNotification] = useState<{title: string, body: string, eventId?: string, type?: string} | null>(null);
     
     const [notificationPermissionStatus, setNotificationPermissionStatus] = useState<NotificationPermission>(
         (typeof Notification !== 'undefined') ? Notification.permission : 'default'
@@ -484,9 +483,7 @@ const App: React.FC = () => {
                         if ((isRosterMember || isExternalTeamMember) && !notifiedEvents.includes(eventId)) {
                             const title = "Convocação!";
                             const body = `Você foi escalado para: ${eventData.nome}`;
-                            setForegroundNotification({ title, body, eventId, type: 'roster' });
                             triggerSystemNotification(title, body);
-                            setTimeout(() => setForegroundNotification(null), 10000);
                             notifiedEvents.push(eventId);
                             localStorage.setItem('ancb_notified_rosters', JSON.stringify(notifiedEvents));
                             checkStaticNotifications({ force: true });
@@ -536,14 +533,7 @@ const App: React.FC = () => {
                     if (!notifiedIds.includes(notifId)) {
                         const title = data.title || "Nova Notificação";
                         const body = data.message || "Você tem um novo alerta.";
-                        setForegroundNotification({
-                            title,
-                            body,
-                            eventId: data.eventId,
-                            type: data.type === 'pending_review' ? 'review' : 'alert'
-                        });
                         triggerSystemNotification(title, body);
-                        setTimeout(() => setForegroundNotification(null), 12000);
                         notifiedIds.push(notifId);
                         localStorage.setItem('ancb_notified_ids', JSON.stringify(notifiedIds));
                     }
@@ -1340,29 +1330,6 @@ const App: React.FC = () => {
                         profilePhoto={headerUser?.photo}
                     />
                 </>
-            )}
-
-            {foregroundNotification && (
-                <div 
-                    onClick={() => {
-                        if (foregroundNotification.type === 'review') setCurrentView('profile'); 
-                        else if (foregroundNotification.eventId) handleOpenEventDetail(foregroundNotification.eventId);
-                        setForegroundNotification(null);
-                    }}
-                    className="fixed top-20 right-4 z-[200] bg-white dark:bg-gray-800 shadow-2xl rounded-2xl border-l-8 border-ancb-orange p-5 max-w-sm animate-slideDown flex items-start gap-4 ring-1 ring-black/5 cursor-pointer hover:bg-orange-50 dark:hover:bg-gray-700 transition-all active:scale-95 group"
-                >
-                    <div className="bg-orange-100 dark:bg-orange-900/30 p-3 rounded-full text-ancb-orange shrink-0 group-hover:rotate-12 transition-transform">
-                        {foregroundNotification.type === 'review' ? <LucideStar size={24} fill="currentColor" /> : <LucideMegaphone size={24} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-gray-900 dark:text-white text-sm leading-tight mb-1">{foregroundNotification.title}</h4>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">{foregroundNotification.body}</p>
-                        <div className="mt-3 flex items-center gap-1.5 text-ancb-blue dark:text-blue-400 text-[10px] font-black uppercase tracking-tighter">
-                            <LucideExternalLink size={12} /> Clique para participar
-                        </div>
-                    </div>
-                    <button onClick={(e) => { e.stopPropagation(); setForegroundNotification(null); }} className="text-gray-400 hover:text-red-500 p-1 rounded-full"><LucideX size={20} /></button>
-                </div>
             )}
 
             {showNotificationsView && userProfile && (
