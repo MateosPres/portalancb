@@ -1268,6 +1268,8 @@ const App: React.FC = () => {
                             onJogadoresClick={() => setCurrentView('jogadores')}
                             onEventClick={() => setCurrentView('eventos')}
                             onVerTodosApoiadores={() => setCurrentView('apoiadores')}
+                            onOpenPost={handleOpenPostView}
+                            onOpenPlayer={handleOpenPlayerFromFeed}
                             publicEvent={ongoingEvents[0]}
                             onOpenPublicGame={(game) => {
                                 setSelectedPublicGame({ game, eventId: ongoingEvents[0]?.id || '' });
@@ -1278,13 +1280,6 @@ const App: React.FC = () => {
                 ) : (
                     <div className="flex-grow">
                         <main className="container mx-auto px-4 py-6 max-w-6xl">
-                            <button 
-                                onClick={() => setCurrentView('home')}
-                                className="flex items-center gap-2 mb-6 px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-[#F27405] hover:bg-white/10 transition"
-                            >
-                                <span>←</span>
-                                <span>Voltar</span>
-                            </button>
                             <Suspense fallback={
                                 <div className="w-full py-16 flex items-center justify-center">
                                     <div className="w-10 h-10 border-4 border-gray-200 dark:border-gray-700 border-t-ancb-orange rounded-full animate-spin" />

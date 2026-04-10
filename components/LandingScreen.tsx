@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { LucideArrowRight, LucideBookOpen, LucideTrophy, LucideUsers, LucideCalendar } from 'lucide-react';
 import { ApoiadoresCarousel } from './ApoiadoresCarousel';
 import { LiveEventHero } from './LiveEventHero';
-import { Evento } from '../types';
+import { Evento, FeedPost } from '../types';
 import { useLiveStream } from '../hooks/useLiveStream';
 import { LiveYouTubePlayer } from './LiveYouTubePlayer';
+import { Feed } from './Feed';
 
 interface LandingScreenProps {
   onLogin: () => void;
@@ -16,6 +17,8 @@ interface LandingScreenProps {
   onVerTodosApoiadores: () => void;
   publicEvent?: Evento | null;
   onOpenPublicGame?: (game: any) => void;
+  onOpenPost?: (post: FeedPost) => void;
+  onOpenPlayer?: (playerId: string) => void;
 }
 
 export const LandingScreen: React.FC<LandingScreenProps> = ({
@@ -28,6 +31,8 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   onVerTodosApoiadores,
   publicEvent,
   onOpenPublicGame,
+  onOpenPost,
+  onOpenPlayer,
 }) => {
   const [showStandaloneLivePlayer, setShowStandaloneLivePlayer] = useState(true);
   const { config: streamConfig, game: streamGame } = useLiveStream();
@@ -77,58 +82,56 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
           )}
 
           {/* Public Access Buttons */}
-          <div className="rounded-[24px] border border-white/10 bg-slate-950/80 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)] mb-8">
-            <p className="text-sm uppercase tracking-[0.25em] text-slate-400 mb-4">Acesso público</p>
-            <div className="grid gap-4 sm:grid-cols-2">
+          <div className="mb-10">
+            <p className="text-sm uppercase tracking-[0.25em] text-slate-400 mb-5">Acesso público</p>
+            <div className="grid grid-cols-4 gap-3 sm:gap-4">
               <button
                 type="button"
                 onClick={onNossaHistoriaClick}
-                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-left transition hover:border-[#F27405]/40 hover:bg-[#F27405]/10"
+                className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-2 py-3 text-center transition hover:border-[#F27405]/40 hover:bg-[#F27405]/10"
               >
-                <span>
-                  <span className="block text-sm font-semibold text-white">Nossa História</span>
-                  <span className="text-xs text-slate-400">Sobre a ANCB</span>
-                </span>
-                <LucideBookOpen size={20} className="text-[#F27405]" />
+                <LucideBookOpen size={18} className="text-[#F27405]" />
+                <span className="block text-[11px] font-semibold leading-tight text-white">Nossa História</span>
               </button>
 
               <button
                 type="button"
                 onClick={onRankingClick}
-                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-left transition hover:border-[#F27405]/40 hover:bg-[#F27405]/10"
+                className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-2 py-3 text-center transition hover:border-[#F27405]/40 hover:bg-[#F27405]/10"
               >
-                <span>
-                  <span className="block text-sm font-semibold text-white">Ranking</span>
-                  <span className="text-xs text-slate-400">Classificação geral</span>
-                </span>
-                <LucideTrophy size={20} className="text-[#F27405]" />
+                <LucideTrophy size={18} className="text-[#F27405]" />
+                <span className="block text-[11px] font-semibold leading-tight text-white">Ranking</span>
               </button>
 
               <button
                 type="button"
                 onClick={onJogadoresClick}
-                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-left transition hover:border-[#F27405]/40 hover:bg-[#F27405]/10"
+                className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-2 py-3 text-center transition hover:border-[#F27405]/40 hover:bg-[#F27405]/10"
               >
-                <span>
-                  <span className="block text-sm font-semibold text-white">Jogadores</span>
-                  <span className="text-xs text-slate-400">Atletas e perfis</span>
-                </span>
-                <LucideUsers size={20} className="text-[#F27405]" />
+                <LucideUsers size={18} className="text-[#F27405]" />
+                <span className="block text-[11px] font-semibold leading-tight text-white">Jogadores</span>
               </button>
 
               <button
                 type="button"
                 onClick={onEventClick}
-                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-left transition hover:border-[#F27405]/40 hover:bg-[#F27405]/10"
+                className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-2 py-3 text-center transition hover:border-[#F27405]/40 hover:bg-[#F27405]/10"
               >
-                <span>
-                  <span className="block text-sm font-semibold text-white">Eventos</span>
-                  <span className="text-xs text-slate-400">Competições e jogos</span>
-                </span>
-                <LucideCalendar size={20} className="text-[#F27405]" />
+                <LucideCalendar size={18} className="text-[#F27405]" />
+                <span className="block text-[11px] font-semibold leading-tight text-white">Eventos</span>
               </button>
             </div>
           </div>
+
+          {/* Mural ANCB */}
+          <section className="mb-10">
+            <h2 className="mb-4 text-sm uppercase tracking-[0.2em] text-slate-300">Mural da ANCB</h2>
+            <Feed
+              userProfile={null}
+              onOpenPost={onOpenPost}
+              onOpenPlayer={onOpenPlayer}
+            />
+          </section>
 
           <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
             <span>Projeto com foco em basquete regional</span>
@@ -138,7 +141,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
       </div>
 
       {/* Fixed Auth Footer */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/10 bg-slate-950/90 backdrop-blur-xl">
+      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/10 bg-[#062553] backdrop-blur-xl">
         <div className="px-6 py-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:justify-center sm:gap-6">
             <button
