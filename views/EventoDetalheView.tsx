@@ -21,6 +21,7 @@ import { GroupStandings } from '../components/GroupStandings';
 import { ChaaveConfigurator } from '../components/ChaaveConfigurator';
 import { formatCpf } from '../utils/contactFormat';
 import { uploadImageToImgBB } from '../utils/imgbb';
+import { formatShortWeekdayDate, formatShortWeekdayDateTime, normalizeDateToIso } from '../utils/dateFormat';
 
 interface EventoDetalheViewProps {
     eventId: string;
@@ -1032,17 +1033,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         (p.apelido || '').toLowerCase().includes(teamRosterSearch.toLowerCase())
     );
 
-    const normalizeGameDate = (dateValue?: string) => {
-        if (!dateValue) return '';
-        if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return dateValue;
-
-        const brDate = dateValue.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-        if (brDate) {
-            return `${brDate[3]}-${brDate[2]}-${brDate[1]}`;
-        }
-
-        return dateValue;
-    };
+    const normalizeGameDate = (dateValue?: string) => normalizeDateToIso(dateValue);
 
     const getGameSortKey = (game: Jogo) => {
         const normalizedDate = normalizeGameDate(game.dataJogo);
@@ -1062,9 +1053,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
     const formatGroupDateLabel = (dateKey: string) => {
         if (dateKey === 'Sem data') return dateKey;
-        const dateParts = dateKey.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (!dateParts) return dateKey;
-        return `${dateParts[3]}/${dateParts[2]}/${dateParts[1]}`;
+        return formatShortWeekdayDate(dateKey);
     };
 
     return (
@@ -1100,9 +1089,16 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                             )}
                         </div>
                     </div>
-                    <h1 className="text-3xl md:text-[2.85rem] font-extrabold mb-3 leading-[1.08] tracking-tight">{event.nome}</h1>
+                    <div className="flex items-start gap-3 md:gap-4 mb-3">
+                        {event.logoUrl && (
+                            <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border-2 border-white/40 bg-white/10 backdrop-blur-md overflow-hidden shrink-0">
+                                <img src={event.logoUrl} alt={`Logo ${event.nome}`} className="w-full h-full object-cover" />
+                            </div>
+                        )}
+                        <h1 className="text-3xl md:text-[2.85rem] font-extrabold leading-[1.08] tracking-tight">{event.nome}</h1>
+                    </div>
                     <div className="flex flex-wrap gap-6 text-sm md:text-base font-medium opacity-90">
-                        <div className="flex items-center gap-2"><LucideCalendar className="opacity-70" /> {event.data.split('-').reverse().join('/')}</div>
+                        <div className="flex items-center gap-2"><LucideCalendar className="opacity-70" /> {formatShortWeekdayDate(event.data)}</div>
                         <div className="flex items-center gap-2"><LucideMapPin className="opacity-70" /> {event.modalidade}</div>
                     </div>
                 </div>
@@ -1232,12 +1228,10 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                             className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors ${getGameResultClass(game)}`}
                                                         >
                                                             {/* HORÁRIO — coluna própria, nunca sobrepõe os nomes */}
-                                                            <div className="shrink-0 w-12 text-center">
-                                                                {game.horaJogo && (
-                                                                    <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 tabular-nums leading-none">
-                                                                        {game.horaJogo}
-                                                                    </span>
-                                                                )}
+                                                            <div className="shrink-0 w-24 md:w-28 text-center">
+                                                                <span className="text-[10px] md:text-[11px] font-bold text-gray-500 dark:text-gray-400 tabular-nums leading-tight text-center block">
+                                                                    {formatShortWeekdayDateTime(game.dataJogo, game.horaJogo)}
+                                                                </span>
                                                             </div>
 
                                                             {/* LINHA DE JOGO */}

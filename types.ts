@@ -76,6 +76,7 @@ export interface EscaladoInfo {
 export interface Evento {
     id: string;
     nome: string;
+    logoUrl?: string;
     data: string;
     modalidade: '3x3' | '5x5';
     type: 'torneio_externo' | 'torneio_interno' | 'amistoso';

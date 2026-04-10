@@ -1,18 +1,18 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../services/firebase';
-import { Evento, Jogo, Player, UserProfile, Time, EscaladoInfo, RosterEntry, Cesta } from '../types';
+import { Evento, Jogo, Player, UserProfile, EscaladoInfo, RosterEntry, Cesta } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { ShareModal } from '../components/ShareModal';
 import { GameSummaryModal } from '../components/GameSummaryModal';
 import { ImageCropperModal } from '../components/ImageCropperModal';
-import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucideTrash2, LucideStar, LucideMessageSquare, LucidePlayCircle, LucideShield, LucideCamera, LucideLoader2, LucideCalendar, LucideMapPin, LucideShare2, LucideSearch } from 'lucide-react';
+import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucideTrash2, LucideStar, LucideMessageSquare, LucidePlayCircle, LucideShield, LucideCamera, LucideLoader2, LucideCalendar, LucideMapPin, LucideSearch } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { collection, doc, getDocs, getDoc, writeBatch, updateDoc, addDoc, serverTimestamp, setDoc, query, where, limit, deleteField } from 'firebase/firestore';
 import { fileToBase64 } from '../utils/imageUtils';
 import { uploadImageToImgBB } from '../utils/imgbb';
+import { formatShortWeekdayDate, formatShortWeekdayDateTime } from '../utils/dateFormat';
 
 interface EventosViewProps {
     onBack: () => void;
@@ -28,10 +28,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<'proximos' | 'finalizados'>('proximos');
     const [allPlayers, setAllPlayers] = useState<Player[]>([]);
-    
-    // Share State
-    const [showShareModal, setShowShareModal] = useState(false);
-    const [shareData, setShareData] = useState<any>(null);
+
     const [friendlyGamesMap, setFriendlyGamesMap] = useState<Record<string, Jogo>>({});
     const [selectedFriendlySummary, setSelectedFriendlySummary] = useState<{ eventId: string; game: Jogo } | null>(null);
 
@@ -46,6 +43,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [editFriendlyOpponent, setEditFriendlyOpponent] = useState('');
     const [editFriendlyTeamAName, setEditFriendlyTeamAName] = useState('ANCB');
     const [editFriendlyTeamBName, setEditFriendlyTeamBName] = useState('');
+    const [editFriendlyEventLogo, setEditFriendlyEventLogo] = useState('');
     const [editFriendlyTeamALogo, setEditFriendlyTeamALogo] = useState('');
     const [editFriendlyTeamBLogo, setEditFriendlyTeamBLogo] = useState('');
     const [editFriendlyRosterMap, setEditFriendlyRosterMap] = useState<Record<string, number>>({});
@@ -63,10 +61,20 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [formStatus, setFormStatus] = useState<'proximo'|'andamento'|'finalizado'>('proximo');
     const [formFriendlyMode, setFormFriendlyMode] = useState<'external_string' | 'internal_team'>('external_string');
     const [formOpponent, setFormOpponent] = useState(''); // Only for Amistoso
+    const [formEventLogo, setFormEventLogo] = useState('');
     const [formTeamAName, setFormTeamAName] = useState('ANCB');
     const [formTeamBName, setFormTeamBName] = useState('');
     const [formTeamALogo, setFormTeamALogo] = useState('');
     const [formTeamBLogo, setFormTeamBLogo] = useState('');
+
+    const [showEventEditModal, setShowEventEditModal] = useState(false);
+    const [editingEventId, setEditingEventId] = useState<string | null>(null);
+    const [editingEventType, setEditingEventType] = useState<'amistoso'|'torneio_interno'|'torneio_externo'>('amistoso');
+    const [editEventName, setEditEventName] = useState('');
+    const [editEventDate, setEditEventDate] = useState('');
+    const [editEventMode, setEditEventMode] = useState<'3x3'|'5x5'>('5x5');
+    const [editEventStatus, setEditEventStatus] = useState<'proximo'|'andamento'|'finalizado'>('proximo');
+    const [editEventLogo, setEditEventLogo] = useState('');
     
     // Roster Selection State
     const [selectedRosterMap, setSelectedRosterMap] = useState<Record<string, number>>({});
@@ -76,7 +84,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [isUploadingLogo, setIsUploadingLogo] = useState(false);
     const [showLogoCropModal, setShowLogoCropModal] = useState(false);
     const [logoCropImageSrc, setLogoCropImageSrc] = useState<string | null>(null);
-    const [logoCropTarget, setLogoCropTarget] = useState<'create_team_a' | 'create_team_b' | 'edit_team_a' | 'edit_team_b' | null>(null);
+    const [logoCropTarget, setLogoCropTarget] = useState<'create_event' | 'create_team_a' | 'create_team_b' | 'edit_event' | 'edit_friendly_event' | 'edit_team_a' | 'edit_team_b' | null>(null);
 
     useEffect(() => {
         const unsubscribe = db.collection("eventos").orderBy("data", "desc").onSnapshot((snapshot) => {
@@ -203,7 +211,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         }));
     };
 
-    const handleOpenLogoCrop = async (file: File, target: 'create_team_a' | 'create_team_b' | 'edit_team_a' | 'edit_team_b') => {
+    const handleOpenLogoCrop = async (file: File, target: 'create_event' | 'create_team_a' | 'create_team_b' | 'edit_event' | 'edit_friendly_event' | 'edit_team_a' | 'edit_team_b') => {
         try {
             const rawBase64 = await fileToBase64(file);
             setLogoCropTarget(target);
@@ -220,18 +228,21 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
         setIsUploadingLogo(true);
         try {
-            const file = new File([croppedImageBlob], 'team-logo.jpg', { type: 'image/jpeg' });
+            const file = new File([croppedImageBlob], 'event-logo.jpg', { type: 'image/jpeg' });
             const compressed = await imageCompression(file, {
                 maxSizeMB: 0.1,
                 maxWidthOrHeight: 256,
                 useWebWorker: true,
                 fileType: 'image/jpeg'
             });
-            const compressedFile = new File([compressed], 'team-logo.jpg', { type: 'image/jpeg' });
+            const compressedFile = new File([compressed], 'event-logo.jpg', { type: 'image/jpeg' });
             const { imageUrl } = await uploadImageToImgBB(compressedFile);
 
+            if (logoCropTarget === 'create_event') setFormEventLogo(imageUrl);
             if (logoCropTarget === 'create_team_a') setFormTeamALogo(imageUrl);
             if (logoCropTarget === 'create_team_b') setFormTeamBLogo(imageUrl);
+            if (logoCropTarget === 'edit_event') setEditEventLogo(imageUrl);
+            if (logoCropTarget === 'edit_friendly_event') setEditFriendlyEventLogo(imageUrl);
             if (logoCropTarget === 'edit_team_a') setEditFriendlyTeamALogo(imageUrl);
             if (logoCropTarget === 'edit_team_b') setEditFriendlyTeamBLogo(imageUrl);
         } catch (error) {
@@ -284,6 +295,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         setEditFriendlyMode(evento.modalidade || '5x5');
         setEditFriendlyOpponentMode(isInternal ? 'internal_team' : 'external_string');
         setEditFriendlyStatus(evento.status || 'proximo');
+        setEditFriendlyEventLogo(evento.logoUrl || '');
         setEditFriendlyOpponent(game?.adversario || game?.timeB_nome || '');
         setEditFriendlyHour(game?.horaJogo || '');
         setEditFriendlyTeamAName(teamA?.nomeTime || game?.timeA_nome || 'ANCB');
@@ -349,6 +361,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
             const eventUpdate: any = {
                 nome: editFriendlyName,
+                logoUrl: editFriendlyEventLogo || '',
                 data: editFriendlyDate,
                 modalidade: editFriendlyMode,
                 status: editFriendlyStatus,
@@ -510,6 +523,43 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         }
     };
 
+    const handleOpenEventEdit = (evento: Evento) => {
+        if (evento.type === 'amistoso') {
+            handleOpenFriendlyEdit(evento);
+            return;
+        }
+
+        setEditingEventId(evento.id);
+        setEditingEventType(evento.type);
+        setEditEventName(evento.nome || '');
+        setEditEventDate(evento.data || '');
+        setEditEventMode(evento.modalidade || '5x5');
+        setEditEventStatus(evento.status || 'proximo');
+        setEditEventLogo(evento.logoUrl || '');
+        setShowEventEditModal(true);
+    };
+
+    const handleSaveEventEdit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingEventId) return;
+
+        try {
+            await updateDoc(doc(db, 'eventos', editingEventId), {
+                nome: editEventName,
+                logoUrl: editEventLogo || '',
+                data: editEventDate,
+                modalidade: editEventMode,
+                status: editEventStatus,
+            });
+
+            setShowEventEditModal(false);
+            setEditingEventId(null);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao atualizar evento.');
+        }
+    };
+
     const sendFriendlyRosterInvites = async (eventId: string, eventName: string, playerIds: string[]) => {
         const uniquePlayerIds = Array.from(new Set(playerIds.filter(Boolean)));
         for (const playerId of uniquePlayerIds) {
@@ -626,6 +676,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
             const eventPayload: any = {
                 nome: formName,
+                logoUrl: formEventLogo || '',
                 data: formDate,
                 modalidade: formMode,
                 type: formType,
@@ -720,6 +771,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             setFormDate('');
             setFormGameHour('');
             setFormOpponent('');
+            setFormEventLogo('');
             setFormFriendlyMode('external_string');
             setFormTeamAName('ANCB');
             setFormTeamBName('');
@@ -730,61 +782,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             setRosterSearch('');
             setRosterSearchTeamB('');
         } catch (e) { alert("Erro ao criar evento"); }
-    };
-
-    const handleShareEvent = async (e: React.MouseEvent, evento: Evento) => {
-        e.stopPropagation();
-        
-        let type: 'roster' | 'internal_teams' = 'roster';
-        let players: Player[] = [];
-        let teams: Time[] = [];
-
-        if (evento.type === 'torneio_interno') {
-            type = 'internal_teams';
-            teams = evento.times || [];
-        } else {
-            type = 'roster';
-            
-            try {
-                // Fetch roster subcollection to check status
-                const rosterSnap = await db.collection("eventos").doc(evento.id).collection("roster").get();
-                let validIds: string[] = [];
-
-                if (!rosterSnap.empty) {
-                    rosterSnap.forEach(doc => {
-                        const data = doc.data();
-                        // Exclude 'recusado' players from the story
-                        if (data.status !== 'recusado') {
-                            validIds.push(doc.id); // doc.id is the playerId
-                        }
-                    });
-                } else {
-                    // Fallback to legacy array if subcollection is empty
-                    // Check if it's string[] or object[]
-                    if (evento.jogadoresEscalados && evento.jogadoresEscalados.length > 0) {
-                        if (typeof evento.jogadoresEscalados[0] === 'string') {
-                            validIds = evento.jogadoresEscalados as string[];
-                        } else {
-                            validIds = (evento.jogadoresEscalados as EscaladoInfo[]).map(e => e.id);
-                        }
-                    }
-                }
-
-                // Filter the global player list by valid IDs
-                players = allPlayers.filter(p => validIds.includes(p.id));
-
-            } catch (err) {
-                console.error("Error fetching roster for share:", err);
-            }
-        }
-
-        setShareData({
-            type,
-            event: evento,
-            players,
-            teams
-        });
-        setShowShareModal(true);
     };
 
     // Helper for Card Gradients based on Type
@@ -855,7 +852,11 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 <div className="flex justify-center py-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ancb-blue"></div></div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
-                    {displayEvents.length > 0 ? displayEvents.map(evento => (
+                    {displayEvents.length > 0 ? displayEvents.map(evento => {
+                        const friendlyGame = friendlyGamesMap[evento.id];
+                        const eventDateLabel = formatShortWeekdayDateTime(evento.data, friendlyGame?.horaJogo);
+
+                        return (
                         <Card 
                             key={evento.id} 
                             onClick={() => handleEventCardClick(evento)} 
@@ -867,27 +868,19 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                             </div>
 
                             <div className="flex justify-between items-start mb-4 relative z-10">
-                                <div className="bg-white/20 backdrop-blur-md rounded-lg p-2 text-center min-w-[60px] border border-white/30 text-white shadow-sm">
-                                    <span className="block text-[10px] font-bold uppercase tracking-wider opacity-80">{evento.data.split('-')[1] || 'MÊS'}</span>
-                                    <span className="block text-2xl font-black leading-none">{evento.data.split('-')[2] || 'DIA'}</span>
+                                <div className="bg-white/20 backdrop-blur-md rounded-lg px-3 py-2 border border-white/30 text-white shadow-sm">
+                                    <span className="block text-xs font-bold tracking-wide">{eventDateLabel || formatShortWeekdayDate(evento.data)}</span>
                                 </div>
                                 <div className="flex gap-2">
-                                    {(userProfile?.role === 'admin' || userProfile?.role === 'super-admin') && evento.type === 'amistoso' && (
+                                    {(userProfile?.role === 'admin' || userProfile?.role === 'super-admin') && (
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); handleOpenFriendlyEdit(evento); }}
+                                            onClick={(e) => { e.stopPropagation(); handleOpenEventEdit(evento); }}
                                             className="p-1.5 rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors backdrop-blur-md border border-white/10"
                                             title="Editar evento"
                                         >
                                             <LucideEdit size={16} />
                                         </button>
                                     )}
-                                    <button 
-                                        onClick={(e) => handleShareEvent(e, evento)}
-                                        className="p-1.5 rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors backdrop-blur-md border border-white/10"
-                                        title="Gerar Card para Instagram"
-                                    >
-                                        <LucideShare2 size={16} />
-                                    </button>
                                     <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide flex items-center ${getStatusBadgeStyle(evento.status, evento.type)}`}>
                                         {evento.status === 'andamento' ? 'EM ANDAMENTO' : evento.status}
                                     </span>
@@ -896,7 +889,14 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                             
                             <div className="flex-grow mb-4 relative z-10">
                                 <div className="flex items-start justify-between gap-3 mb-2">
-                                    <h3 className="text-2xl font-bold leading-tight drop-shadow-sm">{evento.nome}</h3>
+                                    <div className="flex items-start gap-3 min-w-0">
+                                        {evento.logoUrl && (
+                                            <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border-2 border-white/40 bg-white/10 backdrop-blur-md overflow-hidden shrink-0">
+                                                <img src={evento.logoUrl} alt={`Logo ${evento.nome}`} className="w-full h-full object-cover" />
+                                            </div>
+                                        )}
+                                        <h3 className="text-2xl font-bold leading-tight drop-shadow-sm line-clamp-2 break-words">{evento.nome}</h3>
+                                    </div>
                                     {evento.type === 'amistoso' && friendlyGamesMap[evento.id]?.status === 'finalizado' && (
                                         <div className="shrink-0 rounded-md border border-white/20 bg-black/20 px-2.5 py-1.5 text-white text-sm font-extrabold leading-none tracking-tight whitespace-nowrap">
                                             <span className="text-white/90 text-[11px] mr-1">{friendlyGamesMap[evento.id].timeA_nome || 'ANCB'}</span>
@@ -924,7 +924,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                 </div>
                             </div>
                         </Card>
-                    )) : (
+                    );}) : (
                         <div className="col-span-full text-center py-16 bg-white/50 dark:bg-gray-800/50 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700"><LucideCalendarClock size={48} className="mx-auto text-gray-300 mb-4" /><p className="text-gray-500 dark:text-gray-400 font-medium">Nenhum evento encontrado.</p></div>
                     )}
                 </div>
@@ -936,6 +936,30 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                         <div className="md:col-span-2">
                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nome do Evento</label>
                             <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-ancb-blue outline-none transition-all" value={formName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormName(e.target.value)} required placeholder="Ex: Copa Garantã 2025" />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Logo do Evento</label>
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                    {formEventLogo ? <img src={formEventLogo} alt="Logo do evento" className="w-full h-full object-cover" /> : <LucideCamera size={16} className="text-gray-400" />}
+                                </div>
+                                <label className="text-xs text-center font-bold px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer bg-white/70 dark:bg-gray-700 w-full sm:w-auto">
+                                    {isUploadingLogo ? 'Enviando...' : 'Upload logo'}
+                                    <input type="file" accept="image/*" className="hidden" onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleOpenLogoCrop(file, 'create_event');
+                                    }} disabled={isUploadingLogo} />
+                                </label>
+                                {formEventLogo && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormEventLogo('')}
+                                        className="text-xs font-bold text-red-500 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+                                    >
+                                        Remover
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Data</label>
@@ -1196,15 +1220,6 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                 </form>
             </Modal>
 
-            {/* Share Modal */}
-            {shareData && (
-                <ShareModal 
-                    isOpen={showShareModal} 
-                    onClose={() => setShowShareModal(false)} 
-                    data={shareData}
-                />
-            )}
-
             <GameSummaryModal
                 isOpen={!!selectedFriendlySummary}
                 onClose={() => setSelectedFriendlySummary(null)}
@@ -1229,6 +1244,30 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                         <div className="md:col-span-2">
                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nome do Evento</label>
                             <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editFriendlyName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditFriendlyName(e.target.value)} required />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Logo do Evento</label>
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                    {editFriendlyEventLogo ? <img src={editFriendlyEventLogo} alt="Logo do evento" className="w-full h-full object-cover" /> : <LucideCamera size={16} className="text-gray-400" />}
+                                </div>
+                                <label className="text-xs text-center font-bold px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer bg-white/70 dark:bg-gray-700 w-full sm:w-auto">
+                                    {isUploadingLogo ? 'Enviando...' : 'Upload logo'}
+                                    <input type="file" accept="image/*" className="hidden" onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleOpenLogoCrop(file, 'edit_friendly_event');
+                                    }} disabled={isUploadingLogo} />
+                                </label>
+                                {editFriendlyEventLogo && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditFriendlyEventLogo('')}
+                                        className="text-xs font-bold text-red-500 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+                                    >
+                                        Remover
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Data</label>
@@ -1478,6 +1517,75 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                 <LucideTrash2 size={14} /> Excluir amistoso
                             </Button>
                         </div>
+                    </div>
+                </form>
+            </Modal>
+
+            <Modal isOpen={showEventEditModal} onClose={() => setShowEventEditModal(false)} title="Editar Evento" maxWidthClassName="max-w-2xl">
+                <form onSubmit={handleSaveEventEdit} className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nome do Evento</label>
+                        <input className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editEventName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventName(e.target.value)} required />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Logo do Evento</label>
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                                {editEventLogo ? <img src={editEventLogo} alt="Logo do evento" className="w-full h-full object-cover" /> : <LucideCamera size={16} className="text-gray-400" />}
+                            </div>
+                            <label className="text-xs text-center font-bold px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer bg-white/70 dark:bg-gray-700 w-full sm:w-auto">
+                                {isUploadingLogo ? 'Enviando...' : 'Upload logo'}
+                                <input type="file" accept="image/*" className="hidden" onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleOpenLogoCrop(file, 'edit_event');
+                                }} disabled={isUploadingLogo} />
+                            </label>
+                            {editEventLogo && (
+                                <button
+                                    type="button"
+                                    onClick={() => setEditEventLogo('')}
+                                    className="text-xs font-bold text-red-500 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+                                >
+                                    Remover
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Data</label>
+                            <input type="date" className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editEventDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventDate(e.target.value)} required />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Status</label>
+                            <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editEventStatus} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setEditEventStatus(e.target.value as any)}>
+                                <option value="proximo">Próximo</option>
+                                <option value="andamento">Em Andamento</option>
+                                <option value="finalizado">Finalizado</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Modalidade</label>
+                            <select className="w-full p-3 border rounded-xl dark:bg-gray-700 dark:text-white dark:border-gray-600" value={editEventMode} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setEditEventMode(e.target.value as any)}>
+                                <option value="5x5">5x5</option>
+                                <option value="3x3">3x3</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Tipo</label>
+                            <div className="w-full p-3 border rounded-xl bg-gray-50 dark:bg-gray-700/60 dark:text-gray-200 dark:border-gray-600 text-sm font-bold uppercase tracking-wide text-gray-600">
+                                {editingEventType.replace('_', ' ')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-2">
+                        <Button type="submit" className="w-full">Salvar alterações</Button>
                     </div>
                 </form>
             </Modal>
