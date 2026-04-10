@@ -23,11 +23,13 @@ interface HeaderProps {
   onNossaHistoriaClick: () => void;
   notifications?: NotificationItem[];
   onNotificationsClick?: () => void;
+  onNotificationsPreload?: () => void;
   showInstallAppLink?: boolean;
   onInstallApp?: () => void;
   onInstallPranchetaApp?: () => void;
   desktopNavActiveItem?: 'eventos' | 'jogadores' | 'home' | 'ranking' | 'profile';
   onDesktopNavSelect?: (item: 'eventos' | 'jogadores' | 'home' | 'ranking' | 'profile') => void;
+  onDesktopNavPreload?: (item: 'eventos' | 'jogadores' | 'home' | 'ranking' | 'profile') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -43,11 +45,13 @@ export const Header: React.FC<HeaderProps> = ({
   onNossaHistoriaClick,
   notifications = [],
   onNotificationsClick,
+  onNotificationsPreload,
   showInstallAppLink = false,
   onInstallApp,
   onInstallPranchetaApp,
   desktopNavActiveItem = 'home',
   onDesktopNavSelect,
+  onDesktopNavPreload,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeMenu = () => setIsMenuOpen(false);
@@ -135,6 +139,9 @@ export const Header: React.FC<HeaderProps> = ({
             {user && onNotificationsClick && (
               <button
                 onClick={onNotificationsClick}
+                onMouseEnter={() => onNotificationsPreload?.()}
+                onFocus={() => onNotificationsPreload?.()}
+                onTouchStart={() => onNotificationsPreload?.()}
                 className="relative isolate overflow-visible flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white transition hover:text-slate-200 focus:outline-none"
                 title="Notificações"
               >
@@ -158,6 +165,9 @@ export const Header: React.FC<HeaderProps> = ({
                       key={item.key}
                       type="button"
                       onClick={() => onDesktopNavSelect(item.key)}
+                      onMouseEnter={() => onDesktopNavPreload?.(item.key)}
+                      onFocus={() => onDesktopNavPreload?.(item.key)}
+                      onTouchStart={() => onDesktopNavPreload?.(item.key)}
                       title={item.label}
                       className={`inline-flex h-11 items-center gap-2 rounded-2xl px-3 text-sm font-semibold transition focus:outline-none ${isActive ? 'bg-white/15 text-white' : 'bg-transparent text-white hover:bg-white/10 hover:text-slate-200'}`}
                     >

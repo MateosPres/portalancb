@@ -6,10 +6,11 @@ type BottomNavItem = 'eventos' | 'jogadores' | 'home' | 'ranking' | 'profile';
 interface BottomNavigationProps {
   activeItem: BottomNavItem;
   onSelect: (item: BottomNavItem) => void;
+  onPreload?: (item: BottomNavItem) => void;
   profilePhoto?: string | null;
 }
 
-export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeItem, onSelect, profilePhoto }) => {
+export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeItem, onSelect, onPreload, profilePhoto }) => {
   const items: Array<{ key: BottomNavItem; label: string; icon: React.ReactNode }> = [
     { key: 'eventos', label: 'Eventos', icon: <LucideCalendar size={20} /> },
     { key: 'jogadores', label: 'Jogadores', icon: <LucideUsers size={20} /> },
@@ -34,6 +35,9 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeItem, 
               key={item.key}
               type="button"
               onClick={() => onSelect(item.key)}
+              onMouseEnter={() => onPreload?.(item.key)}
+              onFocus={() => onPreload?.(item.key)}
+              onTouchStart={() => onPreload?.(item.key)}
               className="relative flex flex-col items-center justify-end gap-0.5"
             >
               {isCenter ? (

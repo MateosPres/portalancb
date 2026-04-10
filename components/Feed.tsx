@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { db } from '../services/firebase';
 import { FeedPost, UserProfile } from '../types';
 import { LikeButton } from "../components/LikeButton";
@@ -40,6 +40,9 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
   const [showComments, setShowComments] = useState<Record<string, boolean>>({});
   const [commentsCount, setCommentsCount] = useState<Record<string, number>>({});
   const [highlightComments, setHighlightComments] = useState<Record<string, HighlightComment | null>>({});
+  const [visiblePostIds, setVisiblePostIds] = useState<Record<string, boolean>>({});
+  const authorCacheRef = useRef<Map<string, { authorName: string; authorPhoto: string | null; authorPlayerId: string | null }>>(new Map());
+  const feedListRef = useRef<HTMLDivElement | null>(null);
 
   const getPosts = async () => {
     try {
@@ -48,27 +51,56 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
         .limit(10)
         .get();
 
-      const postsData = await Promise.all(
-        snapshot.docs.map(async (doc) => {
-          const data = doc.data() as FeedPost;
+      const basePosts = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as FeedPost),
+      }));
 
-          let authorName = "ANCB";
-          let authorPhoto: string | null = null;
-          let authorPlayerId: string | null = null;
+      const authorIds = Array.from(new Set(
+        basePosts
+          .map((post) => post.author_id)
+          .filter((authorId): authorId is string => Boolean(authorId))
+      ));
 
-          if (data.author_id) {
-            const userDoc = await db.collection("usuarios").doc(data.author_id).get();
+      const missingAuthorIds = authorIds.filter((authorId) => !authorCacheRef.current.has(authorId));
+      if (missingAuthorIds.length > 0) {
+        await Promise.all(
+          missingAuthorIds.map(async (authorId) => {
+            let authorName = 'ANCB';
+            let authorPhoto: string | null = null;
+            let authorPlayerId: string | null = null;
+
+            const userDoc = await db.collection('usuarios').doc(authorId).get();
             if (userDoc.exists) {
               const userData = userDoc.data();
-              authorName = userData?.apelido || userData?.nome || "Usuário";
+              authorName = userData?.apelido || userData?.nome || 'Usuário';
               authorPhoto = userData?.foto || null;
               authorPlayerId = userData?.linkedPlayerId || null;
             }
-          }
 
-          return { ...data, id: doc.id, authorName, authorPhoto, authorPlayerId };
-        })
-      );
+            authorCacheRef.current.set(authorId, { authorName, authorPhoto, authorPlayerId });
+          })
+        );
+      }
+
+      const postsData = basePosts.map((post) => {
+        if (!post.author_id) {
+          return {
+            ...post,
+            authorName: 'ANCB',
+            authorPhoto: null,
+            authorPlayerId: null,
+          };
+        }
+
+        const cached = authorCacheRef.current.get(post.author_id);
+        return {
+          ...post,
+          authorName: cached?.authorName || 'ANCB',
+          authorPhoto: cached?.authorPhoto || null,
+          authorPlayerId: cached?.authorPlayerId || null,
+        };
+      });
 
       setPosts(postsData);
     } catch (error) {
@@ -83,11 +115,61 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
   }, []);
 
   useEffect(() => {
+    const feedElement = feedListRef.current;
+    if (!feedElement) return;
+
+    const postElements = feedElement.querySelectorAll<HTMLElement>('[data-feed-post-id]');
+    if (!postElements.length) return;
+
+    if (typeof IntersectionObserver === 'undefined') {
+      const fallbackVisible: Record<string, boolean> = {};
+      postElements.forEach((el) => {
+        const postId = el.dataset.feedPostId;
+        if (postId) fallbackVisible[postId] = true;
+      });
+      setVisiblePostIds(fallbackVisible);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setVisiblePostIds((prev) => {
+          const next = { ...prev };
+          entries.forEach((entry) => {
+            const target = entry.target as HTMLElement;
+            const postId = target.dataset.feedPostId;
+            if (!postId) return;
+            next[postId] = entry.isIntersecting;
+          });
+          return next;
+        });
+      },
+      {
+        root: null,
+        rootMargin: '220px 0px',
+        threshold: 0.1,
+      }
+    );
+
+    postElements.forEach((element) => observer.observe(element));
+
+    return () => observer.disconnect();
+  }, [posts]);
+
+  useEffect(() => {
     if (!posts.length) {
       setCommentsCount({});
       setHighlightComments({});
       return;
     }
+
+    const prioritizedPostIds = posts.slice(0, 3).map((post) => post.id);
+    const expandedPostIds = Object.keys(showComments).filter((postId) => showComments[postId]);
+    const currentlyVisiblePostIds = Object.keys(visiblePostIds).filter((postId) => visiblePostIds[postId]);
+    const activePostIds = Array.from(new Set([...prioritizedPostIds, ...expandedPostIds, ...currentlyVisiblePostIds]));
+
+    const activePosts = posts.filter((post) => activePostIds.includes(post.id));
+    if (!activePosts.length) return;
 
     const getCreatedAtMs = (value: any) => {
       if (!value) return 0;
@@ -96,7 +178,7 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
       return Number.isNaN(parsed) ? 0 : parsed;
     };
 
-    const unsubscribes = posts.map((post) => {
+    const unsubscribes = activePosts.map((post) => {
       return db
         .collection('feed_posts')
         .doc(post.id)
@@ -150,7 +232,7 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
     return () => {
       unsubscribes.forEach((unsubscribe) => unsubscribe());
     };
-  }, [posts]);
+  }, [posts, showComments, visiblePostIds]);
 
   const formatTime = (timestamp: any) => {
     if (!timestamp) return '';
@@ -235,7 +317,7 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
 
   return (
     <section className="mt-4">
-      <div className="w-full max-w-[600px] mx-auto flex flex-col">
+      <div ref={feedListRef} className="w-full max-w-[600px] mx-auto flex flex-col">
         {posts.map((post) => {
           const videoUrl = post.content?.link_video;
           const youtubeId = videoUrl ? getYoutubeId(videoUrl) : null;
@@ -247,7 +329,7 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
           const canOpenHighlightPlayer = Boolean(highlightPlayerId && onOpenPlayer);
 
           return (
-            <div key={post.id} className="flex flex-col border-b border-white/10 pb-8 mb-8 last:mb-0 last:border-b-0">
+            <div key={post.id} data-feed-post-id={post.id} className="flex flex-col border-b border-white/10 pb-8 mb-8 last:mb-0 last:border-b-0">
               {/* HEADER */}
               <div className="flex items-start gap-3 px-3">
                 <button

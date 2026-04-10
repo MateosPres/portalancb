@@ -20,12 +20,13 @@ interface EventosViewProps {
     onBack: () => void;
     userProfile?: UserProfile | null;
     onSelectEvent: (eventId: string) => void;
+    onPreloadEventDetail?: (eventId: string) => void;
     onOpenFriendlyAdminPanel?: (eventId: string, game: Jogo) => void;
     initialFriendlyEventId?: string | null;
     onFriendlySummaryOpened?: () => void;
 }
 
-export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, onSelectEvent, onOpenFriendlyAdminPanel, initialFriendlyEventId, onFriendlySummaryOpened }) => {
+export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, onSelectEvent, onPreloadEventDetail, onOpenFriendlyAdminPanel, initialFriendlyEventId, onFriendlySummaryOpened }) => {
     const [events, setEvents] = useState<Evento[]>([]);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<'proximos' | 'finalizados'>('proximos');
@@ -926,6 +927,9 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                         <Card 
                             key={evento.id} 
                             onClick={() => handleEventCardClick(evento)} 
+                            onMouseEnter={() => onPreloadEventDetail?.(evento.id)}
+                            onFocus={() => onPreloadEventDetail?.(evento.id)}
+                            onTouchStart={() => onPreloadEventDetail?.(evento.id)}
                             className={`flex flex-col h-full hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden ${getCardStyle(evento.type)}`}
                         >
                             {/* Decorative Background Icon */}

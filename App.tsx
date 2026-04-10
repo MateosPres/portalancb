@@ -22,23 +22,64 @@ import { HomeView } from "./views/HomeView";
 const VAPID_KEY = "BI9T9nLXUjdJHqOSZEoORZ7UDyWQoIMcrQ5Oz-7KeKif19LoGx_Db5AdY4zi0yXT5zTdvZRbJy6nF65Dv-8ncKk"; 
 const PRANCHETA_URL = 'https://prancheta.ancb.app.br';
 
+const loadPublicGameView = () => import('./views/PublicGameView');
+const loadTeamManagerView = () => import('./views/TeamManagerView');
+const loadNotificationsView = () => import('./views/NotificationsView');
+const loadJogadoresView = () => import('./views/JogadoresView');
+const loadEventosView = () => import('./views/EventosView');
+const loadEventoDetalheView = () => import('./views/EventoDetalheView');
+const loadRankingView = () => import('./views/RankingView');
+const loadAdminView = () => import('./views/AdminView');
+const loadPainelJogoView = () => import('./views/PainelJogoView');
+const loadProfileView = () => import('./views/ProfileView');
+const loadApoiadoresView = () => import('./views/ApoiadoresView');
+const loadPostView = () => import('./views/PostView');
+const loadImageCropperModal = () => import('./components/ImageCropperModal');
+const loadPeerReviewQuiz = () => import('./components/PeerReviewQuiz');
+
 // Route-level lazy loading to reduce initial mobile bundle size.
-const PublicGameView = React.lazy(() => import('./views/PublicGameView').then((m) => ({ default: m.PublicGameView })));
-const TeamManagerView = React.lazy(() => import('./views/TeamManagerView').then((m) => ({ default: m.TeamManagerView })));
-const NotificationsView = React.lazy(() => import('./views/NotificationsView').then((m) => ({ default: m.NotificationsView })));
-const JogadoresView = React.lazy(() => import('./views/JogadoresView').then((m) => ({ default: m.JogadoresView })));
-const EventosView = React.lazy(() => import('./views/EventosView').then((m) => ({ default: m.EventosView })));
-const EventoDetalheView = React.lazy(() => import('./views/EventoDetalheView').then((m) => ({ default: m.EventoDetalheView })));
-const RankingView = React.lazy(() => import('./views/RankingView').then((m) => ({ default: m.RankingView })));
-const AdminView = React.lazy(() => import('./views/AdminView').then((m) => ({ default: m.AdminView })));
-const PainelJogoView = React.lazy(() => import('./views/PainelJogoView').then((m) => ({ default: m.PainelJogoView })));
-const ProfileView = React.lazy(() => import('./views/ProfileView').then((m) => ({ default: m.ProfileView })));
-const ApoiadoresView = React.lazy(() => import('./views/ApoiadoresView').then((m) => ({ default: m.ApoiadoresView })));
-const PostView = React.lazy(() => import('./views/PostView').then((m) => ({ default: m.PostView })));
-const ImageCropperModal = React.lazy(() => import('./components/ImageCropperModal').then((m) => ({ default: m.ImageCropperModal })));
-const PeerReviewQuiz = React.lazy(() => import('./components/PeerReviewQuiz').then((m) => ({ default: m.PeerReviewQuiz })));
+const PublicGameView = React.lazy(() => loadPublicGameView().then((m) => ({ default: m.PublicGameView })));
+const TeamManagerView = React.lazy(() => loadTeamManagerView().then((m) => ({ default: m.TeamManagerView })));
+const NotificationsView = React.lazy(() => loadNotificationsView().then((m) => ({ default: m.NotificationsView })));
+const JogadoresView = React.lazy(() => loadJogadoresView().then((m) => ({ default: m.JogadoresView })));
+const EventosView = React.lazy(() => loadEventosView().then((m) => ({ default: m.EventosView })));
+const EventoDetalheView = React.lazy(() => loadEventoDetalheView().then((m) => ({ default: m.EventoDetalheView })));
+const RankingView = React.lazy(() => loadRankingView().then((m) => ({ default: m.RankingView })));
+const AdminView = React.lazy(() => loadAdminView().then((m) => ({ default: m.AdminView })));
+const PainelJogoView = React.lazy(() => loadPainelJogoView().then((m) => ({ default: m.PainelJogoView })));
+const ProfileView = React.lazy(() => loadProfileView().then((m) => ({ default: m.ProfileView })));
+const ApoiadoresView = React.lazy(() => loadApoiadoresView().then((m) => ({ default: m.ApoiadoresView })));
+const PostView = React.lazy(() => loadPostView().then((m) => ({ default: m.PostView })));
+const ImageCropperModal = React.lazy(() => loadImageCropperModal().then((m) => ({ default: m.ImageCropperModal })));
+const PeerReviewQuiz = React.lazy(() => loadPeerReviewQuiz().then((m) => ({ default: m.PeerReviewQuiz })));
 
 const App: React.FC = () => {
+    const preloadNotificationsView = () => {
+        void loadNotificationsView();
+    };
+
+    const preloadEventDetailView = () => {
+        void loadEventoDetalheView();
+    };
+
+    const preloadNavigationView = (item: 'eventos' | 'jogadores' | 'home' | 'ranking' | 'profile') => {
+        if (item === 'eventos') {
+            void loadEventosView();
+            return;
+        }
+        if (item === 'jogadores') {
+            void loadJogadoresView();
+            return;
+        }
+        if (item === 'ranking') {
+            void loadRankingView();
+            return;
+        }
+        if (item === 'profile') {
+            void loadProfileView();
+        }
+    };
+
     const [currentView, setCurrentView] = useState<ViewState>('home');
     useScrollToTop(currentView);
     const isRestoringFromHistoryRef = useRef(false);
@@ -128,6 +169,9 @@ const App: React.FC = () => {
     const [isAndroid, setIsAndroid] = useState(false);
     const [isStandalone, setIsStandalone] = useState(false);
     const hasAutoReloadedForUpdate = useRef(false);
+    const staticNotifsRequestInFlightRef = useRef(false);
+    const staticNotifsLastRunAtRef = useRef(0);
+    const staticNotifsSignatureRef = useRef('');
 
     const buildNavigationState = () => ({
         appNavigation: true,
@@ -445,7 +489,7 @@ const App: React.FC = () => {
                             setTimeout(() => setForegroundNotification(null), 10000);
                             notifiedEvents.push(eventId);
                             localStorage.setItem('ancb_notified_rosters', JSON.stringify(notifiedEvents));
-                            checkStaticNotifications();
+                            checkStaticNotifications({ force: true });
                         }
                     }
                 }
@@ -542,7 +586,7 @@ const App: React.FC = () => {
                 applyNotificationSnapshot(snapshot);
             }, (fallbackError) => {
                 console.warn("Fallback notification listener error:", fallbackError);
-                checkStaticNotifications();
+                checkStaticNotifications({ force: true });
             });
         };
 
@@ -553,7 +597,7 @@ const App: React.FC = () => {
         }, (error) => {
             console.warn("Notification listener error (likely missing index):", error);
             attachFallbackListener();
-            checkStaticNotifications();
+            checkStaticNotifications({ force: true });
         });
 
         return () => {
@@ -562,8 +606,17 @@ const App: React.FC = () => {
         };
     }, [user]);
 
-    const checkStaticNotifications = async () => {
+    const checkStaticNotifications = async (options?: { force?: boolean }) => {
         if (!userProfile?.linkedPlayerId) return;
+        const now = Date.now();
+        const shouldForce = Boolean(options?.force);
+
+        if (staticNotifsRequestInFlightRef.current) return;
+        if (!shouldForce && now - staticNotifsLastRunAtRef.current < 15000) return;
+
+        staticNotifsRequestInFlightRef.current = true;
+        staticNotifsLastRunAtRef.current = now;
+
         const myPlayerId = userProfile.linkedPlayerId!;
         const inferredNotifications: NotificationItem[] = [];
 
@@ -589,23 +642,55 @@ const App: React.FC = () => {
             });
 
             const readIds = JSON.parse(localStorage.getItem('ancb_read_notifications') || '[]');
-            setNotifications(prev => {
-                const dbNotifs = prev.filter(n => n.type !== 'roster_alert');
-                const uniqueInferred = inferredNotifications.map(n => ({
-                    ...n,
-                    read: readIds.includes(n.id)
-                }));
-                return [...dbNotifs, ...uniqueInferred];
-            });
+            const uniqueInferred = inferredNotifications.map(n => ({
+                ...n,
+                read: readIds.includes(n.id)
+            }));
 
-        } catch (error) { console.error(error); }
+            const inferredSignature = uniqueInferred
+                .map(n => `${n.id}:${n.read ? 1 : 0}`)
+                .sort()
+                .join('|');
+
+            if (inferredSignature !== staticNotifsSignatureRef.current) {
+                staticNotifsSignatureRef.current = inferredSignature;
+                setNotifications(prev => {
+                    const dbNotifs = prev.filter(n => n.type !== 'roster_alert');
+                    return [...dbNotifs, ...uniqueInferred];
+                });
+            }
+
+        } catch (error) {
+            console.error(error);
+        } finally {
+            staticNotifsRequestInFlightRef.current = false;
+        }
     };
 
     useEffect(() => {
-        checkStaticNotifications();
-        const interval = setInterval(checkStaticNotifications, 60000);
-        return () => clearInterval(interval);
-    }, [userProfile]);
+        staticNotifsSignatureRef.current = '';
+        staticNotifsLastRunAtRef.current = 0;
+        staticNotifsRequestInFlightRef.current = false;
+    }, [userProfile?.linkedPlayerId]);
+
+    useEffect(() => {
+        if (!userProfile?.linkedPlayerId) return;
+
+        const runStaticCheck = () => {
+            if (document.visibilityState === 'visible') {
+                checkStaticNotifications();
+            }
+        };
+
+        runStaticCheck();
+        const interval = setInterval(runStaticCheck, 60000);
+        document.addEventListener('visibilitychange', runStaticCheck);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', runStaticCheck);
+        };
+    }, [userProfile?.linkedPlayerId]);
 
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -829,6 +914,7 @@ const App: React.FC = () => {
     };
 
     const handleOpenEventDetail = async (eventId: string) => {
+        preloadEventDetailView();
         try {
             const eventSnap = await getDoc(doc(db, 'eventos', eventId));
             if (!eventSnap.exists()) return;
@@ -1030,6 +1116,7 @@ const App: React.FC = () => {
                 <HomeView 
                     highlightEvent={ongoingEvents.length > 0 ? ongoingEvents[0] : null}
                     onViewEvent={handleOpenEventDetail}
+                    onPreloadEventDetail={preloadEventDetailView}
                     onOpenLiveGame={(game, eventId) => {
                         setSelectedPublicGame({ game, eventId });
                         setCurrentView('public-game');
@@ -1039,7 +1126,7 @@ const App: React.FC = () => {
                     onOpenPlayer={handleOpenPlayerFromFeed}
                 />
             );
-            case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onSelectEvent={handleOpenEventDetail} onOpenFriendlyAdminPanel={(eventId, game) => handleOpenGamePanel(game, eventId, true)} initialFriendlyEventId={pendingFriendlyEventId} onFriendlySummaryOpened={() => setPendingFriendlyEventId(null)} />;
+            case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onSelectEvent={handleOpenEventDetail} onPreloadEventDetail={preloadEventDetailView} onOpenFriendlyAdminPanel={(eventId, game) => handleOpenGamePanel(game, eventId, true)} initialFriendlyEventId={pendingFriendlyEventId} onFriendlySummaryOpened={() => setPendingFriendlyEventId(null)} />;
             case 'evento-detalhe': return selectedEventId ? <EventoDetalheView 
                 eventId={selectedEventId} 
                 initialTeamId={returnToTeamId} 
@@ -1222,12 +1309,20 @@ const App: React.FC = () => {
                         onHomeClick={handleHomeClick}
                         onNossaHistoriaClick={handleNossaHistoriaClick}
                         notifications={notifications}
-                        onNotificationsClick={() => setShowNotificationsView(true)}
+                        onNotificationsClick={() => {
+                            preloadNotificationsView();
+                            setShowNotificationsView(true);
+                        }}
+                        onNotificationsPreload={preloadNotificationsView}
                         showInstallAppLink={showInstallInMenu}
                         onInstallApp={handleInstallPortal}
                         onInstallPranchetaApp={handleInstallPrancheta}
                         desktopNavActiveItem={['eventos','jogadores','home','ranking','profile'].includes(currentView) ? currentView as 'eventos' | 'jogadores' | 'home' | 'ranking' | 'profile' : 'home'}
-                        onDesktopNavSelect={(item) => setCurrentView(item)}
+                        onDesktopNavSelect={(item) => {
+                            preloadNavigationView(item);
+                            setCurrentView(item);
+                        }}
+                        onDesktopNavPreload={preloadNavigationView}
                     />
 
                     <main className={`flex-grow pb-40 ${currentView === 'evento-detalhe' ? 'pt-0 w-full' : currentView === 'painel-jogo' ? 'pt-16 w-full' : currentView === 'post-view' ? 'pt-2 md:pt-12 w-full' : 'pt-16 container mx-auto px-4 pt-6 md:pt-10 max-w-6xl'}`}>
@@ -1242,7 +1337,11 @@ const App: React.FC = () => {
 
                     <BottomNavigation
                         activeItem={['eventos','jogadores','home','ranking','profile'].includes(currentView) ? currentView as any : 'home'}
-                        onSelect={(item) => setCurrentView(item)}
+                        onSelect={(item) => {
+                            preloadNavigationView(item);
+                            setCurrentView(item);
+                        }}
+                        onPreload={preloadNavigationView}
                         profilePhoto={headerUser?.photo}
                     />
                 </>

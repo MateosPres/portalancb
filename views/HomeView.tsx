@@ -11,6 +11,7 @@ import { LiveYouTubePlayer } from '../components/LiveYouTubePlayer';
 interface HomeViewProps {
     highlightEvent: Evento | null;
     onViewEvent: (eventId: string) => void;
+    onPreloadEventDetail?: (eventId: string) => void;
     onOpenLiveGame: (game: Jogo, eventId: string) => void;
     userProfile: UserProfile | null;
     onOpenPost: (post: FeedPost) => void;
@@ -20,6 +21,7 @@ interface HomeViewProps {
 export const HomeView: React.FC<HomeViewProps> = ({ 
     highlightEvent, 
     onViewEvent, 
+    onPreloadEventDetail,
     onOpenLiveGame, 
     userProfile,
     onOpenPost,
@@ -50,11 +52,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
             )}
 
             {highlightEvent && (
-                <LiveEventHero 
-                    event={highlightEvent} 
-                    onClick={() => onViewEvent(highlightEvent.id)}
-                    onOpenLiveGame={(game) => onOpenLiveGame(game, highlightEvent.id)}
-                />
+                <div
+                    onMouseEnter={() => onPreloadEventDetail?.(highlightEvent.id)}
+                    onTouchStart={() => onPreloadEventDetail?.(highlightEvent.id)}
+                >
+                    <LiveEventHero 
+                        event={highlightEvent} 
+                        onClick={() => onViewEvent(highlightEvent.id)}
+                        onOpenLiveGame={(game) => onOpenLiveGame(game, highlightEvent.id)}
+                    />
+                </div>
             )}
 
             {/* 3. BASE: FEED DE NOTÍCIAS */}
