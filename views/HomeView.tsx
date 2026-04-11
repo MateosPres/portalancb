@@ -74,7 +74,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             <LiveYouTubePlayer videoId={streamConfig.videoId} />
                             <button
                                 onClick={handleOpenYouTubeComments}
-                                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/40 bg-red-600 hover:bg-red-700 px-4 py-3 text-sm font-bold text-white transition-colors"
+                                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-blue-500/40 bg-blue-600 hover:bg-blue-700 px-4 py-3 text-sm font-bold text-white transition-colors"
                             >
                                 <LucideMessageCircle size={16} />
                                 Comentar no YouTube
