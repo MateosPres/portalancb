@@ -12,26 +12,9 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [playerActive, setPlayerActive] = useState(true); // start live automatically on page load
+  const fallbackFullscreenRef = useRef(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const lockLandscape = async () => {
-    try {
-      if ('screen' in window && 'orientation' in window.screen) {
-        await (window.screen.orientation as any).lock?.('landscape');
-      }
-    } catch (_) {
-      // Orientation lock can fail on unsupported browsers or without user gesture.
-    }
-  };
-
-  const unlockOrientation = () => {
-    try {
-      (window.screen.orientation as any)?.unlock?.();
-    } catch (_) {
-      // Ignore unsupported unlock on some browsers.
-    }
-  };
 
   const getFullscreenElement = () => {
     const doc = document as any;
@@ -42,9 +25,14 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
   useEffect(() => {
     const syncFullscreenState = () => {
       const active = Boolean(getFullscreenElement());
-      setIsFullscreen(active);
-      if (!active) {
-        unlockOrientation();
+      if (active) {
+        fallbackFullscreenRef.current = false;
+        setIsFullscreen(true);
+        return;
+      }
+
+      if (!fallbackFullscreenRef.current) {
+        setIsFullscreen(false);
       }
     };
 
@@ -54,7 +42,44 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
     return () => {
       document.removeEventListener('fullscreenchange', syncFullscreenState);
       document.removeEventListener('webkitfullscreenchange' as any, syncFullscreenState);
-      unlockOrientation();
+      fallbackFullscreenRef.current = false;
+    };
+  }, []);
+
+  // Prevent page scroll while fallback fullscreen is active.
+  useEffect(() => {
+    if (!isFullscreen || !fallbackFullscreenRef.current) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isFullscreen]);
+
+  // Safety net for browsers that do not support native fullscreen APIs.
+  useEffect(() => {
+    const closeFallbackFullscreen = () => {
+      if (!fallbackFullscreenRef.current) return;
+      fallbackFullscreenRef.current = false;
+      setIsFullscreen(false);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        closeFallbackFullscreen();
+      }
+    };
+
+    window.addEventListener('orientationchange', closeFallbackFullscreen);
+    window.addEventListener('pagehide', closeFallbackFullscreen);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('orientationchange', closeFallbackFullscreen);
+      window.removeEventListener('pagehide', closeFallbackFullscreen);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
@@ -62,9 +87,10 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
   const handleFullscreen = async () => {
     const container = containerRef.current as any;
     const doc = document as any;
-    const fullscreenActive = Boolean(getFullscreenElement());
+    const nativeFullscreenActive = Boolean(getFullscreenElement());
+    const fallbackFullscreenActive = fallbackFullscreenRef.current;
 
-    if (!fullscreenActive) {
+    if (!nativeFullscreenActive && !fallbackFullscreenActive) {
       try {
         if (container?.requestFullscreen) {
           await container.requestFullscreen();
@@ -72,13 +98,20 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
           container.webkitRequestFullscreen();
         } else {
           // Fallback when fullscreen API is unavailable.
+          fallbackFullscreenRef.current = true;
           setIsFullscreen(true);
         }
-        await lockLandscape();
       } catch (_) {
         // If request fullscreen is blocked, keep fallback behavior.
+        fallbackFullscreenRef.current = true;
         setIsFullscreen(true);
       }
+      return;
+    }
+
+    if (fallbackFullscreenActive && !nativeFullscreenActive) {
+      fallbackFullscreenRef.current = false;
+      setIsFullscreen(false);
       return;
     }
 
@@ -92,8 +125,8 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
       // Ignore; fallback state update below.
     }
 
+    fallbackFullscreenRef.current = false;
     setIsFullscreen(false);
-    unlockOrientation();
   };
 
   return (
@@ -136,7 +169,7 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
           )}
 
           {/* Controls */}
-          <div className="absolute bottom-2 right-2 z-20 flex gap-1.5 pointer-events-auto">
+          <div className={`absolute z-20 flex gap-1.5 pointer-events-auto ${isFullscreen ? 'top-3 right-3' : 'bottom-2 right-2'}`}>
             <button
               onClick={handleFullscreen}
               className="bg-black/60 hover:bg-black/80 text-white p-1.5 rounded-lg backdrop-blur-sm transition-all"

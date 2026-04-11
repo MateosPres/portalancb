@@ -10,7 +10,7 @@
   "lang": "pt-BR",
   "background_color": "#062553",
   "theme_color": "#062553",
-  "orientation": "portrait",
+  "orientation": "any",
   "icons": [
     {
       "src": "https://i.imgur.com/SE2jHsz.png",

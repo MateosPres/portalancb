@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Evento, Jogo, UserProfile, FeedPost } from '../types';
 import { LiveEventHero } from '../components/LiveEventHero';
 import { ApoiadoresCarousel } from '../components/ApoiadoresCarousel';
 import { Feed } from '../components/Feed';
-import { LucideMegaphone } from 'lucide-react';
+import { LucideExternalLink, LucideMegaphone, LucideMessageCircle } from 'lucide-react';
 import { CreatePost } from '../components/CreatePost'; // ajuste o caminho se estiver em outra pasta
 import { useLiveStream } from '../hooks/useLiveStream';
 import { LiveYouTubeWithChat } from '../components/LiveYouTubeWithChat';
+import { LiveYouTubePlayer } from '../components/LiveYouTubePlayer';
+import { toYouTubeWatchUrl } from '../utils/youtube';
 
 interface HomeViewProps {
     highlightEvent: Evento | null;
@@ -28,10 +30,34 @@ export const HomeView: React.FC<HomeViewProps> = ({
     onOpenPlayer,
 }) => {
     const [showCreatePost, setShowCreatePost] = useState(false);
+    const [isMobileOrStandalone, setIsMobileOrStandalone] = useState(false);
     const canCreatePost = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
     const { config: streamConfig } = useLiveStream();
     const domain = window.location.host;
     const shouldShowStandaloneLive = !!(streamConfig?.active && streamConfig.videoId);
+
+    useEffect(() => {
+        const detectMobileContext = () => {
+            const ua = window.navigator.userAgent.toLowerCase();
+            const isMobileUa = /android|iphone|ipad|ipod/.test(ua);
+            const isNarrowViewport = window.matchMedia('(max-width: 1023px)').matches;
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!(window.navigator as any).standalone;
+            setIsMobileOrStandalone(isMobileUa || isNarrowViewport || isStandalone);
+        };
+
+        detectMobileContext();
+        window.addEventListener('resize', detectMobileContext);
+
+        return () => {
+            window.removeEventListener('resize', detectMobileContext);
+        };
+    }, []);
+
+    const handleOpenYouTubeComments = () => {
+        if (!streamConfig?.videoId) return;
+        const watchUrl = toYouTubeWatchUrl(streamConfig.videoId);
+        window.open(watchUrl, '_blank', 'noopener,noreferrer');
+    };
 
     return (
         <div className="space-y-8 animate-fadeIn pb-24">
@@ -43,10 +69,24 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {/* 2. MEIO: EVENTO EM DESTAQUE (SE HOUVER) */}
             {shouldShowStandaloneLive && streamConfig && (
                 <div className="mb-2">
-                    <LiveYouTubeWithChat
-                        videoId={streamConfig.videoId}
-                        domain={domain}
-                    />
+                    {isMobileOrStandalone ? (
+                        <div className="space-y-3">
+                            <LiveYouTubePlayer videoId={streamConfig.videoId} />
+                            <button
+                                onClick={handleOpenYouTubeComments}
+                                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/40 bg-red-600 hover:bg-red-700 px-4 py-3 text-sm font-bold text-white transition-colors"
+                            >
+                                <LucideMessageCircle size={16} />
+                                Comentar no YouTube
+                                <LucideExternalLink size={14} />
+                            </button>
+                        </div>
+                    ) : (
+                        <LiveYouTubeWithChat
+                            videoId={streamConfig.videoId}
+                            domain={domain}
+                        />
+                    )}
                 </div>
             )}
 
