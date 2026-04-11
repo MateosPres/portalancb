@@ -30,3 +30,49 @@
 		animation: none;
 	}
 }
+
+.yt-live-layout {
+	height: 100svh;
+	max-height: 100svh;
+	overflow: hidden;
+}
+
+.yt-live-layout__inner {
+	height: 100%;
+}
+
+.yt-live-layout__video {
+	min-height: 0;
+}
+
+.yt-live-layout__chat {
+	min-height: 0;
+}
+
+@supports (height: 100dvh) {
+	.yt-live-layout {
+		height: 100dvh;
+		max-height: 100dvh;
+	}
+}
+
+@media (orientation: landscape) and (max-width: 1023px) {
+	/* In mobile landscape we force row to mirror YouTube: video left, chat right. */
+	.yt-live-layout__inner {
+		flex-direction: row;
+	}
+
+	/* Video uses most of the horizontal space while staying flexible. */
+	.yt-live-layout__video {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	/* Chat sits on the right with bounded width for readability. */
+	.yt-live-layout__chat {
+		flex: 0 0 clamp(300px, 36vw, 380px);
+		width: clamp(300px, 36vw, 380px) !important;
+		border-top: 0;
+		border-left: 1px solid rgba(255, 255, 255, 0.1);
+	}
+}

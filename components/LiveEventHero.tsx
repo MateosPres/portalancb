@@ -11,9 +11,10 @@ interface LiveEventHeroProps {
     event: Evento;
     onClick: () => void;
     onOpenLiveGame?: (game: Jogo) => void;
+    hideLivePlayer?: boolean;
 }
 
-export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, onOpenLiveGame }) => {
+export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, onOpenLiveGame, hideLivePlayer = false }) => {
     const [activeGame, setActiveGame] = useState<Jogo | null>(null);
     const [latestFinishedGame, setLatestFinishedGame] = useState<Jogo | null>(null);
     const [nextGame, setNextGame] = useState<Jogo | null>(null);
@@ -25,7 +26,7 @@ export const LiveEventHero: React.FC<LiveEventHeroProps> = ({ event, onClick, on
     const { config: streamConfig, game: streamGame } = useLiveStream();
     const hasLiveStream = !!(streamConfig?.active && streamConfig.videoId && streamGame);
 
-    const livePlayerNode = hasLiveStream && streamGame && streamConfig && showPlayer ? (
+    const livePlayerNode = !hideLivePlayer && hasLiveStream && streamGame && streamConfig && showPlayer ? (
         <LiveYouTubePlayer
             videoId={streamConfig.videoId}
             onClose={() => setShowPlayer(false)}
