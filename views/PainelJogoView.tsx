@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import firebase, { db } from '../services/firebase';
+import firebase, { db, functions } from '../services/firebase';
 import { Jogo, Player, Evento, Cesta, EscaladoInfo } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
@@ -268,6 +268,19 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
             // envia automaticamente a notificação do quiz de avaliação
             // para todos os jogadores escalados nos dois times.
             await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), { status: 'finalizado' });
+
+            // Executa o motor de conquistas pos-jogo por callable.
+            // Falhas aqui nao impedem o encerramento oficial da partida.
+            try {
+                const avaliarConquistasPartida = functions.httpsCallable('avaliarConquistasPartida');
+                const result = await avaliarConquistasPartida({ jogoId: game.id, eventoId: eventId });
+                const data = (result as any)?.data;
+                if (data?.conquistasConcedidas > 0) {
+                    console.log(`Conquistas concedidas: ${data.conquistasConcedidas}`);
+                }
+            } catch (achievementError) {
+                console.warn('Falha ao avaliar conquistas pos-jogo:', achievementError);
+            }
 
             // Fallback para amistoso: garante pending_review mesmo sem deploy/execução da Cloud Function.
             if (eventData?.type === 'amistoso') {

@@ -100,8 +100,8 @@ export interface RarityStyle {
     classes: string;
 }
 
-export const getRarityStyles = (rarity: Badge['raridade']): RarityStyle => {
-    switch (rarity) {
+export const getRarityStyles = (rarity?: Badge['raridade'] | null): RarityStyle => {
+    switch (rarity || 'comum') {
         case 'lendaria':
             return {
                 label: 'Lendária',
@@ -125,8 +125,8 @@ export const getRarityStyles = (rarity: Badge['raridade']): RarityStyle => {
     }
 };
 
-export const getBadgeWeight = (rarity: Badge['raridade']): number => {
-    switch (rarity) {
+export const getBadgeWeight = (rarity?: Badge['raridade'] | null): number => {
+    switch (rarity || 'comum') {
         case 'lendaria': return 4;
         case 'epica':    return 3;
         case 'rara':     return 2;

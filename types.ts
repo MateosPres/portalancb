@@ -22,6 +22,50 @@ export interface Badge {
     data: string;
     descricao: string;
     gameId?: string;
+    teamId?: string;
+    teamNome?: string;
+}
+
+export type RaridadeConquista = Badge['raridade'];
+
+export type TipoIconeConquista = 'emoji' | 'imagem';
+export type TipoAvaliacaoConquista = 'pos_jogo' | 'pos_evento' | 'ao_fechar_temporada' | 'manual';
+
+export type ConquistaGatilho =
+    | { tipo: 'pontos_partida'; minimo: number }
+    | { tipo: 'bolas_de_tres'; minimo: number }
+    | { tipo: 'cestinha_partida' }
+    | { tipo: 'top_atributo_jogo'; atributo: 'ataque' | 'defesa' | 'velocidade' | 'forca' | 'visao' }
+    | { tipo: 'participacao_evento' }
+    | { tipo: 'podio_campeao' }
+    | { tipo: 'podio_vice' }
+    | { tipo: 'podio_terceiro' }
+    | { tipo: 'cestinha_evento' }
+    | { tipo: 'pontos_unico_jogo_evento'; minimo: number }
+    | { tipo: 'bolas_de_tres_evento'; minimo: number }
+    | { tipo: 'top_atributo_evento'; atributo: 'ataque' | 'defesa' | 'velocidade' | 'forca' | 'visao' }
+    | { tipo: 'ranking_pontos_temporada'; minimo: number }
+    | { tipo: 'ranking_bolas_de_tres_temporada'; minimo: number }
+    | { tipo: 'participou_todos_eventos_temporada' }
+    | { tipo: 'conquistas_evento_temporada'; minimo: number }
+    | { tipo: 'top_atributo_temporada'; atributo: 'ataque' | 'defesa' | 'velocidade' | 'forca' | 'visao' }
+    | { tipo: 'manual_admin' };
+
+export interface ConquistaRegra {
+    id: string;
+    titulo: string;
+    descricao: string;
+    descricaoTemplate?: string;
+    raridade: RaridadeConquista;
+    tipoIcone: TipoIconeConquista;
+    iconeValor: string;
+    tipoAvaliacao: TipoAvaliacaoConquista;
+    gatilho: ConquistaGatilho | string;
+    mensagemNotificacao: string;
+    mensagemNotificacaoTemplate?: string;
+    ativo: boolean;
+    createdAt?: any;
+    updatedAt?: any;
 }
 
 export interface Player {

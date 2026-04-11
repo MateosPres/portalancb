@@ -8,6 +8,7 @@ import imageCompression from 'browser-image-compression';
 import { ApoiadoresManager } from '../components/ApoiadoresManager';
 import { LiveStreamAdmin } from '../components/LiveStreamAdmin';
 import { MediaStudio } from '../components/MediaStudio';
+import { AdminConquistasView } from '../components/AdminConquistasView';
 import { UserManagementCard } from '../components/UserManagementCard';
 import { UserDetailsPanel } from '../components/UserDetailsPanel';
 import { normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
@@ -30,11 +31,13 @@ interface AdminViewProps {
 
 export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, userProfile }) => {
     const [adminTab, setAdminTab] = useState<'home' | 'posts' | 'users' | 'apoiadores' | 'live' | 'reviews' | 'badges' | 'midia'>('home');
+    const restrictedTabs: Array<'users' | 'reviews' | 'badges'> = ['users', 'reviews', 'badges'];
     // Badge management state
-    const [badgeTargetId, setBadgeTargetId] = useState('');
-    const [badgeSelectedDef, setBadgeSelectedDef] = useState('');
     const [badgeLoading, setBadgeLoading] = useState(false);
     const [badgeSuccess, setBadgeSuccess] = useState<string | null>(null);
+    const [badgePlayerSearch, setBadgePlayerSearch] = useState('');
+    const [expandedBadgePlayerId, setExpandedBadgePlayerId] = useState<string | null>(null);
+    const [badgeQuickAssignByPlayer, setBadgeQuickAssignByPlayer] = useState<Record<string, string>>({});
     const [seasonYear, setSeasonYear] = useState(String(new Date().getFullYear()));
     const [seasonLoading, setSeasonLoading] = useState(false);
     const [seasonResult, setSeasonResult] = useState<{ awarded: number; log: string[] } | null>(null);
@@ -99,6 +102,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [editingApoiadorId, setEditingApoiadorId] = useState<string | null>(null);
 
     const isSuperAdmin = userProfile?.role === 'super-admin';
+
+    useEffect(() => {
+        if (!isSuperAdmin && restrictedTabs.includes(adminTab as 'users' | 'reviews' | 'badges')) {
+            setAdminTab('home');
+        }
+    }, [adminTab, isSuperAdmin]);
 
     useEffect(() => {
         const unsubEvents = db.collection("eventos").orderBy("data", "desc").onSnapshot((snapshot) => {
@@ -1048,7 +1057,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             )}
 
             {/* TAB: USERS */}
-            {adminTab === 'users' && (
+            {adminTab === 'users' && isSuperAdmin && (
                 <div className="animate-fadeIn">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
                         <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
@@ -1241,13 +1250,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                             <p className="text-sm text-gray-500 dark:text-gray-400">Criar, editar e excluir notícias, avisos, placares e resultados.</p>
                         </button>
 
-                        <button onClick={() => setAdminTab('users')} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all shadow-sm hover:shadow-md">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center"><LucideUsers size={18} /></div>
-                                <h3 className="font-bold text-gray-800 dark:text-gray-200">Usuários</h3>
-                            </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Gerenciar contas, permissões e vínculos com atletas.</p>
-                        </button>
+                        {isSuperAdmin && (
+                            <button onClick={() => setAdminTab('users')} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all shadow-sm hover:shadow-md">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center"><LucideUsers size={18} /></div>
+                                    <h3 className="font-bold text-gray-800 dark:text-gray-200">Usuários</h3>
+                                </div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Gerenciar contas, permissões e vínculos com atletas.</p>
+                            </button>
+                        )}
 
                         <button onClick={() => setAdminTab('apoiadores')} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-orange-400 dark:hover:border-orange-500 transition-all shadow-sm hover:shadow-md">
                             <div className="flex items-center gap-3 mb-2">
@@ -1273,21 +1284,25 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                             <p className="text-sm text-gray-500 dark:text-gray-400">Criar stories e thumbs de jogos, eventos e escalações.</p>
                         </button>
 
-                        <button onClick={() => { setAdminTab('reviews'); loadReviews(); }} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-amber-400 dark:hover:border-amber-500 transition-all shadow-sm hover:shadow-md">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 flex items-center justify-center"><LucideStar size={18} /></div>
-                                <h3 className="font-bold text-gray-800 dark:text-gray-200">Avaliações</h3>
-                            </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Gerenciar avaliações e reverter impactos quando necessário.</p>
-                        </button>
+                        {isSuperAdmin && (
+                            <button onClick={() => { setAdminTab('reviews'); loadReviews(); }} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-amber-400 dark:hover:border-amber-500 transition-all shadow-sm hover:shadow-md">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 flex items-center justify-center"><LucideStar size={18} /></div>
+                                    <h3 className="font-bold text-gray-800 dark:text-gray-200">Avaliações</h3>
+                                </div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Gerenciar avaliações e reverter impactos quando necessário.</p>
+                            </button>
+                        )}
 
-                        <button onClick={() => setAdminTab('badges')} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-purple-400 dark:hover:border-purple-500 transition-all shadow-sm hover:shadow-md">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-300 flex items-center justify-center"><LucideTrophy size={18} /></div>
-                                <h3 className="font-bold text-gray-800 dark:text-gray-200">Conquistas</h3>
-                            </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Conceder conquistas manualmente aos atletas.</p>
-                        </button>
+                        {isSuperAdmin && (
+                            <button onClick={() => setAdminTab('badges')} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-purple-400 dark:hover:border-purple-500 transition-all shadow-sm hover:shadow-md">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-300 flex items-center justify-center"><LucideTrophy size={18} /></div>
+                                    <h3 className="font-bold text-gray-800 dark:text-gray-200">Conquistas</h3>
+                                </div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Conceder, gerenciar regras e fechar temporada de conquistas.</p>
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
@@ -1307,7 +1322,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             )}
 
             {/* TAB: REVIEWS */}
-            {adminTab === 'reviews' && (
+            {adminTab === 'reviews' && isSuperAdmin && (
                 <div className="animate-fadeIn bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                     <div className="flex items-center justify-between mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
                         <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2">
@@ -1379,47 +1394,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             )}
 
             {/* TAB: CONQUISTAS */}
-            {adminTab === 'badges' && (() => {
-                const handleAwardBadge = async () => {
-                    if (!badgeTargetId || !badgeSelectedDef) return;
-                    const def = BADGE_CATALOG.find(b => b.id === badgeSelectedDef);
-                    if (!def) return;
-                    const player = activePlayers.find(p => p.id === badgeTargetId);
-                    if (!player) return;
-                    const alreadyHas = (player.badges || []).some(b => b.id === def.id);
-                    if (alreadyHas) { alert(`${player.nome} já possui a conquista "${def.nome}".`); return; }
-                    setBadgeLoading(true);
-                    setBadgeSuccess(null);
-                    try {
-                        const badge = buildBadge(def);
-                        await db.collection('jogadores').doc(badgeTargetId).update({
-                            badges: firebase.firestore.FieldValue.arrayUnion(badge),
-                        });
-                        // Notifica o jogador vinculado
-                        const usersSnap = await db.collection('usuarios').where('linkedPlayerId', '==', badgeTargetId).limit(1).get();
-                        if (!usersSnap.empty) {
-                            const targetUserId = usersSnap.docs[0].id;
-                            const notifId = `badge_${targetUserId}_${def.id}`;
-                            await db.collection('notifications').doc(notifId).set({
-                                targetUserId,
-                                type: 'evaluation',
-                                title: `Nova conquista desbloqueada! ${def.emoji}`,
-                                message: `Você ganhou a conquista "${def.nome}": ${def.descricao}`,
-                                data: { badgeId: def.id },
-                                read: false,
-                                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                            }, { merge: true });
-                        }
-                        setBadgeSuccess(`✅ Conquista "${def.nome}" concedida a ${player.nome}!`);
-                        setBadgeTargetId('');
-                        setBadgeSelectedDef('');
-                    } catch (e) {
-                        alert('Erro ao conceder conquista.');
-                    } finally {
-                        setBadgeLoading(false);
-                    }
-                };
-
+            {adminTab === 'badges' && isSuperAdmin && (() => {
                 const handleRevokeBadge = async (playerId: string, badgeId: string) => {
                     const player = activePlayers.find(p => p.id === playerId);
                     if (!player) return;
@@ -1436,117 +1411,166 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                     }
                 };
 
-                const selectedPlayer = activePlayers.find(p => p.id === badgeTargetId);
-                const selectedDef = BADGE_CATALOG.find(b => b.id === badgeSelectedDef);
+                const handleAwardBadgeToPlayer = async (playerId: string, badgeDefId: string) => {
+                    const def = BADGE_CATALOG.find(b => b.id === badgeDefId);
+                    const player = activePlayers.find(p => p.id === playerId);
+                    if (!def || !player) return;
+                    const alreadyHas = (player.badges || []).some(b => b.id === def.id);
+                    if (alreadyHas) {
+                        alert(`${player.nome} já possui a conquista "${def.nome}".`);
+                        return;
+                    }
+
+                    setBadgeLoading(true);
+                    try {
+                        const badge = buildBadge(def);
+                        await db.collection('jogadores').doc(playerId).update({
+                            badges: firebase.firestore.FieldValue.arrayUnion(badge),
+                        });
+
+                        const usersSnap = await db.collection('usuarios').where('linkedPlayerId', '==', playerId).limit(1).get();
+                        if (!usersSnap.empty) {
+                            const targetUserId = usersSnap.docs[0].id;
+                            const notifId = `badge_${targetUserId}_${def.id}`;
+                            await db.collection('notifications').doc(notifId).set({
+                                targetUserId,
+                                type: 'evaluation',
+                                title: `Nova conquista desbloqueada! ${def.emoji}`,
+                                message: `Você ganhou a conquista "${def.nome}": ${def.descricao}`,
+                                data: { badgeId: def.id },
+                                read: false,
+                                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                            }, { merge: true });
+                        }
+
+                        setBadgeSuccess(`✅ Conquista "${def.nome}" concedida a ${player.nome}!`);
+                        setBadgeQuickAssignByPlayer(prev => ({ ...prev, [playerId]: '' }));
+                    } catch {
+                        alert('Erro ao conceder conquista.');
+                    } finally {
+                        setBadgeLoading(false);
+                    }
+                };
+
+                const normalizedSearch = badgePlayerSearch.trim().toLowerCase();
+                const filteredBadgePlayers = activePlayers
+                    .filter((player) => {
+                        if (!normalizedSearch) return true;
+                        const label = `${player.nome} ${player.apelido || ''}`.toLowerCase();
+                        return label.includes(normalizedSearch);
+                    })
+                    .sort((a, b) => (b.badges?.length ?? 0) - (a.badges?.length ?? 0) || a.nome.localeCompare(b.nome));
 
                 return (
-                    <div className="animate-fadeIn space-y-6">
-                        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                            <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
-                                <LucideTrophy size={18} className="text-purple-500" /> Conceder Conquista Manual
-                            </h3>
-
-                            {badgeSuccess && (
-                                <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm font-semibold">
-                                    {badgeSuccess}
-                                </div>
-                            )}
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                {/* Seleção de atleta */}
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Atleta</label>
-                                    <select
-                                        value={badgeTargetId}
-                                        onChange={e => { setBadgeTargetId(e.target.value); setBadgeSuccess(null); }}
-                                        className="w-full border border-gray-200 dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-                                    >
-                                        <option value="">Selecionar atleta...</option>
-                                        {activePlayers.map(p => (
-                                            <option key={p.id} value={p.id}>{p.nome}{p.apelido ? ` (${p.apelido})` : ''}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                {/* Seleção de conquista */}
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Conquista</label>
-                                    <select
-                                        value={badgeSelectedDef}
-                                        onChange={e => { setBadgeSelectedDef(e.target.value); setBadgeSuccess(null); }}
-                                        className="w-full border border-gray-200 dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-                                    >
-                                        <option value="">Selecionar conquista...</option>
-                                        {BADGE_CATALOG.map(def => {
-                                            const alreadyHas = (selectedPlayer?.badges || []).some(b => b.id === def.id);
-                                            return (
-                                                <option key={def.id} value={def.id} disabled={alreadyHas}>
-                                                    {def.emoji} {def.nome} ({def.raridade}){alreadyHas ? ' — já possui' : ''}
-                                                </option>
-                                            );
-                                        })}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Preview da conquista selecionada */}
-                            {selectedDef && (
-                                <div className={`mb-4 p-3 rounded-lg border flex items-center gap-3 ${getRarityStyles(selectedDef.raridade).classes}`}>
-                                    <span className="text-3xl">{selectedDef.emoji}</span>
-                                    <div>
-                                        <div className="font-bold text-sm">{selectedDef.nome}</div>
-                                        <div className="text-xs opacity-80">{selectedDef.descricao}</div>
-                                    </div>
-                                </div>
-                            )}
-
-                            <Button
-                                onClick={handleAwardBadge}
-                                disabled={!badgeTargetId || !badgeSelectedDef || badgeLoading}
-                                className="w-full md:w-auto"
-                            >
-                                <LucideTrophy size={16} />
-                                {badgeLoading ? 'Concedendo...' : 'Conceder Conquista'}
-                            </Button>
-                        </div>
-
-                        {/* Lista de conquistas por atleta */}
-                        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <div className="animate-fadeIn flex flex-col gap-6">
+                        {/* Cards de conquistas por atleta */}
+                        <div className="order-4 bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                             <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
                                 <LucideStar size={18} className="text-amber-500" /> Conquistas por Atleta
                             </h3>
+                            <div className="mb-4">
+                                <div className="relative">
+                                    <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                                    <input
+                                        type="text"
+                                        value={badgePlayerSearch}
+                                        onChange={(e) => setBadgePlayerSearch(e.target.value)}
+                                        placeholder="Buscar atleta por nome ou apelido"
+                                        className="w-full pl-9 p-2.5 text-sm border rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                                    />
+                                </div>
+                                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{filteredBadgePlayers.length} atleta(s) encontrado(s)</p>
+                            </div>
+
                             <div className="space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
-                                {activePlayers
-                                    .filter(p => (p.badges || []).length > 0)
-                                    .sort((a, b) => (b.badges?.length ?? 0) - (a.badges?.length ?? 0))
-                                    .map(player => (
-                                        <div key={player.id} className="p-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className="font-bold text-sm text-gray-800 dark:text-white">{player.nome}</span>
-                                                <span className="text-xs text-gray-400">{player.badges!.length} conquista(s)</span>
-                                            </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {player.badges!.map(badge => {
-                                                    const style = getRarityStyles(badge.raridade);
-                                                    return (
-                                                        <div key={badge.id} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-bold ${style.classes}`}>
-                                                            <span>{badge.emoji}</span>
-                                                            <span>{badge.nome}</span>
-                                                            <button
-                                                                onClick={() => handleRevokeBadge(player.id, badge.id)}
-                                                                className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
-                                                                title="Revogar conquista"
-                                                            >
-                                                                <LucideX size={10} />
-                                                            </button>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                                {filteredBadgePlayers.map(player => {
+                                    const isOpen = expandedBadgePlayerId === player.id;
+                                    const playerBadges = player.badges || [];
+                                    const quickSelectedId = badgeQuickAssignByPlayer[player.id] || '';
+
+                                    return (
+                                        <div key={player.id} className="rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 overflow-hidden">
+                                            <button
+                                                onClick={() => setExpandedBadgePlayerId(prev => prev === player.id ? null : player.id)}
+                                                className="w-full px-3 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                            >
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden shrink-0">
+                                                        {player.foto ? (
+                                                            <img src={player.foto} alt={player.nome} className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center text-xs font-bold text-gray-600 dark:text-gray-200">
+                                                                {(player.apelido || player.nome || '?').charAt(0)}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0 text-left">
+                                                        <p className="font-bold text-sm text-gray-800 dark:text-white truncate">{player.apelido || player.nome}</p>
+                                                        {player.apelido && <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{player.nome}</p>}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400">{playerBadges.length} conquista(s)</span>
+                                                    <LucideArrowDown size={16} className={`text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                                                </div>
+                                            </button>
+
+                                            {isOpen && (
+                                                <div className="px-3 pb-3 border-t border-gray-100 dark:border-gray-700">
+                                                    <div className="pt-3 flex flex-col sm:flex-row gap-2 sm:items-center">
+                                                        <select
+                                                            value={quickSelectedId}
+                                                            onChange={(e) => setBadgeQuickAssignByPlayer(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                                            className="flex-1 border border-gray-200 dark:border-gray-600 rounded-lg p-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                                                        >
+                                                            <option value="">Atribuir conquista para este atleta...</option>
+                                                            {BADGE_CATALOG.map(def => {
+                                                                const alreadyHas = playerBadges.some(b => b.id === def.id);
+                                                                return (
+                                                                    <option key={def.id} value={def.id} disabled={alreadyHas}>
+                                                                        {def.emoji} {def.nome}{alreadyHas ? ' — já possui' : ''}
+                                                                    </option>
+                                                                );
+                                                            })}
+                                                        </select>
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => handleAwardBadgeToPlayer(player.id, quickSelectedId)}
+                                                            disabled={!quickSelectedId || badgeLoading}
+                                                        >
+                                                            <LucidePlus size={14} /> {badgeLoading ? 'Atribuindo...' : 'Atribuir'}
+                                                        </Button>
+                                                    </div>
+
+                                                    <div className="mt-3 flex flex-wrap gap-2">
+                                                        {playerBadges.length === 0 && (
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Nenhuma conquista ainda.</p>
+                                                        )}
+                                                        {playerBadges.map(badge => {
+                                                            const style = getRarityStyles(badge.raridade);
+                                                            return (
+                                                                <div key={badge.id} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-bold ${style.classes}`}>
+                                                                    <span>{badge.emoji}</span>
+                                                                    <span>{badge.nome}</span>
+                                                                    <button
+                                                                        onClick={() => handleRevokeBadge(player.id, badge.id)}
+                                                                        className="ml-1 opacity-70 hover:opacity-100 transition-opacity"
+                                                                        title="Remover conquista"
+                                                                    >
+                                                                        <LucideX size={10} />
+                                                                    </button>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                    ))}
-                                {activePlayers.every(p => !(p.badges || []).length) && (
-                                    <p className="text-center text-gray-400 py-8 text-sm">Nenhum atleta possui conquistas ainda.</p>
+                                    );
+                                })}
+
+                                {!filteredBadgePlayers.length && (
+                                    <p className="text-center text-gray-400 py-8 text-sm">Nenhum atleta encontrado para o filtro atual.</p>
                                 )}
                             </div>
                         </div>
@@ -1685,6 +1709,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                         totalEventos: eventosDoAno.length, totalBadges: totalAwarded,
                                     }, { merge: true });
 
+                                    // 6. Executa regras dinamicas de fechamento de temporada (pos_evento)
+                                    try {
+                                        const avaliarConquistasFechamentoTemporada = functions.httpsCallable('avaliarConquistasFechamentoTemporada');
+                                        const resp = await avaliarConquistasFechamentoTemporada({ seasonYear: yr });
+                                        const callableData = (resp as any)?.data;
+                                        const grantedByRules = Number(callableData?.conquistasConcedidas || 0);
+                                        if (grantedByRules > 0) {
+                                            totalAwarded += grantedByRules;
+                                            log.push(`⚙️ Regras dinamicas: ${grantedByRules} conquista(s) concedida(s)`);
+                                        } else {
+                                            log.push('⚙️ Regras dinamicas: nenhuma nova conquista concedida');
+                                        }
+                                    } catch (callableError) {
+                                        console.warn('Falha ao executar regras dinamicas de temporada:', callableError);
+                                        log.push('⚠️ Regras dinamicas de temporada falharam (ver console)');
+                                    }
+
                                     log.push(`✅ ${totalAwarded} conquista(s) distribuída(s)`);
                                     setSeasonResult({ awarded: totalAwarded, log });
                                 } catch (e) {
@@ -1696,7 +1737,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                             };
 
                             return (
-                                <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                                <div className="order-1 bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                                     <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-1 border-b border-gray-100 dark:border-gray-700 pb-3">
                                         <LucideCrown size={18} className="text-yellow-500" /> Fechar Temporada
                                     </h3>
@@ -1729,6 +1770,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                 </div>
                             );
                         })()}
+
+                        <div className="order-2 bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                            <AdminConquistasView />
+                        </div>
                     </div>
                 );
             })()}

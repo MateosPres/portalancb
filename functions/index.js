@@ -21,6 +21,406 @@ function extractPlayerId(entry) {
     return null;
 }
 
+function normalizeGatilho(gatilho) {
+    if (!gatilho) return { tipo: '' };
+    if (typeof gatilho === 'string') return { tipo: gatilho };
+    if (typeof gatilho === 'object') return gatilho;
+    return { tipo: '' };
+}
+
+const ALLOWED_RARIDADES = new Set(['comum', 'rara', 'epica', 'lendaria']);
+
+function resolveRegraRaridade(regra) {
+    const raw = String(regra?.raridade || '').trim().toLowerCase();
+    return ALLOWED_RARIDADES.has(raw) ? raw : 'comum';
+}
+
+const REVIEW_TAG_MULTIPLIERS = {
+    1: 1.0,
+    2: 0.75,
+    3: 0.55,
+};
+
+const REVIEW_TAG_IMPACTS = {
+    muralha:   { defesa: 3, forca: 1 },
+    sniper:    { ataque: 3, visao: 1 },
+    garcom:    { visao: 3, ataque: 1 },
+    flash:     { velocidade: 3, ataque: 1 },
+    lider:     { visao: 3, defesa: 1, forca: 1 },
+    guerreiro: { forca: 3, defesa: 1 },
+    avenida:   { defesa: -1, velocidade: -0.5 },
+    fominha:   { visao: -1, ataque: -0.5 },
+    tijoleiro: { ataque: -1, visao: -0.5 },
+    cone:      { velocidade: -1, forca: -0.5 },
+};
+
+const ATTR_KEYS = ['ataque', 'defesa', 'velocidade', 'forca', 'visao'];
+
+function buildHierarchyKey(gatilho) {
+    const tipo = String(gatilho?.tipo || '');
+    if (!tipo) return '';
+    if (gatilho?.atributo) return `${tipo}:${gatilho.atributo}`;
+    return tipo;
+}
+
+function dominanceScore(gatilho) {
+    if (!gatilho || typeof gatilho !== 'object') return 0;
+    if (typeof gatilho.minimo === 'number') {
+        if (String(gatilho.tipo).startsWith('ranking_')) {
+            return 1000 - Number(gatilho.minimo);
+        }
+        return Number(gatilho.minimo);
+    }
+    return 1;
+}
+
+function selectDominantMatchedRules(matchedRules) {
+    const byFamily = new Map();
+    for (const regra of matchedRules) {
+        const gatilho = normalizeGatilho(regra.gatilho);
+        const family = buildHierarchyKey(gatilho);
+        if (!family) {
+            byFamily.set(`rule:${regra.id}`, regra);
+            continue;
+        }
+        const current = byFamily.get(family);
+        if (!current) {
+            byFamily.set(family, regra);
+            continue;
+        }
+        const currentScore = dominanceScore(normalizeGatilho(current.gatilho));
+        const nextScore = dominanceScore(gatilho);
+        if (nextScore > currentScore) {
+            byFamily.set(family, regra);
+        }
+    }
+    return Array.from(byFamily.values());
+}
+
+function aggregateAttributeScoresFromReviews(reviewDocs) {
+    const scoresByPlayer = {};
+    for (const reviewDoc of reviewDocs) {
+        const review = reviewDoc.data ? reviewDoc.data() : reviewDoc;
+        const targetId = review?.targetId;
+        if (!targetId) continue;
+        const tags = Array.isArray(review?.tags) ? review.tags : [];
+        const multiplier = REVIEW_TAG_MULTIPLIERS[tags.length] || 1.0;
+
+        if (!scoresByPlayer[targetId]) {
+            scoresByPlayer[targetId] = { ataque: 0, defesa: 0, velocidade: 0, forca: 0, visao: 0 };
+        }
+
+        tags.forEach((tag) => {
+            const impact = REVIEW_TAG_IMPACTS[tag];
+            if (!impact) return;
+            ATTR_KEYS.forEach((key) => {
+                scoresByPlayer[targetId][key] += Number(impact[key] || 0) * multiplier;
+            });
+        });
+    }
+    return scoresByPlayer;
+}
+
+function buildTopByAttribute(scoresByPlayer) {
+    const leaders = {};
+    ATTR_KEYS.forEach((attr) => {
+        let maxScore = Number.NEGATIVE_INFINITY;
+        Object.values(scoresByPlayer).forEach((scores) => {
+            const val = Number(scores[attr] || 0);
+            if (val > maxScore) maxScore = val;
+        });
+
+        if (!Number.isFinite(maxScore)) {
+            leaders[attr] = [];
+            return;
+        }
+
+        leaders[attr] = Object.entries(scoresByPlayer)
+            .filter(([_, scores]) => Number(scores[attr] || 0) === maxScore)
+            .map(([playerId]) => playerId);
+    });
+    return leaders;
+}
+
+function resolveAncbPlayersForGame(eventData, gameData) {
+    const gameTeamIds = [gameData?.timeA_id, gameData?.timeB_id].filter(Boolean);
+    let ancbPlayerIds = [];
+
+    if (eventData?.timesParticipantes && eventData.timesParticipantes.length > 0) {
+        const participantTeams = gameTeamIds.length > 0
+            ? eventData.timesParticipantes.filter((t) => gameTeamIds.includes(t.id))
+            : eventData.timesParticipantes;
+
+        participantTeams
+            .filter((t) => t.isANCB)
+            .forEach((t) => ancbPlayerIds.push(...(t.jogadores || [])));
+    } else if (eventData?.times && eventData.times.length > 0) {
+        const teams = gameTeamIds.length > 0
+            ? eventData.times.filter((t) => gameTeamIds.includes(t.id))
+            : eventData.times;
+        teams.forEach((t) => ancbPlayerIds.push(...(t.jogadores || [])));
+    } else {
+        const gameRoster = (gameData?.jogadoresEscalados || []).map(extractPlayerId).filter(Boolean);
+        const eventRoster = (eventData?.jogadoresEscalados || []).map(extractPlayerId).filter(Boolean);
+        ancbPlayerIds = gameRoster.length > 0 ? gameRoster : eventRoster;
+    }
+
+    return [...new Set(ancbPlayerIds.filter(Boolean))];
+}
+
+function resolveAncbTeamPlayersForGame(eventData, gameData) {
+    const gameTeamIds = [gameData?.timeA_id, gameData?.timeB_id].filter(Boolean);
+    const teamPlayersMap = {};
+    const playerTeamMap = {};
+
+    const addTeamPlayers = (teamId, jogadores) => {
+        const normalizedTeamId = String(teamId || '').trim();
+        if (!normalizedTeamId) return;
+        if (!Array.isArray(teamPlayersMap[normalizedTeamId])) teamPlayersMap[normalizedTeamId] = [];
+        for (const pid of jogadores || []) {
+            const playerId = String(pid || '').trim();
+            if (!playerId) continue;
+            if (!teamPlayersMap[normalizedTeamId].includes(playerId)) {
+                teamPlayersMap[normalizedTeamId].push(playerId);
+            }
+            if (!playerTeamMap[playerId]) {
+                playerTeamMap[playerId] = normalizedTeamId;
+            }
+        }
+    };
+
+    if (eventData?.timesParticipantes && eventData.timesParticipantes.length > 0) {
+        const participantTeams = gameTeamIds.length > 0
+            ? eventData.timesParticipantes.filter((t) => gameTeamIds.includes(t.id))
+            : eventData.timesParticipantes;
+
+        participantTeams
+            .filter((t) => t.isANCB)
+            .forEach((t) => addTeamPlayers(t.id || t.nomeTime, t.jogadores || []));
+    } else if (eventData?.times && eventData.times.length > 0) {
+        const teams = gameTeamIds.length > 0
+            ? eventData.times.filter((t) => gameTeamIds.includes(t.id))
+            : eventData.times;
+
+        teams.forEach((t) => addTeamPlayers(t.id || t.nomeTime, t.jogadores || []));
+    } else {
+        // Legado/amistoso sem estrutura de times: mantem um contexto unico ANCB.
+        const roster = (gameData?.jogadoresEscalados || eventData?.jogadoresEscalados || [])
+            .map(extractPlayerId)
+            .filter(Boolean);
+        addTeamPlayers('ancb_default', roster);
+    }
+
+    const playerIds = Object.keys(playerTeamMap);
+    return { playerIds, playerTeamMap, teamPlayersMap };
+}
+
+function evaluateRuleForPlayer(gatilho, stats, playerId, teamId) {
+    switch (gatilho.tipo) {
+        case 'pontos_partida':
+            return (stats.pontosByPlayer[playerId] || 0) >= (Number(gatilho.minimo) || 0);
+        case 'bolas_de_tres':
+            return (stats.bolas3ByPlayer[playerId] || 0) >= (Number(gatilho.minimo) || 0);
+        case 'cestinha_partida':
+            return Array.isArray(stats.topScorersByTeam?.[teamId]) && stats.topScorersByTeam[teamId].includes(playerId);
+        case 'top_atributo_jogo': {
+            const attr = String(gatilho.atributo || '');
+            return Boolean(
+                attr &&
+                Array.isArray(stats.topByAttributeByTeam?.[teamId]?.[attr]) &&
+                stats.topByAttributeByTeam[teamId][attr].includes(playerId)
+            );
+        }
+        default:
+            return false;
+    }
+}
+
+function resolveAncbPlayersForEvent(eventData) {
+    let allAncbPlayerIds = [];
+
+    if (eventData?.timesParticipantes && eventData.timesParticipantes.length > 0) {
+        eventData.timesParticipantes
+            .filter((t) => t.isANCB)
+            .forEach((t) => allAncbPlayerIds.push(...(t.jogadores || [])));
+    } else if (eventData?.times && eventData.times.length > 0) {
+        eventData.times.forEach((t) => allAncbPlayerIds.push(...(t.jogadores || [])));
+    } else {
+        allAncbPlayerIds = (eventData?.jogadoresEscalados || []).map(extractPlayerId).filter(Boolean);
+    }
+
+    return [...new Set(allAncbPlayerIds.filter(Boolean))];
+}
+
+function resolveAncbTeamPlayersForEvent(eventData) {
+    const teamPlayersMap = {};
+    const playerTeamMap = {};
+
+    const addTeamPlayers = (teamId, jogadores) => {
+        const normalizedTeamId = String(teamId || '').trim();
+        if (!normalizedTeamId) return;
+        if (!Array.isArray(teamPlayersMap[normalizedTeamId])) teamPlayersMap[normalizedTeamId] = [];
+        for (const pid of jogadores || []) {
+            const playerId = String(pid || '').trim();
+            if (!playerId) continue;
+            if (!teamPlayersMap[normalizedTeamId].includes(playerId)) {
+                teamPlayersMap[normalizedTeamId].push(playerId);
+            }
+            if (!playerTeamMap[playerId]) {
+                playerTeamMap[playerId] = normalizedTeamId;
+            }
+        }
+    };
+
+    if (eventData?.timesParticipantes && eventData.timesParticipantes.length > 0) {
+        eventData.timesParticipantes
+            .filter((t) => t.isANCB)
+            .forEach((t) => addTeamPlayers(t.id || t.nomeTime, t.jogadores || []));
+    } else if (eventData?.times && eventData.times.length > 0) {
+        eventData.times.forEach((t) => addTeamPlayers(t.id || t.nomeTime, t.jogadores || []));
+    } else {
+        const roster = (eventData?.jogadoresEscalados || []).map(extractPlayerId).filter(Boolean);
+        addTeamPlayers('ancb_default', roster);
+    }
+
+    const playerIds = Object.keys(playerTeamMap);
+    return { playerIds, playerTeamMap, teamPlayersMap };
+}
+
+function evaluateSeasonRuleForPlayer(gatilho, seasonStats, playerId) {
+    switch (gatilho.tipo) {
+        case 'participacao_evento':
+            return (seasonStats.eventosParticipados[playerId] || 0) > 0;
+        case 'podio_campeao':
+            return seasonStats.campeoes.has(playerId);
+        case 'podio_vice':
+            return seasonStats.vices.has(playerId);
+        case 'podio_terceiro':
+            return seasonStats.terceiros.has(playerId);
+        case 'cestinha_evento':
+            return seasonStats.cestinhas.has(playerId);
+        case 'pontos_unico_jogo_evento':
+            return (seasonStats.maxPontosJogo[playerId] || 0) >= (Number(gatilho.minimo) || 0);
+        case 'bolas_de_tres_evento':
+            return (seasonStats.bolas3NoAno[playerId] || 0) >= (Number(gatilho.minimo) || 0);
+        case 'ranking_pontos_temporada': {
+            const posicao = Number(gatilho.minimo) || 1;
+            return (seasonStats.rankPontos[playerId] || 9999) === posicao;
+        }
+        case 'ranking_bolas_de_tres_temporada': {
+            const posicao = Number(gatilho.minimo) || 1;
+            return (seasonStats.rankBolas3[playerId] || 9999) === posicao;
+        }
+        case 'participou_todos_eventos_temporada':
+            return (seasonStats.eventosParticipados[playerId] || 0) >= seasonStats.totalEventos && seasonStats.totalEventos > 0;
+        case 'conquistas_evento_temporada':
+            return (seasonStats.eventBadgesByPlayer[playerId] || 0) >= (Number(gatilho.minimo) || 0);
+        case 'top_atributo_temporada': {
+            const attr = String(gatilho.atributo || '');
+            return Boolean(attr && Array.isArray(seasonStats.topByAttribute?.[attr]) && seasonStats.topByAttribute[attr].includes(playerId));
+        }
+        case 'manual_admin':
+            return false;
+        default:
+            return false;
+    }
+}
+
+function evaluateEventRuleForPlayer(gatilho, eventStats, playerId, teamId) {
+    switch (gatilho.tipo) {
+        case 'participacao_evento':
+            return (eventStats.playerIds || []).includes(playerId);
+        case 'podio_campeao':
+            return eventStats.campeoes.has(playerId);
+        case 'podio_vice':
+            return eventStats.vices.has(playerId);
+        case 'podio_terceiro':
+            return eventStats.terceiros.has(playerId);
+        case 'cestinha_evento':
+            return Boolean(eventStats.cestinhasByTeam?.[teamId]?.has(playerId));
+        case 'pontos_unico_jogo_evento':
+            return (eventStats.maxPontosJogo[playerId] || 0) >= (Number(gatilho.minimo) || 0);
+        case 'bolas_de_tres_evento':
+            return (eventStats.bolas3NoEvento[playerId] || 0) >= (Number(gatilho.minimo) || 0);
+        case 'top_atributo_evento': {
+            const attr = String(gatilho.atributo || '');
+            return Boolean(
+                attr &&
+                Array.isArray(eventStats.topByAttributeByTeam?.[teamId]?.[attr]) &&
+                eventStats.topByAttributeByTeam[teamId][attr].includes(playerId)
+            );
+        }
+        default:
+            return false;
+    }
+}
+
+function countEventBadgesInSeason(existingBadges, seasonYear) {
+    if (!Array.isArray(existingBadges)) return 0;
+    const eventBadgePrefixes = [
+        'estava_la_',
+        'campiao_',
+        'vice_',
+        'podio_',
+        'cestinha_ev_',
+        'bola_quente_',
+        'imparavel_',
+        'primeira_bomba_',
+        'atirador_',
+        'atirador_elite_',
+    ];
+
+    return existingBadges.filter((badge) => {
+        if (!badge || typeof badge !== 'object') return false;
+        const badgeId = String(badge.id || '');
+        const badgeDate = String(badge.data || '');
+        if (!badgeDate.includes(seasonYear)) return false;
+        return eventBadgePrefixes.some((prefix) => badgeId.startsWith(prefix));
+    }).length;
+}
+
+function renderTemplate(template, context) {
+    const source = String(template || '').trim();
+    if (!source) return '';
+
+    return source.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => {
+        const value = context?.[key];
+        if (value === undefined || value === null) return '';
+        return String(value);
+    }).replace(/\s{2,}/g, ' ').trim();
+}
+
+function buildRenderedTexts(regra, context) {
+    const baseTitulo = regra?.titulo || 'Conquista';
+    const baseDescricao = regra?.descricaoTemplate || regra?.descricao || 'Conquista desbloqueada.';
+    const baseMensagem = regra?.mensagemNotificacaoTemplate || regra?.mensagemNotificacao || `Voce ganhou a conquista "${regra?.titulo || 'Conquista'}".`;
+
+    const titulo = renderTemplate(baseTitulo, context) || 'Conquista';
+    const descricao = renderTemplate(baseDescricao, context) || 'Conquista desbloqueada.';
+    const mensagem = renderTemplate(baseMensagem, context) || `Voce ganhou a conquista "${regra?.titulo || 'Conquista'}".`;
+
+    return { titulo, descricao, mensagem };
+}
+
+function resolveGameNameForTemplate(gameData) {
+    const teamA = String(gameData?.timeA_nome || 'ANCB').trim() || 'ANCB';
+    const teamB = String(gameData?.timeB_nome || gameData?.adversario || 'Adversario').trim() || 'Adversario';
+    return `${teamA} x ${teamB}`;
+}
+
+function resolveTeamNameFromEvent(eventData, teamId) {
+    const targetId = String(teamId || '').trim();
+    if (!targetId) return '';
+
+    const allTeams = [
+        ...(Array.isArray(eventData?.timesParticipantes) ? eventData.timesParticipantes : []),
+        ...(Array.isArray(eventData?.times) ? eventData.times : []),
+    ];
+
+    const found = allTeams.find((team) => String(team?.id || '').trim() === targetId);
+    return String(found?.nomeTime || '').trim();
+}
+
 // ─────────────────────────────────────────────────────────────
 // 1. MONITOR DE CONVOCAÇÕES
 //
@@ -393,6 +793,761 @@ exports.adminResetPassword = functions.https.onCall(async (data, context) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// 4.1 MOTOR DE CONQUISTAS POS-JOGO (CALLABLE)
+//
+// Chamada manual no fluxo de "Finalizar Jogo".
+// IMPORTANTE: sempre usa arrayUnion e nunca substitui badges existentes.
+// ─────────────────────────────────────────────────────────────
+exports.avaliarConquistasPartida = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Usuario precisa estar autenticado.');
+    }
+
+    const callerUid = context.auth.uid;
+    const callerDoc = await admin.firestore().collection('usuarios').doc(callerUid).get();
+    const callerRole = callerDoc.exists ? callerDoc.data().role : null;
+    if (!callerDoc.exists || (callerRole !== 'admin' && callerRole !== 'super-admin')) {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas administradores podem avaliar conquistas.');
+    }
+
+    const jogoId = String(data?.jogoId || '').trim();
+    const eventoId = String(data?.eventoId || '').trim();
+    if (!jogoId || !eventoId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Informe jogoId e eventoId.');
+    }
+
+    const eventRef = admin.firestore().collection('eventos').doc(eventoId);
+    const gameRef = eventRef.collection('jogos').doc(jogoId);
+
+    const [eventSnap, gameSnap, rulesSnap] = await Promise.all([
+        eventRef.get(),
+        gameRef.get(),
+        admin.firestore().collection('conquistas_regras')
+            .where('ativo', '==', true)
+            .where('tipoAvaliacao', '==', 'pos_jogo')
+            .get(),
+    ]);
+
+    if (!eventSnap.exists) {
+        throw new functions.https.HttpsError('not-found', `Evento ${eventoId} nao encontrado.`);
+    }
+    if (!gameSnap.exists) {
+        throw new functions.https.HttpsError('not-found', `Jogo ${jogoId} nao encontrado.`);
+    }
+
+    const eventData = eventSnap.data() || {};
+    const gameData = gameSnap.data() || {};
+
+    const regras = rulesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    if (!regras.length) {
+        return {
+            success: true,
+            regrasAvaliadas: 0,
+            jogadoresProcessados: 0,
+            conquistasConcedidas: 0,
+            detalhes: ['Nenhuma regra ativa pos_jogo encontrada.'],
+        };
+    }
+
+    const gameTeamContext = resolveAncbTeamPlayersForGame(eventData, gameData);
+    const playerIds = gameTeamContext.playerIds;
+    const playerTeamMap = { ...gameTeamContext.playerTeamMap };
+    const teamPlayersMap = { ...gameTeamContext.teamPlayersMap };
+    if (!playerIds.length) {
+        return {
+            success: true,
+            regrasAvaliadas: regras.length,
+            jogadoresProcessados: 0,
+            conquistasConcedidas: 0,
+            detalhes: ['Nenhum jogador ANCB elegivel no jogo.'],
+        };
+    }
+
+    const cestasSnap = await gameRef.collection('cestas').get();
+    const reviewsSnap = await admin.firestore().collection('avaliacoes_gamified')
+        .where('eventId', '==', eventoId)
+        .where('gameId', '==', jogoId)
+        .get();
+    const pontosByPlayer = {};
+    const bolas3ByPlayer = {};
+
+    cestasSnap.docs.forEach((doc) => {
+        const cesta = doc.data();
+        const pid = cesta?.jogadorId;
+        if (!pid || !playerIds.includes(pid)) return;
+        const pts = Number(cesta?.pontos) || 0;
+
+        const observedTeamId = String(cesta?.timeId || '').trim();
+        if (observedTeamId) {
+            if (!Array.isArray(teamPlayersMap[observedTeamId])) teamPlayersMap[observedTeamId] = [];
+            if (!teamPlayersMap[observedTeamId].includes(pid)) teamPlayersMap[observedTeamId].push(pid);
+            if (!playerTeamMap[pid] || playerTeamMap[pid] === 'ancb_default') playerTeamMap[pid] = observedTeamId;
+        }
+
+        pontosByPlayer[pid] = (pontosByPlayer[pid] || 0) + pts;
+        if (pts === 3) {
+            bolas3ByPlayer[pid] = (bolas3ByPlayer[pid] || 0) + 1;
+        }
+    });
+
+    const topScorersByTeam = {};
+    for (const [teamId, teamPlayers] of Object.entries(teamPlayersMap)) {
+        let maxPontosTeam = 0;
+        for (const pid of teamPlayers) {
+            const total = Number(pontosByPlayer[pid] || 0);
+            if (total > maxPontosTeam) maxPontosTeam = total;
+        }
+        topScorersByTeam[teamId] = maxPontosTeam > 0
+            ? teamPlayers.filter((pid) => Number(pontosByPlayer[pid] || 0) === maxPontosTeam)
+            : [];
+    }
+
+    const scoresByPlayer = aggregateAttributeScoresFromReviews(reviewsSnap.docs);
+    const topByAttributeByTeam = {};
+    for (const [teamId, teamPlayers] of Object.entries(teamPlayersMap)) {
+        const teamScores = {};
+        for (const pid of teamPlayers) {
+            if (scoresByPlayer[pid]) {
+                teamScores[pid] = scoresByPlayer[pid];
+            }
+        }
+        topByAttributeByTeam[teamId] = buildTopByAttribute(teamScores);
+    }
+
+    const stats = { pontosByPlayer, bolas3ByPlayer, topScorersByTeam, topByAttributeByTeam };
+    const today = new Date().toISOString().split('T')[0];
+    let conquistasConcedidas = 0;
+    const detalhes = [];
+
+    for (const playerId of playerIds) {
+        const playerRef = admin.firestore().collection('jogadores').doc(playerId);
+        const playerSnap = await playerRef.get();
+        if (!playerSnap.exists) continue;
+
+        const playerData = playerSnap.data() || {};
+        const existingBadges = Array.isArray(playerData.badges) ? playerData.badges : [];
+        const existingIds = new Set(existingBadges.map((b) => b.id));
+        const matchedRules = [];
+        const teamId = String(playerTeamMap[playerId] || 'ancb_default');
+        const teamName = resolveTeamNameFromEvent(eventData, teamId) || (teamId === 'ancb_default' ? 'ANCB' : teamId);
+
+        for (const regra of regras) {
+            const gatilho = normalizeGatilho(regra.gatilho);
+            if (!evaluateRuleForPlayer(gatilho, stats, playerId, teamId)) continue;
+
+            matchedRules.push(regra);
+        }
+
+        const dominantRules = selectDominantMatchedRules(matchedRules);
+        const badgesToAdd = [];
+        const badgeMessageById = {};
+
+        for (const regra of dominantRules) {
+            const gatilho = normalizeGatilho(regra.gatilho);
+
+            const badgeId = `regra_${regra.id}_${jogoId}`;
+            if (existingIds.has(badgeId)) continue;
+
+            const rendered = buildRenderedTexts(regra, {
+                eventName: eventData?.nome || 'Evento',
+                gameName: resolveGameNameForTemplate(gameData),
+                seasonYear: String(eventData?.data || '').slice(-4),
+                playerName: playerData?.nome || playerId,
+                value: typeof gatilho?.minimo === 'number' ? gatilho.minimo : '',
+            });
+
+            badgesToAdd.push({
+                id: badgeId,
+                nome: rendered.titulo,
+                emoji: regra.tipoIcone === 'emoji' ? (regra.iconeValor || '🏅') : '🏅',
+                categoria: 'partida',
+                raridade: resolveRegraRaridade(regra),
+                descricao: rendered.descricao,
+                data: today,
+                gameId: jogoId,
+                teamId,
+                teamNome: teamName,
+                regraId: regra.id,
+                tipoIcone: regra.tipoIcone || 'emoji',
+                iconeValor: regra.iconeValor || '🏅',
+            });
+            badgeMessageById[badgeId] = rendered.mensagem;
+        }
+
+        if (!badgesToAdd.length) continue;
+
+        await playerRef.update({
+            badges: admin.firestore.FieldValue.arrayUnion(...badgesToAdd),
+        });
+
+        conquistasConcedidas += badgesToAdd.length;
+        detalhes.push(`${playerData.nome || playerId} [${teamName}]: ${badgesToAdd.length} conquista(s)`);
+        console.log(`Conquistas pos-jogo -> jogador=${playerData.nome || playerId} team=${teamId} (${teamName}) qtd=${badgesToAdd.length}`);
+
+        const usersSnap = await admin.firestore().collection('usuarios')
+            .where('linkedPlayerId', '==', playerId)
+            .limit(1)
+            .get();
+
+        if (!usersSnap.empty) {
+            const targetUserId = usersSnap.docs[0].id;
+            for (const badge of badgesToAdd) {
+                const regraId = badge.regraId;
+                const message = badgeMessageById[badge.id] || `Voce ganhou a conquista "${badge.nome}".`;
+                const notifId = `badge_${targetUserId}_${badge.id}`;
+
+                await admin.firestore().collection('notifications').doc(notifId).set({
+                    targetUserId,
+                    type: 'evaluation',
+                    title: `Nova conquista desbloqueada! ${badge.emoji}`,
+                    message,
+                    data: {
+                        badgeId: badge.id,
+                        regraId,
+                        eventoId,
+                        jogoId,
+                        teamId,
+                        teamNome: teamName,
+                    },
+                    read: false,
+                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
+            }
+        }
+    }
+
+    return {
+        success: true,
+        regrasAvaliadas: regras.length,
+        jogadoresProcessados: playerIds.length,
+        conquistasConcedidas,
+        detalhes,
+    };
+});
+
+// ─────────────────────────────────────────────────────────────
+// 4.2 MOTOR DE CONQUISTAS NO FECHAMENTO DE TEMPORADA (CALLABLE)
+//
+// Avalia regras ativas tipoAvaliacao='ao_fechar_temporada' usando todos os
+// eventos finalizados do ano informado.
+// ─────────────────────────────────────────────────────────────
+exports.avaliarConquistasFechamentoTemporada = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Usuario precisa estar autenticado.');
+    }
+
+    const callerUid = context.auth.uid;
+    const callerDoc = await admin.firestore().collection('usuarios').doc(callerUid).get();
+    const callerRole = callerDoc.exists ? callerDoc.data().role : null;
+    if (!callerDoc.exists || (callerRole !== 'admin' && callerRole !== 'super-admin')) {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas administradores podem fechar temporada de conquistas.');
+    }
+
+    const seasonYear = String(data?.seasonYear || '').trim();
+    if (!seasonYear) {
+        throw new functions.https.HttpsError('invalid-argument', 'Informe seasonYear.');
+    }
+
+    const [eventosSnap, rulesSnap] = await Promise.all([
+        admin.firestore().collection('eventos').where('status', '==', 'finalizado').get(),
+        admin.firestore().collection('conquistas_regras')
+            .where('ativo', '==', true)
+            .where('tipoAvaliacao', '==', 'ao_fechar_temporada')
+            .get(),
+    ]);
+
+    const eventosDoAno = eventosSnap.docs.filter((doc) => {
+        const rawDate = String(doc.data()?.data || '');
+        return rawDate.includes(seasonYear) || rawDate.endsWith('/' + seasonYear.slice(2));
+    });
+
+    if (!eventosDoAno.length) {
+        return {
+            success: true,
+            regrasAvaliadas: 0,
+            jogadoresProcessados: 0,
+            conquistasConcedidas: 0,
+            detalhes: [`Nenhum evento finalizado encontrado em ${seasonYear}.`],
+        };
+    }
+
+    const regras = rulesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    if (!regras.length) {
+        return {
+            success: true,
+            regrasAvaliadas: 0,
+            jogadoresProcessados: 0,
+            conquistasConcedidas: 0,
+            detalhes: ['Nenhuma regra ativa ao_fechar_temporada encontrada.'],
+        };
+    }
+
+    const eventosParticipados = {};
+    const pontosNoAno = {};
+    const bolas3NoAno = {};
+    const maxPontosJogo = {};
+    const eventBadgesByPlayer = {};
+    const campeoes = new Set();
+    const vices = new Set();
+    const terceiros = new Set();
+    const cestinhas = new Set();
+    const allPlayers = new Set();
+    const seasonReviews = [];
+
+    for (const eventDoc of eventosDoAno) {
+        const eventId = eventDoc.id;
+        const eventData = eventDoc.data() || {};
+        const playerIds = resolveAncbPlayersForEvent(eventData);
+
+        playerIds.forEach((pid) => {
+            allPlayers.add(pid);
+            eventosParticipados[pid] = (eventosParticipados[pid] || 0) + 1;
+        });
+
+        const allTimes = eventData.timesParticipantes || eventData.times || [];
+        const podio = eventData.podio || {};
+        const resolvePodioPlayers = (teamName) => {
+            if (!teamName) return [];
+            const team = allTimes.find((t) => String(t?.nomeTime || '').toLowerCase().trim() === String(teamName).toLowerCase().trim());
+            return (team?.jogadores || []).filter((pid) => playerIds.includes(pid));
+        };
+
+        resolvePodioPlayers(podio.primeiro).forEach((pid) => campeoes.add(pid));
+        resolvePodioPlayers(podio.segundo).forEach((pid) => vices.add(pid));
+        resolvePodioPlayers(podio.terceiro).forEach((pid) => terceiros.add(pid));
+
+        const jogosSnap = await admin.firestore().collection('eventos').doc(eventId).collection('jogos').get();
+        const reviewsSnap = await admin.firestore().collection('avaliacoes_gamified')
+            .where('eventId', '==', eventId)
+            .get();
+        seasonReviews.push(...reviewsSnap.docs);
+        const pontosNoEvento = {};
+
+        for (const jogoDoc of jogosSnap.docs) {
+            const cestasSnap = await admin.firestore().collection('eventos').doc(eventId)
+                .collection('jogos').doc(jogoDoc.id).collection('cestas').get();
+
+            const pontosNesteJogo = {};
+            for (const cestaDoc of cestasSnap.docs) {
+                const cesta = cestaDoc.data() || {};
+                const pid = cesta.jogadorId;
+                if (!pid || !playerIds.includes(pid)) continue;
+
+                const pts = Number(cesta.pontos) || 0;
+                pontosNoEvento[pid] = (pontosNoEvento[pid] || 0) + pts;
+                pontosNesteJogo[pid] = (pontosNesteJogo[pid] || 0) + pts;
+                pontosNoAno[pid] = (pontosNoAno[pid] || 0) + pts;
+
+                if (pts === 3) {
+                    bolas3NoAno[pid] = (bolas3NoAno[pid] || 0) + 1;
+                }
+            }
+
+            Object.entries(pontosNesteJogo).forEach(([pid, pts]) => {
+                if ((maxPontosJogo[pid] || 0) < pts) {
+                    maxPontosJogo[pid] = pts;
+                }
+            });
+        }
+
+        let maxPontosEvento = 0;
+        Object.values(pontosNoEvento).forEach((pts) => {
+            if (pts > maxPontosEvento) maxPontosEvento = pts;
+        });
+        if (maxPontosEvento > 0) {
+            Object.entries(pontosNoEvento).forEach(([pid, pts]) => {
+                if (pts === maxPontosEvento) cestinhas.add(pid);
+            });
+        }
+    }
+
+    const seasonStats = {
+        eventosParticipados,
+        pontosNoAno,
+        bolas3NoAno,
+        maxPontosJogo,
+        campeoes,
+        vices,
+        terceiros,
+        cestinhas,
+        rankPontos: {},
+        rankBolas3: {},
+        totalEventos: eventosDoAno.length,
+        eventBadgesByPlayer,
+        topByAttribute: {},
+    };
+
+    const seasonScoresByPlayer = aggregateAttributeScoresFromReviews(seasonReviews);
+    seasonStats.topByAttribute = buildTopByAttribute(seasonScoresByPlayer);
+
+    const rankPontosIds = Object.entries(pontosNoAno).sort((a, b) => Number(b[1]) - Number(a[1])).map(([pid]) => pid);
+    rankPontosIds.forEach((pid, index) => {
+        seasonStats.rankPontos[pid] = index + 1;
+    });
+
+    const rankBolas3Ids = Object.entries(bolas3NoAno).sort((a, b) => Number(b[1]) - Number(a[1])).map(([pid]) => pid);
+    rankBolas3Ids.forEach((pid, index) => {
+        seasonStats.rankBolas3[pid] = index + 1;
+    });
+
+    const today = new Date().toISOString().split('T')[0];
+    let conquistasConcedidas = 0;
+    const detalhes = [];
+    const allPlayerIds = Array.from(allPlayers);
+
+    for (const playerId of allPlayerIds) {
+        const playerRef = admin.firestore().collection('jogadores').doc(playerId);
+        const playerSnap = await playerRef.get();
+        if (!playerSnap.exists) continue;
+
+        const playerData = playerSnap.data() || {};
+        const existingBadges = Array.isArray(playerData.badges) ? playerData.badges : [];
+        seasonStats.eventBadgesByPlayer[playerId] = countEventBadgesInSeason(existingBadges, seasonYear);
+        const existingIds = new Set(existingBadges.map((b) => b.id));
+        const matchedRules = [];
+
+        for (const regra of regras) {
+            const gatilho = normalizeGatilho(regra.gatilho);
+            if (!evaluateSeasonRuleForPlayer(gatilho, seasonStats, playerId)) continue;
+
+            matchedRules.push(regra);
+        }
+
+        const dominantRules = selectDominantMatchedRules(matchedRules);
+        const badgesToAdd = [];
+        const badgeMessageById = {};
+
+        for (const regra of dominantRules) {
+            const gatilho = normalizeGatilho(regra.gatilho);
+
+            const badgeId = `regra_${regra.id}_${seasonYear}`;
+            if (existingIds.has(badgeId)) continue;
+
+            const rendered = buildRenderedTexts(regra, {
+                eventName: '',
+                gameName: '',
+                seasonYear,
+                playerName: playerData?.nome || playerId,
+                value: typeof gatilho?.minimo === 'number' ? gatilho.minimo : '',
+            });
+
+            badgesToAdd.push({
+                id: badgeId,
+                nome: rendered.titulo,
+                emoji: regra.tipoIcone === 'emoji' ? (regra.iconeValor || '🏅') : '🏅',
+                categoria: 'temporada',
+                raridade: resolveRegraRaridade(regra),
+                descricao: rendered.descricao,
+                data: today,
+                regraId: regra.id,
+                tipoIcone: regra.tipoIcone || 'emoji',
+                iconeValor: regra.iconeValor || '🏅',
+            });
+            badgeMessageById[badgeId] = rendered.mensagem;
+        }
+
+        if (!badgesToAdd.length) continue;
+
+        await playerRef.update({
+            badges: admin.firestore.FieldValue.arrayUnion(...badgesToAdd),
+        });
+
+        conquistasConcedidas += badgesToAdd.length;
+        detalhes.push(`${playerData.nome || playerId}: ${badgesToAdd.length} conquista(s)`);
+
+        const usersSnap = await admin.firestore().collection('usuarios')
+            .where('linkedPlayerId', '==', playerId)
+            .limit(1)
+            .get();
+
+        if (!usersSnap.empty) {
+            const targetUserId = usersSnap.docs[0].id;
+            for (const badge of badgesToAdd) {
+                const regraId = badge.regraId;
+                const message = badgeMessageById[badge.id] || `Voce ganhou a conquista "${badge.nome}".`;
+                const notifId = `badge_${targetUserId}_${badge.id}`;
+
+                await admin.firestore().collection('notifications').doc(notifId).set({
+                    targetUserId,
+                    type: 'evaluation',
+                    title: `Nova conquista desbloqueada! ${badge.emoji}`,
+                    message,
+                    data: {
+                        badgeId: badge.id,
+                        regraId,
+                        seasonYear,
+                    },
+                    read: false,
+                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
+            }
+        }
+    }
+
+    return {
+        success: true,
+        regrasAvaliadas: regras.length,
+        jogadoresProcessados: allPlayerIds.length,
+        conquistasConcedidas,
+        detalhes,
+    };
+});
+
+async function executarConquistasPosEvento(eventId, forcedEventData = null) {
+    const eventRef = admin.firestore().collection('eventos').doc(eventId);
+    const [eventSnap, rulesSnap] = await Promise.all([
+        forcedEventData ? null : eventRef.get(),
+        admin.firestore().collection('conquistas_regras')
+            .where('ativo', '==', true)
+            .where('tipoAvaliacao', '==', 'pos_evento')
+            .get(),
+    ]);
+
+    const eventData = forcedEventData || (eventSnap && eventSnap.exists ? eventSnap.data() : null);
+    if (!eventData) {
+        throw new functions.https.HttpsError('not-found', `Evento ${eventId} nao encontrado.`);
+    }
+
+    const regras = rulesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    if (!regras.length) {
+        return {
+            success: true,
+            regrasAvaliadas: 0,
+            jogadoresProcessados: 0,
+            conquistasConcedidas: 0,
+            detalhes: ['Nenhuma regra ativa pos_evento encontrada.'],
+        };
+    }
+
+    const eventTeamContext = resolveAncbTeamPlayersForEvent(eventData);
+    const playerIds = eventTeamContext.playerIds;
+    const playerTeamMap = { ...eventTeamContext.playerTeamMap };
+    const teamPlayersMap = { ...eventTeamContext.teamPlayersMap };
+    if (!playerIds.length) {
+        return {
+            success: true,
+            regrasAvaliadas: regras.length,
+            jogadoresProcessados: 0,
+            conquistasConcedidas: 0,
+            detalhes: ['Nenhum jogador ANCB elegivel no evento.'],
+        };
+    }
+
+    const jogosSnap = await eventRef.collection('jogos').get();
+    const pontosNoEvento = {};
+    const bolas3NoEvento = {};
+    const maxPontosJogo = {};
+
+    for (const jogoDoc of jogosSnap.docs) {
+        const cestasSnap = await eventRef.collection('jogos').doc(jogoDoc.id).collection('cestas').get();
+        const pontosNesteJogo = {};
+
+        for (const cestaDoc of cestasSnap.docs) {
+            const cesta = cestaDoc.data() || {};
+            const pid = cesta.jogadorId;
+            if (!pid || !playerIds.includes(pid)) continue;
+
+            const observedTeamId = String(cesta?.timeId || '').trim();
+            if (observedTeamId) {
+                if (!Array.isArray(teamPlayersMap[observedTeamId])) teamPlayersMap[observedTeamId] = [];
+                if (!teamPlayersMap[observedTeamId].includes(pid)) teamPlayersMap[observedTeamId].push(pid);
+                if (!playerTeamMap[pid] || playerTeamMap[pid] === 'ancb_default') playerTeamMap[pid] = observedTeamId;
+            }
+
+            const pts = Number(cesta.pontos) || 0;
+            pontosNoEvento[pid] = (pontosNoEvento[pid] || 0) + pts;
+            pontosNesteJogo[pid] = (pontosNesteJogo[pid] || 0) + pts;
+            if (pts === 3) {
+                bolas3NoEvento[pid] = (bolas3NoEvento[pid] || 0) + 1;
+            }
+        }
+
+        Object.entries(pontosNesteJogo).forEach(([pid, pts]) => {
+            if ((maxPontosJogo[pid] || 0) < pts) {
+                maxPontosJogo[pid] = pts;
+            }
+        });
+    }
+
+    const podio = eventData.podio || {};
+    const allTimes = eventData.timesParticipantes || eventData.times || [];
+    const resolvePodioPlayers = (teamName) => {
+        if (!teamName) return [];
+        const team = allTimes.find((t) => String(t?.nomeTime || '').toLowerCase().trim() === String(teamName).toLowerCase().trim());
+        return (team?.jogadores || []).filter((pid) => playerIds.includes(pid));
+    };
+
+    const campeoes = new Set(resolvePodioPlayers(podio.primeiro));
+    const vices = new Set(resolvePodioPlayers(podio.segundo));
+    const terceiros = new Set(resolvePodioPlayers(podio.terceiro));
+
+    const cestinhasByTeam = {};
+    for (const [teamId, teamPlayers] of Object.entries(teamPlayersMap)) {
+        let maxPontosTeam = 0;
+        for (const pid of teamPlayers) {
+            const pts = Number(pontosNoEvento[pid] || 0);
+            if (pts > maxPontosTeam) maxPontosTeam = pts;
+        }
+        cestinhasByTeam[teamId] = new Set(
+            maxPontosTeam > 0
+                ? teamPlayers.filter((pid) => Number(pontosNoEvento[pid] || 0) === maxPontosTeam)
+                : []
+        );
+    }
+
+    const reviewsSnap = await admin.firestore().collection('avaliacoes_gamified')
+        .where('eventId', '==', eventId)
+        .get();
+    const scoresByPlayer = aggregateAttributeScoresFromReviews(reviewsSnap.docs);
+    const topByAttributeByTeam = {};
+    for (const [teamId, teamPlayers] of Object.entries(teamPlayersMap)) {
+        const teamScores = {};
+        for (const pid of teamPlayers) {
+            if (scoresByPlayer[pid]) {
+                teamScores[pid] = scoresByPlayer[pid];
+            }
+        }
+        topByAttributeByTeam[teamId] = buildTopByAttribute(teamScores);
+    }
+
+    const eventStats = {
+        playerIds,
+        bolas3NoEvento,
+        maxPontosJogo,
+        campeoes,
+        vices,
+        terceiros,
+        cestinhasByTeam,
+        topByAttributeByTeam,
+    };
+
+    const today = new Date().toISOString().split('T')[0];
+    let conquistasConcedidas = 0;
+    const detalhes = [];
+
+    for (const playerId of playerIds) {
+        const playerRef = admin.firestore().collection('jogadores').doc(playerId);
+        const playerSnap = await playerRef.get();
+        if (!playerSnap.exists) continue;
+
+        const playerData = playerSnap.data() || {};
+        const existingBadges = Array.isArray(playerData.badges) ? playerData.badges : [];
+        const existingIds = new Set(existingBadges.map((b) => b.id));
+        const teamId = String(playerTeamMap[playerId] || 'ancb_default');
+        const teamName = resolveTeamNameFromEvent(eventData, teamId) || (teamId === 'ancb_default' ? 'ANCB' : teamId);
+
+        const matchedRules = [];
+        for (const regra of regras) {
+            const gatilho = normalizeGatilho(regra.gatilho);
+            if (!evaluateEventRuleForPlayer(gatilho, eventStats, playerId, teamId)) continue;
+            matchedRules.push(regra);
+        }
+
+        const dominantRules = selectDominantMatchedRules(matchedRules);
+        const badgesToAdd = [];
+        const badgeMessageById = {};
+
+        for (const regra of dominantRules) {
+            const badgeId = `regra_${regra.id}_${eventId}`;
+            if (existingIds.has(badgeId)) continue;
+
+            const gatilho = normalizeGatilho(regra.gatilho);
+            const rendered = buildRenderedTexts(regra, {
+                eventName: eventData?.nome || 'Evento',
+                gameName: '',
+                seasonYear: String(eventData?.data || '').slice(-4),
+                playerName: playerData?.nome || playerId,
+                value: typeof gatilho?.minimo === 'number' ? gatilho.minimo : '',
+            });
+
+            badgesToAdd.push({
+                id: badgeId,
+                nome: rendered.titulo,
+                emoji: regra.tipoIcone === 'emoji' ? (regra.iconeValor || '🏅') : '🏅',
+                categoria: 'partida',
+                raridade: resolveRegraRaridade(regra),
+                descricao: rendered.descricao,
+                data: today,
+                teamId,
+                teamNome: teamName,
+                regraId: regra.id,
+                tipoIcone: regra.tipoIcone || 'emoji',
+                iconeValor: regra.iconeValor || '🏅',
+            });
+            badgeMessageById[badgeId] = rendered.mensagem;
+        }
+
+        if (!badgesToAdd.length) continue;
+
+        await playerRef.update({
+            badges: admin.firestore.FieldValue.arrayUnion(...badgesToAdd),
+        });
+
+        conquistasConcedidas += badgesToAdd.length;
+        detalhes.push(`${playerData.nome || playerId} [${teamName}]: ${badgesToAdd.length} conquista(s)`);
+        console.log(`Conquistas pos-evento -> jogador=${playerData.nome || playerId} team=${teamId} (${teamName}) qtd=${badgesToAdd.length}`);
+
+        const usersSnap = await admin.firestore().collection('usuarios')
+            .where('linkedPlayerId', '==', playerId)
+            .limit(1)
+            .get();
+
+        if (!usersSnap.empty) {
+            const targetUserId = usersSnap.docs[0].id;
+            for (const badge of badgesToAdd) {
+                const regraId = badge.regraId;
+                const message = badgeMessageById[badge.id] || `Voce ganhou a conquista "${badge.nome}".`;
+                const notifId = `badge_${targetUserId}_${badge.id}`;
+
+                await admin.firestore().collection('notifications').doc(notifId).set({
+                    targetUserId,
+                    type: 'evaluation',
+                    title: `Nova conquista desbloqueada! ${badge.emoji}`,
+                    message,
+                    data: {
+                        badgeId: badge.id,
+                        regraId,
+                        eventoId: eventId,
+                        teamId,
+                        teamNome: teamName,
+                    },
+                    read: false,
+                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
+            }
+        }
+    }
+
+    return {
+        success: true,
+        regrasAvaliadas: regras.length,
+        jogadoresProcessados: playerIds.length,
+        conquistasConcedidas,
+        detalhes,
+    };
+}
+
+exports.avaliarConquistasEventoFinalizado = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Usuario precisa estar autenticado.');
+    }
+
+    const callerUid = context.auth.uid;
+    const callerDoc = await admin.firestore().collection('usuarios').doc(callerUid).get();
+    const callerRole = callerDoc.exists ? callerDoc.data().role : null;
+    if (!callerDoc.exists || (callerRole !== 'admin' && callerRole !== 'super-admin')) {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas administradores podem avaliar conquistas de evento.');
+    }
+
+    const eventoId = String(data?.eventoId || '').trim();
+    if (!eventoId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Informe eventoId.');
+    }
+
+    return executarConquistasPosEvento(eventoId);
+});
+
+// ─────────────────────────────────────────────────────────────
 // 5. SISTEMA DE CONQUISTAS (BADGES)
 //
 // Disparado quando um evento é marcado como 'finalizado'.
@@ -617,6 +1772,17 @@ exports.onEventFinishedAwardBadges = functions.firestore
                     }, { merge: true });
                 }
             }
+        }
+
+        // Executa regras dinamicas de pos_evento (inclui atributos via quiz)
+        try {
+            const dynamicResult = await executarConquistasPosEvento(eventId, newData);
+            if (dynamicResult?.conquistasConcedidas > 0) {
+                totalConcedidas += Number(dynamicResult.conquistasConcedidas || 0);
+            }
+            console.log(`⚙️ Regras dinamicas pos_evento: ${dynamicResult?.conquistasConcedidas || 0} conquista(s).`);
+        } catch (dynamicError) {
+            console.warn(`Falha ao executar regras dinamicas pos_evento no evento ${eventId}:`, dynamicError?.message || dynamicError);
         }
 
         // Marca como processado
