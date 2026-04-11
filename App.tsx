@@ -54,6 +54,91 @@ const ImageCropperModal = React.lazy(() => loadImageCropperModal().then((m) => (
 const PeerReviewQuiz = React.lazy(() => loadPeerReviewQuiz().then((m) => ({ default: m.PeerReviewQuiz })));
 
 const App: React.FC = () => {
+    const viewToHash: Partial<Record<ViewState, string>> = {
+        home: 'home',
+        eventos: 'eventos',
+        jogadores: 'jogadores',
+        ranking: 'ranking',
+        apoiadores: 'apoiadores',
+    };
+
+    const hashToView: Record<string, ViewState> = {
+        home: 'home',
+        eventos: 'eventos',
+        jogadores: 'jogadores',
+        ranking: 'ranking',
+        apoiadores: 'apoiadores',
+    };
+
+    const setSeoForView = (view: ViewState) => {
+        const seoByView: Record<ViewState, { title: string; description: string }> = {
+            home: {
+                title: 'ANCB MT | Basquete Mato Grosso | Portal Oficial',
+                description: 'Portal oficial da ANCB MT com eventos, ranking, atletas e resultados do basquete em Mato Grosso.'
+            },
+            eventos: {
+                title: 'Eventos de Basquete | ANCB MT',
+                description: 'Calendario de jogos e eventos de basquete da ANCB em Mato Grosso e Nova Canaa do Norte.'
+            },
+            'evento-detalhe': {
+                title: 'Detalhes do Evento | ANCB MT',
+                description: 'Acompanhe resultados, jogos e estatisticas do evento de basquete da ANCB.'
+            },
+            jogadores: {
+                title: 'Jogadores de Basquete | ANCB MT',
+                description: 'Conheca os atletas e perfis de jogadores da ANCB no basquetebol de Mato Grosso.'
+            },
+            ranking: {
+                title: 'Ranking de Basquete | ANCB MT',
+                description: 'Veja o ranking de jogadores, pontuacoes e destaques da temporada da ANCB MT.'
+            },
+            admin: {
+                title: 'Painel Administrativo | ANCB MT',
+                description: 'Area administrativa da ANCB.'
+            },
+            'painel-jogo': {
+                title: 'Painel de Jogo | ANCB MT',
+                description: 'Painel de jogo em tempo real da ANCB.'
+            },
+            'public-game': {
+                title: 'Placar Publico | ANCB MT',
+                description: 'Acompanhe placar e estatisticas publicas dos jogos da ANCB.'
+            },
+            profile: {
+                title: 'Perfil | ANCB MT',
+                description: 'Perfil de usuario no portal ANCB MT.'
+            },
+            'team-manager': {
+                title: 'Gerenciador de Times | ANCB MT',
+                description: 'Gestao de times e escalacoes da ANCB.'
+            },
+            notifications: {
+                title: 'Notificacoes | ANCB MT',
+                description: 'Notificacoes do portal ANCB MT.'
+            },
+            apoiadores: {
+                title: 'ANCB MT e Apoiadores | Basquete Mato Grosso',
+                description: 'Conheca a historia da ANCB e os apoiadores que fortalecem o basquete em Mato Grosso.'
+            },
+            'post-view': {
+                title: 'Mural da ANCB | Basquete Mato Grosso',
+                description: 'Noticias, destaques e publicacoes da comunidade ANCB MT.'
+            },
+        };
+
+        const fallback = seoByView.home;
+        const seo = seoByView[view] || fallback;
+        document.title = seo.title;
+
+        let descriptionTag = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+        if (!descriptionTag) {
+            descriptionTag = document.createElement('meta');
+            descriptionTag.name = 'description';
+            document.head.appendChild(descriptionTag);
+        }
+        descriptionTag.content = seo.description;
+    };
+
     const preloadNotificationsView = () => {
         void loadNotificationsView();
     };
@@ -252,6 +337,24 @@ const App: React.FC = () => {
             navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
         };
     }, []);
+
+    useEffect(() => {
+        setSeoForView(currentView);
+    }, [currentView]);
+
+    useEffect(() => {
+        const initialHash = window.location.hash.replace('#', '').trim().toLowerCase();
+        if (initialHash && hashToView[initialHash]) {
+            setCurrentView(hashToView[initialHash]);
+        }
+    }, []);
+
+    useEffect(() => {
+        const nextHash = viewToHash[currentView];
+        if (!nextHash) return;
+        if (window.location.hash.replace('#', '') === nextHash) return;
+        window.history.replaceState(window.history.state, '', `#${nextHash}`);
+    }, [currentView]);
 
     useEffect(() => {
         const savedTheme = localStorage.getItem('theme');

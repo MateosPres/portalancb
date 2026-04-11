@@ -2,9 +2,12 @@
 {
   "name": "Portal ANCB-MT",
   "short_name": "ANCB",
+  "description": "Portal oficial da ANCB MT com eventos, ranking e noticias do basquete em Mato Grosso.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "categories": ["sports", "news"],
+  "lang": "pt-BR",
   "background_color": "#062553",
   "theme_color": "#062553",
   "orientation": "portrait",

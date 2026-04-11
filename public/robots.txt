@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /painel-jogo
+Disallow: /notifications
+
+Sitemap: https://ancb.app.br/sitemap.xml

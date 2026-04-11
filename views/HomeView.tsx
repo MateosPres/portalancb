@@ -35,9 +35,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
     return (
         <div className="space-y-8 animate-fadeIn pb-24">
-            
             {/* 1. TOPO: CARROSSEL DE APOIADORES */}
-            <div className="pt-2">
+            <div>
                 <ApoiadoresCarousel onVerTodos={() => {}} />
             </div>
 

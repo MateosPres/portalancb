@@ -119,8 +119,8 @@ export const LiveYouTubePlayer: React.FC<LiveYouTubePlayerProps> = ({
             allowFullScreen={false}
             className={`absolute left-0 w-full border-0 ${playerActive ? '' : 'pointer-events-none'}`}
             style={{
-              top: '-80px',
-              height: 'calc(100% + 160px)'
+              top: '0',
+              height: '100%'
             }}
             title="Live Stream ANCB"
           />
