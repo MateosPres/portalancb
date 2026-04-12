@@ -338,6 +338,8 @@ function evaluateEventRuleForPlayer(gatilho, eventStats, playerId, teamId) {
             return eventStats.terceiros.has(playerId);
         case 'cestinha_evento':
             return Boolean(eventStats.cestinhasByTeam?.[teamId]?.has(playerId));
+        case 'pontos_totais_evento':
+            return (eventStats.pontosNoEvento[playerId] || 0) >= (Number(gatilho.minimo) || 0);
         case 'pontos_unico_jogo_evento':
             return (eventStats.maxPontosJogo[playerId] || 0) >= (Number(gatilho.minimo) || 0);
         case 'bolas_de_tres_evento':
@@ -350,6 +352,12 @@ function evaluateEventRuleForPlayer(gatilho, eventStats, playerId, teamId) {
                 eventStats.topByAttributeByTeam[teamId][attr].includes(playerId)
             );
         }
+        case 'pontos_amistoso':
+            return eventStats.eventType === 'amistoso' && (eventStats.pontosNoEvento[playerId] || 0) >= (Number(gatilho.minimo) || 0);
+        case 'campeao_torneio_interno':
+            return eventStats.eventType === 'torneio_interno' && eventStats.campeoes.has(playerId);
+        case 'medalhista_torneio_externo':
+            return eventStats.eventType === 'torneio_externo' && eventStats.medalhistas.has(playerId);
         default:
             return false;
     }
@@ -1380,6 +1388,7 @@ async function executarConquistasPosEvento(eventId, forcedEventData = null) {
     const campeoes = new Set(resolvePodioPlayers(podio.primeiro));
     const vices = new Set(resolvePodioPlayers(podio.segundo));
     const terceiros = new Set(resolvePodioPlayers(podio.terceiro));
+    const medalhistas = new Set([...campeoes, ...vices, ...terceiros]);
 
     const cestinhasByTeam = {};
     for (const [teamId, teamPlayers] of Object.entries(teamPlayersMap)) {
@@ -1412,11 +1421,14 @@ async function executarConquistasPosEvento(eventId, forcedEventData = null) {
 
     const eventStats = {
         playerIds,
+        eventType: String(eventData?.type || ''),
+        pontosNoEvento,
         bolas3NoEvento,
         maxPontosJogo,
         campeoes,
         vices,
         terceiros,
+        medalhistas,
         cestinhasByTeam,
         topByAttributeByTeam,
     };

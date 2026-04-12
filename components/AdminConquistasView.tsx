@@ -31,9 +31,13 @@ type TriggerType =
     | 'podio_vice'
     | 'podio_terceiro'
     | 'cestinha_evento'
+    | 'pontos_totais_evento'
     | 'pontos_unico_jogo_evento'
     | 'bolas_de_tres_evento'
     | 'top_atributo_evento'
+    | 'pontos_amistoso'
+    | 'campeao_torneio_interno'
+    | 'medalhista_torneio_externo'
     | 'ranking_pontos_temporada'
     | 'ranking_bolas_de_tres_temporada'
     | 'participou_todos_eventos_temporada'
@@ -81,9 +85,13 @@ const triggerLabels: Record<TriggerType, string> = {
     podio_vice: 'Time vice-campeao',
     podio_terceiro: 'Time em 3 lugar',
     cestinha_evento: 'Cestinha do evento',
+    pontos_totais_evento: 'Pontos feitos no evento (minimo)',
     pontos_unico_jogo_evento: 'Pontos em um unico jogo do evento (minimo)',
     bolas_de_tres_evento: 'Bolas de 3 no evento (minimo)',
     top_atributo_evento: 'Topo de atributo no evento (quiz)',
+    pontos_amistoso: 'Pontos em amistoso (minimo)',
+    campeao_torneio_interno: 'Campeao de torneio interno',
+    medalhista_torneio_externo: 'Medalhista de torneio externo (podio)',
     ranking_pontos_temporada: 'Ranking de pontos da temporada (posicao)',
     ranking_bolas_de_tres_temporada: 'Ranking de bolas de 3 da temporada (posicao)',
     participou_todos_eventos_temporada: 'Participou de todos os eventos da temporada',
@@ -111,8 +119,10 @@ const PLACEHOLDERS = ['{{eventName}}', '{{gameName}}', '{{seasonYear}}', '{{play
 const triggerNeedsMinimo = (trigger: TriggerType) =>
     trigger === 'pontos_partida' ||
     trigger === 'bolas_de_tres' ||
+    trigger === 'pontos_totais_evento' ||
     trigger === 'pontos_unico_jogo_evento' ||
     trigger === 'bolas_de_tres_evento' ||
+    trigger === 'pontos_amistoso' ||
     trigger === 'ranking_pontos_temporada' ||
     trigger === 'ranking_bolas_de_tres_temporada' ||
     trigger === 'conquistas_evento_temporada';
@@ -128,9 +138,13 @@ const availableTriggersByTipo: Record<TipoAvaliacaoConquista, TriggerType[]> = {
         'podio_vice',
         'podio_terceiro',
         'cestinha_evento',
+        'pontos_totais_evento',
         'pontos_unico_jogo_evento',
         'bolas_de_tres_evento',
         'top_atributo_evento',
+        'pontos_amistoso',
+        'campeao_torneio_interno',
+        'medalhista_torneio_externo',
     ],
     ao_fechar_temporada: [
         'ranking_pontos_temporada',

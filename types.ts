@@ -41,9 +41,13 @@ export type ConquistaGatilho =
     | { tipo: 'podio_vice' }
     | { tipo: 'podio_terceiro' }
     | { tipo: 'cestinha_evento' }
+    | { tipo: 'pontos_totais_evento'; minimo: number }
     | { tipo: 'pontos_unico_jogo_evento'; minimo: number }
     | { tipo: 'bolas_de_tres_evento'; minimo: number }
     | { tipo: 'top_atributo_evento'; atributo: 'ataque' | 'defesa' | 'velocidade' | 'forca' | 'visao' }
+    | { tipo: 'pontos_amistoso'; minimo: number }
+    | { tipo: 'campeao_torneio_interno' }
+    | { tipo: 'medalhista_torneio_externo' }
     | { tipo: 'ranking_pontos_temporada'; minimo: number }
     | { tipo: 'ranking_bolas_de_tres_temporada'; minimo: number }
     | { tipo: 'participou_todos_eventos_temporada' }
