@@ -352,8 +352,6 @@ function evaluateEventRuleForPlayer(gatilho, eventStats, playerId, teamId) {
                 eventStats.topByAttributeByTeam[teamId][attr].includes(playerId)
             );
         }
-        case 'pontos_amistoso':
-            return eventStats.eventType === 'amistoso' && (eventStats.pontosNoEvento[playerId] || 0) >= (Number(gatilho.minimo) || 0);
         case 'campeao_torneio_interno':
             return eventStats.eventType === 'torneio_interno' && eventStats.campeoes.has(playerId);
         case 'medalhista_torneio_externo':

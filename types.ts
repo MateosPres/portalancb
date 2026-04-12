@@ -45,7 +45,6 @@ export type ConquistaGatilho =
     | { tipo: 'pontos_unico_jogo_evento'; minimo: number }
     | { tipo: 'bolas_de_tres_evento'; minimo: number }
     | { tipo: 'top_atributo_evento'; atributo: 'ataque' | 'defesa' | 'velocidade' | 'forca' | 'visao' }
-    | { tipo: 'pontos_amistoso'; minimo: number }
     | { tipo: 'campeao_torneio_interno' }
     | { tipo: 'medalhista_torneio_externo' }
     | { tipo: 'ranking_pontos_temporada'; minimo: number }
