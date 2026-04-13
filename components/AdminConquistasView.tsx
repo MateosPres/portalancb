@@ -19,6 +19,7 @@ import {
     LucideCopy,
     LucideSearch,
     LucideFilterX,
+    LucideMoreVertical,
 } from 'lucide-react';
 
 type TriggerType =
@@ -175,6 +176,59 @@ const formatTrigger = (gatilho: any): string => {
     return `${label}: ${suffix.join(' • ')}`;
 };
 
+const compactTriggerLabel = (gatilho: any): string => {
+    const parsed = parseTrigger(gatilho);
+    const min = typeof parsed.minimo === 'number' ? parsed.minimo : null;
+    const attr = parsed.atributo ? ` (${parsed.atributo})` : '';
+
+    switch (parsed.tipo) {
+        case 'pontos_partida':
+            return `Pontos na partida${min ? ` >= ${min}` : ''}`;
+        case 'bolas_de_tres':
+            return `Bolas de 3 na partida${min ? ` >= ${min}` : ''}`;
+        case 'cestinha_partida':
+            return 'Cestinha da partida';
+        case 'top_atributo_jogo':
+            return `Topo atributo no jogo${attr}`;
+        case 'participacao_evento':
+            return 'Participou do evento';
+        case 'podio_campeao':
+            return 'Time campeao';
+        case 'podio_vice':
+            return 'Time vice';
+        case 'podio_terceiro':
+            return 'Time em 3o';
+        case 'cestinha_evento':
+            return 'Cestinha do evento';
+        case 'pontos_totais_evento':
+            return `Pontos no evento${min ? ` >= ${min}` : ''}`;
+        case 'pontos_unico_jogo_evento':
+            return `Pontos em 1 jogo${min ? ` >= ${min}` : ''}`;
+        case 'bolas_de_tres_evento':
+            return `Bolas de 3 no evento${min ? ` >= ${min}` : ''}`;
+        case 'top_atributo_evento':
+            return `Topo atributo no evento${attr}`;
+        case 'campeao_torneio_interno':
+            return 'Campeao torneio interno';
+        case 'medalhista_torneio_externo':
+            return 'Medalhista torneio externo';
+        case 'ranking_pontos_temporada':
+            return `Ranking pontos: ${min || 1}o`;
+        case 'ranking_bolas_de_tres_temporada':
+            return `Ranking bolas de 3: ${min || 1}o`;
+        case 'participou_todos_eventos_temporada':
+            return 'Todos os eventos da temporada';
+        case 'conquistas_evento_temporada':
+            return `Conquistas de evento${min ? ` >= ${min}` : ''}`;
+        case 'top_atributo_temporada':
+            return `Topo atributo temporada${attr}`;
+        case 'manual_admin':
+            return 'Concedida manualmente';
+        default:
+            return formatTrigger(gatilho);
+    }
+};
+
 export const AdminConquistasView: React.FC = () => {
     const [regras, setRegras] = useState<ConquistaRegra[]>([]);
     const [loadingRegras, setLoadingRegras] = useState(true);
@@ -192,6 +246,7 @@ export const AdminConquistasView: React.FC = () => {
     const [filterStatus, setFilterStatus] = useState<'todas' | 'ativas' | 'pausadas'>('todas');
     const [filterRaridade, setFilterRaridade] = useState<'todas' | RaridadeConquista>('todas');
     const [copiedPlaceholder, setCopiedPlaceholder] = useState('');
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
     useEffect(() => {
         const unsub = db.collection('conquistas_regras').onSnapshot((snap) => {
@@ -452,55 +507,110 @@ export const AdminConquistasView: React.FC = () => {
     const renderRegraCard = (regra: ConquistaRegra) => {
         const paused = regra.ativo === false;
         const rarityStyle = getRarityStyles(regra.raridade || 'comum');
+        const menuOpen = openMenuId === regra.id;
+        const triggerText = compactTriggerLabel(regra.gatilho);
         return (
             <div
                 key={regra.id}
-                className={`rounded-xl border p-3 bg-white dark:bg-gray-800 ${paused ? 'opacity-75 border-gray-200 dark:border-gray-700' : 'border-gray-100 dark:border-gray-700 shadow-sm'}`}
+                className={`group relative overflow-visible rounded-2xl border p-3 transition-all duration-200 ${
+                    paused
+                        ? 'bg-white/90 dark:bg-gray-800/90 border-gray-200 dark:border-gray-700'
+                        : 'bg-gradient-to-b from-white to-slate-50/80 dark:from-gray-800 dark:to-gray-800/95 border-slate-200/80 dark:border-gray-700 shadow-sm hover:shadow-md hover:-translate-y-[1px]'
+                }`}
             >
-                <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden shrink-0">
+                <div className="h-full flex flex-col">
+                    <div className="flex items-start gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700/80 flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-slate-200/80 dark:ring-slate-600/60">
                             {regra.tipoIcone === 'imagem' ? (
                                 <img src={regra.iconeValor} alt={regra.titulo} className="w-full h-full object-cover" />
                             ) : (
                                 <span className="text-xl leading-none">{regra.iconeValor || '🏅'}</span>
                             )}
                         </div>
-                        <div className="min-w-0">
-                            <p className="font-bold text-sm text-gray-900 dark:text-white truncate">{regra.titulo}</p>
-                            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{tipoLabels[regra.tipoAvaliacao]} • {formatTrigger(regra.gatilho)}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-1">{regra.descricao}</p>
+
+                        <div className="min-w-0 flex-1 pr-16">
+                            <div className="flex items-start justify-between gap-2 min-w-0">
+                                <p className="font-extrabold text-[15px] leading-5 text-slate-900 dark:text-white break-words min-w-0">
+                                    {regra.titulo}
+                                </p>
+                                <span className={`shrink-0 text-[10px] font-black px-1.5 py-1 rounded-full uppercase tracking-wide border ${rarityStyle.classes}`}>
+                                    {rarityStyle.label}
+                                </span>
+                            </div>
+
+                            <div className="mt-1 flex items-center gap-1.5 w-full text-[11px] leading-4">
+                                <span className="shrink-0 font-semibold text-slate-700 dark:text-slate-200">
+                                    {tipoLabels[regra.tipoAvaliacao]}
+                                </span>
+                                <span className="shrink-0 text-slate-400">•</span>
+                                <span className="min-w-0 flex-1 text-cyan-700 dark:text-cyan-300 font-semibold break-words" title={formatTrigger(regra.gatilho)}>
+                                    {triggerText}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="absolute top-2.5 right-2.5 flex items-center gap-1 shrink-0 z-10">
+                            <span className={`text-[10px] font-bold px-1.5 py-1 rounded-full ${paused ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'}`}>
+                                {paused ? 'Pausada' : 'Ativa'}
+                            </span>
+                            <div className="relative">
+                                <button
+                                    onClick={() => setOpenMenuId(menuOpen ? null : regra.id)}
+                                    disabled={busyRuleId === regra.id}
+                                    aria-label="Abrir ações"
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+                                >
+                                    {busyRuleId === regra.id
+                                        ? <LucideLoader2 size={16} className="animate-spin" />
+                                        : <LucideMoreVertical size={16} />}
+                                </button>
+                                {menuOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                                        <div className="absolute right-0 top-8 z-20 w-44 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg py-1">
+                                            <button
+                                                onClick={() => { openEdit(regra); setOpenMenuId(null); }}
+                                                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                            >
+                                                <LucidePencil size={14} /> Editar
+                                            </button>
+                                            <button
+                                                onClick={() => { openDuplicate(regra); setOpenMenuId(null); }}
+                                                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                            >
+                                                <LucideCopy size={14} /> Duplicar
+                                            </button>
+                                            <button
+                                                onClick={() => { handlePauseToggle(regra); setOpenMenuId(null); }}
+                                                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                            >
+                                                {regra.ativo === false ? <LucidePlay size={14} /> : <LucidePause size={14} />}
+                                                {regra.ativo === false ? 'Ativar' : 'Pausar'}
+                                            </button>
+                                            <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+                                            <button
+                                                onClick={() => { handleDelete(regra); setOpenMenuId(null); }}
+                                                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                            >
+                                                <LucideTrash2 size={14} /> Excluir
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-1.5">
-                        <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-wide border ${rarityStyle.classes}`}>
-                            {rarityStyle.label}
-                        </span>
-                        <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-wide ${paused ? 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'}`}>
-                            {paused ? 'Pausada' : 'Ativa'}
-                        </span>
+                    <div className="mt-2 rounded-xl border border-slate-200/70 dark:border-slate-700/70 bg-slate-50/70 dark:bg-slate-900/30 p-2">
+                        <p className="text-xs leading-5 text-slate-700 dark:text-slate-300 break-words">
+                            {regra.descricaoTemplate || regra.descricao}
+                        </p>
                     </div>
-                </div>
 
-                <p className="text-[11px] mt-2 text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700 pt-2 line-clamp-1">
-                    Notificacao: {regra.mensagemNotificacao || 'Nova conquista desbloqueada.'}
-                </p>
-
-                <div className="flex flex-wrap gap-2 mt-2">
-                    <Button size="sm" variant="secondary" onClick={() => openEdit(regra)} disabled={busyRuleId === regra.id}>
-                        <LucidePencil size={13} /> Editar
-                    </Button>
-                    <Button size="sm" variant="secondary" onClick={() => openDuplicate(regra)} disabled={busyRuleId === regra.id}>
-                        <LucideCopy size={13} /> Duplicar
-                    </Button>
-                    <Button size="sm" variant="secondary" onClick={() => handlePauseToggle(regra)} disabled={busyRuleId === regra.id}>
-                        {busyRuleId === regra.id ? <LucideLoader2 size={13} className="animate-spin" /> : regra.ativo === false ? <LucidePlay size={13} /> : <LucidePause size={13} />}
-                        {regra.ativo === false ? 'Ativar' : 'Pausar'}
-                    </Button>
-                    <Button size="sm" variant="danger" onClick={() => handleDelete(regra)} disabled={busyRuleId === regra.id}>
-                        <LucideTrash2 size={13} /> Excluir
-                    </Button>
+                    <p className="mt-1.5 pt-1.5 border-t border-slate-200/70 dark:border-slate-700/70 text-[10px] leading-4 text-slate-500 dark:text-slate-400 break-words">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Notificação:</span>{' '}
+                        {regra.mensagemNotificacaoTemplate || regra.mensagemNotificacao || 'Nova conquista desbloqueada.'}
+                    </p>
                 </div>
             </div>
         );
@@ -812,7 +922,7 @@ export const AdminConquistasView: React.FC = () => {
                             Nenhuma conquista encontrada com os filtros atuais.
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[65vh] overflow-y-auto custom-scrollbar pr-1">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-stretch max-h-[65vh] overflow-y-auto custom-scrollbar pr-1">
                             {regrasFiltradas.map(renderRegraCard)}
                         </div>
                     )}
