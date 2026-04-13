@@ -34,6 +34,7 @@ const loadPainelJogoView = () => import('./views/PainelJogoView');
 const loadProfileView = () => import('./views/ProfileView');
 const loadApoiadoresView = () => import('./views/ApoiadoresView');
 const loadPostView = () => import('./views/PostView');
+const loadPlayerProfileModal = () => import('./components/PlayerProfileModal');
 const loadImageCropperModal = () => import('./components/ImageCropperModal');
 const loadPeerReviewQuiz = () => import('./components/PeerReviewQuiz');
 
@@ -50,6 +51,7 @@ const PainelJogoView = React.lazy(() => loadPainelJogoView().then((m) => ({ defa
 const ProfileView = React.lazy(() => loadProfileView().then((m) => ({ default: m.ProfileView })));
 const ApoiadoresView = React.lazy(() => loadApoiadoresView().then((m) => ({ default: m.ApoiadoresView })));
 const PostView = React.lazy(() => loadPostView().then((m) => ({ default: m.PostView })));
+const PlayerProfileModal = React.lazy(() => loadPlayerProfileModal().then((m) => ({ default: m.PlayerProfileModal })));
 const ImageCropperModal = React.lazy(() => loadImageCropperModal().then((m) => ({ default: m.ImageCropperModal })));
 const PeerReviewQuiz = React.lazy(() => loadPeerReviewQuiz().then((m) => ({ default: m.PeerReviewQuiz })));
 
@@ -173,7 +175,7 @@ const App: React.FC = () => {
     
     const [returnToEventId, setReturnToEventId] = useState<string | null>(null);
     const [returnToTeamId, setReturnToTeamId] = useState<string | null>(null);
-    const [returnToTab, setReturnToTab] = useState<'jogos' | 'times' | 'classificacao'>('jogos');
+    const [returnToTab, setReturnToTab] = useState<'jogos' | 'times' | 'classificacao' | 'pontuadores'>('jogos');
 
     const [user, setUser] = useState<any>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -220,6 +222,8 @@ const App: React.FC = () => {
     const [panelEventId, setPanelEventId] = useState<string | null>(null);
     const [panelIsEditable, setPanelIsEditable] = useState(false);
     const [selectedPublicGame, setSelectedPublicGame] = useState<{ game: Jogo, eventId: string } | null>(null);
+    const [profileModalPlayerId, setProfileModalPlayerId] = useState<string | null>(null);
+    const [showPlayerProfileModal, setShowPlayerProfileModal] = useState(false);
 
     // Team Manager State
     const [teamManagerEventId, setTeamManagerEventId] = useState<string | null>(null);
@@ -1033,8 +1037,14 @@ const App: React.FC = () => {
         setCurrentView('jogadores');
     };
 
+    const handleOpenPlayerProfile = (playerId: string) => {
+        if (!playerId) return;
+        setProfileModalPlayerId(playerId);
+        setShowPlayerProfileModal(true);
+    };
+
     const handleOpenPlayerFromFeed = (playerId: string) => {
-        handleOpenPlayerDetail(playerId);
+        handleOpenPlayerProfile(playerId);
     };
 
     const handleOpenPostView = (post: FeedPost) => {
@@ -1216,7 +1226,7 @@ const App: React.FC = () => {
                     }}
                     userProfile={userProfile}
                     onOpenPost={handleOpenPostView}
-                    onOpenPlayer={handleOpenPlayerFromFeed}
+                    onOpenPlayer={handleOpenPlayerProfile}
                 />
             );
             case 'eventos': return <EventosView onBack={() => setCurrentView('home')} userProfile={userProfile} onSelectEvent={handleOpenEventDetail} onPreloadEventDetail={preloadEventDetailView} onOpenFriendlyAdminPanel={(eventId, game) => handleOpenGamePanel(game, eventId, true)} initialFriendlyEventId={pendingFriendlyEventId} onFriendlySummaryOpened={() => setPendingFriendlyEventId(null)} />;
@@ -1228,7 +1238,7 @@ const App: React.FC = () => {
                 userProfile={userProfile} 
                 onOpenGamePanel={(g, eid) => handleOpenGamePanel(g, eid, false)} 
                 onOpenReview={handleOpenReviewQuiz} 
-                onSelectPlayer={(pid, teamId) => handleOpenPlayerDetail(pid, selectedEventId, teamId)}
+                onSelectPlayer={(pid) => handleOpenPlayerProfile(pid)}
                 onOpenTeamManager={(eventId, teamId) => {
                     setTeamManagerEventId(eventId);
                     setTeamManagerTeamId(teamId);
@@ -1250,7 +1260,7 @@ const App: React.FC = () => {
                 userProfile={userProfile} 
                 initialPlayerId={targetPlayerId} 
             />;
-            case 'ranking': return <RankingView onBack={() => setCurrentView('home')} />;
+            case 'ranking': return <RankingView onBack={() => setCurrentView('home')} onOpenPlayer={handleOpenPlayerProfile} />;
             case 'admin': return <AdminView onBack={() => setCurrentView('home')} userProfile={userProfile} onOpenGamePanel={(g, eid, isEditable) => handleOpenGamePanel(g, eid, isEditable)} />;
             case 'painel-jogo': return panelGame && panelEventId ? <PainelJogoView game={panelGame} eventId={panelEventId} onBack={() => handleOpenEventDetail(panelEventId)} userProfile={userProfile} isEditable={panelIsEditable} /> : null;
             case 'public-game': return selectedPublicGame ? <PublicGameView game={selectedPublicGame.game} eventId={selectedPublicGame.eventId} onBack={() => setCurrentView('home')} /> : <div>Jogo não encontrado</div>;
@@ -1261,7 +1271,7 @@ const App: React.FC = () => {
                 <PostView
                     post={selectedPost}
                     userProfile={userProfile}
-                    onOpenPlayer={handleOpenPlayerFromFeed}
+                    onOpenPlayer={handleOpenPlayerProfile}
                     onBack={() => {
                         setCurrentView(postReturnView || 'home');
                         setSelectedPost(null);
@@ -1362,7 +1372,7 @@ const App: React.FC = () => {
                             onEventClick={() => setCurrentView('eventos')}
                             onVerTodosApoiadores={() => setCurrentView('apoiadores')}
                             onOpenPost={handleOpenPostView}
-                            onOpenPlayer={handleOpenPlayerFromFeed}
+                            onOpenPlayer={handleOpenPlayerProfile}
                             publicEvent={ongoingEvents[0]}
                             onOpenPublicGame={(game) => {
                                 setSelectedPublicGame({ game, eventId: ongoingEvents[0]?.id || '' });
@@ -1598,6 +1608,18 @@ const App: React.FC = () => {
                     imageSrc={registerCropImageSrc || ''}
                     onCropComplete={handleRegisterCropComplete}
                     aspect={1}
+                />
+            </Suspense>
+
+            <Suspense fallback={null}>
+                <PlayerProfileModal
+                    isOpen={showPlayerProfileModal}
+                    playerId={profileModalPlayerId}
+                    userProfile={userProfile}
+                    onClose={() => {
+                        setShowPlayerProfileModal(false);
+                        setProfileModalPlayerId(null);
+                    }}
                 />
             </Suspense>
 

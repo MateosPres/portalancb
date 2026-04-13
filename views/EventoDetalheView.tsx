@@ -19,6 +19,7 @@ import imageCompression from 'browser-image-compression';
 import { SimpleScorePanel } from '../components/SimpleScorePanel';
 import { GroupStandings } from '../components/GroupStandings';
 import { ChaaveConfigurator } from '../components/ChaaveConfigurator';
+import { EventScorersTab } from '../components/EventScorersTab';
 import { formatCpf } from '../utils/contactFormat';
 import { uploadImageToImgBB } from '../utils/imgbb';
 import { formatShortWeekdayDate, formatShortWeekdayDateTime, normalizeDateToIso } from '../utils/dateFormat';
@@ -34,7 +35,7 @@ interface EventoDetalheViewProps {
     onSelectPlayer?: (playerId: string, teamId?: string) => void;
     initialTeamId?: string | null;
     onOpenTeamManager?: (eventId: string, teamId?: string) => void;
-    initialTab?: 'jogos' | 'times' | 'classificacao';
+    initialTab?: 'jogos' | 'times' | 'classificacao' | 'pontuadores';
 }
 
 export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, onBack, userProfile, onOpenGamePanel, onOpenReview, onSelectPlayer, initialTeamId, onOpenTeamManager, initialTab = 'jogos' }) => {
@@ -69,7 +70,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
     const [cropAspect, setCropAspect] = useState(1); // 1:1 for logos
 
     // External Tournament State
-    const [activeTab, setActiveTab] = useState<'jogos' | 'times' | 'classificacao'>(initialTab);
+    const [activeTab, setActiveTab] = useState<'jogos' | 'times' | 'classificacao' | 'pontuadores'>(initialTab);
     const [showSimpleScorePanel, setShowSimpleScorePanel] = useState(false);
     const [selectedGameForSimpleScore, setSelectedGameForSimpleScore] = useState<Jogo | null>(null);
     
@@ -547,27 +548,6 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
             alert("Torneio encerrado com sucesso!");
         } catch (e) {
             alert("Erro ao salvar pódio.");
-        }
-    };
-
-    const handleOpenGame = (game: Jogo) => {
-        // Check if it's an ANCB game
-        const teamA = (event?.timesParticipantes || []).find(t => t.id === game.timeA_id);
-        const teamB = (event?.timesParticipantes || []).find(t => t.id === game.timeB_id);
-        
-        const isANCBGame = teamA?.isANCB || teamB?.isANCB || game.timeA_nome?.toUpperCase().includes('ANCB') || game.timeB_nome?.toUpperCase().includes('ANCB');
-        
-        // If not admin, always open public panel (via onOpenGamePanel which handles logic in App.tsx)
-        if (!isAdmin) {
-            onOpenGamePanel(game, eventId);
-            return;
-        }
-
-        if (isANCBGame || event?.type === 'torneio_interno' || event?.type === 'amistoso') {
-            onOpenGamePanel(game, eventId);
-        } else {
-            setSelectedGameForSimpleScore(game);
-            setShowSimpleScorePanel(true);
         }
     };
 
@@ -1190,15 +1170,17 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
             <div className="flex-grow container mx-auto px-4 py-8 max-w-5xl">
                 
-                {/* TABS FOR EXTERNAL TOURNAMENT */}
-                {event.type === 'torneio_externo' && (
-                    <div className="flex items-center gap-4 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
-                        <button 
-                            onClick={() => setActiveTab('jogos')}
-                            className={`pb-3 px-2 text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'jogos' ? 'text-ancb-blue border-b-2 border-ancb-blue' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
-                        >
-                            <LucideGamepad2 className="inline-block mr-1 mb-0.5" size={16}/> Jogos
-                        </button>
+                {/* EVENT TABS */}
+                <div className="flex items-center gap-4 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+                    <button 
+                        onClick={() => setActiveTab('jogos')}
+                        className={`pb-3 px-2 text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'jogos' ? 'text-ancb-blue border-b-2 border-ancb-blue' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                    >
+                        <LucideGamepad2 className="inline-block mr-1 mb-0.5" size={16}/> Jogos
+                    </button>
+
+                    {event.type === 'torneio_externo' && (
+                        <>
                         <button 
                             onClick={() => setActiveTab('times')}
                             className={`pb-3 px-2 text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'times' ? 'text-ancb-blue border-b-2 border-ancb-blue' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
@@ -1211,13 +1193,21 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                         >
                             {event.formato === 'chaveamento' ? <LucideNetwork className="inline-block mr-1 mb-0.5" size={16}/> : <LucideList className="inline-block mr-1 mb-0.5" size={16}/>} Classificação
                         </button>
-                    </div>
-                )}
+                        </>
+                    )}
 
-                <div className={`grid gap-8 ${event.type === 'torneio_externo' ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-3'}`}>
+                    <button 
+                        onClick={() => setActiveTab('pontuadores')}
+                        className={`pb-3 px-2 text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'pontuadores' ? 'text-ancb-blue border-b-2 border-ancb-blue' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                    >
+                        <LucideAward className="inline-block mr-1 mb-0.5" size={16}/> Pontuadores ANCB
+                    </button>
+                </div>
+
+                <div className={`grid gap-8 ${event.type === 'torneio_externo' || activeTab === 'pontuadores' ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-3'}`}>
                     
                     {/* LEFT COLUMN: GAMES / MAIN CONTENT */}
-                    {(activeTab === 'jogos' || event.type !== 'torneio_externo') && (
+                    {activeTab === 'jogos' && (
                         <div className={`${event.type === 'torneio_externo' ? 'w-full' : 'lg:col-span-2'} space-y-6`}>
                             <div className="flex justify-between items-center">
                                 <h3 className="text-xl font-bold flex items-center gap-2"><LucideGamepad2 className="text-ancb-blue" /> Partidas</h3>
@@ -1248,8 +1238,8 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                     return (
                                                         <div
                                                             key={game.id} 
-                                                            onClick={() => event.type === 'torneio_externo' ? handleOpenGame(game) : setSelectedGameForSummary(game)}
-                                                            className={`p-3 flex items-center gap-3 cursor-pointer border-b border-gray-200/80 dark:border-gray-700/80 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors ${getGameResultClass(game)}`}
+                                                            onClick={() => setSelectedGameForSummary(game)}
+                                                            className={`p-3 flex items-center gap-3 cursor-pointer rounded-xl border hover:bg-blue-100/60 dark:hover:bg-blue-900/30 transition-colors ${getGameResultClass(game)}`}
                                                         >
                                                             {/* HORÁRIO — coluna própria, nunca sobrepõe os nomes */}
                                                             <div className="shrink-0 w-24 md:w-28 text-center">
@@ -1266,7 +1256,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                                     </span>
                                                                     
                                                                     <div className="flex items-center justify-center shrink-0">
-                                                                        <div className={`px-2 py-1 rounded font-mono font-bold text-sm md:text-base whitespace-nowrap text-center min-w-[56px] ${isGameLive ? 'bg-red-100 text-red-600 animate-pulse border border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>
+                                                                        <div className={`px-3 py-1.5 rounded-xl font-mono font-bold text-sm md:text-base whitespace-nowrap text-center min-w-[56px] ${isGameLive ? 'bg-red-100 text-red-600 animate-pulse border border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>
                                                                             {sA} – {sB}
                                                                         </div>
                                                                     </div>
@@ -1286,6 +1276,21 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                                         <LucideMoreVertical size={18} />
                                                                         {activeMenuGameId === game.id && (
                                                                             <div className="absolute right-0 top-8 z-50 bg-white dark:bg-gray-800 shadow-xl rounded-xl border border-gray-100 dark:border-gray-700 py-1 w-48 animate-slideDown overflow-hidden">
+                                                                                {game.status === 'agendado' ? (
+                                                                                    <button 
+                                                                                        className="w-full text-left px-4 py-3 hover:bg-green-50 dark:hover:bg-green-900/20 text-sm flex items-center gap-2 text-green-600"
+                                                                                        onClick={(e) => { e.stopPropagation(); handleStartGame(game); setActiveMenuGameId(null); }}
+                                                                                    >
+                                                                                        <LucidePlay size={16} /> Iniciar e Abrir Painel
+                                                                                    </button>
+                                                                                ) : (
+                                                                                    <button 
+                                                                                        className="w-full text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-sm flex items-center gap-2 text-ancb-blue"
+                                                                                        onClick={(e) => { e.stopPropagation(); onOpenGamePanel(game, eventId); setActiveMenuGameId(null); }}
+                                                                                    >
+                                                                                        <LucideGamepad2 size={16} /> Abrir Painel ao Vivo
+                                                                                    </button>
+                                                                                )}
                                                                                 <button 
                                                                                     className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-gray-700 dark:text-gray-200"
                                                                                     onClick={(e) => { e.stopPropagation(); handleShareGame(e, game); }}
@@ -1294,7 +1299,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                                                 </button>
                                                                                 <button 
                                                                                     className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-2 text-ancb-blue"
-                                                                                    onClick={(e) => { e.stopPropagation(); handleOpenScoreEdit(game); }}
+                                                                                    onClick={(e) => { e.stopPropagation(); handleOpenScoreEdit(game); setActiveMenuGameId(null); }}
                                                                                 >
                                                                                     <LucideEdit2 size={16} /> Editar Placar
                                                                                 </button>
@@ -1308,7 +1313,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                                                 )}
                                                                                 <button 
                                                                                     className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm flex items-center gap-2 text-red-600"
-                                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteGame(game.id); }}
+                                                                                    onClick={(e) => { e.stopPropagation(); setActiveMenuGameId(null); handleDeleteGame(game.id); }}
                                                                                 >
                                                                                     <LucideTrash2 size={16} /> Excluir Jogo
                                                                                 </button>
@@ -1332,6 +1337,25 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                     ))}
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* SCORERS TAB CONTENT */}
+                    {activeTab === 'pontuadores' && (
+                        <div className="w-full space-y-6">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-xl font-bold flex items-center gap-2">
+                                    <LucideAward className="text-ancb-blue" /> Pontuadores ANCB
+                                </h3>
+                            </div>
+                            <EventScorersTab
+                                event={event}
+                                eventId={eventId}
+                                games={games}
+                                allPlayers={allPlayers}
+                                roster={roster}
+                                onOpenPlayer={(playerId) => onSelectPlayer && onSelectPlayer(playerId)}
+                            />
                         </div>
                     )}
 
@@ -1711,7 +1735,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                     )}
 
                     {/* RIGHT COLUMN: ROSTER OR TEAMS (Only show if NOT in Teams/Standings tab for external) */}
-                    {event.type !== 'torneio_externo' && (
+                    {event.type !== 'torneio_externo' && activeTab === 'jogos' && (
                         <div className="space-y-6">
                             {/* ... (Roster header same) */}
                             <div className="flex items-center justify-between">
@@ -1899,13 +1923,9 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                 onClose={() => setSelectedGameForSummary(null)}
                 game={selectedGameForSummary}
                 eventId={eventId}
-                isAdmin={isAdmin}
-                onOpenAdminPanel={() => {
-                    if (selectedGameForSummary) {
-                        onOpenGamePanel(selectedGameForSummary, eventId);
-                        setSelectedGameForSummary(null);
-                    }
-                }}
+                isAdmin={false}
+                onOpenAdminPanel={() => {}}
+                onOpenPlayer={(playerId) => onSelectPlayer && onSelectPlayer(playerId)}
             />
 
             {/* Event Edit Modal ... (Existing) */}

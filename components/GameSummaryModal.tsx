@@ -14,6 +14,7 @@ interface GameSummaryModalProps {
     eventId: string;
     isAdmin: boolean;
     onOpenAdminPanel: () => void;
+    onOpenPlayer?: (playerId: string) => void;
 }
 
 interface ScorerStats {
@@ -31,7 +32,8 @@ export const GameSummaryModal: React.FC<GameSummaryModalProps> = ({
     game, 
     eventId, 
     isAdmin, 
-    onOpenAdminPanel 
+    onOpenAdminPanel,
+    onOpenPlayer
 }) => {
     const [loading, setLoading] = useState(false);
     const [scorers, setScorers] = useState<ScorerStats[]>([]);
@@ -148,7 +150,17 @@ export const GameSummaryModal: React.FC<GameSummaryModalProps> = ({
                                     <div className="flex items-center gap-3">
                                         <span className="w-5 text-center text-gray-400 font-bold text-xs">{idx + 1}</span>
                                         <div>
-                                            <p className="text-sm font-bold text-gray-800 dark:text-gray-200 leading-tight">{player.name}</p>
+                                            {onOpenPlayer ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onOpenPlayer(player.id)}
+                                                    className="text-sm font-bold text-gray-800 dark:text-gray-200 leading-tight hover:underline"
+                                                >
+                                                    {player.name}
+                                                </button>
+                                            ) : (
+                                                <p className="text-sm font-bold text-gray-800 dark:text-gray-200 leading-tight">{player.name}</p>
+                                            )}
                                             <div className="flex gap-2 text-[9px] text-gray-400 mt-0.5">
                                                 {player.c3 > 0 && <span title="Bolas de 3">3PT: <b>{player.c3}</b></span>}
                                                 {player.c2 > 0 && <span title="Bolas de 2">2PT: <b>{player.c2}</b></span>}

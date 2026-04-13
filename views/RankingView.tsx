@@ -8,6 +8,7 @@ import { LucideArrowLeft, LucideTrophy, LucideCalendarRange, LucideFilter, Lucid
 
 interface RankingViewProps {
     onBack: () => void;
+    onOpenPlayer?: (playerId: string) => void;
 }
 
 interface PlayerStats extends Player {
@@ -16,7 +17,7 @@ interface PlayerStats extends Player {
     gamesPlayed: number;
 }
 
-export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
+export const RankingView: React.FC<RankingViewProps> = ({ onBack, onOpenPlayer }) => {
     const [stats, setStats] = useState<PlayerStats[]>([]);
     const [loading, setLoading] = useState(true);
     
@@ -373,20 +374,46 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                         {stats[1] && stats[1].totalPoints > 0 && (
                             <div className="flex flex-col items-center w-1/3 md:w-32 order-1">
                                 <div className="relative mb-2">
-                                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-4 border-gray-300 shadow-lg bg-gray-200 dark:bg-gray-700">
-                                        {stats[1].foto ? (
-                                            <img src={stats[1].foto} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"/>
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-xl font-bold text-gray-400">
-                                                {stats[1].nome.charAt(0)}
-                                            </div>
-                                        )}
-                                    </div>
+                                    {onOpenPlayer ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => onOpenPlayer(stats[1].id)}
+                                            className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-4 border-gray-300 shadow-lg bg-gray-200 dark:bg-gray-700"
+                                        >
+                                            {stats[1].foto ? (
+                                                <img src={stats[1].foto} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"/>
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-xl font-bold text-gray-400">
+                                                    {stats[1].nome.charAt(0)}
+                                                </div>
+                                            )}
+                                        </button>
+                                    ) : (
+                                        <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-4 border-gray-300 shadow-lg bg-gray-200 dark:bg-gray-700">
+                                            {stats[1].foto ? (
+                                                <img src={stats[1].foto} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"/>
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-xl font-bold text-gray-400">
+                                                    {stats[1].nome.charAt(0)}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                     <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-gray-300 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-md">
                                         2º
                                     </div>
                                 </div>
-                                <h4 className="font-bold text-gray-700 dark:text-gray-200 text-sm text-center line-clamp-1">{stats[1].apelido || stats[1].nome}</h4>
+                                {onOpenPlayer ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => onOpenPlayer(stats[1].id)}
+                                        className="font-bold text-gray-700 dark:text-gray-200 text-sm text-center line-clamp-1 hover:underline"
+                                    >
+                                        {stats[1].apelido || stats[1].nome}
+                                    </button>
+                                ) : (
+                                    <h4 className="font-bold text-gray-700 dark:text-gray-200 text-sm text-center line-clamp-1">{stats[1].apelido || stats[1].nome}</h4>
+                                )}
                                 <p className="text-ancb-orange font-bold text-sm">{stats[1].totalPoints} {getMetricLabel()}</p>
                             </div>
                         )}
@@ -400,20 +427,46 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                         size={36}
                                     />
                                     
-                                    <div className="w-20 h-20 md:w-28 md:h-28 rounded-full overflow-hidden border-4 border-yellow-400 shadow-xl ring-4 ring-yellow-100 dark:ring-yellow-900 bg-gray-200 dark:bg-gray-700 relative z-10">
-                                        {stats[0].foto ? (
-                                            <img src={stats[0].foto} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"/>
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-gray-400">
-                                                {stats[0].nome.charAt(0)}
-                                            </div>
-                                        )}
-                                    </div>
+                                    {onOpenPlayer ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => onOpenPlayer(stats[0].id)}
+                                            className="w-20 h-20 md:w-28 md:h-28 rounded-full overflow-hidden border-4 border-yellow-400 shadow-xl ring-4 ring-yellow-100 dark:ring-yellow-900 bg-gray-200 dark:bg-gray-700 relative z-10"
+                                        >
+                                            {stats[0].foto ? (
+                                                <img src={stats[0].foto} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"/>
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-gray-400">
+                                                    {stats[0].nome.charAt(0)}
+                                                </div>
+                                            )}
+                                        </button>
+                                    ) : (
+                                        <div className="w-20 h-20 md:w-28 md:h-28 rounded-full overflow-hidden border-4 border-yellow-400 shadow-xl ring-4 ring-yellow-100 dark:ring-yellow-900 bg-gray-200 dark:bg-gray-700 relative z-10">
+                                            {stats[0].foto ? (
+                                                <img src={stats[0].foto} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"/>
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-gray-400">
+                                                    {stats[0].nome.charAt(0)}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                     <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-white text-sm font-bold px-3 py-1 rounded-full shadow-md z-20">
                                         1º
                                     </div>
                                 </div>
-                                <h4 className="font-bold text-gray-800 dark:text-white text-lg text-center line-clamp-1">{stats[0].apelido || stats[0].nome}</h4>
+                                {onOpenPlayer ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => onOpenPlayer(stats[0].id)}
+                                        className="font-bold text-gray-800 dark:text-white text-lg text-center line-clamp-1 hover:underline"
+                                    >
+                                        {stats[0].apelido || stats[0].nome}
+                                    </button>
+                                ) : (
+                                    <h4 className="font-bold text-gray-800 dark:text-white text-lg text-center line-clamp-1">{stats[0].apelido || stats[0].nome}</h4>
+                                )}
                                 <p className="text-ancb-orange font-bold text-xl">{stats[0].totalPoints} {getMetricLabel()}</p>
                                 <p className="text-gray-400 dark:text-gray-500 text-xs font-medium">{stats[0].ppg} {selectedMode === 'shooters' ? '/jogo' : 'PPG'}</p>
                             </div>
@@ -423,20 +476,46 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                         {stats[2] && stats[2].totalPoints > 0 && (
                             <div className="flex flex-col items-center w-1/3 md:w-32 order-3">
                                 <div className="relative mb-2">
-                                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-4 border-orange-300 shadow-lg bg-gray-200 dark:bg-gray-700">
-                                        {stats[2].foto ? (
-                                            <img src={stats[2].foto} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"/>
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-xl font-bold text-gray-400">
-                                                {stats[2].nome.charAt(0)}
-                                            </div>
-                                        )}
-                                    </div>
+                                    {onOpenPlayer ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => onOpenPlayer(stats[2].id)}
+                                            className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-4 border-orange-300 shadow-lg bg-gray-200 dark:bg-gray-700"
+                                        >
+                                            {stats[2].foto ? (
+                                                <img src={stats[2].foto} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"/>
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-xl font-bold text-gray-400">
+                                                    {stats[2].nome.charAt(0)}
+                                                </div>
+                                            )}
+                                        </button>
+                                    ) : (
+                                        <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-4 border-orange-300 shadow-lg bg-gray-200 dark:bg-gray-700">
+                                            {stats[2].foto ? (
+                                                <img src={stats[2].foto} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"/>
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-xl font-bold text-gray-400">
+                                                    {stats[2].nome.charAt(0)}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                     <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-orange-300 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-md">
                                         3º
                                     </div>
                                 </div>
-                                <h4 className="font-bold text-gray-700 dark:text-gray-200 text-sm text-center line-clamp-1">{stats[2].apelido || stats[2].nome}</h4>
+                                {onOpenPlayer ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => onOpenPlayer(stats[2].id)}
+                                        className="font-bold text-gray-700 dark:text-gray-200 text-sm text-center line-clamp-1 hover:underline"
+                                    >
+                                        {stats[2].apelido || stats[2].nome}
+                                    </button>
+                                ) : (
+                                    <h4 className="font-bold text-gray-700 dark:text-gray-200 text-sm text-center line-clamp-1">{stats[2].apelido || stats[2].nome}</h4>
+                                )}
                                 <p className="text-ancb-orange font-bold text-sm">{stats[2].totalPoints} {getMetricLabel()}</p>
                             </div>
                         )}
@@ -459,15 +538,39 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack }) => {
                                             {index + 4}º
                                         </div>
                                         <div className="col-span-6 flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden hidden sm:flex items-center justify-center">
-                                                {player.foto ? (
-                                                    <img src={player.foto} loading="lazy" decoding="async" className="w-full h-full object-cover"/>
-                                                ) : (
-                                                    <span className="text-xs font-bold text-gray-400">{player.nome.charAt(0)}</span>
-                                                )}
-                                            </div>
+                                            {onOpenPlayer ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onOpenPlayer(player.id)}
+                                                    className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden hidden sm:flex items-center justify-center"
+                                                >
+                                                    {player.foto ? (
+                                                        <img src={player.foto} loading="lazy" decoding="async" className="w-full h-full object-cover"/>
+                                                    ) : (
+                                                        <span className="text-xs font-bold text-gray-400">{player.nome.charAt(0)}</span>
+                                                    )}
+                                                </button>
+                                            ) : (
+                                                <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden hidden sm:flex items-center justify-center">
+                                                    {player.foto ? (
+                                                        <img src={player.foto} loading="lazy" decoding="async" className="w-full h-full object-cover"/>
+                                                    ) : (
+                                                        <span className="text-xs font-bold text-gray-400">{player.nome.charAt(0)}</span>
+                                                    )}
+                                                </div>
+                                            )}
                                             <div>
-                                                <p className="font-bold text-gray-800 dark:text-gray-200 text-sm">{player.apelido || player.nome}</p>
+                                                {onOpenPlayer ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onOpenPlayer(player.id)}
+                                                        className="font-bold text-gray-800 dark:text-gray-200 text-sm hover:underline"
+                                                    >
+                                                        {player.apelido || player.nome}
+                                                    </button>
+                                                ) : (
+                                                    <p className="font-bold text-gray-800 dark:text-gray-200 text-sm">{player.apelido || player.nome}</p>
+                                                )}
                                                 <p className="text-[10px] text-gray-400 uppercase">{player.posicao}</p>
                                             </div>
                                         </div>
