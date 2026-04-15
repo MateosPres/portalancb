@@ -24,9 +24,9 @@ export default defineConfig({
           clientsClaim: true
       },
       manifest: {
-        name: 'Portal ANCB-MT',
+        name: 'Portal ANCB | Associacao Nova Canaa de Basquetebol',
         short_name: 'ANCB',
-        description: 'Portal da Associação de Amigos do Basquetebol de Nova Canaã do Norte - MT',
+        description: 'Portal oficial da Associacao Nova Canaa de Basquetebol com eventos, ranking, jogadores e resultados.',
         theme_color: '#062553',
         background_color: '#062553',
         display: 'standalone',

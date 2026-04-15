@@ -75,56 +75,56 @@ const App: React.FC = () => {
     const setSeoForView = (view: ViewState) => {
         const seoByView: Record<ViewState, { title: string; description: string }> = {
             home: {
-                title: 'ANCB MT | Basquete Mato Grosso | Portal Oficial',
-                description: 'Portal oficial da ANCB MT com eventos, ranking, atletas e resultados do basquete em Mato Grosso.'
+                title: 'ANCB | Basquete de Nova Canaa | Portal Oficial',
+                description: 'Portal oficial da Associacao Nova Canaa de Basquetebol com eventos, ranking, jogadores e resultados do basquete de Nova Canaa.'
             },
             eventos: {
-                title: 'Eventos de Basquete | ANCB MT',
-                description: 'Calendario de jogos e eventos de basquete da ANCB em Mato Grosso e Nova Canaa do Norte.'
+                title: 'Eventos de Basquete | ANCB',
+                description: 'Calendario de jogos e eventos da Associacao Nova Canaa de Basquetebol.'
             },
             'evento-detalhe': {
-                title: 'Detalhes do Evento | ANCB MT',
+                title: 'Detalhes do Evento | ANCB',
                 description: 'Acompanhe resultados, jogos e estatisticas do evento de basquete da ANCB.'
             },
             jogadores: {
-                title: 'Jogadores de Basquete | ANCB MT',
-                description: 'Conheca os atletas e perfis de jogadores da ANCB no basquetebol de Mato Grosso.'
+                title: 'Jogadores de Basquete | ANCB',
+                description: 'Conheca os atletas e perfis de jogadores da Associacao Nova Canaa de Basquetebol.'
             },
             ranking: {
-                title: 'Ranking de Basquete | ANCB MT',
-                description: 'Veja o ranking de jogadores, pontuacoes e destaques da temporada da ANCB MT.'
+                title: 'Ranking de Basquete | ANCB',
+                description: 'Veja o ranking de jogadores, pontuacoes e destaques da temporada da ANCB.'
             },
             admin: {
-                title: 'Painel Administrativo | ANCB MT',
+                title: 'Painel Administrativo | ANCB',
                 description: 'Area administrativa da ANCB.'
             },
             'painel-jogo': {
-                title: 'Painel de Jogo | ANCB MT',
+                title: 'Painel de Jogo | ANCB',
                 description: 'Painel de jogo em tempo real da ANCB.'
             },
             'public-game': {
-                title: 'Placar Publico | ANCB MT',
+                title: 'Placar Publico | ANCB',
                 description: 'Acompanhe placar e estatisticas publicas dos jogos da ANCB.'
             },
             profile: {
-                title: 'Perfil | ANCB MT',
-                description: 'Perfil de usuario no portal ANCB MT.'
+                title: 'Perfil | ANCB',
+                description: 'Perfil de usuario no portal da Associacao Nova Canaa de Basquetebol.'
             },
             'team-manager': {
-                title: 'Gerenciador de Times | ANCB MT',
+                title: 'Gerenciador de Times | ANCB',
                 description: 'Gestao de times e escalacoes da ANCB.'
             },
             notifications: {
-                title: 'Notificacoes | ANCB MT',
-                description: 'Notificacoes do portal ANCB MT.'
+                title: 'Notificacoes | ANCB',
+                description: 'Notificacoes do portal da Associacao Nova Canaa de Basquetebol.'
             },
             apoiadores: {
-                title: 'ANCB MT e Apoiadores | Basquete Mato Grosso',
-                description: 'Conheca a historia da ANCB e os apoiadores que fortalecem o basquete em Mato Grosso.'
+                title: 'ANCB e Apoiadores | Basquete de Nova Canaa',
+                description: 'Conheca a historia da Associacao Nova Canaa de Basquetebol e os apoiadores que fortalecem o basquete de Nova Canaa.'
             },
             'post-view': {
-                title: 'Mural da ANCB | Basquete Mato Grosso',
-                description: 'Noticias, destaques e publicacoes da comunidade ANCB MT.'
+                title: 'Mural da ANCB | Basquete de Nova Canaa',
+                description: 'Noticias, destaques e publicacoes da comunidade da Associacao Nova Canaa de Basquetebol.'
             },
         };
 

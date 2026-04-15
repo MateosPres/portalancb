@@ -1,8 +1,8 @@
 
 {
-  "name": "Portal ANCB-MT",
+  "name": "Portal ANCB | Associacao Nova Canaa de Basquetebol",
   "short_name": "ANCB",
-  "description": "Portal oficial da ANCB MT com eventos, ranking e noticias do basquete em Mato Grosso.",
+  "description": "Portal oficial da Associacao Nova Canaa de Basquetebol com eventos, ranking, jogadores e noticias do basquete de Nova Canaa.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
