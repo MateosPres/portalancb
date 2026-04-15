@@ -95,7 +95,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
     return (
         <article
             onClick={() => onOpenDetails(user)}
-            className="relative rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 cursor-pointer"
+            className={`relative overflow-visible rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 cursor-pointer ${menuOpen ? 'z-30' : 'z-0'}`}
         >
             <div className="absolute right-3 top-3 flex items-center gap-1">
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${getStatusStyles(user.status)}`}>
@@ -118,7 +118,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
                     </div>
                 </div>
 
-                <div ref={menuRef} className="relative z-20" onClick={(e) => e.stopPropagation()}>
+                <div ref={menuRef} className="relative z-40" onClick={(e) => e.stopPropagation()}>
                     <button
                         onClick={() => onToggleMenu(menuOpen ? null : user.uid)}
                         className="rounded-full p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -128,7 +128,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
                     </button>
 
                     {menuOpen && (
-                        <div className="absolute right-0 mt-1 w-56 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-600 dark:bg-gray-800">
+                        <div className="absolute right-0 z-50 mt-1 w-56 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-600 dark:bg-gray-800">
                             <button onClick={() => { onOpenEdit(user); onToggleMenu(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700">
                                 <LucideEdit size={14} /> Editar usuario
                             </button>
