@@ -17,7 +17,8 @@ import {
     LucideClock,
     LucideXCircle,
     LucideShield,
-    LucideMoreVertical
+    LucideMoreVertical,
+    LucideUsers
 } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { ImageCropperModal } from '../components/ImageCropperModal';
@@ -35,10 +36,15 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
     const [event, setEvent] = useState<Evento | null>(null);
     const [team, setTeam] = useState<Partial<Time>>({ nomeTime: '', jogadores: [], rosterStatus: {} });
     const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+    const [linkedUsersByPlayerId, setLinkedUsersByPlayerId] = useState<Record<string, UserProfile | null>>({});
     const [activeMenuPlayerId, setActiveMenuPlayerId] = useState<string | null>(null);
+    const [activeSummaryMenuPlayerId, setActiveSummaryMenuPlayerId] = useState<string | null>(null);
     // Fecha o menu de 3 pontinhos ao clicar em fora
     useEffect(() => {
-        const handleClickOutside = () => setActiveMenuPlayerId(null);
+        const handleClickOutside = () => {
+            setActiveMenuPlayerId(null);
+            setActiveSummaryMenuPlayerId(null);
+        };
         document.addEventListener('click', handleClickOutside);
         return () => document.removeEventListener('click', handleClickOutside);
     }, []);
@@ -395,6 +401,53 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
         rosterScrollRef.current.scrollTop = rosterScrollTopRef.current;
     }, [team.jogadores, team.rosterStatus]);
 
+    useEffect(() => {
+        const selectedPlayerIds = team.jogadores || [];
+
+        if (selectedPlayerIds.length === 0) {
+            setLinkedUsersByPlayerId({});
+            return;
+        }
+
+        let isActive = true;
+
+        const loadLinkedUsers = async () => {
+            try {
+                const entries = await Promise.all(selectedPlayerIds.map(async (playerId) => {
+                    const player = allPlayers.find(item => item.id === playerId);
+
+                    if (player?.userId) {
+                        const userDoc = await db.collection('usuarios').doc(player.userId).get();
+                        if (userDoc.exists) {
+                            return [playerId, { uid: userDoc.id, ...userDoc.data() } as UserProfile] as const;
+                        }
+                    }
+
+                    const linkedSnap = await db.collection('usuarios').where('linkedPlayerId', '==', playerId).limit(1).get();
+                    if (!linkedSnap.empty) {
+                        const linkedDoc = linkedSnap.docs[0];
+                        return [playerId, { uid: linkedDoc.id, ...linkedDoc.data() } as UserProfile] as const;
+                    }
+
+                    return [playerId, null] as const;
+                }));
+
+                if (!isActive) return;
+                setLinkedUsersByPlayerId(Object.fromEntries(entries));
+            } catch (error) {
+                console.error('Error loading linked users for roster:', error);
+                if (isActive) {
+                    setLinkedUsersByPlayerId({});
+                }
+            }
+        };
+
+        loadLinkedUsers();
+        return () => {
+            isActive = false;
+        };
+    }, [allPlayers, team.jogadores]);
+
     const filteredPlayers = useMemo(() => allPlayers.filter(p =>
         p.nome.toLowerCase().includes(search.toLowerCase()) ||
         (p.apelido && p.apelido.toLowerCase().includes(search.toLowerCase()))
@@ -428,6 +481,82 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
         if (p.includes('5') || (p.includes('piv') && !p.includes('ala')) || p.includes('c)') || p.trim().endsWith('(c)')) return 'Pivô (5)';
         return pos;
     };
+
+    const getFirstName = (name?: string) => {
+        const trimmed = String(name || '').trim();
+        if (!trimmed) return 'Usuário';
+        return trimmed.split(/\s+/)[0];
+    };
+
+    const getPreferredDisplayName = (user?: UserProfile | null, player?: Player | null) => {
+        const userNickname = String(user?.apelido || '').trim();
+        if (userNickname) return userNickname;
+
+        const userFirstName = getFirstName(user?.nome);
+        if (userFirstName !== 'Usuário') return userFirstName;
+
+        const playerNickname = String(player?.apelido || '').trim();
+        if (playerNickname) return playerNickname;
+
+        return getFirstName(player?.nome);
+    };
+
+    const renderStatusIcon = (status?: 'pendente' | 'confirmado' | 'recusado') => {
+        if (status === 'confirmado') {
+            return <LucideCheckCircle2 size={16} className="shrink-0 text-green-500 dark:text-green-400" />;
+        }
+
+        if (status === 'recusado') {
+            return <LucideXCircle size={16} className="shrink-0 text-red-500 dark:text-red-400" />;
+        }
+
+        return <LucideClock size={16} className="shrink-0 text-orange-500 dark:text-orange-400" />;
+    };
+
+    const currentRosterCards = useMemo(() => {
+        const selectedPlayers = (team.jogadores || [])
+            .map(playerId => allPlayers.find(player => player.id === playerId))
+            .filter((player): player is Player => Boolean(player));
+
+        const statusOrder: Record<'confirmado' | 'pendente' | 'recusado', number> = {
+            confirmado: 0,
+            pendente: 1,
+            recusado: 2,
+        };
+
+        return selectedPlayers
+            .map(player => {
+                const linkedUser = linkedUsersByPlayerId[player.id] || null;
+                const status = team.rosterStatus?.[player.id] || 'pendente';
+
+                return {
+                    id: player.id,
+                    status,
+                    linkedUser,
+                    player,
+                    displayName: getPreferredDisplayName(linkedUser, player),
+                    avatarUrl: linkedUser?.foto || player.foto || null,
+                    position: formatPosition(player.posicao),
+                    refusalReason: team.rosterRefusalReason?.[player.id] || '',
+                };
+            })
+            .sort((a, b) => {
+                const statusDiff = statusOrder[a.status] - statusOrder[b.status];
+                if (statusDiff !== 0) return statusDiff;
+                return a.displayName.localeCompare(b.displayName);
+            });
+    }, [allPlayers, linkedUsersByPlayerId, team.jogadores, team.rosterRefusalReason, team.rosterStatus]);
+
+    const renderPlayerActionMenu = (playerId: string, onClose: () => void) => (
+        <div className="absolute right-0 top-10 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden flex flex-col">
+            <button onClick={(e) => { e.stopPropagation(); updatePlayerStatus(playerId, 'confirmado'); onClose(); }} className="px-4 py-3 text-left text-sm font-bold text-green-600 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700">✅ Confirmar</button>
+            <button onClick={(e) => { e.stopPropagation(); updatePlayerStatus(playerId, 'pendente'); onClose(); }} className="px-4 py-3 text-left text-sm font-bold text-orange-500 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700">⏳ Pendente</button>
+            <button onClick={(e) => { e.stopPropagation(); updatePlayerStatus(playerId, 'recusado'); onClose(); }} className="px-4 py-3 text-left text-sm font-bold text-red-500 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700">❌ Recusar</button>
+            <button onClick={(e) => { e.stopPropagation(); togglePlayer(playerId); onClose(); }} className="px-4 py-3 text-left text-sm font-bold text-gray-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 transition-colors flex items-center justify-between">
+                Remover <LucideTrash2 size={14} />
+            </button>
+        </div>
+    );
 
     if (loading) return <div className="flex justify-center items-center h-screen"><LucideLoader2 className="animate-spin" /></div>;
 
@@ -559,6 +688,71 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
                 {/* Roster Management */}
                 {team.isANCB && (
                     <section className="pt-2">
+                        <div className="mb-4 rounded-2xl border border-gray-200/80 bg-white/90 p-4 shadow-sm dark:border-gray-700/80 dark:bg-gray-800/80">
+                            <div className="mb-4 flex items-center justify-between gap-3">
+                                <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                    <LucideUsers className="text-ancb-orange" size={20} />
+                                    Elenco atual <span className="text-sm font-normal text-gray-500">({currentRosterCards.length})</span>
+                                </h2>
+                            </div>
+
+                            {currentRosterCards.length === 0 ? (
+                                <div className="rounded-xl border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                                    Nenhum jogador convocado no momento.
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                    {currentRosterCards.map(({ id, status, linkedUser, player, displayName, avatarUrl, position, refusalReason }) => (
+                                        <article
+                                            key={id}
+                                            className={`relative overflow-visible rounded-xl border border-gray-200/80 bg-gray-50/80 px-4 pb-3 pt-4 shadow-sm transition-colors dark:border-gray-700 dark:bg-gray-900/40 ${activeSummaryMenuPlayerId === id ? 'z-30' : 'z-0'}`}
+                                        >
+                                            {isAdmin && (
+                                                <div className="absolute right-2 top-2" onClick={(e) => e.stopPropagation()}>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setActiveSummaryMenuPlayerId(activeSummaryMenuPlayerId === id ? null : id);
+                                                        }}
+                                                        className="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white transition-colors"
+                                                    >
+                                                        <LucideMoreVertical size={18} />
+                                                    </button>
+
+                                                    {activeSummaryMenuPlayerId === id && renderPlayerActionMenu(id, () => setActiveSummaryMenuPlayerId(null))}
+                                                </div>
+                                            )}
+
+                                            <div className="mb-1 flex items-start gap-3 pr-6">
+                                                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100 dark:border-gray-600 dark:bg-gray-700">
+                                                    {avatarUrl ? (
+                                                        <img src={avatarUrl} alt={displayName} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                                                    ) : (
+                                                        <span className="text-sm font-bold text-gray-500 dark:text-gray-300">{displayName.slice(0, 2).toUpperCase()}</span>
+                                                    )}
+                                                </div>
+                                                <div className="min-w-0 flex-1 pr-1">
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-start gap-2">
+                                                            <span className="mt-0.5">{renderStatusIcon(status)}</span>
+                                                            <h3 className="break-words text-sm font-bold leading-tight text-gray-900 dark:text-white">{displayName}</h3>
+                                                        </div>
+                                                        <p className="mt-1 truncate pl-6 text-xs text-gray-500 dark:text-gray-400">{position}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {status === 'recusado' && refusalReason && (
+                                                <p className="pr-6 text-xs text-red-600 dark:text-red-300">
+                                                    Motivo: {refusalReason}
+                                                </p>
+                                            )}
+                                        </article>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
                         <div className="pb-4 border-b border-gray-200/80 dark:border-gray-700/80 flex flex-col sm:flex-row justify-between items-center gap-4">
                             <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
                                 <LucideUserPlus className="text-ancb-orange" size={20} />
@@ -640,14 +834,7 @@ export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ eventId, teamI
 
                                                             {/* Dropdown Menu */}
                                                             {activeMenuPlayerId === p.id && (
-                                                                <div className="absolute right-0 top-10 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden flex flex-col">
-                                                                    <button onClick={(e) => { e.stopPropagation(); updatePlayerStatus(p.id, 'confirmado'); setActiveMenuPlayerId(null); }} className="px-4 py-3 text-left text-sm font-bold text-green-600 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700">✅ Confirmar</button>
-                                                                    <button onClick={(e) => { e.stopPropagation(); updatePlayerStatus(p.id, 'pendente'); setActiveMenuPlayerId(null); }} className="px-4 py-3 text-left text-sm font-bold text-orange-500 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700">⏳ Pendente</button>
-                                                                    <button onClick={(e) => { e.stopPropagation(); updatePlayerStatus(p.id, 'recusado'); setActiveMenuPlayerId(null); }} className="px-4 py-3 text-left text-sm font-bold text-red-500 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700">❌ Recusar</button>
-                                                                    <button onClick={(e) => { e.stopPropagation(); togglePlayer(p.id); setActiveMenuPlayerId(null); }} className="px-4 py-3 text-left text-sm font-bold text-gray-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 transition-colors flex items-center justify-between">
-                                                                        Remover <LucideTrash2 size={14} />
-                                                                    </button>
-                                                                </div>
+                                                                renderPlayerActionMenu(p.id, () => setActiveMenuPlayerId(null))
                                                             )}
                                                         </div>
                                                     )}

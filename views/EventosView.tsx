@@ -7,7 +7,7 @@ import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { GameSummaryModal } from '../components/GameSummaryModal';
 import { ImageCropperModal } from '../components/ImageCropperModal';
-import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucideTrash2, LucideStar, LucideMessageSquare, LucidePlayCircle, LucideShield, LucideCamera, LucideLoader2, LucideCalendar, LucideMapPin, LucideSearch } from 'lucide-react';
+import { LucideArrowLeft, LucideCalendarClock, LucideCheckCircle2, LucideGamepad2, LucideBarChart3, LucidePlus, LucideTrophy, LucideChevronRight, LucideSettings, LucideEdit, LucideUsers, LucideCheckSquare, LucideSquare, LucideTrash2, LucideStar, LucideMessageSquare, LucidePlayCircle, LucideShield, LucideCamera, LucideLoader2, LucideCalendar, LucideMapPin, LucideSearch, LucideMoreVertical } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { collection, doc, getDocs, getDoc, writeBatch, updateDoc, addDoc, serverTimestamp, setDoc, query, where, limit, deleteField } from 'firebase/firestore';
 import { fileToBase64 } from '../utils/imageUtils';
@@ -84,6 +84,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
     const [selectedRosterMapTeamB, setSelectedRosterMapTeamB] = useState<Record<string, number>>({});
     const [rosterSearch, setRosterSearch] = useState('');
     const [rosterSearchTeamB, setRosterSearchTeamB] = useState('');
+    const [activeCreateRosterMenuId, setActiveCreateRosterMenuId] = useState<string | null>(null);
     const [isUploadingLogo, setIsUploadingLogo] = useState(false);
     const [showLogoCropModal, setShowLogoCropModal] = useState(false);
     const [logoCropImageSrc, setLogoCropImageSrc] = useState<string | null>(null);
@@ -104,6 +105,12 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
             setAllPlayers(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Player)));
         };
         fetchPlayers();
+    }, []);
+
+    useEffect(() => {
+        const handleClickOutside = () => setActiveCreateRosterMenuId(null);
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
     }, []);
 
     useEffect(() => {
@@ -890,6 +897,128 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
         (p.apelido || '').toLowerCase().includes(editFriendlyRosterSearchTeamB.toLowerCase())
     );
 
+    const getCompactRosterDisplayName = (player: Player) => String(player.apelido || player.nome || 'Jogador').trim();
+
+    const getCompactRosterCardName = (player: Player) => {
+        const baseName = getCompactRosterDisplayName(player);
+        if (baseName.length <= 14) return baseName;
+
+        const firstName = baseName.split(/\s+/).filter(Boolean)[0] || baseName;
+        return firstName;
+    };
+
+    const getCompactRosterInitials = (name: string) => {
+        const parts = name.split(/\s+/).filter(Boolean).slice(0, 2);
+        if (parts.length === 0) return 'JG';
+        return parts.map(part => part[0]).join('').toUpperCase();
+    };
+
+    const getCompactRosterNameClassName = (name: string) => {
+        const length = name.trim().length;
+        if (length > 20) return 'text-[11px]';
+        if (length > 14) return 'text-xs';
+        return 'text-[13px]';
+    };
+
+    const buildCompactRosterPlayers = (rosterMap: Record<string, number>) => {
+        return Object.keys(rosterMap)
+            .map(playerId => allPlayers.find(player => player.id === playerId))
+            .filter((player): player is Player => Boolean(player))
+            .sort((a, b) => getCompactRosterDisplayName(a).localeCompare(getCompactRosterDisplayName(b)));
+    };
+
+    const compactRosterPlayers = buildCompactRosterPlayers(selectedRosterMap);
+    const compactRosterPlayersTeamB = buildCompactRosterPlayers(selectedRosterMapTeamB);
+
+    const editCompactRosterPlayers = buildCompactRosterPlayers(editFriendlyRosterMap);
+    const editCompactRosterPlayersTeamB = buildCompactRosterPlayers(editFriendlyRosterMapTeamB);
+
+    const renderCompactRosterCard = (player: Player, cardMenuId: string, onRemove: () => void) => {
+        const displayName = getCompactRosterDisplayName(player);
+        const cardName = getCompactRosterCardName(player);
+
+        return (
+            <article
+                key={cardMenuId}
+                className={`relative aspect-square overflow-visible rounded-2xl border border-white/10 bg-[#1f2a3d] p-2.5 shadow-[0_10px_24px_rgba(0,0,0,0.12)] transition-colors ${activeCreateRosterMenuId === cardMenuId ? 'z-30' : 'z-0'}`}
+            >
+                <div className="absolute right-1 top-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveCreateRosterMenuId(activeCreateRosterMenuId === cardMenuId ? null : cardMenuId);
+                        }}
+                        className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+                        aria-label={`Abrir menu de ${displayName}`}
+                    >
+                        <LucideMoreVertical size={16} />
+                    </button>
+
+                    {activeCreateRosterMenuId === cardMenuId && (
+                        <div className="absolute right-0 top-9 z-50 mt-1 w-36 overflow-hidden rounded-xl border border-white/10 bg-[#243247] shadow-xl">
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRemove();
+                                    setActiveCreateRosterMenuId(null);
+                                }}
+                                className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-bold text-red-300 transition-colors hover:bg-red-900/20"
+                            >
+                                Remover <LucideTrash2 size={14} />
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex h-full flex-col items-center text-center">
+                    <div className="mb-2 mt-1 flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-700 shadow-inner">
+                        {player.foto ? (
+                            <img src={player.foto} alt={displayName} loading="lazy" decoding="async" className="h-full w-full rounded-full object-cover object-center" />
+                        ) : (
+                            <span className="text-sm font-bold text-slate-200">{getCompactRosterInitials(displayName)}</span>
+                        )}
+                    </div>
+
+                    <div className="mt-auto flex w-full items-start justify-center px-1 pb-0.5 pr-5">
+                        <div className="inline-flex max-w-full items-start gap-1.5">
+                            <LucideCheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-400" />
+                            <h4 className={`${getCompactRosterNameClassName(cardName)} text-left font-bold leading-tight text-white`}>
+                                {cardName}
+                            </h4>
+                        </div>
+                    </div>
+                </div>
+            </article>
+        );
+    };
+
+    const renderCompactRosterSection = (
+        title: string,
+        players: Player[],
+        accentClassName: string,
+        menuPrefix: string,
+        onRemovePlayer: (player: Player) => void,
+    ) => (
+        <div className="mb-3 rounded-xl border border-gray-200/80 bg-white/80 p-3 dark:border-gray-700 dark:bg-gray-800/70">
+            <div className="mb-3 flex items-center justify-between gap-2">
+                <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">{title}</h4>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${accentClassName}`}>{players.length}</span>
+            </div>
+
+            {players.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-300 px-3 py-4 text-center text-xs text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                    Nenhum jogador convocado.
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                    {players.map(player => renderCompactRosterCard(player, `${menuPrefix}-${player.id}`, () => onRemovePlayer(player)))}
+                </div>
+            )}
+        </div>
+    );
+
     return (
         <div className="animate-fadeIn pb-10">
             <div className="flex items-center justify-between mb-6">
@@ -1160,6 +1289,8 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                             <div className="md:col-span-2 mt-2 border-t pt-4 dark:border-gray-700">
                                 {formFriendlyMode === 'external_string' ? (
                                     <>
+                                        {renderCompactRosterSection('Jogadores convocados', compactRosterPlayers, 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', 'create-a', toggleRosterPlayer)}
+
                                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">
                                             Jogadores ANCB (Opcional)
                                         </label>
@@ -1206,6 +1337,8 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                 ) : (
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                         <div>
+                                            {renderCompactRosterSection('Convocados Time A', compactRosterPlayers, 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', 'create-a', toggleRosterPlayer)}
+
                                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Elenco Time A</label>
                                             <div className="relative mb-2">
                                                 <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
@@ -1243,6 +1376,8 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                         </div>
 
                                         <div>
+                                            {renderCompactRosterSection('Convocados Time B', compactRosterPlayersTeamB, 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300', 'create-b', toggleRosterPlayerTeamB)}
+
                                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Elenco Time B</label>
                                             <div className="relative mb-2">
                                                 <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
@@ -1462,6 +1597,8 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                         <div className="md:col-span-2 mt-2 border-t pt-4 dark:border-gray-700">
                             {editFriendlyOpponentMode === 'external_string' ? (
                                 <>
+                                    {renderCompactRosterSection('Jogadores convocados', editCompactRosterPlayers, 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', 'edit-a', toggleFriendlyEditRosterPlayer)}
+
                                     <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Jogadores ANCB</label>
                                     <div className="relative mb-2">
                                         <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
@@ -1503,6 +1640,8 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                             ) : (
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                     <div>
+                                        {renderCompactRosterSection('Convocados Time A', editCompactRosterPlayers, 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', 'edit-a', toggleFriendlyEditRosterPlayer)}
+
                                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Elenco Time A</label>
                                         <div className="relative mb-2">
                                             <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
@@ -1540,6 +1679,8 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                     </div>
 
                                     <div>
+                                        {renderCompactRosterSection('Convocados Time B', editCompactRosterPlayersTeamB, 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300', 'edit-b', toggleFriendlyEditRosterPlayerTeamB)}
+
                                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Elenco Time B</label>
                                         <div className="relative mb-2">
                                             <LucideSearch className="absolute left-3 top-2.5 text-gray-400" size={14} />
