@@ -714,6 +714,62 @@ exports.onAvisoPostCreated = functions.firestore
     });
 
 // ─────────────────────────────────────────────────────────────
+// 2.3 NOVO CADASTRO: ALERTA AUTOMÁTICO PARA ADMINS
+// ─────────────────────────────────────────────────────────────
+exports.notifyAdminsOnNewUserRegistration = functions.firestore
+    .document('usuarios/{userId}')
+    .onCreate(async (snap, context) => {
+        const userData = snap.data() || {};
+        const newUserId = context.params.userId;
+
+        if (userData.status !== 'pending') return null;
+
+        const userName = String(userData.nome || 'Novo usuário').trim();
+        const userEmail = String(userData.email || userData.emailContato || '').trim();
+
+        try {
+            const adminsSnap = await admin.firestore().collection('usuarios')
+                .where('role', 'in', ['admin', 'super-admin'])
+                .get();
+
+            if (adminsSnap.empty) {
+                console.log(`Nenhum admin encontrado para ser notificado sobre o cadastro ${newUserId}.`);
+                return null;
+            }
+
+            const writes = adminsSnap.docs
+                .filter((adminDoc) => adminDoc.id !== newUserId)
+                .map((adminDoc) => {
+                    const notifId = `new_user_pending_${newUserId}_${adminDoc.id}`;
+                    return admin.firestore().collection('notifications').doc(notifId).set({
+                        targetUserId: adminDoc.id,
+                        type: 'new_user_pending_approval',
+                        title: 'Novo usuário aguardando aprovação 👤',
+                        message: userEmail
+                            ? `${userName} acabou de se cadastrar (${userEmail}).`
+                            : `${userName} acabou de se cadastrar no portal.`,
+                        data: {
+                            source: 'new_user_registration',
+                            newUserId,
+                            userName,
+                            userEmail,
+                            status: 'pending',
+                        },
+                        read: false,
+                        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                    }, { merge: true });
+                });
+
+            await Promise.all(writes);
+            console.log(`✅ ${writes.length} admin(s) notificados sobre o novo cadastro de ${userName}.`);
+        } catch (error) {
+            console.error('Erro ao notificar admins sobre novo cadastro:', error);
+        }
+
+        return null;
+    });
+
+// ─────────────────────────────────────────────────────────────
 // 3. MONITOR DE NOTIFICAÇÕES DIRETAS (sem alterações)
 // ─────────────────────────────────────────────────────────────
 exports.sendDirectNotification = functions.firestore

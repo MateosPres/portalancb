@@ -6,7 +6,7 @@ export interface UserProfile {
     email: string;
     emailContato?: string; // Legacy: manter durante migracao para email unico
     role: 'admin' | 'jogador' | 'super-admin';
-    status: 'active' | 'banned';
+    status: 'active' | 'pending' | 'banned';
     dataNascimento?: string;
     linkedPlayerId?: string; // ID do jogador na collection 'jogadores' que este usuário controla
     fcmToken?: string; // Token para Notificações Push
@@ -253,7 +253,7 @@ export interface ReviewTagDefinition {
 
 export interface NotificationItem {
     id: string;
-    type: 'pending_review' | 'roster_invite' | 'evaluation' | 'roster_alert' | 'feed_alert';
+    type: 'pending_review' | 'roster_invite' | 'evaluation' | 'roster_alert' | 'feed_alert' | 'new_user_pending_approval';
     title: string;
     message: string;
     data: any; // Dados extras (gameId, eventId, etc)
