@@ -468,7 +468,8 @@ export const MediaStudio: React.FC<MediaStudioProps> = ({ events, players }) => 
         let cancelled = false;
 
         const syncLogoColors = async () => {
-            if (template !== 'thumb_youtube') return;
+            const usesLogoPalette = template === 'thumb_youtube' || template === 'story_game';
+            if (!usesLogoPalette) return;
 
             const [leftPalette, rightPalette] = await Promise.all([
                 getLogoPalette(activeLogoA),

@@ -46,3 +46,16 @@ export const formatShortWeekdayDateTime = (dateValue?: string, timeValue?: strin
     if (!timeValue || !/^\d{2}:\d{2}$/.test(timeValue)) return base;
     return `${base} • ${timeValue}`;
 };
+
+export const formatDisplayTime = (timeValue?: string, fallback = 'Sem horario') => {
+    if (!timeValue) return fallback;
+
+    const match = timeValue.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return fallback;
+
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return fallback;
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};

@@ -22,9 +22,10 @@ import { ChaaveConfigurator } from '../components/ChaaveConfigurator';
 import { EventScorersTab } from '../components/EventScorersTab';
 import { formatCpf } from '../utils/contactFormat';
 import { uploadImageToImgBB } from '../utils/imgbb';
-import { formatShortWeekdayDate, formatShortWeekdayDateTime, normalizeDateToIso } from '../utils/dateFormat';
+import { formatDisplayTime, formatShortWeekdayDate, normalizeDateToIso } from '../utils/dateFormat';
 import { normalizeEvento, normalizeEventoWrite } from '../utils/eventNormalize';
 import { normalizeJogo, normalizeJogoWrite, normalizeRosterEntry } from '../utils/gameNormalize';
+import { calculateStandings } from '../utils/standings';
 
 interface EventoDetalheViewProps {
     eventId: string;
@@ -1242,9 +1243,9 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                                             className={`p-3 flex items-center gap-3 cursor-pointer rounded-xl border hover:bg-blue-100/60 dark:hover:bg-blue-900/30 transition-colors ${getGameResultClass(game)}`}
                                                         >
                                                             {/* HORÁRIO — coluna própria, nunca sobrepõe os nomes */}
-                                                            <div className="shrink-0 w-24 md:w-28 text-center">
+                                                            <div className="shrink-0 w-16 md:w-20 text-center">
                                                                 <span className="text-[10px] md:text-[11px] font-bold text-gray-500 dark:text-gray-400 tabular-nums leading-tight text-center block">
-                                                                    {formatShortWeekdayDateTime(game.dataJogo, game.horaJogo)}
+                                                                    {formatDisplayTime(game.horaJogo)}
                                                                 </span>
                                                             </div>
 
@@ -1637,96 +1638,108 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
                                     }
                                     
                                     // Fallback to simple standings table
+                                    const fallbackStandings = calculateStandings(event.timesParticipantes || [], games);
+
                                     return (
-                                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                                            <table className="w-full text-sm text-left">
-                                                <thead className="bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-300 font-bold uppercase text-xs">
-                                                    <tr>
-                                                        <th className="p-3">Pos</th>
-                                                        <th className="p-3">Time</th>
-                                                        <th className="p-3 text-center">J</th>
-                                                        <th className="p-3 text-center">V</th>
-                                                        <th className="p-3 text-center">D</th>
-                                                        <th className="p-3 text-center">Saldo</th>
-                                                        <th className="p-3 text-center font-black">Pts</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                                    {event.timesParticipantes && event.timesParticipantes.length > 0 ? (
-                                                        (() => {
-                                                            // Calculate standings for all teams
-                                                            const standings = event.timesParticipantes.map(team => {
-                                                                const teamGames = games.filter(g => g.status === 'finalizado' && (g.timeA_id === team.id || g.timeB_id === team.id));
-                                                                
-                                                                let wins = 0;
-                                                                let losses = 0;
-                                                                let draws = 0;
-                                                                let pointsFor = 0;
-                                                                let pointsAgainst = 0;
+                                        <div className="space-y-3">
+                                            {fallbackStandings.inconsistentGames.length > 0 && (
+                                                <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                                                    Jogos finalizados com placar empatado foram ignorados na classificacao ate correcao manual.
+                                                </div>
+                                            )}
 
-                                                                teamGames.forEach(g => {
-                                                                    const sA = g.placarTimeA_final || 0;
-                                                                    const sB = g.placarTimeB_final || 0;
+                                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                {fallbackStandings.standings.length > 0 ? (
+                                                    <>
+                                                        <div className="md:hidden space-y-2 p-2">
+                                                            {fallbackStandings.standings.map((standing) => (
+                                                                <div key={standing.team.id} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2.5 py-2 shadow-sm">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-8 text-center font-black text-lg text-ancb-orange">{standing.position}º</div>
+                                                                        <div className="min-w-0 flex-1 flex items-center gap-2">
+                                                                            {standing.team.logoUrl ? (
+                                                                                <img
+                                                                                    src={standing.team.logoUrl}
+                                                                                    alt={standing.team.nomeTime}
+                                                                                    loading="lazy"
+                                                                                    decoding="async"
+                                                                                    className="w-9 h-9 object-contain shrink-0"
+                                                                                />
+                                                                            ) : (
+                                                                                <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-ancb-blue dark:text-blue-300 font-bold text-sm shrink-0">
+                                                                                    {standing.team.nomeTime.charAt(0)}
+                                                                                </div>
+                                                                            )}
+                                                                            <div className="min-w-0">
+                                                                                <p className="font-bold text-sm leading-tight text-gray-900 dark:text-gray-100 truncate">{standing.team.nomeTime}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
 
-                                                                    if (g.timeA_id === team.id) {
-                                                                        pointsFor += sA;
-                                                                        pointsAgainst += sB;
-                                                                        if (sA > sB) wins++;
-                                                                        else if (sA < sB) losses++;
-                                                                        else draws++;
-                                                                    } else {
-                                                                        pointsFor += sB;
-                                                                        pointsAgainst += sA;
-                                                                        if (sB > sA) wins++;
-                                                                        else if (sB < sA) losses++;
-                                                                        else draws++;
-                                                                    }
-                                                                });
+                                                                    <div className="mt-2 grid grid-cols-3 gap-1.5 text-xs">
+                                                                        <div className="rounded-md bg-gray-100 dark:bg-gray-700/60 px-2 py-1.5 flex items-center justify-between gap-2">
+                                                                            <p className="font-bold uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400">J</p>
+                                                                            <p className="font-black text-gray-900 dark:text-gray-100">{standing.gamesPlayed}</p>
+                                                                        </div>
+                                                                        <div className="rounded-md bg-gray-100 dark:bg-gray-700/60 px-2 py-1.5 flex items-center justify-between gap-2">
+                                                                            <p className="font-bold uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400">V</p>
+                                                                            <p className="font-black text-green-600 dark:text-green-400">{standing.wins}</p>
+                                                                        </div>
+                                                                        <div className="rounded-md bg-gray-100 dark:bg-gray-700/60 px-2 py-1.5 flex items-center justify-between gap-2">
+                                                                            <p className="font-bold uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400">D</p>
+                                                                            <p className="font-black text-red-600 dark:text-red-400">{standing.losses}</p>
+                                                                        </div>
+                                                                        <div className="col-span-2 rounded-md bg-gray-100 dark:bg-gray-700/60 px-2 py-1.5 flex items-center justify-between gap-2">
+                                                                            <p className="font-bold uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400">Saldo</p>
+                                                                            <p className={`font-black ${standing.pointBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                                                {standing.pointBalance >= 0 ? '+' : ''}
+                                                                                {standing.pointBalance}
+                                                                            </p>
+                                                                        </div>
+                                                                        <div className="rounded-md bg-ancb-blue/10 dark:bg-ancb-blue/20 px-2 py-1.5 flex items-center justify-between gap-2">
+                                                                            <p className="font-bold uppercase tracking-[0.08em] text-ancb-blue dark:text-blue-300">Pts</p>
+                                                                            <p className="font-black text-ancb-blue dark:text-blue-300">{standing.totalPoints}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
 
-                                                                const pointBalance = pointsFor - pointsAgainst;
-                                                                // Points: Win = 2, Draw = 1, Loss = 0 (or configure as needed)
-                                                                const totalPoints = wins * 2 + draws * 1;
-
-                                                                return {
-                                                                    team,
-                                                                    gamesPlayed: teamGames.length,
-                                                                    wins,
-                                                                    losses,
-                                                                    pointsFor,
-                                                                    pointsAgainst,
-                                                                    pointBalance,
-                                                                    totalPoints
-                                                                };
-                                                            })
-                                                            // Sort by: Total Points (desc) > Point Balance (desc)
-                                                            .sort((a, b) => {
-                                                                if (b.totalPoints !== a.totalPoints) {
-                                                                    return b.totalPoints - a.totalPoints;
-                                                                }
-                                                                return b.pointBalance - a.pointBalance;
-                                                            });
-
-                                                            return standings.map((standing, idx) => (
-                                                                <tr key={standing.team.id} className="hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
-                                                                    <td className="p-3 font-black text-center text-ancb-orange">{idx + 1}º</td>
-                                                                    <td className="p-3 font-bold text-gray-800 dark:text-gray-200">{standing.team.nomeTime}</td>
-                                                                    <td className="p-3 text-center">{standing.gamesPlayed}</td>
-                                                                    <td className="p-3 text-center text-green-600 font-bold">{standing.wins}</td>
-                                                                    <td className="p-3 text-center text-red-600 font-bold">{standing.losses}</td>
-                                                                    <td className="p-3 text-center font-semibold">
-                                                                        <span className={standing.pointBalance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                                                            {standing.pointBalance >= 0 ? '+' : ''}{standing.pointBalance}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td className="p-3 text-center font-black text-ancb-blue">{standing.totalPoints}</td>
+                                                        <table className="hidden md:table w-full text-sm text-left">
+                                                            <thead className="bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-300 font-bold uppercase text-xs">
+                                                                <tr>
+                                                                    <th className="p-3">Pos</th>
+                                                                    <th className="p-3">Time</th>
+                                                                    <th className="p-3 text-center">J</th>
+                                                                    <th className="p-3 text-center">V</th>
+                                                                    <th className="p-3 text-center">D</th>
+                                                                    <th className="p-3 text-center">Saldo</th>
+                                                                    <th className="p-3 text-center font-black">Pts</th>
                                                                 </tr>
-                                                            ));
-                                                        })()
-                                                    ) : (
-                                                        <tr><td colSpan={7} className="p-4 text-center text-gray-500">Sem dados.</td></tr>
-                                                    )}
-                                                </tbody>
-                                            </table>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                                {fallbackStandings.standings.map((standing) => (
+                                                                    <tr key={standing.team.id} className="hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
+                                                                        <td className="p-3 font-black text-center text-ancb-orange">{standing.position}º</td>
+                                                                        <td className="p-3 font-bold text-gray-800 dark:text-gray-200">{standing.team.nomeTime}</td>
+                                                                        <td className="p-3 text-center">{standing.gamesPlayed}</td>
+                                                                        <td className="p-3 text-center text-green-600 font-bold">{standing.wins}</td>
+                                                                        <td className="p-3 text-center text-red-600 font-bold">{standing.losses}</td>
+                                                                        <td className="p-3 text-center font-semibold">
+                                                                            <span className={standing.pointBalance >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                                                                {standing.pointBalance >= 0 ? '+' : ''}{standing.pointBalance}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="p-3 text-center font-black text-ancb-blue">{standing.totalPoints}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </>
+                                                ) : (
+                                                    <div className="p-4 text-center text-gray-500">Sem dados.</div>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })()
