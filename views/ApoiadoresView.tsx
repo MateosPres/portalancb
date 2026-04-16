@@ -13,6 +13,7 @@ interface Apoiador {
     descricao?: string;
     destaque?: boolean;
     ordem?: number;
+    ativo?: boolean;
 }
 
 interface ApoiadoresViewProps {
@@ -107,7 +108,8 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
             setApoiadores(snap.docs.map(doc => ({ 
                 id: doc.id, 
                 ...doc.data(),
-                ordem: doc.data().ordem ?? 999
+                ordem: doc.data().ordem ?? 999,
+                ativo: doc.data().ativo !== false,
             } as Apoiador)));
             setLoading(false);
         });
@@ -234,8 +236,9 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
     const logoOpacity = isDark ? '0.65' : '0.6';
 
     // Manter a lógica de destacados, mas já ordenado por 'ordem'
-    const destacados = apoiadores.filter(a => a.destaque);
-    const demais = apoiadores.filter(a => !a.destaque);
+    const apoiadoresVisiveis = apoiadores.filter(a => a.ativo !== false);
+    const destacados = apoiadoresVisiveis.filter(a => a.destaque);
+    const demais = apoiadoresVisiveis.filter(a => !a.destaque);
     const todosParaExibir = [...destacados, ...demais];
     return (
         <div className="animate-fadeIn pb-16">
@@ -330,7 +333,7 @@ export const ApoiadoresView: React.FC<ApoiadoresViewProps> = ({ onBack, userProf
 
                     <div className="flex items-center gap-4 pt-4 border-t border-white/10">
                         <div className="text-center">
-                            <span className="block text-xl font-black text-white">{apoiadores.length}</span>
+                            <span className="block text-xl font-black text-white">{apoiadoresVisiveis.length}</span>
                             <span className="text-[10px] text-white/50 uppercase font-bold tracking-wide">Apoiadores</span>
                         </div>
                         <div className="w-px h-7 bg-white/15" />

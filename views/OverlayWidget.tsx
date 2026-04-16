@@ -10,7 +10,10 @@ type OverlayApoiador = {
   logo?: string;
   logoBase64?: string;
   ordem?: number;
+  ativo?: boolean;
 };
+
+const isApoiadorAtivo = (apoiador: OverlayApoiador) => apoiador.ativo !== false;
 
 type EventoOverlay = Evento & {
   apoiadores?: OverlayApoiador[];
@@ -152,7 +155,9 @@ export const OverlayWidget: React.FC = () => {
     const apoiadoresRef = collection(db, 'apoiadores');
     const apoiadoresQuery = query(apoiadoresRef, orderBy('ordem', 'asc'));
     const unsub = onSnapshot(apoiadoresQuery, (snap) => {
-      const list = snap.docs.map((item) => ({ id: item.id, ...item.data() } as OverlayApoiador));
+      const list = snap.docs
+        .map((item) => ({ id: item.id, ...item.data(), ativo: item.data().ativo !== false } as OverlayApoiador))
+        .filter(isApoiadorAtivo);
       setFallbackApoiadores(list);
     });
 
@@ -165,6 +170,7 @@ export const OverlayWidget: React.FC = () => {
       : fallbackApoiadores;
 
     return source
+      .filter(isApoiadorAtivo)
       .slice()
       .sort((a, b) => (a.ordem ?? 999) - (b.ordem ?? 999));
   }, [evento?.apoiadores, fallbackApoiadores]);

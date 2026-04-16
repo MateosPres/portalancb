@@ -29,6 +29,19 @@ interface AdminViewProps {
     userProfile?: UserProfile | null;
 }
 
+interface ApoiadorAdmin {
+    id: string;
+    nome: string;
+    logoBase64: string;
+    site?: string;
+    descricao?: string;
+    destaque?: boolean;
+    ordem?: number;
+    ativo?: boolean;
+}
+
+const isApoiadorAtivo = (apoiador: ApoiadorAdmin) => apoiador.ativo !== false;
+
 export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, userProfile }) => {
     const [adminTab, setAdminTab] = useState<'home' | 'posts' | 'users' | 'apoiadores' | 'live' | 'reviews' | 'badges' | 'midia'>('home');
     const restrictedTabs: Array<'users' | 'reviews' | 'badges'> = ['users', 'reviews', 'badges'];
@@ -89,12 +102,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [isSyncingContactEmails, setIsSyncingContactEmails] = useState(false);
 
     // --- APOIADORES STATE ---
-    const [apoiadores, setApoiadores] = useState<any[]>([]);
+    const [apoiadores, setApoiadores] = useState<ApoiadorAdmin[]>([]);
     const [showApoiadorForm, setShowApoiadorForm] = useState(false);
     const [apoiadorNome, setApoiadorNome] = useState('');
     const [apoiadorSite, setApoiadorSite] = useState('');
     const [apoiadorDescricao, setApoiadorDescricao] = useState('');
     const [apoiadorDestaque, setApoiadorDestaque] = useState(false);
+    const [apoiadorAtivo, setApoiadorAtivo] = useState(true);
     const [apoiadorLogoFile, setApoiadorLogoFile] = useState<File | null>(null);
     const [apoiadorLogoPreview, setApoiadorLogoPreview] = useState<string | null>(null);
     const [isSavingApoiador, setIsSavingApoiador] = useState(false);
@@ -135,30 +149,36 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         });
 
         const unsubApoiadores = db.collection('apoiadores').onSnapshot(async snap => {
-            const docsData = snap.docs.map((doc, index) => ({ 
-                id: doc.id, 
-                ...doc.data(),
-            } as any));
+            const docsData = snap.docs.map((doc, index) => {
+                const data = doc.data() as Partial<ApoiadorAdmin>;
+                return {
+                    id: doc.id,
+                    ...data,
+                    ordem: data.ordem ?? index,
+                    ativo: data.ativo !== false,
+                } as ApoiadorAdmin;
+            });
 
-            // Verificar se algum documento não tem 'ordem'
-            const needsMigration = docsData.some(doc => (doc as any).ordem === undefined);
-            
-            if (needsMigration) {
-                // Migrar: adicionar campo 'ordem' aos documentos que não têm
-                const updates = docsData
-                    .filter(doc => doc.ordem === undefined)
-                    .map((doc, idx) => 
-                        db.collection('apoiadores').doc(doc.id).update({ 
-                            ordem: docsData.findIndex(d => d.id === doc.id) 
-                        })
-                    );
-                    
-                if (updates.length > 0) {
-                    await Promise.all(updates);
+            const updates = snap.docs.flatMap((doc, index) => {
+                const data = doc.data() as Partial<ApoiadorAdmin>;
+                const payload: Partial<ApoiadorAdmin> = {};
+
+                if (data.ordem === undefined) {
+                    payload.ordem = index;
                 }
+
+                if (data.ativo === undefined) {
+                    payload.ativo = true;
+                }
+
+                if (Object.keys(payload).length === 0) return [];
+                return [db.collection('apoiadores').doc(doc.id).update(payload)];
+            });
+
+            if (updates.length > 0) {
+                await Promise.all(updates);
             }
 
-            // Ordenar por 'ordem' ou by index se não existir
             const sorted = docsData.sort((a, b) => (a.ordem ?? 999) - (b.ordem ?? 999));
             setApoiadores(sorted);
         });
@@ -302,18 +322,20 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         setApoiadorSite('');
         setApoiadorDescricao('');
         setApoiadorDestaque(false);
+        setApoiadorAtivo(true);
         setApoiadorLogoFile(null);
         setApoiadorLogoPreview(null);
         setEditingApoiadorId(null);
         setShowApoiadorForm(false);
     };
 
-    const handleEditApoiador = (apoiador: any) => {
+    const handleEditApoiador = (apoiador: ApoiadorAdmin) => {
         setEditingApoiadorId(apoiador.id);
         setApoiadorNome(apoiador.nome || '');
         setApoiadorSite(apoiador.site || '');
         setApoiadorDescricao(apoiador.descricao || '');
         setApoiadorDestaque(Boolean(apoiador.destaque));
+        setApoiadorAtivo(isApoiadorAtivo(apoiador));
         setApoiadorLogoFile(null);
         setApoiadorLogoPreview(apoiador.logoBase64 || null);
         setShowApoiadorForm(true);
@@ -332,6 +354,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                 site: apoiadorSite,
                 descricao: apoiadorDescricao,
                 destaque: apoiadorDestaque,
+                ativo: apoiadorAtivo,
                 atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
             };
 
@@ -366,6 +389,20 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         await db.collection('apoiadores').doc(id).update({ destaque: !atual });
     };
 
+    const handleToggleApoiadorAtivo = async (apoiador: ApoiadorAdmin) => {
+        const vaiFicarAtivo = !isApoiadorAtivo(apoiador);
+        const maxEnabledOrder = apoiadores
+            .filter(isApoiadorAtivo)
+            .reduce((max, item) => Math.max(max, item.ordem ?? -1), -1);
+        const maxOverallOrder = apoiadores.reduce((max, item) => Math.max(max, item.ordem ?? -1), -1);
+
+        await db.collection('apoiadores').doc(apoiador.id).update({
+            ativo: vaiFicarAtivo,
+            ordem: vaiFicarAtivo ? maxEnabledOrder + 1 : maxOverallOrder + 1,
+            atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+    };
+
     const handleDragStartApoiador = (id: string) => {
         setDraggedApoiador(id);
     };
@@ -374,34 +411,155 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         e.preventDefault();
     };
 
+    const persistApoiadoresOrder = (orderedApoiadores: ApoiadorAdmin[]) => {
+        return Promise.all(
+            orderedApoiadores.map((apoiador, idx) =>
+                db.collection('apoiadores').doc(apoiador.id).update({ ordem: idx })
+            )
+        );
+    };
+
     const handleDropApoiador = (targetIndex: number) => {
         if (!draggedApoiador) return;
-        const draggedIndex = apoiadores.findIndex((a: any) => a.id === draggedApoiador);
-        if (draggedIndex === targetIndex) {
+        const enabledApoiadores = apoiadores.filter(isApoiadorAtivo);
+        const draggedIndex = enabledApoiadores.findIndex((a) => a.id === draggedApoiador);
+        if (draggedIndex < 0 || draggedIndex === targetIndex) {
             setDraggedApoiador(null);
             return;
         }
-        const newOrder = [...apoiadores];
+        const newOrder = [...enabledApoiadores];
         const [draggedItem] = newOrder.splice(draggedIndex, 1);
         newOrder.splice(targetIndex, 0, draggedItem);
         
-        // Update order in Firestore
-        Promise.all(newOrder.map((a, idx) => 
-            db.collection('apoiadores').doc(a.id).update({ ordem: idx })
-        )).catch(() => alert('Erro ao reordenar'));
+        persistApoiadoresOrder(newOrder).catch(() => alert('Erro ao reordenar'));
         
         setDraggedApoiador(null);
     };
 
     const moveApoiadorUp = (index: number) => {
         if (index === 0) return;
-        handleDropApoiador(index - 1);
+        const enabledApoiadores = [...apoiadores.filter(isApoiadorAtivo)];
+        [enabledApoiadores[index - 1], enabledApoiadores[index]] = [enabledApoiadores[index], enabledApoiadores[index - 1]];
+        persistApoiadoresOrder(enabledApoiadores).catch(() => alert('Erro ao reordenar'));
     };
 
     const moveApoiadorDown = (index: number) => {
-        if (index === apoiadores.length - 1) return;
-        handleDropApoiador(index + 1);
+        const enabledApoiadores = [...apoiadores.filter(isApoiadorAtivo)];
+        if (index === enabledApoiadores.length - 1) return;
+        [enabledApoiadores[index], enabledApoiadores[index + 1]] = [enabledApoiadores[index + 1], enabledApoiadores[index]];
+        persistApoiadoresOrder(enabledApoiadores).catch(() => alert('Erro ao reordenar'));
     };
+
+    const apoiadoresHabilitados = useMemo(() => apoiadores.filter(isApoiadorAtivo), [apoiadores]);
+    const apoiadoresDesabilitados = useMemo(() => apoiadores.filter((apoiador) => !isApoiadorAtivo(apoiador)), [apoiadores]);
+
+    const renderApoiadorRow = (a: ApoiadorAdmin, index: number, isEnabledSection: boolean) => (
+        <div
+            key={a.id}
+            draggable={isEnabledSection}
+            onDragStart={isEnabledSection ? () => handleDragStartApoiador(a.id) : undefined}
+            onDragOver={isEnabledSection ? handleDragOverApoiador : undefined}
+            onDrop={isEnabledSection ? () => handleDropApoiador(index) : undefined}
+            className={`flex items-center gap-3 bg-white dark:bg-gray-800 rounded-xl border p-3 shadow-sm hover:shadow-md transition-all ${
+                draggedApoiador === a.id ? 'opacity-50 scale-95' : ''
+            } ${
+                isEnabledSection
+                    ? 'border-gray-100 dark:border-gray-700'
+                    : 'border-gray-200 dark:border-gray-700/80 opacity-80'
+            }`}
+        >
+            <div className={`flex-shrink-0 ${isEnabledSection ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}>
+                <LucideGripVertical size={20} className={isEnabledSection ? 'text-gray-400' : 'text-gray-300 dark:text-gray-600'} />
+            </div>
+
+            <div
+                className="w-14 h-14 rounded-xl bg-transparent flex items-center justify-center flex-shrink-0"
+                style={{
+                    backgroundImage: `url('${a.logoBase64}')`,
+                    backgroundSize: 'contain',
+                    backgroundPosition: 'center',
+                    backgroundRepeat: 'no-repeat'
+                }}
+            />
+
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="font-bold text-sm text-gray-900 dark:text-white">{a.nome}</p>
+                    {a.destaque && (
+                        <span className="text-[9px] font-black bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                            ⭐ Destaque
+                        </span>
+                    )}
+                    {!isEnabledSection && (
+                        <span className="text-[9px] font-black bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                            Desabilitado
+                        </span>
+                    )}
+                </div>
+                {a.site && <p className="text-[11px] text-ancb-blue dark:text-blue-400 truncate">{a.site}</p>}
+                {a.descricao && <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{a.descricao}</p>}
+            </div>
+
+            <div className="flex gap-1.5 flex-shrink-0">
+                <button
+                    onClick={() => handleEditApoiador(a)}
+                    className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all"
+                    title="Editar apoiador"
+                >
+                    <LucideEdit2 size={14} />
+                </button>
+
+                {isEnabledSection && (
+                    <>
+                        <button
+                            onClick={() => moveApoiadorUp(index)}
+                            disabled={index === 0}
+                            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Mover para cima"
+                        >
+                            <LucideArrowUp size={18} className="text-gray-700 dark:text-gray-300" />
+                        </button>
+
+                        <button
+                            onClick={() => moveApoiadorDown(index)}
+                            disabled={index === apoiadoresHabilitados.length - 1}
+                            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Mover para baixo"
+                        >
+                            <LucideArrowDown size={18} className="text-gray-700 dark:text-gray-300" />
+                        </button>
+                    </>
+                )}
+
+                <button
+                    onClick={() => handleToggleDestaque(a.id, a.destaque || false)}
+                    title={a.destaque ? 'Remover destaque' : 'Marcar como destaque'}
+                    className={`p-2 rounded-lg text-sm transition-all ${a.destaque ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 hover:text-yellow-500'}`}
+                >
+                    ⭐
+                </button>
+
+                <button
+                    onClick={() => handleToggleApoiadorAtivo(a)}
+                    title={isEnabledSection ? 'Desabilitar apoiador' : 'Habilitar apoiador'}
+                    className={`p-2 rounded-lg transition-all ${
+                        isEnabledSection
+                            ? 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+                            : 'bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400'
+                    }`}
+                >
+                    {isEnabledSection ? <LucideX size={14} /> : <LucideCheck size={14} />}
+                </button>
+
+                <button
+                    onClick={() => handleDeleteApoiador(a.id, a.nome)}
+                    className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 transition-all"
+                >
+                    <LucideTrash2 size={14} />
+                </button>
+            </div>
+        </div>
+    );
 
     // Super Admin Functions
     const handlePromoteUser = async (user: UserProfile) => {
@@ -489,13 +647,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         try {
             const batch = db.batch();
             const newPlayerRef = db.collection("jogadores").doc();
+            const userRef = db.collection("usuarios").doc(user.uid);
             const canonicalEmail = String((user as any).email || (user as any).emailContato || '').trim();
             const userPhoto = (user as any).foto || null;
             const playerData: any = {
                 nome: user.nome,
                 apelido: user.apelido || '',
                 posicao: (user as any).posicaoPreferida || 'Ala (3)',
-                numero_uniforme: (user as any).numeroPreferido || 0,
+                numero_uniforme: Number((user as any).numeroPreferido || 0),
                 telefone: normalizePhoneForStorage((user as any).whatsapp || (user as any).telefone || ''),
                 nascimento: (user as any).dataNascimento || '',
                 cpf: normalizeCpfForStorage((user as any).cpf || ''),
@@ -507,85 +666,42 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             };
 
             batch.set(newPlayerRef, playerData);
-            const userRef = db.collection("usuarios").doc(user.uid);
-            batch.update(userRef, { status: 'active', linkedPlayerId: newPlayerRef.id, email: canonicalEmail, emailContato: canonicalEmail });
-            await batch.commit();
-            alert("Usuário aprovado e perfil criado!");
-        } catch (error) {
-            alert("Erro.");
-        }
-    };
-
-    const handleAutoLinkUser = async (user: UserProfile, targetPlayerId: string) => {
-        if (!window.confirm(`Vincular?`)) return;
-        try {
-            const batch = db.batch();
-            const userRef = db.collection("usuarios").doc(user.uid);
-            const playerRef = db.collection("jogadores").doc(targetPlayerId);
-            const canonicalEmail = String((user as any).email || (user as any).emailContato || '').trim();
-            const userPhoto = (user as any).foto || null;
-
-            batch.update(userRef, { linkedPlayerId: targetPlayerId, status: 'active', email: canonicalEmail, emailContato: canonicalEmail });
-            batch.update(playerRef, {
-                userId: user.uid,
+            batch.update(userRef, {
+                linkedPlayerId: newPlayerRef.id,
                 status: 'active',
                 email: canonicalEmail,
                 emailContato: canonicalEmail,
-                ...(userPhoto ? { foto: userPhoto } : {})
             });
+
             await batch.commit();
-            alert("Vinculado!");
+            alert('Usuário aprovado e atleta criado com sucesso.');
         } catch (error) {
-            alert("Erro.");
+            alert('Erro ao aprovar usuário.');
         }
     };
 
-    const handleLinkPlayerToUser = async () => {
-        if (!selectedUser || !linkPlayerId) return;
-        try {
-            const batch = db.batch();
-            const userRef = db.collection("usuarios").doc(selectedUser.uid);
-            const playerRef = db.collection("jogadores").doc(linkPlayerId);
-            const canonicalEmail = String((selectedUser as any).email || (selectedUser as any).emailContato || '').trim();
-            const userPhoto = (selectedUser as any).foto || null;
-
-            batch.update(userRef, { linkedPlayerId: linkPlayerId, status: 'active', email: canonicalEmail, emailContato: canonicalEmail });
-            batch.update(playerRef, {
-                userId: selectedUser.uid,
-                status: 'active',
-                email: canonicalEmail,
-                emailContato: canonicalEmail,
-                ...(userPhoto ? { foto: userPhoto } : {})
-            });
-            await batch.commit();
-            setShowUserEditModal(false);
-            alert("Vínculo realizado!");
-        } catch (error) {
-            alert("Erro.");
-        }
-    };
     const handleUserPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!selectedUser) return;
-        if (!e.target.files || !e.target.files[0]) return;
+        const file = e.target.files?.[0];
+        if (!file || !selectedUser) return;
 
         setIsSavingUserPhoto(true);
         try {
-            const compressed = await compressImage(e.target.files[0]);
+            const compressed = await compressImage(file);
             const photoBase64 = await fileToBase64(compressed);
 
-            const userRef = db.collection("usuarios").doc(selectedUser.uid);
-            await userRef.set({ foto: photoBase64 }, { merge: true });
+            await db.collection('usuarios').doc(selectedUser.uid).update({ foto: photoBase64 });
 
-            const linkedPlayerId = selectedUser.linkedPlayerId;
-            if (linkedPlayerId) {
-                await db.collection("jogadores").doc(linkedPlayerId).set({ foto: photoBase64 }, { merge: true });
+            if (selectedUser.linkedPlayerId) {
+                await db.collection('jogadores').doc(selectedUser.linkedPlayerId).set({ foto: photoBase64 }, { merge: true });
             }
 
             setUserPhotoPreview(photoBase64);
             setSelectedUser({ ...selectedUser, foto: photoBase64 });
-            alert('Foto do usuário atualizada.');
+            if (selectedUserDetails?.uid === selectedUser.uid) {
+                setSelectedUserDetails({ ...selectedUserDetails, foto: photoBase64 });
+            }
         } catch (error) {
-            alert('Erro ao atualizar foto do usuário.');
+            alert('Erro ao salvar foto do usuário.');
         } finally {
             setIsSavingUserPhoto(false);
             e.target.value = '';
@@ -594,20 +710,21 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
 
     const handleRemoveUserPhoto = async () => {
         if (!selectedUser) return;
-        if (!window.confirm(`Remover foto de ${selectedUser.nome}?`)) return;
+        if (!window.confirm(`Remover a foto de ${selectedUser.nome}?`)) return;
 
         setIsSavingUserPhoto(true);
         try {
-            const userRef = db.collection("usuarios").doc(selectedUser.uid);
-            await userRef.set({ foto: null }, { merge: true });
+            await db.collection('usuarios').doc(selectedUser.uid).update({ foto: null });
 
-            const linkedPlayerId = selectedUser.linkedPlayerId;
-            if (linkedPlayerId) {
-                await db.collection("jogadores").doc(linkedPlayerId).set({ foto: '' }, { merge: true });
+            if (selectedUser.linkedPlayerId) {
+                await db.collection('jogadores').doc(selectedUser.linkedPlayerId).set({ foto: '' }, { merge: true });
             }
 
             setUserPhotoPreview('');
             setSelectedUser({ ...selectedUser, foto: null });
+            if (selectedUserDetails?.uid === selectedUser.uid) {
+                setSelectedUserDetails({ ...selectedUserDetails, foto: null });
+            }
             alert('Foto do usuário removida.');
         } catch (error) {
             alert('Erro ao remover foto do usuário.');
@@ -615,6 +732,90 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             setIsSavingUserPhoto(false);
         }
     };
+
+    const linkUserToPlayer = async (user: UserProfile, playerId: string) => {
+        const player = activePlayers.find((item) => item.id === playerId);
+        if (!player) {
+            alert('Atleta selecionado não encontrado.');
+            return false;
+        }
+
+        const targetPlayerRef = db.collection('jogadores').doc(playerId);
+        const currentUserRef = db.collection('usuarios').doc(user.uid);
+        const canonicalEmail = String((user as any).email || (user as any).emailContato || '').trim();
+        const userPhoto = (user as any).foto || null;
+
+        try {
+            const targetPlayerSnap = await targetPlayerRef.get();
+            const targetPlayerData = targetPlayerSnap.data() as any;
+            const currentLinkedUserId = String(targetPlayerData?.userId || '').trim();
+
+            if (currentLinkedUserId && currentLinkedUserId !== user.uid) {
+                alert('Este atleta já está vinculado a outro usuário.');
+                return false;
+            }
+
+            const batch = db.batch();
+
+            if (user.linkedPlayerId && user.linkedPlayerId !== playerId) {
+                const previousPlayerRef = db.collection('jogadores').doc(user.linkedPlayerId);
+                batch.set(previousPlayerRef, { userId: null }, { merge: true });
+            }
+
+            batch.set(targetPlayerRef, {
+                userId: user.uid,
+                status: 'active',
+                email: canonicalEmail || (targetPlayerData?.email || ''),
+                emailContato: canonicalEmail || (targetPlayerData?.emailContato || ''),
+                foto: userPhoto || (targetPlayerData?.foto || ''),
+            }, { merge: true });
+
+            batch.set(currentUserRef, {
+                linkedPlayerId: playerId,
+                status: 'active',
+                email: canonicalEmail,
+                emailContato: canonicalEmail,
+            }, { merge: true });
+
+            await batch.commit();
+            return true;
+        } catch (error) {
+            alert('Erro ao vincular usuário ao atleta.');
+            return false;
+        }
+    };
+
+    const handleAutoLinkUser = async (user: UserProfile, playerId: string) => {
+        if (!window.confirm(`Vincular ${user.nome} ao atleta sugerido?`)) return;
+        const linked = await linkUserToPlayer(user, playerId);
+        if (linked) {
+            alert('Usuário vinculado com sucesso.');
+        }
+    };
+
+    const handleLinkPlayerToUser = async () => {
+        if (!selectedUser) {
+            alert('Nenhum usuário selecionado.');
+            return;
+        }
+
+        if (!linkPlayerId) {
+            alert('Selecione um atleta para vincular.');
+            return;
+        }
+
+        const linked = await linkUserToPlayer(selectedUser, linkPlayerId);
+        if (!linked) return;
+
+        const updatedSelectedUser = { ...selectedUser, linkedPlayerId: linkPlayerId };
+        setSelectedUser(updatedSelectedUser);
+        if (selectedUserDetails?.uid === selectedUser.uid) {
+            setSelectedUserDetails({ ...selectedUserDetails, linkedPlayerId: linkPlayerId });
+        }
+        setShowUserEditModal(false);
+        alert('Vínculo salvo com sucesso.');
+    };
+
     const handleDeleteUser = async (user: UserProfile) => { if (!window.confirm(`Excluir usuário ${user.nome}?`)) return; try { const batch = db.batch(); const userRef = db.collection("usuarios").doc(user.uid); batch.delete(userRef); if (user.linkedPlayerId) { const playerRef = db.collection("jogadores").doc(user.linkedPlayerId); const playerSnap = await playerRef.get(); if (playerSnap.exists) { batch.update(playerRef, { userId: null }); } } await batch.commit(); alert("Usuário excluído."); } catch (error) { alert("Erro."); } };
 
     const handleSyncLegacyContactEmails = async () => {
@@ -1784,7 +1985,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                     <div className="flex items-center justify-between">
                         <div>
                             <h3 className="text-lg font-black text-gray-900 dark:text-white">Apoiadores</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{apoiadores.length} cadastrado(s) • Arraste para reordenar</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{apoiadoresHabilitados.length} habilitado(s) • {apoiadoresDesabilitados.length} desabilitado(s)</p>
                         </div>
                         <button
                             onClick={() => setShowApoiadorForm(true)}
@@ -1794,101 +1995,56 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                         </button>
                     </div>
 
-                    {/* Lista com Drag & Drop */}
-                    <div className="space-y-2">
-                        {apoiadores.length === 0 && (
-                            <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
-                                <LucideHeart size={36} className="mx-auto text-gray-300 mb-3" />
-                                <p className="text-gray-400 text-sm font-medium">Nenhum apoiador cadastrado ainda.</p>
-                                <p className="text-gray-400 text-xs mt-1">Clique em "Novo Apoiador" para começar.</p>
+                    <div className="space-y-2 rounded-2xl border border-green-100 dark:border-green-900/40 bg-green-50/50 dark:bg-green-950/10 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">Habilitados no portal</h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Aparecem no carrossel, na página Nossa História e no overlay.</p>
                             </div>
-                        )}
-                        {apoiadores.map((a: any, index: number) => (
-                            <div
-                                key={a.id}
-                                draggable
-                                onDragStart={() => handleDragStartApoiador(a.id)}
-                                onDragOver={handleDragOverApoiador}
-                                onDrop={() => handleDropApoiador(index)}
-                                className={`flex items-center gap-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 shadow-sm hover:shadow-md transition-all ${
-                                    draggedApoiador === a.id ? 'opacity-50 scale-95' : ''
-                                }`}
-                            >
-                                {/* Grip Handle */}
-                                <div className="cursor-grab active:cursor-grabbing flex-shrink-0">
-                                    <LucideGripVertical size={20} className="text-gray-400" />
+                            <span className="text-xs font-black text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2.5 py-1 rounded-full">
+                                {apoiadoresHabilitados.length}
+                            </span>
+                        </div>
+
+                        <div className="space-y-2">
+                            {apoiadoresHabilitados.length === 0 && (
+                                <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
+                                    <LucideHeart size={36} className="mx-auto text-gray-300 mb-3" />
+                                    <p className="text-gray-400 text-sm font-medium">Nenhum apoiador habilitado no momento.</p>
+                                    <p className="text-gray-400 text-xs mt-1">Habilite um apoiador para voltar a exibí-lo no portal.</p>
                                 </div>
+                            )}
+                            {apoiadoresHabilitados.map((a, index) => renderApoiadorRow(a, index, true))}
+                        </div>
+                    </div>
 
-                                {/* Logo */}
-                                <div
-            className="w-14 h-14 rounded-xl bg-transparent flex items-center justify-center flex-shrink-0"
-            style={{
-                backgroundImage: `url('${a.logoBase64}')`,
-                backgroundSize: 'contain',
-                backgroundPosition: 'center',
-                backgroundRepeat: 'no-repeat'
-            }}
-        />
-
-                                {/* Info */}
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                        <p className="font-bold text-sm text-gray-900 dark:text-white">{a.nome}</p>
-                                        {a.destaque && (
-                                            <span className="text-[9px] font-black bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
-                                                ⭐ Destaque
-                                            </span>
-                                        )}
-                                    </div>
-                                    {a.site && <p className="text-[11px] text-ancb-blue dark:text-blue-400 truncate">{a.site}</p>}
-                                    {a.descricao && <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{a.descricao}</p>}
-                                </div>
-
-                                {/* Ações */}
-                                <div className="flex gap-1.5 flex-shrink-0">
-                                    <button
-                                        onClick={() => handleEditApoiador(a)}
-                                        className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all"
-                                        title="Editar apoiador"
-                                    >
-                                        <LucideEdit2 size={14} />
-                                    </button>
-
-                                    <button
-                                        onClick={() => moveApoiadorUp(index)}
-                                        disabled={index === 0}
-                                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                                        title="Mover para cima"
-                                    >
-                                        <LucideArrowUp size={18} className="text-gray-700 dark:text-gray-300" />
-                                    </button>
-
-                                    <button
-                                        onClick={() => moveApoiadorDown(index)}
-                                        disabled={index === apoiadores.length - 1}
-                                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                                        title="Mover para baixo"
-                                    >
-                                        <LucideArrowDown size={18} className="text-gray-700 dark:text-gray-300" />
-                                    </button>
-
-                                    <button
-                                        onClick={() => handleToggleDestaque(a.id, a.destaque || false)}
-                                        title={a.destaque ? 'Remover destaque' : 'Marcar como destaque'}
-                                        className={`p-2 rounded-lg text-sm transition-all ${a.destaque ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 hover:text-yellow-500'}`}
-                                    >
-                                        ⭐
-                                    </button>
-
-                                    <button
-                                        onClick={() => handleDeleteApoiador(a.id, a.nome)}
-                                        className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 transition-all"
-                                    >
-                                        <LucideTrash2 size={14} />
-                                    </button>
-                                </div>
+                    <div className="space-y-2 rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-900/40 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">Desabilitados</h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Ficam arquivados no admin e não aparecem em nenhum lugar do portal.</p>
                             </div>
-                        ))}
+                            <span className="text-xs font-black text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-800 px-2.5 py-1 rounded-full">
+                                {apoiadoresDesabilitados.length}
+                            </span>
+                        </div>
+
+                        <div className="space-y-2">
+                            {apoiadores.length === 0 && (
+                                <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
+                                    <LucideHeart size={36} className="mx-auto text-gray-300 mb-3" />
+                                    <p className="text-gray-400 text-sm font-medium">Nenhum apoiador cadastrado ainda.</p>
+                                    <p className="text-gray-400 text-xs mt-1">Clique em \"Novo Apoiador\" para começar.</p>
+                                </div>
+                            )}
+                            {apoiadores.length > 0 && apoiadoresDesabilitados.length === 0 && (
+                                <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
+                                    <p className="text-gray-400 text-sm font-medium">Nenhum apoiador desabilitado.</p>
+                                    <p className="text-gray-400 text-xs mt-1">Use o botão de desabilitar para arquivar apoiadores sem removê-los.</p>
+                                </div>
+                            )}
+                            {apoiadoresDesabilitados.map((a, index) => renderApoiadorRow(a, index, false))}
+                        </div>
                     </div>
 
                     {/* Modal Novo Apoiador */}
@@ -1974,6 +2130,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                         <div>
                                             <span className="text-sm font-bold text-yellow-700 dark:text-yellow-400">⭐ Marcar como Destaque</span>
                                             <p className="text-[10px] text-yellow-600 dark:text-yellow-500">Aparece com card grande na página de apoiadores</p>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center gap-3 bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-200 dark:border-green-800 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={apoiadorAtivo}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setApoiadorAtivo(e.target.checked)}
+                                            className="w-4 h-4 accent-green-600"
+                                        />
+                                        <div>
+                                            <span className="text-sm font-bold text-green-700 dark:text-green-400">Exibir no portal</span>
+                                            <p className="text-[10px] text-green-600 dark:text-green-500">Quando desabilitado, fica apenas no admin e sai do carrossel, da Nossa História e do overlay.</p>
                                         </div>
                                     </label>
 

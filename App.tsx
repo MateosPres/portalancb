@@ -181,7 +181,6 @@ const App: React.FC = () => {
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [ongoingEvents, setOngoingEvents] = useState<Evento[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isDarkMode, setIsDarkMode] = useState(false);
 
     // Auth Modals State
     const [showLogin, setShowLogin] = useState(false);
@@ -361,10 +360,8 @@ const App: React.FC = () => {
     }, [currentView]);
 
     useEffect(() => {
-        const savedTheme = localStorage.getItem('theme');
-        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        setIsDarkMode(savedTheme === 'dark' || (!savedTheme && systemPrefersDark));
-        document.documentElement.classList.toggle('dark', savedTheme === 'dark' || (!savedTheme && systemPrefersDark));
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
 
         const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
         setIsStandalone(isStandaloneMode);
@@ -1296,13 +1293,6 @@ const App: React.FC = () => {
     };
     const handleLogout = () => auth.signOut();
     
-    const handleToggleTheme = () => {
-        const newMode = !isDarkMode;
-        setIsDarkMode(newMode);
-        document.documentElement.classList.toggle('dark', newMode);
-        localStorage.setItem('theme', newMode ? 'dark' : 'light');
-    };
-
     const handleProfileClick = () => setCurrentView('profile');
     const handleAdminClick = () => setCurrentView('admin');
     const handleNossaHistoriaClick = () => setCurrentView('apoiadores');
@@ -1346,8 +1336,6 @@ const App: React.FC = () => {
         email: userProfile.email
     } : null;
 
-    console.log("DADOS DO HEADER:", headerUser);
-
     if (loading) return (
         <div className="fixed inset-0 bg-[#062553] flex flex-col items-center justify-center z-[9999]">
             <div className="relative mb-6">
@@ -1359,7 +1347,7 @@ const App: React.FC = () => {
     );
     
     return (
-        <div className="min-h-screen flex flex-col font-sans text-ancb-black dark:text-gray-100 bg-gray-50 dark:bg-gray-900 transition-colors">
+        <div className="min-h-screen flex flex-col font-sans text-gray-100 bg-gray-900 transition-colors">
             {!userProfile ? (
                 currentView === 'home' ? (
                     <div className="flex-grow">
@@ -1397,8 +1385,6 @@ const App: React.FC = () => {
                 <>
                     <Header 
                         user={headerUser} 
-                        isDarkMode={isDarkMode}
-                        onToggleTheme={handleToggleTheme}
                         onLogin={handleLogin} 
                         onRegister={handleOpenRegister}
                         onLogout={handleLogout}

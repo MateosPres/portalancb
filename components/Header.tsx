@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, User, LogIn, ClipboardList, Home, Shield, Moon, Sun, LogOut, Bell, Heart, UserPlus, Download, LucideCalendar, LucideUsers, LucideTrophy } from 'lucide-react';
+import { Menu, X, User, LogIn, ClipboardList, Home, Shield, LogOut, Bell, Heart, UserPlus, Download, LucideCalendar, LucideUsers, LucideTrophy } from 'lucide-react';
 import { NotificationItem } from '../types';
 
 const PRANCHETA_URL = "https://prancheta.ancb.app.br";
@@ -12,8 +12,6 @@ interface HeaderProps {
     role: string;
     email?: string 
   } | null;
-  isDarkMode: boolean;
-  onToggleTheme: () => void;
   onLogin: () => void;
   onRegister: () => void;
   onLogout: () => void;
@@ -34,8 +32,6 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ 
   user, 
-  isDarkMode, 
-  onToggleTheme, 
   onLogin, 
   onRegister,
   onLogout,

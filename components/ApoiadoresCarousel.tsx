@@ -8,6 +8,7 @@ interface Apoiador {
     logoBase64: string;
     site?: string;
     ordem: number;
+    ativo?: boolean;
 }
 
 interface ApoiadoresCarouselProps {
@@ -28,7 +29,11 @@ export const ApoiadoresCarousel: React.FC<ApoiadoresCarouselProps> = ({ onVerTod
 
     useEffect(() => {
         const unsub = db.collection('apoiadores').orderBy('ordem', 'asc').onSnapshot(snap => {
-            setApoiadores(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Apoiador)));
+            setApoiadores(
+                snap.docs
+                    .map(doc => ({ id: doc.id, ...doc.data(), ativo: doc.data().ativo !== false } as Apoiador))
+                    .filter((apoiador) => apoiador.ativo !== false)
+            );
         });
         return () => unsub();
     }, []);
