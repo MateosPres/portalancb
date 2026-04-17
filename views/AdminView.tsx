@@ -75,6 +75,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [editingPostId, setEditingPostId] = useState<string | null>(null);
     const [postSearch, setPostSearch] = useState('');
     const [postFilterType, setPostFilterType] = useState<'todos' | 'noticia' | 'placar' | 'aviso' | 'resultado_evento'>('todos');
+    const [editingPostOriginal, setEditingPostOriginal] = useState<FeedPost | null>(null);
 
     // Lists
     const [reviews, setReviews] = useState<any[]>([]);
@@ -115,6 +116,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [isSavingApoiador, setIsSavingApoiador] = useState(false);
     const [draggedApoiador, setDraggedApoiador] = useState<string | null>(null);
     const [editingApoiadorId, setEditingApoiadorId] = useState<string | null>(null);
+
+    // Auto post config
+    const [autoPostConfig, setAutoPostConfig] = useState({
+        game_post_enabled: true,
+        event_post_enabled: true,
+        game_post_titulo_template: '',
+        game_post_resumo_template: '',
+        event_post_titulo_template: '',
+        event_post_resumo_template: '',
+    });
+    const [savingAutoPostConfig, setSavingAutoPostConfig] = useState(false);
+    const [autoPostConfigLoaded, setAutoPostConfigLoaded] = useState(false);
 
     const isSuperAdmin = userProfile?.role === 'super-admin';
 
@@ -208,6 +221,39 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         };
     }, []);
 
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const doc = await db.collection('configuracoes').doc('auto_posts').get();
+                if (doc.exists) {
+                    const data = doc.data() as any;
+                    setAutoPostConfig({
+                        game_post_enabled: data.game_post_enabled !== false,
+                        event_post_enabled: data.event_post_enabled !== false,
+                        game_post_titulo_template: data.game_post_titulo_template || '',
+                        game_post_resumo_template: data.game_post_resumo_template || '',
+                        event_post_titulo_template: data.event_post_titulo_template || '',
+                        event_post_resumo_template: data.event_post_resumo_template || '',
+                    });
+                }
+            } finally {
+                setAutoPostConfigLoaded(true);
+            }
+        };
+        load();
+    }, []);
+
+    const saveAutoPostConfig = async () => {
+        setSavingAutoPostConfig(true);
+        try {
+            await db.collection('configuracoes').doc('auto_posts').set(autoPostConfig, { merge: true });
+        } catch {
+            alert('Erro ao salvar configurações de posts automáticos.');
+        } finally {
+            setSavingAutoPostConfig(false);
+        }
+    };
+
     const compressImage = async (file: File): Promise<File> => { const options = { maxSizeMB: 0.1, maxWidthOrHeight: 800, useWebWorker: true, fileType: 'image/webp' }; try { return await imageCompression(file, options); } catch (error) { return file; } };
     const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
     const isValidYoutubeUrl = (url: string): boolean => {
@@ -264,9 +310,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             }
             const payload: any = {
                 type: postType,
-                source: 'manual',
+                source: editingPostOriginal?.source ?? 'manual',
                 notifyPlayers: postType === 'aviso' ? postNotifyPlayers : false,
-                author_id: auth.currentUser.uid,
+                author_id: editingPostOriginal?.author_id ?? auth.currentUser.uid,
                 image_url: postType === 'aviso' ? null : imageUrl,
                 content: postContent,
             };
@@ -286,9 +332,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         } catch (error) { alert("Erro ao criar postagem."); } finally { setIsUploading(false); } 
     };
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; setPostImageFile(file); setImagePreview(URL.createObjectURL(file)); } };
-    const resetPostForm = () => { setPostType('noticia'); setPostTitle(''); setPostBody(''); setPostScoreAncb(''); setPostScoreAdv(''); setPostTeamAdv(''); setPostVideoLink(''); setPostNotifyPlayers(false); setPostEventId(''); setPostImageFile(null); setImagePreview(null); setEditingPostId(null); };
+    const resetPostForm = () => { setPostType('noticia'); setPostTitle(''); setPostBody(''); setPostScoreAncb(''); setPostScoreAdv(''); setPostTeamAdv(''); setPostVideoLink(''); setPostNotifyPlayers(false); setPostEventId(''); setPostImageFile(null); setImagePreview(null); setEditingPostId(null); setEditingPostOriginal(null); };
     const loadPostToForm = (post: FeedPost) => {
         setEditingPostId(post.id);
+        setEditingPostOriginal(post);
         setPostType(post.type === 'resultado_evento' ? 'resultado_evento' : post.type);
         setPostTitle(post.content?.titulo || '');
         setPostBody(post.content?.resumo || '');
@@ -1339,7 +1386,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             )}
 
             {/* TAB: POSTS */}
-            {adminTab === 'posts' && (
+            {adminTab === 'posts' && (<>
                 <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 animate-fadeIn">
                     <div className="xl:col-span-2 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 h-fit">
                         <div className="flex items-center justify-between mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
@@ -1442,9 +1489,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                     <div key={post.id} className="p-3 rounded-lg border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
                                         <div className="flex items-start justify-between gap-2">
                                             <div>
-                                                <p className="font-bold text-gray-800 dark:text-gray-200 text-sm">{post.content?.titulo || 'Sem título'}</p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{post.type.replace('_', ' ')} {(post as any).notifyPlayers ? '• notifica jogadores' : ''}</p>
-                                                {post.content?.resumo && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{post.content.resumo}</p>}
+                                                <p className="font-bold text-gray-800 dark:text-gray-200 text-sm">{post.content?.titulo || (post.type === 'placar' ? `Placar: ${post.content?.teamAName || 'ANCB'} x ${post.content?.teamBName || post.content?.time_adv || ''}` : 'Sem título')}</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                                                    {(post.type || 'post').replace('_', ' ')}
+                                                    {post.source && post.source !== 'manual' && <span className="ml-1 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-1.5 py-0.5 text-[10px] font-bold uppercase">automático</span>}
+                                                    {(post as any).notifyPlayers ? ' • notifica jogadores' : ''}
+                                                </p>
+                                                {post.type === 'placar' && post.content?.placar_ancb !== undefined && (
+                                                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300 mt-0.5">{post.content.teamAName || 'ANCB'} {post.content.placar_ancb} x {post.content.placar_adv} {post.content.teamBName || post.content.time_adv || ''}</p>
+                                                )}
+                                                {post.type !== 'placar' && post.content?.resumo && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{post.content.resumo}</p>}
                                             </div>
                                             <div className="flex gap-1">
                                                 <Button size="sm" variant="secondary" onClick={() => loadPostToForm(post)} className="!py-1 !px-2 text-xs"><LucideEdit size={14} /></Button>
@@ -1457,7 +1511,104 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                         )}
                     </div>
                 </div>
-            )}
+
+                {/* Posts Automáticos — config */}
+                <div className="xl:col-span-5 bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+                        <LucideZap size={18} /> Posts Automáticos
+                    </h3>
+                    {!autoPostConfigLoaded ? (
+                        <p className="text-sm text-gray-400">Carregando configurações...</p>
+                    ) : (
+                        <div className="space-y-5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                {/* Jogo finalizado */}
+                                <div className="space-y-3 rounded-xl border border-gray-100 dark:border-gray-700 p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="font-bold text-sm text-gray-800 dark:text-gray-200">🎮 Ao finalizar jogo</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">Post de placar criado automaticamente.</p>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" className="sr-only" checked={autoPostConfig.game_post_enabled} onChange={e => setAutoPostConfig(p => ({ ...p, game_post_enabled: e.target.checked }))} />
+                                            <div className={`relative w-10 h-5 rounded-full transition-colors ${autoPostConfig.game_post_enabled ? 'bg-ancb-blue' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                                                <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${autoPostConfig.game_post_enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                            </div>
+                                        </label>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Título</label>
+                                            <input
+                                                className="w-full p-2 text-sm border rounded-lg dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                                                placeholder="Padrão: {eventName} • {teamA} x {teamB}"
+                                                value={autoPostConfig.game_post_titulo_template}
+                                                onChange={e => setAutoPostConfig(p => ({ ...p, game_post_titulo_template: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Resumo</label>
+                                            <textarea
+                                                className="w-full p-2 text-sm border rounded-lg dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                                                placeholder="Opcional. Ex: {teamA} {scoreA} x {scoreB} {teamB} — {eventName}"
+                                                rows={2}
+                                                value={autoPostConfig.game_post_resumo_template}
+                                                onChange={e => setAutoPostConfig(p => ({ ...p, game_post_resumo_template: e.target.value }))}
+                                            />
+                                        </div>
+                                        <p className="text-[11px] text-gray-400 dark:text-gray-500">Variáveis: <span className="font-mono">&#123;eventName&#125; &#123;teamA&#125; &#123;teamB&#125; &#123;scoreA&#125; &#123;scoreB&#125; &#123;gameDate&#125;</span></p>
+                                    </div>
+                                </div>
+
+                                {/* Evento finalizado */}
+                                <div className="space-y-3 rounded-xl border border-gray-100 dark:border-gray-700 p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="font-bold text-sm text-gray-800 dark:text-gray-200">🏆 Ao finalizar evento</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">Post de resultado criado automaticamente.</p>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" className="sr-only" checked={autoPostConfig.event_post_enabled} onChange={e => setAutoPostConfig(p => ({ ...p, event_post_enabled: e.target.checked }))} />
+                                            <div className={`relative w-10 h-5 rounded-full transition-colors ${autoPostConfig.event_post_enabled ? 'bg-ancb-blue' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                                                <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${autoPostConfig.event_post_enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                            </div>
+                                        </label>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Título</label>
+                                            <input
+                                                className="w-full p-2 text-sm border rounded-lg dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                                                placeholder="Padrão: Resultado do Evento: {eventName}"
+                                                value={autoPostConfig.event_post_titulo_template}
+                                                onChange={e => setAutoPostConfig(p => ({ ...p, event_post_titulo_template: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Resumo</label>
+                                            <textarea
+                                                className="w-full p-2 text-sm border rounded-lg dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                                                placeholder="Opcional. Ex: {eventName} foi finalizado!\n🥇 {primeiro}\n🥈 {segundo}\n🥉 {terceiro}"
+                                                rows={3}
+                                                value={autoPostConfig.event_post_resumo_template}
+                                                onChange={e => setAutoPostConfig(p => ({ ...p, event_post_resumo_template: e.target.value }))}
+                                            />
+                                        </div>
+                                        <p className="text-[11px] text-gray-400 dark:text-gray-500">Variáveis: <span className="font-mono">&#123;eventName&#125; &#123;eventDate&#125; &#123;eventType&#125; &#123;primeiro&#125; &#123;segundo&#125; &#123;terceiro&#125;</span></p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end">
+                                <Button onClick={saveAutoPostConfig} disabled={savingAutoPostConfig}>
+                                    <LucideSave size={16} />
+                                    {savingAutoPostConfig ? 'Salvando...' : 'Salvar Configurações'}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </>)}
 
             {/* HOME: HUB DE CARDS */}
             {adminTab === 'home' && (

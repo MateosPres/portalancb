@@ -844,21 +844,51 @@ exports.onEventFinishedCreatePost = functions.firestore
         if (!newData || !oldData) return null;
         if (oldData.status === 'finalizado' || newData.status !== 'finalizado') return null;
 
+        const configDoc = await admin.firestore().collection('configuracoes').doc('auto_posts').get();
+        const config = configDoc.exists ? configDoc.data() : {};
+
+        if (config.event_post_enabled === false) {
+            console.log(`Posts automáticos de evento desabilitados. Pulando post para evento ${context.params.eventId}.`);
+            return null;
+        }
+
         const eventId = context.params.eventId;
         const postId = `auto_event_${eventId}`;
         const eventTypeLabel = newData.type === 'torneio_interno'
             ? 'Torneio Interno'
             : (newData.type === 'torneio_externo' ? 'Torneio Externo' : 'Amistoso');
 
-        let resumo = `${newData.nome || 'Evento'} foi finalizado.`;
-        if (newData.podio && (newData.podio.primeiro || newData.podio.segundo || newData.podio.terceiro)) {
-            resumo = [
+        const primeiro = newData.podio?.primeiro || '';
+        const segundo  = newData.podio?.segundo  || '';
+        const terceiro = newData.podio?.terceiro  || '';
+
+        let defaultResumo = `${newData.nome || 'Evento'} foi finalizado.`;
+        if (primeiro || segundo || terceiro) {
+            defaultResumo = [
                 `🏁 ${newData.nome || 'Evento'} finalizado!`,
-                `🥇 ${newData.podio.primeiro || '---'}`,
-                `🥈 ${newData.podio.segundo || '---'}`,
-                `🥉 ${newData.podio.terceiro || '---'}`
+                `🥇 ${primeiro || '---'}`,
+                `🥈 ${segundo  || '---'}`,
+                `🥉 ${terceiro || '---'}`,
             ].join('\n');
         }
+
+        const vars = {
+            '{eventName}': newData.nome || 'Evento',
+            '{eventDate}': newData.data || '',
+            '{eventType}': eventTypeLabel,
+            '{primeiro}':  primeiro || '---',
+            '{segundo}':   segundo  || '---',
+            '{terceiro}':  terceiro || '---',
+        };
+        const applyTpl = (tpl) => tpl.replace(/\{eventName\}|\{eventDate\}|\{eventType\}|\{primeiro\}|\{segundo\}|\{terceiro\}/g, (m) => vars[m] ?? m);
+
+        const titulo = config.event_post_titulo_template
+            ? applyTpl(config.event_post_titulo_template)
+            : `Resultado do Evento: ${newData.nome || 'Evento'}`;
+
+        const resumo = config.event_post_resumo_template
+            ? applyTpl(config.event_post_resumo_template)
+            : defaultResumo;
 
         await admin.firestore().collection('feed_posts').doc(postId).set({
             type: 'resultado_evento',
@@ -868,7 +898,7 @@ exports.onEventFinishedCreatePost = functions.firestore
             author_id: 'system',
             image_url: null,
             content: {
-                titulo: `Resultado do Evento: ${newData.nome || 'Evento'}`,
+                titulo,
                 resumo,
                 eventId,
                 resultado_label: eventTypeLabel,
@@ -2122,9 +2152,35 @@ async function notifyPlayerQuizPosJogo(playerId, eventId, gameId, eventName, tea
 
 async function upsertAutoGameFeedPost(eventId, gameId, eventData, gameData, teamAName, scoreA, teamBName, scoreB) {
     try {
+        const configDoc = await admin.firestore().collection('configuracoes').doc('auto_posts').get();
+        const config = configDoc.exists ? configDoc.data() : {};
+
+        if (config.game_post_enabled === false) {
+            console.log(`Posts automáticos de jogo desabilitados. Pulando post para jogo ${gameId}.`);
+            return;
+        }
+
         const postId = `auto_game_${eventId}_${gameId}`;
         const eventName = eventData?.nome || 'Evento';
         const gameDate = gameData?.dataJogo || eventData?.data || '';
+
+        const vars = {
+            '{eventName}': eventName,
+            '{teamA}': teamAName,
+            '{teamB}': teamBName,
+            '{scoreA}': String(scoreA),
+            '{scoreB}': String(scoreB),
+            '{gameDate}': gameDate,
+        };
+        const applyTpl = (tpl) => tpl.replace(/\{eventName\}|\{teamA\}|\{teamB\}|\{scoreA\}|\{scoreB\}|\{gameDate\}/g, (m) => vars[m] ?? m);
+
+        const titulo = config.game_post_titulo_template
+            ? applyTpl(config.game_post_titulo_template)
+            : `${eventName} • ${teamAName} x ${teamBName}`;
+
+        const resumo = config.game_post_resumo_template
+            ? applyTpl(config.game_post_resumo_template)
+            : '';
 
         await admin.firestore().collection('feed_posts').doc(postId).set({
             type: 'placar',
@@ -2134,7 +2190,8 @@ async function upsertAutoGameFeedPost(eventId, gameId, eventData, gameData, team
             author_id: 'system',
             image_url: null,
             content: {
-                titulo: `${eventName} • ${teamAName} x ${teamBName}`,
+                titulo,
+                ...(resumo ? { resumo } : {}),
                 time_adv: teamBName,
                 placar_ancb: Number(scoreA) || 0,
                 placar_adv: Number(scoreB) || 0,

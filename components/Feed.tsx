@@ -62,7 +62,12 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
           .filter((authorId): authorId is string => Boolean(authorId))
       ));
 
-      const missingAuthorIds = authorIds.filter((authorId) => !authorCacheRef.current.has(authorId));
+      // Pre-seed 'system' so it's never queried from Firestore
+      if (!authorCacheRef.current.has('system')) {
+        authorCacheRef.current.set('system', { authorName: 'ANCB', authorPhoto: 'https://i.imgur.com/SE2jHsz.png', authorPlayerId: null });
+      }
+
+      const missingAuthorIds = authorIds.filter((authorId) => authorId !== 'system' && !authorCacheRef.current.has(authorId));
       if (missingAuthorIds.length > 0) {
         await Promise.all(
           missingAuthorIds.map(async (authorId) => {
@@ -84,11 +89,11 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
       }
 
       const postsData = basePosts.map((post) => {
-        if (!post.author_id) {
+        if (!post.author_id || post.author_id === 'system') {
           return {
             ...post,
             authorName: 'ANCB',
-            authorPhoto: null,
+            authorPhoto: 'https://i.imgur.com/SE2jHsz.png',
             authorPlayerId: null,
           };
         }
@@ -268,7 +273,7 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
 
     const legacyScore =
       content.placar_ancb !== undefined || content.placar_adv !== undefined
-        ? `ANCB ${content.placar_ancb ?? '-'} x ${content.placar_adv ?? '-'} ${content.time_adv ? `(${content.time_adv})` : ''}`
+        ? `${content.teamAName || 'ANCB'} ${content.placar_ancb ?? '-'} x ${content.placar_adv ?? '-'} ${content.teamBName || content.time_adv || ''}`
         : '';
 
     const legacyPieces = [content.titulo, legacyScore, content.resultado_detalhes]

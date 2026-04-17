@@ -222,6 +222,7 @@ export interface Cesta {
 
 export interface FeedPost {
     id: string;
+    type: 'noticia' | 'placar' | 'aviso' | 'resultado_evento';
     timestamp: any; // serverTimestamp
     author_id?: string;
     userId?: string;
