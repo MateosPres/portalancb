@@ -474,7 +474,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
             alert('Erro ao salvar.');
         }
     };
-    const handleTogglePin = async (badgeId: string) => { if (!playerDocId) return; let currentPinned = formData.pinnedBadgeIds || []; if (currentPinned.includes(badgeId)) { currentPinned = currentPinned.filter(id => id !== badgeId); } else { if (currentPinned.length >= 3) { alert("Limite de 3 conquistas fixadas."); return; } currentPinned.push(badgeId); } setFormData({ ...formData, pinnedBadgeIds: currentPinned }); try { await setDoc(doc(db, "jogadores", playerDocId), { pinnedBadgeIds: currentPinned }, { merge: true }); } catch (e) { alert("Erro ao fixar."); } };
+    const handleTogglePin = async (badgeId: string) => { if (!playerDocId) return; const existingBadgeIds = new Set((formData.badges || []).map(b => b.id)); let currentPinned = (formData.pinnedBadgeIds || []).filter(id => existingBadgeIds.has(id)); if (currentPinned.includes(badgeId)) { currentPinned = currentPinned.filter(id => id !== badgeId); } else { if (currentPinned.length >= 3) { alert("Limite de 3 conquistas fixadas."); return; } currentPinned.push(badgeId); } setFormData({ ...formData, pinnedBadgeIds: currentPinned }); try { await setDoc(doc(db, "jogadores", playerDocId), { pinnedBadgeIds: currentPinned }, { merge: true }); } catch (e) { alert("Erro ao fixar."); } };
     const formatDate = (dateStr?: string) => dateStr ? dateStr.split('-').reverse().join('/') : '';
     const normalizePosition = (pos: string | undefined): string => { if (!pos) return '-'; if (pos.includes('1') || pos.toLowerCase().includes('armador')) return 'Armador (1)'; if (pos.includes('2') || pos.toLowerCase().includes('ala/armador')) return 'Ala/Armador (2)'; if (pos.includes('3') || (pos.toLowerCase().includes('ala') && !pos.includes('piv'))) return 'Ala (3)'; if (pos.includes('4') || pos.toLowerCase().includes('ala/piv')) return 'Ala/Pivô (4)'; if (pos.includes('5') || pos.toLowerCase().includes('piv')) return 'Pivô (5)'; return pos; };
     const calculateAge = (dateString?: string) => { if (!dateString) return '-'; const today = new Date(); const birthDate = new Date(dateString); let age = today.getFullYear() - birthDate.getFullYear(); const m = today.getMonth() - birthDate.getMonth(); if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) { age--; } return age; };
@@ -639,10 +639,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                                 const style = getRarityStyles(badge.raridade);
                                         const stackCount = getBadgeStackCount(badge);
                                 return (
-                                    <div 
+                                        <div 
                                         key={idx} 
                                         onClick={() => setSelectedBadge(badge)}
-                                                className={`rounded-lg p-2 md:p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-transform hover:scale-105 active:scale-95 shadow-lg border relative overflow-hidden ${style.classes} ${getBadgeEffectClasses(badge.raridade)}`}
+                                                    className={`rounded-lg p-2 md:p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-transform hover:scale-105 active:scale-95 shadow-lg border relative ${style.classes} ${getBadgeEffectClasses(badge.raridade)}`}
                                     >
                                                 {stackCount > 1 && (
                                                     <span className="absolute top-1.5 right-1.5 z-20 rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow-sm">
@@ -839,7 +839,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                             <LucideArrowLeft size={15} /> Voltar para conquistas
                         </button>
                         <div className="text-center">
-                            <div className={`mx-auto mb-6 flex h-28 w-28 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5 ${getBadgeEffectClasses(selectedBadge.raridade)}`}>
+                            <div className={`mx-auto mb-6 flex h-28 w-28 items-center justify-center rounded-[2rem] ${getBadgeEffectClasses(selectedBadge.raridade)}`}>
                                 {isImageBadge(selectedBadge) ? (
                                     <img src={selectedBadge.iconeValor} alt={selectedBadge.nome} className="h-24 w-24 rounded-[1.5rem] object-cover" />
                                 ) : (
@@ -904,7 +904,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                             }
                         </p>
 
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[55vh] overflow-y-auto custom-scrollbar p-1">
+                        <div className="max-h-[55vh] overflow-y-auto custom-scrollbar">
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 p-3">
                             {formData.badges && formData.badges.length > 0 ? (
                                 [...formData.badges].reverse().map((badge, idx) => {
                                     const style = getRarityStyles(badge.raridade);
@@ -949,6 +950,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                             ) : (
                                 <p className="col-span-full text-center text-gray-500 py-10">Nenhuma conquista ainda.</p>
                             )}
+                        </div>
                         </div>
                     </div>
                 )}

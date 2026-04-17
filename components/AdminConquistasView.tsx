@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import firebase, { db, functions } from '../services/firebase';
 import { ConquistaRegra, RaridadeConquista, TipoAvaliacaoConquista } from '../types';
 import { Button } from './Button';
@@ -229,6 +230,11 @@ const compactTriggerLabel = (gatilho: any): string => {
     }
 };
 
+const shouldSkipPropagationInCurrentEnvironment = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+};
+
 export const AdminConquistasView: React.FC = () => {
     const [regras, setRegras] = useState<ConquistaRegra[]>([]);
     const [loadingRegras, setLoadingRegras] = useState(true);
@@ -433,24 +439,30 @@ export const AdminConquistasView: React.FC = () => {
             if (editingId) {
                 await db.collection('conquistas_regras').doc(editingId).set(payload, { merge: true });
 
-                try {
-                    const propagateRuleUpdate = functions.httpsCallable('propagarEdicaoConquista');
-                    const response = await propagateRuleUpdate({ regraId: editingId });
-                    const result = response?.data as { playersUpdated?: number; badgesUpdated?: number } | undefined;
-                    const playersUpdated = Number(result?.playersUpdated || 0);
-                    const badgesUpdated = Number(result?.badgesUpdated || 0);
-                    setFeedback({
-                        type: 'success',
-                        text: playersUpdated > 0 || badgesUpdated > 0
-                            ? `Conquista atualizada e propagada para ${badgesUpdated} badge(s) em ${playersUpdated} atleta(s).`
-                            : 'Conquista atualizada com sucesso. Nenhuma badge vinculada precisou ser propagada.',
-                    });
-                } catch (error) {
-                    console.error('Falha ao propagar edicao da conquista:', error);
+                if (shouldSkipPropagationInCurrentEnvironment()) {
                     setFeedback({
                         type: 'warning',
-                        text: getPropagationErrorMessage(error),
+                        text: 'Conquista salva com sucesso. A propagacao automatica foi pulada no ambiente local; publique ou execute as Cloud Functions para atualizar badges ja concedidas.',
                     });
+                } else {
+                    try {
+                        const propagateRuleUpdate = functions.httpsCallable('propagarEdicaoConquista');
+                        const response = await propagateRuleUpdate({ regraId: editingId });
+                        const result = response?.data as { playersUpdated?: number; badgesUpdated?: number } | undefined;
+                        const playersUpdated = Number(result?.playersUpdated || 0);
+                        const badgesUpdated = Number(result?.badgesUpdated || 0);
+                        setFeedback({
+                            type: 'success',
+                            text: playersUpdated > 0 || badgesUpdated > 0
+                                ? `Conquista atualizada e propagada para ${badgesUpdated} badge(s) em ${playersUpdated} atleta(s).`
+                                : 'Conquista atualizada com sucesso. Nenhuma badge vinculada precisou ser propagada.',
+                        });
+                    } catch (error) {
+                        setFeedback({
+                            type: 'warning',
+                            text: getPropagationErrorMessage(error),
+                        });
+                    }
                 }
             } else {
                 const ref = db.collection('conquistas_regras').doc();
@@ -535,11 +547,27 @@ export const AdminConquistasView: React.FC = () => {
         }
     };
 
+    const menuButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+    useEffect(() => {
+        if (!openMenuId) return;
+        const close = () => setOpenMenuId(null);
+        window.addEventListener('scroll', close, true);
+        return () => window.removeEventListener('scroll', close, true);
+    }, [openMenuId]);
+
     const renderRegraCard = (regra: ConquistaRegra) => {
         const paused = regra.ativo === false;
         const rarityStyle = getRarityStyles(regra.raridade || 'comum');
         const menuOpen = openMenuId === regra.id;
         const triggerText = compactTriggerLabel(regra.gatilho);
+
+        const getMenuPosition = () => {
+            const btn = menuButtonRefs.current[regra.id];
+            if (!btn) return { top: 0, right: 0 };
+            const rect = btn.getBoundingClientRect();
+            return { top: rect.bottom + 4, right: window.innerWidth - rect.right };
+        };
         return (
             <div
                 key={regra.id}
@@ -586,6 +614,7 @@ export const AdminConquistasView: React.FC = () => {
                             </span>
                             <div className="relative">
                                 <button
+                                    ref={(el) => { menuButtonRefs.current[regra.id] = el; }}
                                     onClick={() => setOpenMenuId(menuOpen ? null : regra.id)}
                                     disabled={busyRuleId === regra.id}
                                     aria-label="Abrir ações"
@@ -595,10 +624,13 @@ export const AdminConquistasView: React.FC = () => {
                                         ? <LucideLoader2 size={16} className="animate-spin" />
                                         : <LucideMoreVertical size={16} />}
                                 </button>
-                                {menuOpen && (
+                                {menuOpen && createPortal(
                                     <>
-                                        <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
-                                        <div className="absolute right-0 top-8 z-20 w-44 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg py-1">
+                                        <div className="fixed inset-0 z-[998]" onClick={() => setOpenMenuId(null)} />
+                                        <div
+                                            className="fixed z-[999] w-44 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg py-1"
+                                            style={getMenuPosition()}
+                                        >
                                             <button
                                                 onClick={() => { openEdit(regra); setOpenMenuId(null); }}
                                                 className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -626,7 +658,8 @@ export const AdminConquistasView: React.FC = () => {
                                                 <LucideTrash2 size={14} /> Excluir
                                             </button>
                                         </div>
-                                    </>
+                                    </>,
+                                    document.body
                                 )}
                             </div>
                         </div>
@@ -957,8 +990,10 @@ export const AdminConquistasView: React.FC = () => {
                             Nenhuma conquista encontrada com os filtros atuais.
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-stretch max-h-[65vh] overflow-y-auto custom-scrollbar pr-1">
+                        <div className="max-h-[65vh] overflow-y-auto custom-scrollbar pr-1">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-stretch overflow-visible">
                             {regrasFiltradas.map(renderRegraCard)}
+                        </div>
                         </div>
                     )}
                 </div>

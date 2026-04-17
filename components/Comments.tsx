@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { db } from '../services/firebase';
 import { UserProfile } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,6 +33,11 @@ export const Comments: React.FC<CommentsProps> = ({ postId, user, onChangeCount,
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const [authorPlayerByUserId, setAuthorPlayerByUserId] = useState<Record<string, string | null>>({});
+  const onChangeCountRef = useRef<CommentsProps['onChangeCount']>(onChangeCount);
+
+  useEffect(() => {
+    onChangeCountRef.current = onChangeCount;
+  }, [onChangeCount]);
 
   const handleSend = async () => {
     if (!newComment.trim() || !user) return;
@@ -189,8 +194,8 @@ useEffect(() => {
 }, [comments, authorPlayerByUserId]);
 
 useEffect(() => {
-  if (onChangeCount) onChangeCount(comments.length);
-}, [comments, onChangeCount]);
+  onChangeCountRef.current?.(comments.length);
+}, [comments.length]);
 
   const isLight = variant === 'light';
 

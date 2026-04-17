@@ -668,7 +668,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                             <div 
                                                 key={idx} 
                                                 onClick={() => setSelectedBadge(badge)}
-                                                className={`rounded-lg p-2 md:p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-transform hover:scale-105 active:scale-95 shadow-lg border relative overflow-hidden ${style.classes} ${getBadgeEffectClasses(badge.raridade)}`}
+                                                className={`rounded-lg p-2 md:p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-transform hover:scale-105 active:scale-95 shadow-lg border relative ${style.classes} ${getBadgeEffectClasses(badge.raridade)}`}
                                             >
                                                 {stackCount > 1 && (
                                                     <span className="absolute top-1.5 right-1.5 z-20 rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow-sm">
@@ -782,7 +782,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                 <LucideArrowLeft size={15} /> Voltar para conquistas
                             </button>
                             <div className="text-center">
-                                <div className={`mx-auto mb-4 flex h-28 w-28 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5 ${getBadgeEffectClasses(selectedBadge.raridade)}`}>
+                                <div className={`mx-auto mb-4 flex h-28 w-28 items-center justify-center rounded-[2rem] ${getBadgeEffectClasses(selectedBadge.raridade)}`}>
                                     {isImageBadge(selectedBadge) ? (
                                         <img src={selectedBadge.iconeValor} alt={selectedBadge.nome} className="h-24 w-24 rounded-[1.5rem] object-cover" />
                                     ) : (
@@ -819,7 +819,8 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                     ) : (
                         /* ── TELA DE GALERIA ── */
                         <div className="p-2">
-                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar p-1">
+                            <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
+                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 p-3">
                                 {selectedPlayer?.badges && selectedPlayer.badges.length > 0 ? (
                                     [...selectedPlayer.badges].reverse().map((badge, idx) => {
                                         const style = getRarityStyles(badge.raridade);
@@ -847,6 +848,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                 ) : (
                                     <p className="col-span-full text-center text-gray-500 py-10">Nenhuma conquista ainda.</p>
                                 )}
+                            </div>
                             </div>
                         </div>
                     )}

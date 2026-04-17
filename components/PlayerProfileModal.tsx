@@ -285,7 +285,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
                     <Modal isOpen={!!selectedBadge} onClose={() => setSelectedBadge(null)} title="Detalhe da Conquista">
                         {selectedBadge && (
                             <div className="text-center space-y-3">
-                                <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-[1.5rem] border border-white/10 bg-white/5 ${getBadgeEffectClasses(selectedBadge.raridade)}`}>
+                                <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-[1.5rem] ${getBadgeEffectClasses(selectedBadge.raridade)}`}>
                                     {isImageBadge(selectedBadge) ? (
                                         <img src={selectedBadge.iconeValor} alt={selectedBadge.nome} className="h-16 w-16 rounded-[1rem] object-cover" />
                                     ) : (
