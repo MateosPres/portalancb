@@ -114,18 +114,36 @@ const calculateRadarStats = (
 
 interface DraggableBadgeCardProps { badge: Badge; isPinned: boolean; onTap: () => void; }
 
+const DragHandle: React.FC<{ listeners: ReturnType<typeof useDraggable>['listeners'] }> = ({ listeners }) => (
+    <div
+        {...listeners}
+        onClick={e => e.stopPropagation()}
+        style={{ touchAction: 'none' }}
+        className="w-full flex justify-center pt-0.5 pb-1 cursor-grab active:cursor-grabbing text-white/30 hover:text-white/60 active:text-white/80 transition-colors"
+        title="Arrastar para slot"
+    >
+        <svg width="18" height="9" viewBox="0 0 18 9" fill="currentColor">
+            <circle cx="4.5" cy="2.2" r="1.4"/><circle cx="9" cy="2.2" r="1.4"/><circle cx="13.5" cy="2.2" r="1.4"/>
+            <circle cx="4.5" cy="6.8" r="1.4"/><circle cx="9" cy="6.8" r="1.4"/><circle cx="13.5" cy="6.8" r="1.4"/>
+        </svg>
+    </div>
+);
+
 const DraggableBadgeCard: React.FC<DraggableBadgeCardProps> = ({ badge, isPinned, onTap }) => {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: badge.id });
     const rarityStyle = getRarityStyles(badge.raridade);
     const stackCount = getBadgeStackCount(badge);
     return (
-        <div ref={setNodeRef} {...listeners} {...attributes} onClick={onTap}
-            className={`rounded-xl p-2 flex flex-col items-center justify-center text-center cursor-grab active:cursor-grabbing transition-all shadow-sm border-2 relative select-none ${rarityStyle.classes} ${getBadgeEffectClasses(badge.raridade)} ${isDragging ? 'opacity-20' : 'hover:scale-105'} ${isPinned ? 'ring-2 ring-white/50' : ''}`}
+        <div ref={setNodeRef} {...attributes}
+            className={`rounded-xl px-2 pb-2 pt-0 flex flex-col items-center justify-center text-center transition-all shadow-sm border-2 relative select-none ${rarityStyle.classes} ${getBadgeEffectClasses(badge.raridade)} ${isDragging ? 'opacity-20' : ''} ${isPinned ? 'ring-2 ring-white/50' : ''}`}
         >
-            {stackCount > 1 && <div className="absolute left-1 top-1 rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow-sm">x{stackCount}</div>}
-            {isPinned && <div className="absolute top-1 right-1 w-3 h-3 rounded-full bg-white shadow-sm flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-ancb-blue" /></div>}
-            {isImageBadge(badge) ? <img src={badge.iconeValor} alt={badge.nome} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20" /> : <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>}
-            <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
+            <DragHandle listeners={listeners} />
+            {stackCount > 1 && <div className="absolute left-1 top-4 rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow-sm">x{stackCount}</div>}
+            {isPinned && <div className="absolute top-4 right-1 w-3 h-3 rounded-full bg-white shadow-sm flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-ancb-blue" /></div>}
+            <button onClick={onTap} className="flex flex-col items-center w-full">
+                {isImageBadge(badge) ? <img src={badge.iconeValor} alt={badge.nome} className="mb-1 h-9 w-9 rounded-xl object-cover border border-white/20" /> : <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>}
+                <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
+            </button>
         </div>
     );
 };
@@ -177,8 +195,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const [showAllBadges, setShowAllBadges] = useState(false);
 
     const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-        useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+        useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+        useSensor(TouchSensor, { activationConstraint: { distance: 4 } }),
     );
     const [activeBadgeId, setActiveBadgeId] = useState<string | null>(null);
 
