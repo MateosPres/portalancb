@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import firebase, { db, auth, functions } from '../services/firebase';
-import { Evento, Jogo, FeedPost, ClaimRequest, Player, Time, Cesta, UserProfile, Badge } from '../types';
+import { Evento, Jogo, FeedPost, ClaimRequest, Player, Time, Cesta, UserProfile, Badge, ConquistaRegra } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { LucidePlus, LucideTrash2, LucideArrowLeft, LucideRadio, LucideGamepad2, LucidePlayCircle, LucideNewspaper, LucideImage, LucideUpload, LucideAlertTriangle, LucideLink, LucideCheck, LucideX, LucideCamera, LucideUserPlus, LucideSearch, LucideBan, LucideUserX, LucideUsers, LucideWrench, LucideStar, LucideMessageCircle, LucideMegaphone, LucideEdit, LucideUserCheck, LucideRefreshCw, LucideTrophy, LucideCalendar, LucideBellRing, LucideBellOff, LucideSend, LucideKeyRound, LucideCrown, LucideShield, LucideSiren, LucideDatabase, LucideHistory, LucideSave, LucideArrowRight, LucideZap, LucideEdit2, LucideHeart, LucideArrowUp, LucideArrowDown, LucideGripVertical } from 'lucide-react';
@@ -15,10 +15,10 @@ import { normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/conta
 import {
     REVIEW_TAG_MULTIPLIERS,
     REVIEW_TAG_IMPACTS,
-    BADGE_CATALOG,
-    evaluateNewBadges,
-    buildBadge,
+    buildRuleBasedBadgeId,
     getRarityStyles,
+    renderConquistaTexts,
+    upsertStackedBadge,
 } from '../utils/badges';
 
 
@@ -55,6 +55,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [seasonLoading, setSeasonLoading] = useState(false);
     const [seasonResult, setSeasonResult] = useState<{ awarded: number; log: string[] } | null>(null);
     const [events, setEvents] = useState<Evento[]>([]);
+    const [manualBadgeRules, setManualBadgeRules] = useState<ConquistaRegra[]>([]);
     
     // Forms
     const [postType, setPostType] = useState<'noticia' | 'placar' | 'aviso' | 'resultado_evento'>('noticia');
@@ -116,6 +117,25 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [editingApoiadorId, setEditingApoiadorId] = useState<string | null>(null);
 
     const isSuperAdmin = userProfile?.role === 'super-admin';
+
+    useEffect(() => {
+        if (!isSuperAdmin) {
+            setManualBadgeRules([]);
+            return;
+        }
+
+        const unsub = db.collection('conquistas_regras')
+            .where('ativo', '==', true)
+            .where('tipoAvaliacao', '==', 'manual')
+            .onSnapshot((snapshot) => {
+                const rules = snapshot.docs
+                    .map((doc) => ({ id: doc.id, ...(doc.data() as any) } as ConquistaRegra))
+                    .sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'));
+                setManualBadgeRules(rules);
+            });
+
+        return () => unsub();
+    }, [isSuperAdmin]);
 
     useEffect(() => {
         if (!isSuperAdmin && restrictedTabs.includes(adminTab as 'users' | 'reviews' | 'badges')) {
@@ -1613,38 +1633,67 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                 };
 
                 const handleAwardBadgeToPlayer = async (playerId: string, badgeDefId: string) => {
-                    const def = BADGE_CATALOG.find(b => b.id === badgeDefId);
+                    const regra = manualBadgeRules.find((item) => item.id === badgeDefId);
                     const player = activePlayers.find(p => p.id === playerId);
-                    if (!def || !player) return;
-                    const alreadyHas = (player.badges || []).some(b => b.id === def.id);
-                    if (alreadyHas) {
-                        alert(`${player.nome} já possui a conquista "${def.nome}".`);
-                        return;
-                    }
+                    if (!regra || !player) return;
 
                     setBadgeLoading(true);
                     try {
-                        const badge = buildBadge(def);
+                        const today = new Date().toISOString().split('T')[0];
+                        const occurrenceId = `manual_${Date.now()}`;
+                        const renderContext = {
+                            eventName: '',
+                            gameName: '',
+                            seasonYear: String(new Date().getFullYear()),
+                            playerName: player.nome || playerId,
+                            value: '',
+                        };
+                        const rendered = renderConquistaTexts(regra, renderContext);
+                        const badge: Badge = {
+                            id: buildRuleBasedBadgeId(regra.id, { tipoAvaliacao: 'manual' }),
+                            nome: rendered.titulo,
+                            emoji: regra.tipoIcone === 'emoji' ? (regra.iconeValor || '🏅') : '🏅',
+                            categoria: 'temporada',
+                            origem: 'regra',
+                            raridade: regra.raridade || 'comum',
+                            descricao: rendered.descricao,
+                            data: today,
+                            regraId: regra.id,
+                            tipoAvaliacao: 'manual',
+                            tipoIcone: regra.tipoIcone || 'emoji',
+                            iconeValor: regra.iconeValor || '🏅',
+                            stackCount: 1,
+                            latestOccurrenceId: occurrenceId,
+                            ocorrencias: [{
+                                id: occurrenceId,
+                                descricao: rendered.descricao,
+                                data: today,
+                                contextLabel: 'Concedida manualmente',
+                                renderContext,
+                            }],
+                        };
+                        const result = upsertStackedBadge(player.badges || [], badge);
+
                         await db.collection('jogadores').doc(playerId).update({
-                            badges: firebase.firestore.FieldValue.arrayUnion(badge),
+                            badges: result.badges,
                         });
 
                         const usersSnap = await db.collection('usuarios').where('linkedPlayerId', '==', playerId).limit(1).get();
                         if (!usersSnap.empty) {
                             const targetUserId = usersSnap.docs[0].id;
-                            const notifId = `badge_${targetUserId}_${def.id}`;
+                            const notifId = `badge_${targetUserId}_${badge.id}_${occurrenceId}`;
                             await db.collection('notifications').doc(notifId).set({
                                 targetUserId,
                                 type: 'evaluation',
-                                title: `Nova conquista desbloqueada! ${def.emoji}`,
-                                message: `Você ganhou a conquista "${def.nome}": ${def.descricao}`,
-                                data: { badgeId: def.id },
+                                title: `Nova conquista desbloqueada! ${badge.emoji}`,
+                                message: rendered.mensagem,
+                                data: { badgeId: badge.id, occurrenceId, regraId: regra.id },
                                 read: false,
                                 timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                             }, { merge: true });
                         }
 
-                        setBadgeSuccess(`✅ Conquista "${def.nome}" concedida a ${player.nome}!`);
+                        setBadgeSuccess(`✅ Conquista "${badge.nome}" concedida a ${player.nome}!`);
                         setBadgeQuickAssignByPlayer(prev => ({ ...prev, [playerId]: '' }));
                     } catch {
                         alert('Erro ao conceder conquista.');
@@ -1725,11 +1774,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                                             className="flex-1 border border-gray-200 dark:border-gray-600 rounded-lg p-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
                                                         >
                                                             <option value="">Atribuir conquista para este atleta...</option>
-                                                            {BADGE_CATALOG.map(def => {
-                                                                const alreadyHas = playerBadges.some(b => b.id === def.id);
+                                                            {manualBadgeRules.map(regra => {
+                                                                const existingBadge = playerBadges.find((badge) => badge.regraId === regra.id || badge.id === buildRuleBasedBadgeId(regra.id, { tipoAvaliacao: 'manual' }));
+                                                                const stackLabel = existingBadge ? ` — stack x${existingBadge.stackCount || existingBadge.ocorrencias?.length || 1}` : '';
                                                                 return (
-                                                                    <option key={def.id} value={def.id} disabled={alreadyHas}>
-                                                                        {def.emoji} {def.nome}{alreadyHas ? ' — já possui' : ''}
+                                                                    <option key={regra.id} value={regra.id}>
+                                                                        {(regra.tipoIcone === 'emoji' ? regra.iconeValor : '🏅')} {regra.titulo}{stackLabel}
                                                                     </option>
                                                                 );
                                                             })}

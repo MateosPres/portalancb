@@ -29,6 +29,105 @@
 	.apoiadores-marquee-track {
 		animation: none;
 	}
+
+	.badge-rarity,
+	.badge-rarity::before,
+	.badge-rarity::after {
+		animation: none !important;
+		transition: none !important;
+	}
+}
+
+@keyframes badgeGlowPulseSoft {
+	0%,
+	100% {
+		box-shadow: 0 0 0 rgba(96, 165, 250, 0.18), 0 0 0 rgba(96, 165, 250, 0.12);
+	}
+	50% {
+		box-shadow: 0 0 18px rgba(96, 165, 250, 0.28), 0 0 32px rgba(96, 165, 250, 0.14);
+	}
+}
+
+@keyframes badgeGlowPulseEpic {
+	0%,
+	100% {
+		box-shadow: 0 0 0 rgba(168, 85, 247, 0.24), 0 0 0 rgba(147, 51, 234, 0.12);
+	}
+	50% {
+		box-shadow: 0 0 20px rgba(168, 85, 247, 0.4), 0 0 38px rgba(147, 51, 234, 0.24);
+	}
+}
+
+@keyframes badgeGlowPulseLegendary {
+	0%,
+	100% {
+		box-shadow: 0 0 0 rgba(250, 204, 21, 0.28), 0 0 0 rgba(251, 146, 60, 0.18);
+		transform: translateZ(0);
+	}
+	50% {
+		box-shadow: 0 0 26px rgba(250, 204, 21, 0.42), 0 0 54px rgba(251, 146, 60, 0.24);
+		transform: translateY(-1px);
+	}
+}
+
+@keyframes badgeParticleFloat {
+	0% {
+		transform: translate3d(0, 8px, 0) scale(0.7);
+		opacity: 0;
+	}
+	20% {
+		opacity: 0.9;
+	}
+	100% {
+		transform: translate3d(0, -24px, 0) scale(1.15);
+		opacity: 0;
+	}
+}
+
+.badge-rarity {
+	position: relative;
+	isolation: isolate;
+	transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.badge-rarity-rara {
+	animation: badgeGlowPulseSoft 2.8s ease-in-out infinite;
+}
+
+.badge-rarity-epica {
+	animation: badgeGlowPulseEpic 2.2s ease-in-out infinite;
+}
+
+.badge-rarity-lendaria {
+	animation: badgeGlowPulseLegendary 1.8s ease-in-out infinite;
+	overflow: visible;
+}
+
+.badge-rarity-lendaria::before,
+.badge-rarity-lendaria::after {
+	content: '';
+	position: absolute;
+	left: 50%;
+	bottom: 14%;
+	width: 7px;
+	height: 7px;
+	border-radius: 9999px;
+	pointer-events: none;
+	background: radial-gradient(circle, rgba(254, 240, 138, 0.95) 0%, rgba(251, 146, 60, 0.15) 72%);
+	filter: blur(0.2px);
+	opacity: 0;
+	z-index: -1;
+	animation: badgeParticleFloat 1.7s ease-out infinite;
+}
+
+.badge-rarity-lendaria::before {
+	margin-left: -18px;
+	animation-delay: 0s;
+}
+
+.badge-rarity-lendaria::after {
+	margin-left: 12px;
+	animation-delay: 0.55s;
 }
 
 .yt-live-layout {

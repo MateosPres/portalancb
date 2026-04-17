@@ -376,13 +376,26 @@ function countEventBadgesInSeason(existingBadges, seasonYear) {
         'atirador_elite_',
     ];
 
-    return existingBadges.filter((badge) => {
-        if (!badge || typeof badge !== 'object') return false;
+    return existingBadges.reduce((count, badge) => {
+        if (!badge || typeof badge !== 'object') return count;
+
+        if (badge.tipoAvaliacao === 'pos_evento') {
+            const occurrences = Array.isArray(badge.ocorrencias) && badge.ocorrencias.length > 0
+                ? badge.ocorrencias
+                : [{ data: badge.data, seasonYear: badge.seasonYear }];
+
+            return count + occurrences.filter((occurrence) => {
+                const occurrenceSeason = String(occurrence?.seasonYear || '').trim();
+                const occurrenceDate = String(occurrence?.data || '').trim();
+                return occurrenceSeason === seasonYear || occurrenceDate.includes(seasonYear);
+            }).length;
+        }
+
         const badgeId = String(badge.id || '');
         const badgeDate = String(badge.data || '');
-        if (!badgeDate.includes(seasonYear)) return false;
-        return eventBadgePrefixes.some((prefix) => badgeId.startsWith(prefix));
-    }).length;
+        if (!badgeDate.includes(seasonYear)) return count;
+        return count + (eventBadgePrefixes.some((prefix) => badgeId.startsWith(prefix)) ? 1 : 0);
+    }, 0);
 }
 
 function renderTemplate(template, context) {
@@ -406,6 +419,196 @@ function buildRenderedTexts(regra, context) {
     const mensagem = renderTemplate(baseMensagem, context) || `Voce ganhou a conquista "${regra?.titulo || 'Conquista'}".`;
 
     return { titulo, descricao, mensagem };
+}
+
+function compareOccurrenceDates(left, right) {
+    return String(left || '').localeCompare(String(right || ''));
+}
+
+function normalizeStoredBadgeOccurrences(badge) {
+    if (Array.isArray(badge?.ocorrencias) && badge.ocorrencias.length > 0) {
+        return [...badge.ocorrencias].sort((a, b) => {
+            const dateDiff = compareOccurrenceDates(a?.data, b?.data);
+            if (dateDiff !== 0) return dateDiff;
+            return String(a?.id || '').localeCompare(String(b?.id || ''));
+        });
+    }
+
+    if (!badge || typeof badge !== 'object') return [];
+
+    return [{
+        id: String(badge.latestOccurrenceId || `${badge.id || 'badge'}:legacy`),
+        descricao: String(badge.descricao || 'Conquista desbloqueada.'),
+        data: String(badge.data || ''),
+        gameId: badge.gameId,
+        eventId: badge.eventId,
+        seasonYear: badge.seasonYear,
+        teamId: badge.teamId,
+        teamNome: badge.teamNome,
+        renderContext: badge.renderContext || undefined,
+    }];
+}
+
+function buildBadgeOccurrence(params) {
+    return {
+        id: String(params.id),
+        descricao: String(params.descricao || 'Conquista desbloqueada.'),
+        data: String(params.data || ''),
+        gameId: params.gameId,
+        eventId: params.eventId,
+        seasonYear: params.seasonYear,
+        teamId: params.teamId,
+        teamNome: params.teamNome,
+        contextLabel: params.contextLabel,
+        renderContext: params.renderContext || undefined,
+    };
+}
+
+function shouldAggregateBadgeByRule(badge) {
+    return String(badge?.tipoAvaliacao || '') !== 'ao_fechar_temporada';
+}
+
+function buildRuleBasedBadgeId(regraId, options = {}) {
+    const normalizedRuleId = String(regraId || '').trim();
+    const seasonYear = String(options.seasonYear || '').trim();
+
+    if (String(options.tipoAvaliacao || '') === 'ao_fechar_temporada' && seasonYear) {
+        return `regra_${normalizedRuleId}_temporada_${seasonYear}`;
+    }
+
+    return `regra_${normalizedRuleId}`;
+}
+
+function buildStackedBadgeFromRule(regra, rendered, options) {
+    const occurrence = buildBadgeOccurrence(options.occurrence);
+    return {
+        id: buildRuleBasedBadgeId(regra.id, {
+            tipoAvaliacao: regra.tipoAvaliacao || options.tipoAvaliacao,
+            seasonYear: occurrence.seasonYear,
+        }),
+        nome: rendered.titulo,
+        emoji: regra.tipoIcone === 'emoji' ? (regra.iconeValor || '🏅') : '🏅',
+        categoria: options.categoria,
+        origem: 'regra',
+        raridade: resolveRegraRaridade(regra),
+        descricao: occurrence.descricao,
+        data: occurrence.data,
+        gameId: occurrence.gameId,
+        eventId: occurrence.eventId,
+        seasonYear: occurrence.seasonYear,
+        teamId: occurrence.teamId,
+        teamNome: occurrence.teamNome,
+        regraId: regra.id,
+        tipoAvaliacao: regra.tipoAvaliacao || options.tipoAvaliacao,
+        tipoIcone: regra.tipoIcone || 'emoji',
+        iconeValor: regra.iconeValor || '🏅',
+        stackCount: 1,
+        latestOccurrenceId: occurrence.id,
+        ocorrencias: [occurrence],
+    };
+}
+
+function upsertStackedBadgeList(existingBadges, incomingBadge) {
+    const nextBadges = Array.isArray(existingBadges) ? [...existingBadges] : [];
+    const badgeIndex = nextBadges.findIndex((badge) => {
+        if (incomingBadge.regraId && badge?.regraId && shouldAggregateBadgeByRule(incomingBadge) && shouldAggregateBadgeByRule(badge)) {
+            return String(badge.regraId) === String(incomingBadge.regraId);
+        }
+        return String(badge?.id || '') === String(incomingBadge.id || '');
+    });
+
+    const incomingOccurrences = normalizeStoredBadgeOccurrences(incomingBadge);
+    if (badgeIndex === -1) {
+        const latestOccurrence = incomingOccurrences[incomingOccurrences.length - 1] || null;
+        const normalizedBadge = {
+            ...incomingBadge,
+            origem: incomingBadge.origem || 'regra',
+            descricao: latestOccurrence?.descricao || incomingBadge.descricao,
+            data: latestOccurrence?.data || incomingBadge.data,
+            stackCount: incomingOccurrences.length,
+            latestOccurrenceId: latestOccurrence?.id,
+            ocorrencias: incomingOccurrences,
+        };
+        nextBadges.push(normalizedBadge);
+        return { badges: nextBadges, badge: normalizedBadge, occurrenceAdded: true };
+    }
+
+    const currentBadge = nextBadges[badgeIndex];
+    const mergedOccurrences = normalizeStoredBadgeOccurrences(currentBadge);
+    const knownIds = new Set(mergedOccurrences.map((occurrence) => String(occurrence?.id || '')));
+    let occurrenceAdded = false;
+
+    for (const occurrence of incomingOccurrences) {
+        const occurrenceId = String(occurrence?.id || '');
+        if (!occurrenceId || knownIds.has(occurrenceId)) continue;
+        mergedOccurrences.push(occurrence);
+        knownIds.add(occurrenceId);
+        occurrenceAdded = true;
+    }
+
+    mergedOccurrences.sort((a, b) => {
+        const dateDiff = compareOccurrenceDates(a?.data, b?.data);
+        if (dateDiff !== 0) return dateDiff;
+        return String(a?.id || '').localeCompare(String(b?.id || ''));
+    });
+
+    const latestOccurrence = mergedOccurrences[mergedOccurrences.length - 1] || null;
+    const mergedBadge = {
+        ...currentBadge,
+        ...incomingBadge,
+        origem: incomingBadge.origem || currentBadge.origem || 'regra',
+        descricao: latestOccurrence?.descricao || incomingBadge.descricao || currentBadge.descricao,
+        data: latestOccurrence?.data || incomingBadge.data || currentBadge.data,
+        gameId: latestOccurrence?.gameId || incomingBadge.gameId || currentBadge.gameId,
+        eventId: latestOccurrence?.eventId || incomingBadge.eventId || currentBadge.eventId,
+        seasonYear: latestOccurrence?.seasonYear || incomingBadge.seasonYear || currentBadge.seasonYear,
+        teamId: latestOccurrence?.teamId || incomingBadge.teamId || currentBadge.teamId,
+        teamNome: latestOccurrence?.teamNome || incomingBadge.teamNome || currentBadge.teamNome,
+        stackCount: mergedOccurrences.length,
+        latestOccurrenceId: latestOccurrence?.id,
+        ocorrencias: mergedOccurrences,
+    };
+
+    nextBadges[badgeIndex] = mergedBadge;
+    return { badges: nextBadges, badge: mergedBadge, occurrenceAdded };
+}
+
+function applyRulePresentationToBadge(badge, regra, playerName) {
+    const occurrences = normalizeStoredBadgeOccurrences(badge).map((occurrence) => {
+        const renderContext = {
+            ...(occurrence?.renderContext || {}),
+            playerName: playerName || occurrence?.renderContext?.playerName || '',
+        };
+        const rendered = buildRenderedTexts(regra, renderContext);
+        return {
+            ...occurrence,
+            descricao: rendered.descricao,
+            renderContext,
+        };
+    });
+
+    const latestOccurrence = occurrences[occurrences.length - 1] || null;
+    const rendered = buildRenderedTexts(regra, latestOccurrence?.renderContext || { playerName: playerName || '' });
+
+    return {
+        ...badge,
+        nome: rendered.titulo,
+        emoji: regra.tipoIcone === 'emoji' ? (regra.iconeValor || '🏅') : '🏅',
+        raridade: resolveRegraRaridade(regra),
+        descricao: latestOccurrence?.descricao || rendered.descricao,
+        data: latestOccurrence?.data || badge.data,
+        gameId: latestOccurrence?.gameId || badge.gameId,
+        eventId: latestOccurrence?.eventId || badge.eventId,
+        seasonYear: latestOccurrence?.seasonYear || badge.seasonYear,
+        teamId: latestOccurrence?.teamId || badge.teamId,
+        teamNome: latestOccurrence?.teamNome || badge.teamNome,
+        tipoAvaliacao: regra.tipoAvaliacao || badge.tipoAvaliacao,
+        tipoIcone: regra.tipoIcone || 'emoji',
+        iconeValor: regra.iconeValor || '🏅',
+        stackCount: occurrences.length,
+        latestOccurrenceId: latestOccurrence?.id || badge.latestOccurrenceId,
+        ocorrencias: occurrences,
+    };
 }
 
 function resolveGameNameForTemplate(gameData) {
@@ -980,6 +1183,7 @@ exports.avaliarConquistasPartida = functions.https.onCall(async (data, context) 
     const today = new Date().toISOString().split('T')[0];
     let conquistasConcedidas = 0;
     const detalhes = [];
+    const seasonYear = String(eventData?.data || '').slice(-4);
 
     for (const playerId of playerIds) {
         const playerRef = admin.firestore().collection('jogadores').doc(playerId);
@@ -988,7 +1192,6 @@ exports.avaliarConquistasPartida = functions.https.onCall(async (data, context) 
 
         const playerData = playerSnap.data() || {};
         const existingBadges = Array.isArray(playerData.badges) ? playerData.badges : [];
-        const existingIds = new Set(existingBadges.map((b) => b.id));
         const matchedRules = [];
         const teamId = String(playerTeamMap[playerId] || 'ancb_default');
         const teamName = resolveTeamNameFromEvent(eventData, teamId) || (teamId === 'ancb_default' ? 'ANCB' : teamId);
@@ -1001,50 +1204,56 @@ exports.avaliarConquistasPartida = functions.https.onCall(async (data, context) 
         }
 
         const dominantRules = selectDominantMatchedRules(matchedRules);
-        const badgesToAdd = [];
-        const badgeMessageById = {};
+        let nextBadges = [...existingBadges];
+        const awardedBadges = [];
 
         for (const regra of dominantRules) {
             const gatilho = normalizeGatilho(regra.gatilho);
-
-            const badgeId = `regra_${regra.id}_${jogoId}`;
-            if (existingIds.has(badgeId)) continue;
-
-            const rendered = buildRenderedTexts(regra, {
+            const renderContext = {
                 eventName: eventData?.nome || 'Evento',
                 gameName: resolveGameNameForTemplate(gameData),
-                seasonYear: String(eventData?.data || '').slice(-4),
+                seasonYear,
                 playerName: playerData?.nome || playerId,
                 value: typeof gatilho?.minimo === 'number' ? gatilho.minimo : '',
+            };
+            const rendered = buildRenderedTexts(regra, renderContext);
+            const incomingBadge = buildStackedBadgeFromRule(regra, rendered, {
+                categoria: 'partida',
+                tipoAvaliacao: 'pos_jogo',
+                occurrence: {
+                    id: `jogo_${jogoId}`,
+                    descricao: rendered.descricao,
+                    data: today,
+                    gameId: jogoId,
+                    eventId: eventoId,
+                    seasonYear,
+                    teamId,
+                    teamNome: teamName,
+                    contextLabel: renderContext.gameName,
+                    renderContext,
+                },
             });
 
-            badgesToAdd.push({
-                id: badgeId,
-                nome: rendered.titulo,
-                emoji: regra.tipoIcone === 'emoji' ? (regra.iconeValor || '🏅') : '🏅',
-                categoria: 'partida',
-                raridade: resolveRegraRaridade(regra),
-                descricao: rendered.descricao,
-                data: today,
-                gameId: jogoId,
-                teamId,
-                teamNome: teamName,
-                regraId: regra.id,
-                tipoIcone: regra.tipoIcone || 'emoji',
-                iconeValor: regra.iconeValor || '🏅',
+            const result = upsertStackedBadgeList(nextBadges, incomingBadge);
+            nextBadges = result.badges;
+            if (!result.occurrenceAdded) continue;
+
+            awardedBadges.push({
+                badge: result.badge,
+                occurrenceId: `jogo_${jogoId}`,
+                message: rendered.mensagem,
             });
-            badgeMessageById[badgeId] = rendered.mensagem;
         }
 
-        if (!badgesToAdd.length) continue;
+        if (!awardedBadges.length) continue;
 
         await playerRef.update({
-            badges: admin.firestore.FieldValue.arrayUnion(...badgesToAdd),
+            badges: nextBadges,
         });
 
-        conquistasConcedidas += badgesToAdd.length;
-        detalhes.push(`${playerData.nome || playerId} [${teamName}]: ${badgesToAdd.length} conquista(s)`);
-        console.log(`Conquistas pos-jogo -> jogador=${playerData.nome || playerId} team=${teamId} (${teamName}) qtd=${badgesToAdd.length}`);
+        conquistasConcedidas += awardedBadges.length;
+        detalhes.push(`${playerData.nome || playerId} [${teamName}]: ${awardedBadges.length} conquista(s)`);
+        console.log(`Conquistas pos-jogo -> jogador=${playerData.nome || playerId} team=${teamId} (${teamName}) qtd=${awardedBadges.length}`);
 
         const usersSnap = await admin.firestore().collection('usuarios')
             .where('linkedPlayerId', '==', playerId)
@@ -1053,10 +1262,11 @@ exports.avaliarConquistasPartida = functions.https.onCall(async (data, context) 
 
         if (!usersSnap.empty) {
             const targetUserId = usersSnap.docs[0].id;
-            for (const badge of badgesToAdd) {
+            for (const awarded of awardedBadges) {
+                const badge = awarded.badge;
                 const regraId = badge.regraId;
-                const message = badgeMessageById[badge.id] || `Voce ganhou a conquista "${badge.nome}".`;
-                const notifId = `badge_${targetUserId}_${badge.id}`;
+                const message = awarded.message || `Voce ganhou a conquista "${badge.nome}".`;
+                const notifId = `badge_${targetUserId}_${badge.id}_${awarded.occurrenceId}`;
 
                 await admin.firestore().collection('notifications').doc(notifId).set({
                     targetUserId,
@@ -1065,6 +1275,7 @@ exports.avaliarConquistasPartida = functions.https.onCall(async (data, context) 
                     message,
                     data: {
                         badgeId: badge.id,
+                        occurrenceId: awarded.occurrenceId,
                         regraId,
                         eventoId,
                         jogoId,
@@ -1265,7 +1476,6 @@ exports.avaliarConquistasFechamentoTemporada = functions.https.onCall(async (dat
         const playerData = playerSnap.data() || {};
         const existingBadges = Array.isArray(playerData.badges) ? playerData.badges : [];
         seasonStats.eventBadgesByPlayer[playerId] = countEventBadgesInSeason(existingBadges, seasonYear);
-        const existingIds = new Set(existingBadges.map((b) => b.id));
         const matchedRules = [];
 
         for (const regra of regras) {
@@ -1276,46 +1486,51 @@ exports.avaliarConquistasFechamentoTemporada = functions.https.onCall(async (dat
         }
 
         const dominantRules = selectDominantMatchedRules(matchedRules);
-        const badgesToAdd = [];
-        const badgeMessageById = {};
+        let nextBadges = [...existingBadges];
+        const awardedBadges = [];
 
         for (const regra of dominantRules) {
             const gatilho = normalizeGatilho(regra.gatilho);
-
-            const badgeId = `regra_${regra.id}_${seasonYear}`;
-            if (existingIds.has(badgeId)) continue;
-
-            const rendered = buildRenderedTexts(regra, {
+            const renderContext = {
                 eventName: '',
                 gameName: '',
                 seasonYear,
                 playerName: playerData?.nome || playerId,
                 value: typeof gatilho?.minimo === 'number' ? gatilho.minimo : '',
+            };
+            const rendered = buildRenderedTexts(regra, renderContext);
+            const incomingBadge = buildStackedBadgeFromRule(regra, rendered, {
+                categoria: 'temporada',
+                tipoAvaliacao: 'ao_fechar_temporada',
+                occurrence: {
+                    id: `temporada_${seasonYear}`,
+                    descricao: rendered.descricao,
+                    data: today,
+                    seasonYear,
+                    contextLabel: seasonYear,
+                    renderContext,
+                },
             });
 
-            badgesToAdd.push({
-                id: badgeId,
-                nome: rendered.titulo,
-                emoji: regra.tipoIcone === 'emoji' ? (regra.iconeValor || '🏅') : '🏅',
-                categoria: 'temporada',
-                raridade: resolveRegraRaridade(regra),
-                descricao: rendered.descricao,
-                data: today,
-                regraId: regra.id,
-                tipoIcone: regra.tipoIcone || 'emoji',
-                iconeValor: regra.iconeValor || '🏅',
+            const result = upsertStackedBadgeList(nextBadges, incomingBadge);
+            nextBadges = result.badges;
+            if (!result.occurrenceAdded) continue;
+
+            awardedBadges.push({
+                badge: result.badge,
+                occurrenceId: `temporada_${seasonYear}`,
+                message: rendered.mensagem,
             });
-            badgeMessageById[badgeId] = rendered.mensagem;
         }
 
-        if (!badgesToAdd.length) continue;
+        if (!awardedBadges.length) continue;
 
         await playerRef.update({
-            badges: admin.firestore.FieldValue.arrayUnion(...badgesToAdd),
+            badges: nextBadges,
         });
 
-        conquistasConcedidas += badgesToAdd.length;
-        detalhes.push(`${playerData.nome || playerId}: ${badgesToAdd.length} conquista(s)`);
+        conquistasConcedidas += awardedBadges.length;
+        detalhes.push(`${playerData.nome || playerId}: ${awardedBadges.length} conquista(s)`);
 
         const usersSnap = await admin.firestore().collection('usuarios')
             .where('linkedPlayerId', '==', playerId)
@@ -1324,10 +1539,11 @@ exports.avaliarConquistasFechamentoTemporada = functions.https.onCall(async (dat
 
         if (!usersSnap.empty) {
             const targetUserId = usersSnap.docs[0].id;
-            for (const badge of badgesToAdd) {
+            for (const awarded of awardedBadges) {
+                const badge = awarded.badge;
                 const regraId = badge.regraId;
-                const message = badgeMessageById[badge.id] || `Voce ganhou a conquista "${badge.nome}".`;
-                const notifId = `badge_${targetUserId}_${badge.id}`;
+                const message = awarded.message || `Voce ganhou a conquista "${badge.nome}".`;
+                const notifId = `badge_${targetUserId}_${badge.id}_${awarded.occurrenceId}`;
 
                 await admin.firestore().collection('notifications').doc(notifId).set({
                     targetUserId,
@@ -1336,6 +1552,7 @@ exports.avaliarConquistasFechamentoTemporada = functions.https.onCall(async (dat
                     message,
                     data: {
                         badgeId: badge.id,
+                        occurrenceId: awarded.occurrenceId,
                         regraId,
                         seasonYear,
                     },
@@ -1498,7 +1715,6 @@ async function executarConquistasPosEvento(eventId, forcedEventData = null) {
 
         const playerData = playerSnap.data() || {};
         const existingBadges = Array.isArray(playerData.badges) ? playerData.badges : [];
-        const existingIds = new Set(existingBadges.map((b) => b.id));
         const teamId = String(playerTeamMap[playerId] || 'ancb_default');
         const teamName = resolveTeamNameFromEvent(eventData, teamId) || (teamId === 'ancb_default' ? 'ANCB' : teamId);
 
@@ -1510,48 +1726,55 @@ async function executarConquistasPosEvento(eventId, forcedEventData = null) {
         }
 
         const dominantRules = selectDominantMatchedRules(matchedRules);
-        const badgesToAdd = [];
-        const badgeMessageById = {};
+        let nextBadges = [...existingBadges];
+        const awardedBadges = [];
 
         for (const regra of dominantRules) {
-            const badgeId = `regra_${regra.id}_${eventId}`;
-            if (existingIds.has(badgeId)) continue;
-
             const gatilho = normalizeGatilho(regra.gatilho);
-            const rendered = buildRenderedTexts(regra, {
+            const renderContext = {
                 eventName: eventData?.nome || 'Evento',
                 gameName: '',
                 seasonYear: String(eventData?.data || '').slice(-4),
                 playerName: playerData?.nome || playerId,
                 value: typeof gatilho?.minimo === 'number' ? gatilho.minimo : '',
+            };
+            const rendered = buildRenderedTexts(regra, renderContext);
+            const incomingBadge = buildStackedBadgeFromRule(regra, rendered, {
+                categoria: 'partida',
+                tipoAvaliacao: 'pos_evento',
+                occurrence: {
+                    id: `evento_${eventId}`,
+                    descricao: rendered.descricao,
+                    data: today,
+                    eventId,
+                    seasonYear: renderContext.seasonYear,
+                    teamId,
+                    teamNome: teamName,
+                    contextLabel: renderContext.eventName,
+                    renderContext,
+                },
             });
 
-            badgesToAdd.push({
-                id: badgeId,
-                nome: rendered.titulo,
-                emoji: regra.tipoIcone === 'emoji' ? (regra.iconeValor || '🏅') : '🏅',
-                categoria: 'partida',
-                raridade: resolveRegraRaridade(regra),
-                descricao: rendered.descricao,
-                data: today,
-                teamId,
-                teamNome: teamName,
-                regraId: regra.id,
-                tipoIcone: regra.tipoIcone || 'emoji',
-                iconeValor: regra.iconeValor || '🏅',
+            const result = upsertStackedBadgeList(nextBadges, incomingBadge);
+            nextBadges = result.badges;
+            if (!result.occurrenceAdded) continue;
+
+            awardedBadges.push({
+                badge: result.badge,
+                occurrenceId: `evento_${eventId}`,
+                message: rendered.mensagem,
             });
-            badgeMessageById[badgeId] = rendered.mensagem;
         }
 
-        if (!badgesToAdd.length) continue;
+        if (!awardedBadges.length) continue;
 
         await playerRef.update({
-            badges: admin.firestore.FieldValue.arrayUnion(...badgesToAdd),
+            badges: nextBadges,
         });
 
-        conquistasConcedidas += badgesToAdd.length;
-        detalhes.push(`${playerData.nome || playerId} [${teamName}]: ${badgesToAdd.length} conquista(s)`);
-        console.log(`Conquistas pos-evento -> jogador=${playerData.nome || playerId} team=${teamId} (${teamName}) qtd=${badgesToAdd.length}`);
+        conquistasConcedidas += awardedBadges.length;
+        detalhes.push(`${playerData.nome || playerId} [${teamName}]: ${awardedBadges.length} conquista(s)`);
+        console.log(`Conquistas pos-evento -> jogador=${playerData.nome || playerId} team=${teamId} (${teamName}) qtd=${awardedBadges.length}`);
 
         const usersSnap = await admin.firestore().collection('usuarios')
             .where('linkedPlayerId', '==', playerId)
@@ -1560,10 +1783,11 @@ async function executarConquistasPosEvento(eventId, forcedEventData = null) {
 
         if (!usersSnap.empty) {
             const targetUserId = usersSnap.docs[0].id;
-            for (const badge of badgesToAdd) {
+            for (const awarded of awardedBadges) {
+                const badge = awarded.badge;
                 const regraId = badge.regraId;
-                const message = badgeMessageById[badge.id] || `Voce ganhou a conquista "${badge.nome}".`;
-                const notifId = `badge_${targetUserId}_${badge.id}`;
+                const message = awarded.message || `Voce ganhou a conquista "${badge.nome}".`;
+                const notifId = `badge_${targetUserId}_${badge.id}_${awarded.occurrenceId}`;
 
                 await admin.firestore().collection('notifications').doc(notifId).set({
                     targetUserId,
@@ -1572,6 +1796,7 @@ async function executarConquistasPosEvento(eventId, forcedEventData = null) {
                     message,
                     data: {
                         badgeId: badge.id,
+                        occurrenceId: awarded.occurrenceId,
                         regraId,
                         eventoId: eventId,
                         teamId,
@@ -1613,6 +1838,77 @@ exports.avaliarConquistasEventoFinalizado = functions.https.onCall(async (data, 
     return executarConquistasPosEvento(eventoId);
 });
 
+exports.propagarEdicaoConquista = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Usuario precisa estar autenticado.');
+    }
+
+    const callerUid = context.auth.uid;
+    const callerDoc = await admin.firestore().collection('usuarios').doc(callerUid).get();
+    const callerRole = callerDoc.exists ? callerDoc.data().role : null;
+    if (!callerDoc.exists || (callerRole !== 'admin' && callerRole !== 'super-admin')) {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas administradores podem propagar alteracoes de conquistas.');
+    }
+
+    const regraId = String(data?.regraId || '').trim();
+    if (!regraId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Informe regraId.');
+    }
+
+    const regraSnap = await admin.firestore().collection('conquistas_regras').doc(regraId).get();
+    if (!regraSnap.exists) {
+        throw new functions.https.HttpsError('not-found', 'Regra nao encontrada.');
+    }
+
+    const regra = { id: regraSnap.id, ...regraSnap.data() };
+    let playersUpdated = 0;
+    let badgesUpdated = 0;
+    let batchesProcessed = 0;
+    const batchSize = Math.min(Math.max(Number(data?.batchSize) || 250, 50), 500);
+    let lastDoc = null;
+
+    while (true) {
+        let query = admin.firestore().collection('jogadores').orderBy(admin.firestore.FieldPath.documentId()).limit(batchSize);
+        if (lastDoc) {
+            query = query.startAfter(lastDoc);
+        }
+
+        const playersSnap = await query.get();
+        if (playersSnap.empty) break;
+
+        batchesProcessed += 1;
+        console.log(`propagarEdicaoConquista: lote ${batchesProcessed} com ${playersSnap.size} jogador(es)`);
+
+        for (const playerDoc of playersSnap.docs) {
+            const playerData = playerDoc.data() || {};
+            const currentBadges = Array.isArray(playerData.badges) ? playerData.badges : [];
+            let changed = false;
+
+            const nextBadges = currentBadges.map((badge) => {
+                if (String(badge?.regraId || '').trim() !== regraId) return badge;
+                changed = true;
+                badgesUpdated += 1;
+                return applyRulePresentationToBadge(badge, regra, playerData?.nome || '');
+            });
+
+            if (!changed) continue;
+
+            await playerDoc.ref.update({ badges: nextBadges });
+            playersUpdated += 1;
+        }
+
+        lastDoc = playersSnap.docs[playersSnap.docs.length - 1];
+    }
+
+    return {
+        success: true,
+        regraId,
+        playersUpdated,
+        badgesUpdated,
+        batchesProcessed,
+    };
+});
+
 // ─────────────────────────────────────────────────────────────
 // 5. SISTEMA DE CONQUISTAS (BADGES)
 //
@@ -1650,213 +1946,21 @@ exports.onEventFinishedAwardBadges = functions.firestore
 
         const eventId = context.params.eventId;
         const eventName = newData.nome || 'Evento';
-        const eventSlug = eventName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+        console.log(`🏆 Iniciando distribuição de conquistas por regras para evento: ${eventName} (${eventId})`);
 
-        console.log(`🏆 Iniciando distribuição de badges para evento: ${eventName} (${eventId})`);
-
-        // ── 1. Resolve todos os jogadores ANCB do evento ─────────
-        let allAncbPlayerIds = [];
-
-        if (newData.timesParticipantes && newData.timesParticipantes.length > 0) {
-            newData.timesParticipantes
-                .filter(t => t.isANCB)
-                .forEach(t => allAncbPlayerIds.push(...(t.jogadores || [])));
-        } else if (newData.times && newData.times.length > 0) {
-            newData.times.forEach(t => allAncbPlayerIds.push(...(t.jogadores || [])));
-        } else {
-            allAncbPlayerIds = (newData.jogadoresEscalados || []).map(extractPlayerId).filter(Boolean);
-        }
-
-        allAncbPlayerIds = [...new Set(allAncbPlayerIds.filter(Boolean))];
-
-        if (allAncbPlayerIds.length === 0) {
-            console.log('Nenhum jogador ANCB encontrado no evento. Encerrando.');
-            return null;
-        }
-
-        console.log(`   ${allAncbPlayerIds.length} jogador(es) ANCB encontrados.`);
-
-        // ── 2. Busca todos os jogos e cestas do evento ───────────
-        const jogosSnap = await admin.firestore()
-            .collection('eventos').doc(eventId).collection('jogos').get();
-
-        // Mapas: playerId → totalPontos, totalPontos3pts, maxPontosJogo
-        const pontosNoEvento = {};   // total de pontos no evento
-        const cestas3NoEvento = {};  // total de cestas de 3 no evento
-        const maxPontosJogo = {};    // maior pontuação em um único jogo
-
-        for (const jogoDoc of jogosSnap.docs) {
-            const cestasSnap = await admin.firestore()
-                .collection('eventos').doc(eventId)
-                .collection('jogos').doc(jogoDoc.id)
-                .collection('cestas').get();
-
-            // Pontos por jogador neste jogo
-            const pontosNesteJogo = {};
-
-            for (const cestaDoc of cestasSnap.docs) {
-                const cesta = cestaDoc.data();
-                const pid = cesta.jogadorId;
-                if (!pid || !allAncbPlayerIds.includes(pid)) continue;
-
-                const pts = Number(cesta.pontos) || 0;
-
-                pontosNoEvento[pid]  = (pontosNoEvento[pid]  || 0) + pts;
-                pontosNesteJogo[pid] = (pontosNesteJogo[pid] || 0) + pts;
-
-                if (pts === 3) {
-                    cestas3NoEvento[pid] = (cestas3NoEvento[pid] || 0) + 1;
-                }
-            }
-
-            // Atualiza máximo por jogo
-            for (const [pid, pts] of Object.entries(pontosNesteJogo)) {
-                if (pts > (maxPontosJogo[pid] || 0)) {
-                    maxPontosJogo[pid] = pts;
-                }
-            }
-        }
-
-        // ── 3. Determina artilheiro ───────────────────────────────
-        let artilheiroId = null;
-        let maxPontos = 0;
-        for (const [pid, pts] of Object.entries(pontosNoEvento)) {
-            if (pts > maxPontos) { maxPontos = pts; artilheiroId = pid; }
-        }
-
-        // ── 4. Resolve times do pódio ─────────────────────────────
-        // podio: { primeiro: nomeTime, segundo: nomeTime, terceiro: nomeTime }
-        const podio = newData.podio || {};
-
-        const resolvePodioPLayerIds = (nomeTime) => {
-            if (!nomeTime) return [];
-            // Tenta casar pelo nome em timesParticipantes ou times
-            const allTimes = newData.timesParticipantes || newData.times || [];
-            const time = allTimes.find(t =>
-                t.nomeTime?.toLowerCase().trim() === nomeTime.toLowerCase().trim()
-            );
-            return (time?.jogadores || []).filter(pid => allAncbPlayerIds.includes(pid));
-        };
-
-        const campeaoIds   = resolvePodioPLayerIds(podio.primeiro);
-        const viceIds      = resolvePodioPLayerIds(podio.segundo);
-        const terceiroIds  = resolvePodioPLayerIds(podio.terceiro);
-
-        // ── 5. Monta badges para cada jogador ─────────────────────
-        const today = new Date().toISOString().split('T')[0];
-
-        const buildBadge = (id, nome, emoji, raridade, categoria, descricao) => ({
-            id, nome, emoji, raridade, categoria, descricao, data: today,
-        });
-
-        // Mapa: playerId → Badge[]
-        const badgesByPlayer = {};
-        const add = (pid, badge) => {
-            if (!badgesByPlayer[pid]) badgesByPlayer[pid] = [];
-            badgesByPlayer[pid].push(badge);
-        };
-
-        for (const pid of allAncbPlayerIds) {
-            // Estava Lá
-            add(pid, buildBadge(
-                `estava_la_${eventSlug}`,
-                `Estava Lá (${eventName})`,
-                '🏀', 'comum', 'partida',
-                `Participou do evento ${eventName}.`
-            ));
-
-            // Pódio
-            if (campeaoIds.includes(pid)) {
-                add(pid, buildBadge(`campiao_${eventSlug}`,  `Campeão (${eventName})`, '🏆', 'epica', 'temporada', `Integrou o time campeão do evento ${eventName}.`));
-            } else if (viceIds.includes(pid)) {
-                add(pid, buildBadge(`vice_${eventSlug}`,     `Vice (${eventName})`,    '🥈', 'rara',  'temporada', `Integrou o time vice-campeão do evento ${eventName}.`));
-            } else if (terceiroIds.includes(pid)) {
-                add(pid, buildBadge(`podio_${eventSlug}`,    `Pódio (${eventName})`,   '🥉', 'rara',  'temporada', `Integrou o time que ficou em 3º lugar no evento ${eventName}.`));
-            }
-
-            // Cestinha (artilheiro do evento)
-            if (pid === artilheiroId && maxPontos > 0) {
-                add(pid, buildBadge(`cestinha_ev_${eventSlug}`, `Cestinha (${eventName})`, '👑', 'rara', 'partida', `Maior pontuador do evento ${eventName} com ${maxPontos} pontos.`));
-            }
-
-            // Bola Quente / Imparável (por jogo)
-            const melhorJogo = maxPontosJogo[pid] || 0;
-            if (melhorJogo >= 20) {
-                add(pid, buildBadge(`imparavel_${eventSlug}`,   `Imparável (${eventName})`,   '☄️', 'rara',  'partida', `Marcou 20+ pontos em um único jogo no evento ${eventName}.`));
-            } else if (melhorJogo >= 10) {
-                add(pid, buildBadge(`bola_quente_${eventSlug}`, `Bola Quente (${eventName})`, '💥', 'comum', 'partida', `Marcou 10+ pontos em um único jogo no evento ${eventName}.`));
-            }
-
-            // Cestas de 3
-            const total3 = cestas3NoEvento[pid] || 0;
-            if (total3 >= 5) {
-                add(pid, buildBadge(`atirador_elite_${eventSlug}`, `Mira Calibrada (${eventName})`,  '🎯', 'epica', 'partida', `Converteu 5+ cestas de 3 pontos no evento ${eventName}.`));
-            } else if (total3 >= 3) {
-                add(pid, buildBadge(`atirador_${eventSlug}`,       `Mão Quente (${eventName})`,      '👌', 'rara',  'partida', `Converteu 3+ cestas de 3 pontos no evento ${eventName}.`));
-            } else if (total3 >= 1) {
-                add(pid, buildBadge(`primeira_bomba_${eventSlug}`, `Tiro Certo (${eventName})`,      '🏹', 'comum', 'partida', `Converteu uma cesta de 3 pontos no evento ${eventName}.`));
-            }
-        }
-
-        // ── 6. Salva badges e notifica cada jogador ───────────────
-        let totalConcedidas = 0;
-
-        for (const [pid, newBadges] of Object.entries(badgesByPlayer)) {
-            if (!newBadges.length) continue;
-
-            // Lê badges atuais para evitar duplicatas
-            const playerSnap = await admin.firestore().collection('jogadores').doc(pid).get();
-            if (!playerSnap.exists) continue;
-
-            const existingIds = new Set((playerSnap.data().badges || []).map(b => b.id));
-            const toAdd = newBadges.filter(b => !existingIds.has(b.id));
-            if (!toAdd.length) continue;
-
-            await admin.firestore().collection('jogadores').doc(pid).update({
-                badges: admin.firestore.FieldValue.arrayUnion(...toAdd),
-            });
-
-            totalConcedidas += toAdd.length;
-            console.log(`   ✅ ${playerSnap.data().nome || pid}: ${toAdd.map(b => b.emoji + b.nome).join(', ')}`);
-
-            // Notifica o usuário vinculado
-            const usersSnap = await admin.firestore().collection('usuarios')
-                .where('linkedPlayerId', '==', pid).limit(1).get();
-
-            if (!usersSnap.empty) {
-                const targetUserId = usersSnap.docs[0].id;
-                for (const badge of toAdd) {
-                    const notifId = `badge_${targetUserId}_${badge.id}`;
-                    await admin.firestore().collection('notifications').doc(notifId).set({
-                        targetUserId,
-                        type: 'evaluation',
-                        title: `Nova conquista desbloqueada! ${badge.emoji}`,
-                        message: `Você ganhou "${badge.nome}": ${badge.descricao}`,
-                        data: { badgeId: badge.id },
-                        read: false,
-                        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                    }, { merge: true });
-                }
-            }
-        }
-
-        // Executa regras dinamicas de pos_evento (inclui atributos via quiz)
         try {
             const dynamicResult = await executarConquistasPosEvento(eventId, newData);
-            if (dynamicResult?.conquistasConcedidas > 0) {
-                totalConcedidas += Number(dynamicResult.conquistasConcedidas || 0);
-            }
             console.log(`⚙️ Regras dinamicas pos_evento: ${dynamicResult?.conquistasConcedidas || 0} conquista(s).`);
+
+            await admin.firestore().collection('eventos').doc(eventId)
+                .update({ badgesAwardedAt: admin.firestore.FieldValue.serverTimestamp() });
+
+            console.log(`🏆 ${dynamicResult?.conquistasConcedidas || 0} conquista(s) processada(s) no evento ${eventName}.`);
+            return null;
         } catch (dynamicError) {
             console.warn(`Falha ao executar regras dinamicas pos_evento no evento ${eventId}:`, dynamicError?.message || dynamicError);
+            throw dynamicError;
         }
-
-        // Marca como processado
-        await admin.firestore().collection('eventos').doc(eventId)
-            .update({ badgesAwardedAt: admin.firestore.FieldValue.serverTimestamp() });
-
-        console.log(`\n🏆 ${totalConcedidas} badge(s) concedida(s) no evento ${eventName}.`);
-        return null;
     });
 
 

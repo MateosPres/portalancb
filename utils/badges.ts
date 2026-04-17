@@ -5,7 +5,7 @@
  * Importe daqui em: ProfileView, JogadoresView, AdminView e Cloud Functions (via cópia/shared).
  */
 
-import { Badge } from '../types';
+import { Badge, BadgeOccurrence, ConquistaRegra } from '../types';
 
 // ─────────────────────────────────────────────────────────────
 // IMPACTOS DE TAGS DE AVALIAÇÃO NOS ATRIBUTOS
@@ -34,63 +34,6 @@ export const REVIEW_TAG_IMPACTS: Record<string, Partial<Record<AtributoKey, numb
 };
 
 // ─────────────────────────────────────────────────────────────
-// CATÁLOGO DE BADGES
-//
-// BADGES DE EVENTO: concedidas automaticamente ao finalizar um evento.
-// IDs são dinâmicos — levam o slug do evento (ex: campiao_jogos_abertos_2025).
-//
-// BADGES DE TEMPORADA: concedidas pelo admin ao fechar a temporada.
-// IDs levam o ano (ex: rei_quadra_2025).
-//
-// As entradas abaixo são os TEMPLATES para exibição no Admin.
-// ─────────────────────────────────────────────────────────────
-export interface BadgeDefinition {
-    id: string;
-    nome: string;
-    emoji: string;
-    descricao: string;
-    categoria: Badge['categoria'];
-    raridade: Badge['raridade'];
-    tipo: 'evento' | 'temporada' | 'manual';
-    criterio?: {
-        tipo: 'tag_count';
-        tag: string;
-        minCount: number;
-    } | {
-        tipo: 'all_around';
-    };
-}
-
-export const BADGE_CATALOG: BadgeDefinition[] = [
-    // ── POR EVENTO ───────────────────────────────────────────
-    { tipo: 'evento',    id: 'estava_la',       nome: 'Estava Lá',          emoji: '🏀', categoria: 'partida',   raridade: 'comum',    descricao: 'Participou do evento.' },
-    { tipo: 'evento',    id: 'campiao',         nome: 'Campeão',            emoji: '🏆', categoria: 'temporada', raridade: 'epica',    descricao: 'Integrou o time campeão do evento.' },
-    { tipo: 'evento',    id: 'vice',            nome: 'Vice',               emoji: '🥈', categoria: 'temporada', raridade: 'rara',     descricao: 'Integrou o time vice-campeão do evento.' },
-    { tipo: 'evento',    id: 'podio',           nome: 'Pódio',              emoji: '🥉', categoria: 'temporada', raridade: 'rara',     descricao: 'Integrou o time que ficou em 3º lugar.' },
-    { tipo: 'evento',    id: 'cestinha',        nome: 'Cestinha',           emoji: '👑', categoria: 'partida',   raridade: 'rara',     descricao: 'Maior pontuador do evento.' },
-    { tipo: 'evento',    id: 'bola_quente',     nome: 'Bola Quente',        emoji: '💥', categoria: 'partida',   raridade: 'comum',    descricao: 'Marcou 10+ pontos em um único jogo.' },
-    { tipo: 'evento',    id: 'imparavel',       nome: 'Imparável',          emoji: '☄️', categoria: 'partida',   raridade: 'rara',     descricao: 'Marcou 20+ pontos em um único jogo.' },
-    { tipo: 'evento',    id: 'primeira_bomba',  nome: 'Tiro Certo',         emoji: '🏹', categoria: 'partida',   raridade: 'comum',    descricao: 'Converteu pelo menos 1 cesta de 3 pontos.' },
-    { tipo: 'evento',    id: 'atirador',        nome: 'Mão Quente',         emoji: '👌', categoria: 'partida',   raridade: 'rara',     descricao: 'Converteu 3+ cestas de 3 pontos.' },
-    { tipo: 'evento',    id: 'atirador_elite',  nome: 'Mira Calibrada',     emoji: '🎯', categoria: 'partida',   raridade: 'epica',    descricao: 'Converteu 5+ cestas de 3 pontos.' },
-
-    // ── POR TEMPORADA ────────────────────────────────────────
-    { tipo: 'temporada', id: 'rei_quadra',      nome: 'Rei da Quadra',      emoji: '👑', categoria: 'temporada', raridade: 'lendaria', descricao: 'Maior pontuador da temporada.' },
-    { tipo: 'temporada', id: 'chama_viva',      nome: 'Chama Viva',         emoji: '🔥', categoria: 'temporada', raridade: 'epica',    descricao: '2º maior pontuador da temporada.' },
-    { tipo: 'temporada', id: 'forca_bruta',     nome: 'Força Bruta',        emoji: '⚡', categoria: 'temporada', raridade: 'epica',    descricao: '3º maior pontuador da temporada.' },
-    { tipo: 'temporada', id: 'mao_ouro',        nome: 'Sniper de Elite',    emoji: '🏹', categoria: 'temporada', raridade: 'lendaria', descricao: 'O melhor da liga em bolas de 3 na temporada.' },
-    { tipo: 'temporada', id: 'mao_prata',       nome: 'Sniper',             emoji: '🎯', categoria: 'temporada', raridade: 'epica',    descricao: '2º lugar em cestas de 3 da temporada. Sempre perigoso.' },
-    { tipo: 'temporada', id: 'mao_bronze',      nome: 'Mão Calibrada',      emoji: '🪃', categoria: 'temporada', raridade: 'epica',    descricao: '3º lugar em cestas de 3 da temporada. Precisão técnica.' },
-    { tipo: 'temporada', id: 'guerreiro',       nome: 'Guerreiro da Temporada', emoji: '🗓️', categoria: 'temporada', raridade: 'rara', descricao: 'Participou de todos os eventos da temporada.' },
-    { tipo: 'temporada', id: 'colecionador',    nome: 'Colecionador',       emoji: '🏅', categoria: 'temporada', raridade: 'rara',     descricao: 'Acumulou 5+ conquistas de evento na temporada.' },
-
-    // ── MANUAL (admin concede) ───────────────────────────────
-    { tipo: 'manual',    id: 'mvp_temporada',   nome: 'MVP da Temporada',   emoji: '🏆', categoria: 'temporada', raridade: 'lendaria', descricao: 'Eleito o jogador mais valioso da temporada.' },
-    { tipo: 'manual',    id: 'veterano',        nome: 'Veterano',           emoji: '🎖️', categoria: 'temporada', raridade: 'rara',     descricao: 'Mais de 20 jogos disputados pela ANCB.' },
-];
-
-
-// ─────────────────────────────────────────────────────────────
 // HELPERS DE EXIBIÇÃO
 // Era: copiados em ProfileView.tsx e JogadoresView.tsx.
 // Agora: fonte única.
@@ -99,6 +42,182 @@ export interface RarityStyle {
     label: string;
     classes: string;
 }
+
+const compareBadgeDates = (left?: string, right?: string): number => {
+    return String(left || '').localeCompare(String(right || ''));
+};
+
+const buildLegacyOccurrence = (badge: Badge): BadgeOccurrence => ({
+    id: badge.latestOccurrenceId || `${badge.id}:legacy`,
+    descricao: badge.descricao || 'Conquista desbloqueada.',
+    data: badge.data || '',
+    gameId: badge.gameId,
+    eventId: badge.eventId,
+    seasonYear: badge.seasonYear,
+    teamId: badge.teamId,
+    teamNome: badge.teamNome,
+});
+
+export const getBadgeOccurrences = (badge: Badge): BadgeOccurrence[] => {
+    if (Array.isArray(badge.ocorrencias) && badge.ocorrencias.length > 0) {
+        return [...badge.ocorrencias].sort((a, b) => {
+            const dateDiff = compareBadgeDates(a.data, b.data);
+            if (dateDiff !== 0) return dateDiff;
+            return String(a.id || '').localeCompare(String(b.id || ''));
+        });
+    }
+
+    return [buildLegacyOccurrence(badge)];
+};
+
+export const getBadgeStackCount = (badge: Badge): number => {
+    if (typeof badge.stackCount === 'number' && badge.stackCount > 0) {
+        return badge.stackCount;
+    }
+    return getBadgeOccurrences(badge).length;
+};
+
+export const getLatestBadgeOccurrence = (badge: Badge): BadgeOccurrence => {
+    const occurrences = getBadgeOccurrences(badge);
+    return occurrences[occurrences.length - 1] || buildLegacyOccurrence(badge);
+};
+
+export const getBadgeDisplayDate = (badge: Badge): string => {
+    return getLatestBadgeOccurrence(badge).data || badge.data || '';
+};
+
+export const getBadgeDisplayDescription = (badge: Badge): string => {
+    return getLatestBadgeOccurrence(badge).descricao || badge.descricao || 'Conquista desbloqueada.';
+};
+
+export const renderConquistaTemplate = (
+    template: string | undefined,
+    context: Record<string, string | number | undefined | null>,
+): string => {
+    const source = String(template || '').trim();
+    if (!source) return '';
+
+    return source.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => {
+        const value = context[key];
+        if (value === undefined || value === null) return '';
+        return String(value);
+    }).replace(/\s{2,}/g, ' ').trim();
+};
+
+export const renderConquistaTexts = (
+    regra: Pick<ConquistaRegra, 'titulo' | 'descricao' | 'descricaoTemplate' | 'mensagemNotificacao' | 'mensagemNotificacaoTemplate'>,
+    context: Record<string, string | number | undefined | null>,
+) => {
+    const tituloBase = regra.titulo || 'Conquista';
+    const descricaoBase = regra.descricaoTemplate || regra.descricao || 'Conquista desbloqueada.';
+    const mensagemBase = regra.mensagemNotificacaoTemplate || regra.mensagemNotificacao || `Voce ganhou a conquista "${regra.titulo || 'Conquista'}".`;
+
+    return {
+        titulo: renderConquistaTemplate(tituloBase, context) || 'Conquista',
+        descricao: renderConquistaTemplate(descricaoBase, context) || 'Conquista desbloqueada.',
+        mensagem: renderConquistaTemplate(mensagemBase, context) || `Voce ganhou a conquista "${regra.titulo || 'Conquista'}".`,
+    };
+};
+
+export const getBadgeEffectClasses = (rarity?: Badge['raridade'] | null): string => {
+    switch (rarity || 'comum') {
+        case 'lendaria':
+            return 'badge-rarity badge-rarity-lendaria';
+        case 'epica':
+            return 'badge-rarity badge-rarity-epica';
+        case 'rara':
+            return 'badge-rarity badge-rarity-rara';
+        default:
+            return 'badge-rarity';
+    }
+};
+
+export const isImageBadge = (badge?: Pick<Badge, 'tipoIcone' | 'iconeValor'> | null): boolean => {
+    return badge?.tipoIcone === 'imagem' && String(badge?.iconeValor || '').startsWith('http');
+};
+
+export const shouldAggregateBadgeByRule = (badge: Pick<Badge, 'tipoAvaliacao'>): boolean => {
+    return badge.tipoAvaliacao !== 'ao_fechar_temporada';
+};
+
+export const buildRuleBasedBadgeId = (
+    regraId: string,
+    options?: { tipoAvaliacao?: Badge['tipoAvaliacao']; seasonYear?: string },
+): string => {
+    const normalizedRuleId = String(regraId || '').trim();
+    const seasonYear = String(options?.seasonYear || '').trim();
+
+    if (options?.tipoAvaliacao === 'ao_fechar_temporada' && seasonYear) {
+        return `regra_${normalizedRuleId}_temporada_${seasonYear}`;
+    }
+
+    return `regra_${normalizedRuleId}`;
+};
+
+export const upsertStackedBadge = (allBadges: Badge[], incomingBadge: Badge) => {
+    const nextBadges = [...allBadges];
+    const badgeIndex = nextBadges.findIndex((badge) => {
+        if (incomingBadge.regraId && badge.regraId && shouldAggregateBadgeByRule(incomingBadge) && shouldAggregateBadgeByRule(badge)) {
+            return badge.regraId === incomingBadge.regraId;
+        }
+        return badge.id === incomingBadge.id;
+    });
+
+    const incomingOccurrences = getBadgeOccurrences(incomingBadge);
+
+    if (badgeIndex === -1) {
+        const latestOccurrence = incomingOccurrences[incomingOccurrences.length - 1];
+        const normalizedBadge: Badge = {
+            ...incomingBadge,
+            origem: incomingBadge.origem || 'regra',
+            descricao: latestOccurrence?.descricao || incomingBadge.descricao,
+            data: latestOccurrence?.data || incomingBadge.data,
+            stackCount: incomingOccurrences.length,
+            latestOccurrenceId: latestOccurrence?.id,
+            ocorrencias: incomingOccurrences,
+        };
+        nextBadges.push(normalizedBadge);
+        return { badges: nextBadges, badge: normalizedBadge, occurrenceAdded: true };
+    }
+
+    const currentBadge = nextBadges[badgeIndex];
+    const currentOccurrences = getBadgeOccurrences(currentBadge);
+    const knownIds = new Set(currentOccurrences.map((occurrence) => occurrence.id));
+    let occurrenceAdded = false;
+
+    for (const occurrence of incomingOccurrences) {
+        if (knownIds.has(occurrence.id)) continue;
+        currentOccurrences.push(occurrence);
+        knownIds.add(occurrence.id);
+        occurrenceAdded = true;
+    }
+
+    currentOccurrences.sort((a, b) => {
+        const dateDiff = compareBadgeDates(a.data, b.data);
+        if (dateDiff !== 0) return dateDiff;
+        return String(a.id || '').localeCompare(String(b.id || ''));
+    });
+
+    const latestOccurrence = currentOccurrences[currentOccurrences.length - 1] || buildLegacyOccurrence(currentBadge);
+    const mergedBadge: Badge = {
+        ...currentBadge,
+        ...incomingBadge,
+        origem: incomingBadge.origem || currentBadge.origem || 'regra',
+        descricao: latestOccurrence.descricao || incomingBadge.descricao || currentBadge.descricao,
+        data: latestOccurrence.data || incomingBadge.data || currentBadge.data,
+        gameId: latestOccurrence.gameId || incomingBadge.gameId || currentBadge.gameId,
+        eventId: latestOccurrence.eventId || incomingBadge.eventId || currentBadge.eventId,
+        seasonYear: latestOccurrence.seasonYear || incomingBadge.seasonYear || currentBadge.seasonYear,
+        teamId: latestOccurrence.teamId || incomingBadge.teamId || currentBadge.teamId,
+        teamNome: latestOccurrence.teamNome || incomingBadge.teamNome || currentBadge.teamNome,
+        stackCount: currentOccurrences.length,
+        latestOccurrenceId: latestOccurrence.id,
+        ocorrencias: currentOccurrences,
+    };
+
+    nextBadges[badgeIndex] = mergedBadge;
+    return { badges: nextBadges, badge: mergedBadge, occurrenceAdded };
+};
 
 export const getRarityStyles = (rarity?: Badge['raridade'] | null): RarityStyle => {
     switch (rarity || 'comum') {
@@ -149,64 +268,8 @@ export const getDisplayBadges = (
     return [...allBadges]
         .sort((a, b) => {
             const diff = getBadgeWeight(b.raridade) - getBadgeWeight(a.raridade);
-            return diff !== 0 ? diff : b.data.localeCompare(a.data);
+            return diff !== 0 ? diff : getBadgeDisplayDate(b).localeCompare(getBadgeDisplayDate(a));
         })
         .slice(0, maxDisplay);
 };
 
-// ─────────────────────────────────────────────────────────────
-// LÓGICA DE CONCESSÃO (usada pela Cloud Function e pelo Admin)
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Avalia quais badges um jogador deve receber com base na contagem
- * atual de tags e atributos. Retorna apenas as NOVAS badges que
- * ainda não foram concedidas.
- *
- * Pode ser chamada no frontend (admin manual) e replicada nas
- * Cloud Functions (onReviewSubmitted).
- */
-export const evaluateNewBadges = (
-    currentBadges: Badge[],
-    statsTags: Record<string, number>,
-    statsAtributos: { ataque?: number; defesa?: number; velocidade?: number; forca?: number; visao?: number },
-): BadgeDefinition[] => {
-    const existingIds = new Set(currentBadges.map(b => b.id));
-    const newBadges: BadgeDefinition[] = [];
-
-    for (const def of BADGE_CATALOG) {
-        if (existingIds.has(def.id)) continue;    // já tem
-        if (!def.criterio) continue;               // manual — pula
-        if (def.criterio.tipo !== 'tag_count') continue;
-
-        const count = statsTags[def.criterio.tag] ?? 0;
-        if (count >= def.criterio.minCount) {
-            newBadges.push(def);
-        }
-    }
-
-    // Critério all_around: todos os atributos >= 50
-    if (!existingIds.has('all_around')) {
-        const attrs = Object.values(statsAtributos);
-        if (attrs.length === 5 && attrs.every(v => (v ?? 0) >= 50)) {
-            const def = BADGE_CATALOG.find(b => b.id === 'all_around');
-            if (def) newBadges.push(def);
-        }
-    }
-
-    return newBadges;
-};
-
-/**
- * Cria um objeto Badge pronto para salvar no Firestore.
- */
-export const buildBadge = (def: BadgeDefinition, gameId?: string): Badge => ({
-    id: def.id,
-    nome: def.nome,
-    emoji: def.emoji,
-    categoria: def.categoria,
-    raridade: def.raridade,
-    descricao: def.descricao,
-    data: new Date().toISOString().split('T')[0],
-    ...(gameId ? { gameId } : {}),
-});

@@ -34,7 +34,16 @@ import {
 } from 'lucide-react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { formatCpf, formatPhoneForDisplay, normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
-import { getRarityStyles, getBadgeWeight, getDisplayBadges } from '../utils/badges';
+import {
+    getRarityStyles,
+    getBadgeWeight,
+    getDisplayBadges,
+    getBadgeDisplayDate,
+    getBadgeEffectClasses,
+    getBadgeOccurrences,
+    getBadgeStackCount,
+    isImageBadge,
+} from '../utils/badges';
 import imageCompression from 'browser-image-compression';
 
 interface JogadoresViewProps {
@@ -654,13 +663,23 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                 <div className="grid grid-cols-3 gap-3 md:gap-4">
                                     {displayBadges.map((badge, idx) => {
                                         const style = getRarityStyles(badge.raridade);
+                                        const stackCount = getBadgeStackCount(badge);
                                         return (
                                             <div 
                                                 key={idx} 
                                                 onClick={() => setSelectedBadge(badge)}
-                                                className={`rounded-lg p-2 md:p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-transform hover:scale-105 active:scale-95 shadow-lg border relative overflow-hidden ${style.classes}`}
+                                                className={`rounded-lg p-2 md:p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-transform hover:scale-105 active:scale-95 shadow-lg border relative overflow-hidden ${style.classes} ${getBadgeEffectClasses(badge.raridade)}`}
                                             >
-                                                <div className="text-2xl md:text-3xl mb-1 drop-shadow-md z-10">{badge.emoji}</div>
+                                                {stackCount > 1 && (
+                                                    <span className="absolute top-1.5 right-1.5 z-20 rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow-sm">
+                                                        x{stackCount}
+                                                    </span>
+                                                )}
+                                                {isImageBadge(badge) ? (
+                                                    <img src={badge.iconeValor} alt={badge.nome} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20 z-10" />
+                                                ) : (
+                                                    <div className="text-2xl md:text-3xl mb-1 drop-shadow-md z-10">{badge.emoji}</div>
+                                                )}
                                                 <div className="z-10 w-full">
                                                     <span className="block text-[8px] md:text-[9px] font-bold uppercase leading-tight line-clamp-2 min-h-[2em] flex items-center justify-center">
                                                         {badge.nome}
@@ -763,15 +782,38 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                 <LucideArrowLeft size={15} /> Voltar para conquistas
                             </button>
                             <div className="text-center">
-                                <div className="text-8xl mb-4 animate-bounce-slow drop-shadow-xl">{selectedBadge.emoji}</div>
+                                <div className={`mx-auto mb-4 flex h-28 w-28 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5 ${getBadgeEffectClasses(selectedBadge.raridade)}`}>
+                                    {isImageBadge(selectedBadge) ? (
+                                        <img src={selectedBadge.iconeValor} alt={selectedBadge.nome} className="h-24 w-24 rounded-[1.5rem] object-cover" />
+                                    ) : (
+                                        <div className="text-8xl animate-bounce-slow drop-shadow-xl">{selectedBadge.emoji}</div>
+                                    )}
+                                </div>
                                 <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 uppercase tracking-wide">{selectedBadge.nome}</h3>
-                                <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 border ${getRarityStyles(selectedBadge.raridade).classes}`}>
-                                    {getRarityStyles(selectedBadge.raridade).label}
+                                <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
+                                    <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${getRarityStyles(selectedBadge.raridade).classes}`}>
+                                        {getRarityStyles(selectedBadge.raridade).label}
+                                    </div>
+                                    {getBadgeStackCount(selectedBadge) > 1 && (
+                                        <div className="inline-block rounded-full border border-gray-200 bg-gray-100 px-3 py-1 text-xs font-black uppercase tracking-wider text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100">
+                                            Stack x{getBadgeStackCount(selectedBadge)}
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-600 mb-4">
-                                    <p className="text-gray-600 dark:text-gray-300 text-sm font-medium leading-relaxed">{selectedBadge.descricao}</p>
+                                <div className="mb-4 space-y-3 text-left">
+                                    {getBadgeOccurrences(selectedBadge).map((occurrence) => (
+                                        <div key={occurrence.id} className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-600">
+                                            <p className="text-gray-600 dark:text-gray-300 text-sm font-medium leading-relaxed">{occurrence.descricao}</p>
+                                            {(occurrence.contextLabel || occurrence.data) && (
+                                                <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                                                    {occurrence.contextLabel && <span>{occurrence.contextLabel}</span>}
+                                                    {occurrence.data && <span>{formatDate(occurrence.data)}</span>}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
-                                <p className="text-xs text-gray-400 uppercase font-bold tracking-widest">Conquistado em: {formatDate(selectedBadge.data)}</p>
+                                <p className="text-xs text-gray-400 uppercase font-bold tracking-widest">Conquistado em: {formatDate(getBadgeDisplayDate(selectedBadge))}</p>
                             </div>
                         </div>
                     ) : (
@@ -781,13 +823,23 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                 {selectedPlayer?.badges && selectedPlayer.badges.length > 0 ? (
                                     [...selectedPlayer.badges].reverse().map((badge, idx) => {
                                         const style = getRarityStyles(badge.raridade);
+                                        const stackCount = getBadgeStackCount(badge);
                                         return (
                                             <div
                                                 key={idx}
                                                 onClick={() => setSelectedBadge(badge)}
-                                                className={`rounded-xl p-2 flex flex-col items-center justify-center text-center cursor-pointer hover:scale-105 transition-transform shadow-sm border ${style.classes}`}
+                                                className={`rounded-xl p-2 flex flex-col items-center justify-center text-center cursor-pointer hover:scale-105 transition-transform shadow-sm border relative ${style.classes} ${getBadgeEffectClasses(badge.raridade)}`}
                                             >
-                                                <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>
+                                                {stackCount > 1 && (
+                                                    <div className="absolute left-1 top-1 rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow-sm">
+                                                        x{stackCount}
+                                                    </div>
+                                                )}
+                                                {isImageBadge(badge) ? (
+                                                    <img src={badge.iconeValor} alt={badge.nome} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20" />
+                                                ) : (
+                                                    <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>
+                                                )}
                                                 <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
                                             </div>
                                         );

@@ -20,7 +20,7 @@ const app = firebase.initializeApp(firebaseConfig);
 export const db = app.firestore();
 export const auth = app.auth();
 export const storage = app.storage();
-export const functions = app.functions(); // Export functions capability
+export const functions = app.functions('us-central1');
 
 // --- MESSAGING SETUP ---
 let messaging: firebase.messaging.Messaging | null = null;

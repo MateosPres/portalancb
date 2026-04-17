@@ -1,9 +1,12 @@
 /**
  * cleanup-and-backfill.js
  *
- * Faz duas coisas em sequência:
- *   1. Remove badges antigas vindas do sistema de reviews de todos os jogadores
- *   2. Processa um evento específico e distribui as novas conquistas
+ * LEGADO DESCONTINUADO.
+ *
+ * Este script faz limpeza e recriacao de badges por regras hardcoded de evento.
+ * O fluxo oficial agora deve usar `conquistas_regras` + Cloud Functions publicadas.
+ *
+ * So execute em ambiente controlado e com confirmacao explicita.
  *
  * COMO USAR:
  *   No PowerShell, dentro da pasta functions/:
@@ -18,6 +21,11 @@
  */
 
 const admin = require('firebase-admin');
+
+if (process.env.ALLOW_LEGACY_BADGE_SCRIPTS !== 'true') {
+    console.error('Script legado descontinuado. Defina ALLOW_LEGACY_BADGE_SCRIPTS=true apenas para manutencao controlada.');
+    process.exit(1);
+}
 
 const PROJECT_ID = 'ancb-painel-db';
 

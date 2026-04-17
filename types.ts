@@ -13,22 +13,53 @@ export interface UserProfile {
     foto?: string | null;
 }
 
+export type RaridadeConquista = 'comum' | 'rara' | 'epica' | 'lendaria';
+export type TipoIconeConquista = 'emoji' | 'imagem';
+
+export interface BadgeOccurrenceContext {
+    eventName?: string;
+    gameName?: string;
+    seasonYear?: string;
+    playerName?: string;
+    value?: string | number;
+}
+
+export interface BadgeOccurrence {
+    id: string;
+    descricao: string;
+    data: string;
+    gameId?: string;
+    eventId?: string;
+    seasonYear?: string;
+    teamId?: string;
+    teamNome?: string;
+    contextLabel?: string;
+    renderContext?: BadgeOccurrenceContext;
+}
+
 export interface Badge {
     id: string;
     nome: string;
     emoji: string;
     categoria: 'partida' | 'temporada' | 'atributo';
-    raridade: 'comum' | 'rara' | 'epica' | 'lendaria'; // Comum (Bronze), Rara (Prata), Epica (Ouro), Lendaria (MVP Season)
+    origem?: 'regra' | 'legado';
+    raridade: RaridadeConquista; // Comum (Bronze), Rara (Prata), Epica (Ouro), Lendaria (MVP Season)
     data: string;
     descricao: string;
     gameId?: string;
     teamId?: string;
     teamNome?: string;
+    eventId?: string;
+    seasonYear?: string;
+    regraId?: string;
+    tipoAvaliacao?: 'pos_jogo' | 'pos_evento' | 'ao_fechar_temporada' | 'manual';
+    tipoIcone?: TipoIconeConquista;
+    iconeValor?: string;
+    stackCount?: number;
+    latestOccurrenceId?: string;
+    ocorrencias?: BadgeOccurrence[];
 }
 
-export type RaridadeConquista = Badge['raridade'];
-
-export type TipoIconeConquista = 'emoji' | 'imagem';
 export type TipoAvaliacaoConquista = 'pos_jogo' | 'pos_evento' | 'ao_fechar_temporada' | 'manual';
 
 export type ConquistaGatilho =

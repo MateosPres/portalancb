@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
-import firebase, { db } from '../services/firebase';
+import firebase, { db, functions } from '../services/firebase';
 import { ConquistaRegra, RaridadeConquista, TipoAvaliacaoConquista } from '../types';
 import { Button } from './Button';
 import { Modal } from './Modal';
@@ -240,7 +240,7 @@ export const AdminConquistasView: React.FC = () => {
     const [uploadingIcon, setUploadingIcon] = useState(false);
     const [savingRule, setSavingRule] = useState(false);
     const [busyRuleId, setBusyRuleId] = useState<string | null>(null);
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [feedback, setFeedback] = useState<{ type: 'success' | 'warning' | 'error'; text: string } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterTipoAvaliacao, setFilterTipoAvaliacao] = useState<'todas' | TipoAvaliacaoConquista>('todas');
     const [filterStatus, setFilterStatus] = useState<'todas' | 'ativas' | 'pausadas'>('todas');
@@ -306,6 +306,18 @@ export const AdminConquistasView: React.FC = () => {
     }, [regrasOrdenadas, searchTerm, filterTipoAvaliacao, filterStatus, filterRaridade]);
 
     const totalAtivas = useMemo(() => regrasOrdenadas.filter((regra) => regra.ativo !== false).length, [regrasOrdenadas]);
+
+    const getPropagationErrorMessage = (error: unknown) => {
+        const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code || '') : '';
+        const message = typeof error === 'object' && error && 'message' in error ? String((error as { message?: unknown }).message || '') : '';
+        const normalized = `${code} ${message}`.toLowerCase();
+
+        if (normalized.includes('not-found') || normalized.includes('404') || normalized.includes('cors')) {
+            return 'Conquista salva, mas a propagacao automatica falhou porque a Cloud Function "propagarEdicaoConquista" nao esta publicada no backend atual. Faça o deploy das functions para sincronizar as badges ja concedidas.';
+        }
+
+        return message || 'Conquista salva, mas houve falha ao propagar a edicao para badges ja concedidas.';
+    };
 
     const resetForm = () => {
         setForm(DEFAULT_FORM);
@@ -420,7 +432,26 @@ export const AdminConquistasView: React.FC = () => {
         try {
             if (editingId) {
                 await db.collection('conquistas_regras').doc(editingId).set(payload, { merge: true });
-                setFeedback({ type: 'success', text: 'Conquista atualizada com sucesso.' });
+
+                try {
+                    const propagateRuleUpdate = functions.httpsCallable('propagarEdicaoConquista');
+                    const response = await propagateRuleUpdate({ regraId: editingId });
+                    const result = response?.data as { playersUpdated?: number; badgesUpdated?: number } | undefined;
+                    const playersUpdated = Number(result?.playersUpdated || 0);
+                    const badgesUpdated = Number(result?.badgesUpdated || 0);
+                    setFeedback({
+                        type: 'success',
+                        text: playersUpdated > 0 || badgesUpdated > 0
+                            ? `Conquista atualizada e propagada para ${badgesUpdated} badge(s) em ${playersUpdated} atleta(s).`
+                            : 'Conquista atualizada com sucesso. Nenhuma badge vinculada precisou ser propagada.',
+                    });
+                } catch (error) {
+                    console.error('Falha ao propagar edicao da conquista:', error);
+                    setFeedback({
+                        type: 'warning',
+                        text: getPropagationErrorMessage(error),
+                    });
+                }
             } else {
                 const ref = db.collection('conquistas_regras').doc();
                 await ref.set({
@@ -650,7 +681,11 @@ export const AdminConquistasView: React.FC = () => {
             </div>
 
             {feedback && (
-                <div className={`rounded-lg border px-4 py-3 text-sm font-semibold ${feedback.type === 'success' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800' : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800'}`}>
+                <div className={`rounded-lg border px-4 py-3 text-sm font-semibold ${feedback.type === 'success'
+                    ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800'
+                    : feedback.type === 'warning'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800'
+                        : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800'}`}>
                     {feedback.text}
                 </div>
             )}

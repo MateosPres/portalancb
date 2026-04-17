@@ -1,8 +1,12 @@
 /**
  * backfill-badges.js
  *
- * Script de uso único para processar todas as avaliações existentes
- * em 'avaliacoes_gamified' e conceder as badges retroativamente.
+ * LEGADO DESCONTINUADO.
+ *
+ * Este script concede badges por catalogo hardcoded do sistema antigo de reviews.
+ * Nao faz parte mais do rollout operacional baseado em `conquistas_regras`.
+ *
+ * So execute em ambiente controlado e com confirmacao explicita.
  *
  * COMO USAR:
  *   1. Coloque este arquivo em functions/ (junto com o index.js)
@@ -20,6 +24,11 @@
  */
 
 const admin = require('firebase-admin');
+
+if (process.env.ALLOW_LEGACY_BADGE_SCRIPTS !== 'true') {
+    console.error('Script legado descontinuado. Defina ALLOW_LEGACY_BADGE_SCRIPTS=true apenas para manutencao controlada.');
+    process.exit(1);
+}
 
 // ─── CONFIGURAÇÃO ────────────────────────────────────────────
 // Troque pelo ID do seu projeto Firebase se necessário.

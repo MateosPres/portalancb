@@ -4,7 +4,13 @@ import { Modal } from './Modal';
 import { RadarChart } from './RadarChart';
 import { Badge, Player, UserProfile } from '../types';
 import { db } from '../services/firebase';
-import { getRarityStyles } from '../utils/badges';
+import {
+    getBadgeEffectClasses,
+    getBadgeOccurrences,
+    getBadgeStackCount,
+    getRarityStyles,
+    isImageBadge,
+} from '../utils/badges';
 
 interface PlayerProfileModalProps {
     isOpen: boolean;
@@ -187,14 +193,24 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                                     {featuredBadges.map((badge) => {
                                         const style = getRarityStyles(badge.raridade);
+                                        const stackCount = getBadgeStackCount(badge);
                                         return (
                                             <button
                                                 type="button"
                                                 key={`featured-${badge.id}`}
                                                 onClick={() => setSelectedBadge(badge)}
-                                                className={`rounded-lg border px-2 py-2 text-center transition-transform hover:scale-[1.02] ${style.classes}`}
+                                                className={`rounded-lg border px-2 py-2 text-center transition-transform hover:scale-[1.02] relative ${style.classes} ${getBadgeEffectClasses(badge.raridade)}`}
                                             >
-                                                <p className="text-lg leading-none">{badge.emoji}</p>
+                                                {stackCount > 1 && (
+                                                    <span className="absolute right-1 top-1 rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow-sm">
+                                                        x{stackCount}
+                                                    </span>
+                                                )}
+                                                {isImageBadge(badge) ? (
+                                                    <img src={badge.iconeValor} alt={badge.nome} className="mx-auto h-10 w-10 rounded-xl object-cover border border-white/20" />
+                                                ) : (
+                                                    <p className="text-lg leading-none">{badge.emoji}</p>
+                                                )}
                                                 <p className="text-[9px] font-bold uppercase mt-1 line-clamp-2">{badge.nome}</p>
                                             </button>
                                         );
@@ -240,14 +256,24 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
                                 {[...player.badges].reverse().map((badge) => {
                                     const style = getRarityStyles(badge.raridade);
+                                    const stackCount = getBadgeStackCount(badge);
                                     return (
                                         <button
                                             type="button"
                                             key={badge.id}
                                             onClick={() => setSelectedBadge(badge)}
-                                            className={`rounded-lg border px-2 py-2 text-center transition-transform hover:scale-[1.02] ${style.classes}`}
+                                            className={`rounded-lg border px-2 py-2 text-center transition-transform hover:scale-[1.02] relative ${style.classes} ${getBadgeEffectClasses(badge.raridade)}`}
                                         >
-                                            <p className="text-xl leading-none">{badge.emoji}</p>
+                                            {stackCount > 1 && (
+                                                <span className="absolute right-1 top-1 rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow-sm">
+                                                    x{stackCount}
+                                                </span>
+                                            )}
+                                            {isImageBadge(badge) ? (
+                                                <img src={badge.iconeValor} alt={badge.nome} className="mx-auto h-10 w-10 rounded-xl object-cover border border-white/20" />
+                                            ) : (
+                                                <p className="text-xl leading-none">{badge.emoji}</p>
+                                            )}
                                             <p className="text-[10px] font-bold uppercase mt-1 line-clamp-2">{badge.nome}</p>
                                         </button>
                                     );
@@ -259,9 +285,24 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
                     <Modal isOpen={!!selectedBadge} onClose={() => setSelectedBadge(null)} title="Detalhe da Conquista">
                         {selectedBadge && (
                             <div className="text-center space-y-3">
-                                <p className="text-5xl">{selectedBadge.emoji}</p>
+                                <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-[1.5rem] border border-white/10 bg-white/5 ${getBadgeEffectClasses(selectedBadge.raridade)}`}>
+                                    {isImageBadge(selectedBadge) ? (
+                                        <img src={selectedBadge.iconeValor} alt={selectedBadge.nome} className="h-16 w-16 rounded-[1rem] object-cover" />
+                                    ) : (
+                                        <p className="text-5xl">{selectedBadge.emoji}</p>
+                                    )}
+                                </div>
                                 <h4 className="text-lg font-bold text-gray-800 dark:text-gray-100">{selectedBadge.nome}</h4>
-                                <p className="text-sm text-gray-600 dark:text-gray-300">{selectedBadge.descricao || 'Sem descricao cadastrada.'}</p>
+                                {getBadgeStackCount(selectedBadge) > 1 && (
+                                    <p className="text-[11px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Stack x{getBadgeStackCount(selectedBadge)}</p>
+                                )}
+                                <div className="space-y-2 text-left">
+                                    {getBadgeOccurrences(selectedBadge).map((occurrence) => (
+                                        <div key={occurrence.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/70">
+                                            <p className="text-sm text-gray-600 dark:text-gray-300">{occurrence.descricao || 'Sem descricao cadastrada.'}</p>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </Modal>
