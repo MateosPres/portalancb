@@ -180,7 +180,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-        useSensor(TouchSensor, { activationConstraint: { distance: 4 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
     );
     const [activeBadgeId, setActiveBadgeId] = useState<string | null>(null);
 
