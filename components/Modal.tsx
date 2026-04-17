@@ -46,7 +46,7 @@ export const Modal: React.FC<ModalProps> = ({
 
             {/* Content */}
             <div className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full ${maxWidthClassName} ${maxHeightClassName} overflow-visible flex flex-col animate-slideUp transition-colors duration-300`}>
-                <div className="sticky top-0 bg-white dark:bg-gray-800 z-10 px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center transition-colors duration-300">
+                <div className="sticky top-0 bg-white dark:bg-gray-800 z-10 px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center transition-colors duration-300 rounded-t-2xl">
                     <h3 className="text-xl font-bold text-gray-800 dark:text-white">{title}</h3>
                     <button 
                         onClick={onClose}

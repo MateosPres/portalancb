@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { DndContext, DragEndEvent, DragStartEvent, DragOverlay, useDraggable, useDroppable, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { doc, onSnapshot, setDoc, collection, query, where, getDocs, serverTimestamp, orderBy, getDoc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
 import { UserProfile, Player, Jogo, Evento, Cesta, Badge } from '../types';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
-import { LucideArrowLeft, LucideCamera, LucideLink, LucideLoader2, LucideStar, LucideHistory, LucideEdit2, LucideTrendingUp, LucideTrophy, LucideMapPin, LucideGrid, LucideUser, LucideCheckCircle2, LucidePin, LucidePinOff, LucideCalendar } from 'lucide-react';
+import { LucideArrowLeft, LucideCamera, LucideLink, LucideLoader2, LucideStar, LucideHistory, LucideEdit2, LucideTrendingUp, LucideTrophy, LucideMapPin, LucideGrid, LucideUser, LucideCheckCircle2, LucideCalendar } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { RadarChart } from '../components/RadarChart';
 import { ImageCropperModal } from '../components/ImageCropperModal';
@@ -109,6 +110,53 @@ const calculateRadarStats = (
     };
 };
 
+// ─── Badge Gallery DnD Sub-components ────────────────────────────────────────
+
+interface DraggableBadgeCardProps { badge: Badge; isPinned: boolean; onTap: () => void; }
+
+const DraggableBadgeCard: React.FC<DraggableBadgeCardProps> = ({ badge, isPinned, onTap }) => {
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: badge.id });
+    const rarityStyle = getRarityStyles(badge.raridade);
+    const stackCount = getBadgeStackCount(badge);
+    return (
+        <div ref={setNodeRef} {...listeners} {...attributes} onClick={onTap}
+            className={`rounded-xl p-2 flex flex-col items-center justify-center text-center cursor-grab active:cursor-grabbing transition-all shadow-sm border-2 relative select-none ${rarityStyle.classes} ${getBadgeEffectClasses(badge.raridade)} ${isDragging ? 'opacity-20' : 'hover:scale-105'} ${isPinned ? 'ring-2 ring-white/50' : ''}`}
+        >
+            {stackCount > 1 && <div className="absolute left-1 top-1 rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow-sm">x{stackCount}</div>}
+            {isPinned && <div className="absolute top-1 right-1 w-3 h-3 rounded-full bg-white shadow-sm flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-ancb-blue" /></div>}
+            {isImageBadge(badge) ? <img src={badge.iconeValor} alt={badge.nome} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20" /> : <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>}
+            <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
+        </div>
+    );
+};
+
+interface BadgeSlotProps { slotIndex: number; badge: Badge | null; onRemove: () => void; }
+
+const BadgeSlot: React.FC<BadgeSlotProps> = ({ slotIndex, badge, onRemove }) => {
+    const { setNodeRef, isOver } = useDroppable({ id: `slot-${slotIndex}` });
+    const rarityStyle = badge ? getRarityStyles(badge.raridade) : null;
+    return (
+        <div ref={setNodeRef}
+            className={`relative rounded-xl border-2 flex flex-col items-center justify-center text-center p-2 min-h-[80px] transition-all ${badge ? `${rarityStyle!.classes} ${getBadgeEffectClasses(badge.raridade)} border-transparent shadow-md` : `border-dashed ${isOver ? 'border-ancb-blue bg-ancb-blue/10' : 'border-gray-600 bg-gray-700/30'}`}`}
+        >
+            {badge ? (
+                <>
+                    <button onClick={(e) => { e.stopPropagation(); onRemove(); }}
+                        className="absolute -top-2 -right-2 z-20 w-5 h-5 rounded-full bg-gray-900 border border-gray-600 text-gray-300 hover:text-white hover:bg-red-600 hover:border-red-600 flex items-center justify-center transition-all text-sm font-bold leading-none"
+                        title="Remover">×</button>
+                    {isImageBadge(badge) ? <img src={badge.iconeValor} alt={badge.nome} className="h-8 w-8 rounded-lg object-cover border border-white/20 mb-1" /> : <div className="text-xl mb-1">{badge.emoji}</div>}
+                    <span className="text-[8px] font-bold uppercase leading-tight line-clamp-2 px-1">{badge.nome}</span>
+                </>
+            ) : (
+                <div className="flex flex-col items-center gap-1 text-gray-500 dark:text-gray-600">
+                    <span className="text-2xl font-thin leading-none">+</span>
+                    <span className="text-[8px] uppercase font-bold tracking-wide">Slot {slotIndex + 1}</span>
+                </div>
+            )}
+        </div>
+    );
+};
+
 export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, onOpenReview, onOpenEvent }) => {
     const [loading, setLoading] = useState(true);
     const [formData, setFormData] = useState<Partial<Player>>({});
@@ -127,7 +175,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     // Badge Management
     const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
     const [showAllBadges, setShowAllBadges] = useState(false);
-    const [pinMode, setPinMode] = useState(false);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+    );
+    const [activeBadgeId, setActiveBadgeId] = useState<string | null>(null);
 
     const [isUploading, setIsUploading] = useState(false);
     
@@ -335,7 +388,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
         fetchMatches();
     }, [playerDocId]);
 
-    // ... (Keep existing helpers: useEffect search, fileToBase64, handlePhotoUpload, handleSave, handleTogglePin, handleClaim, formatDate, normalizePosition, calculateAge, etc.) ...
+    // ... (Keep existing helpers: useEffect search, fileToBase64, handlePhotoUpload, handleSave, handleDropToSlot, handleRemoveFromSlot, handleClaim, formatDate, normalizePosition, calculateAge, etc.) ...
     const fileToBase64 = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result as string); reader.onerror = error => reject(error); }); };
     const getPhoneParts = (value?: string) => {
         const normalized = normalizePhoneForStorage(value || '');
@@ -474,7 +527,49 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
             alert('Erro ao salvar.');
         }
     };
-    const handleTogglePin = async (badgeId: string) => { if (!playerDocId) return; const existingBadgeIds = new Set((formData.badges || []).map(b => b.id)); let currentPinned = (formData.pinnedBadgeIds || []).filter(id => existingBadgeIds.has(id)); if (currentPinned.includes(badgeId)) { currentPinned = currentPinned.filter(id => id !== badgeId); } else { if (currentPinned.length >= 3) { alert("Limite de 3 conquistas fixadas."); return; } currentPinned.push(badgeId); } setFormData({ ...formData, pinnedBadgeIds: currentPinned }); try { await setDoc(doc(db, "jogadores", playerDocId), { pinnedBadgeIds: currentPinned }, { merge: true }); } catch (e) { alert("Erro ao fixar."); } };
+
+    // ─── Badge Pin Handlers ────────────────────────────────────────────────────
+    const buildSlots = (): string[] => {
+        const existingIds = new Set((formData.badges || []).map(b => b.id));
+        const pinned = formData.pinnedBadgeIds || [];
+        return [0, 1, 2].map(i => (pinned[i] && existingIds.has(pinned[i]) ? pinned[i] : ''));
+    };
+
+    const savePinnedSlots = async (slots: string[]) => {
+        let finalPinned = [...slots];
+        while (finalPinned.length > 0 && finalPinned[finalPinned.length - 1] === '') finalPinned.pop();
+        setFormData({ ...formData, pinnedBadgeIds: finalPinned });
+        if (!playerDocId) return;
+        try { await setDoc(doc(db, "jogadores", playerDocId), { pinnedBadgeIds: finalPinned }, { merge: true }); } catch (e) { console.error(e); }
+    };
+
+    const handleDropToSlot = async (badgeId: string, slotIndex: number) => {
+        const slots = buildSlots();
+        for (let i = 0; i < 3; i++) { if (slots[i] === badgeId) slots[i] = ''; }
+        slots[slotIndex] = badgeId;
+        await savePinnedSlots(slots);
+    };
+
+    const handleRemoveFromSlot = async (slotIndex: number) => {
+        const slots = buildSlots();
+        slots[slotIndex] = '';
+        await savePinnedSlots(slots);
+    };
+
+    const onDragStart = (event: DragStartEvent) => {
+        setActiveBadgeId(event.active.id as string);
+    };
+
+    const onDragEnd = async (event: DragEndEvent) => {
+        setActiveBadgeId(null);
+        const { active, over } = event;
+        if (!over) return;
+        const slotMatch = String(over.id).match(/^slot-(\d)$/);
+        if (!slotMatch) return;
+        await handleDropToSlot(active.id as string, parseInt(slotMatch[1]));
+    };
+    // ──────────────────────────────────────────────────────────────────────────
+
     const formatDate = (dateStr?: string) => dateStr ? dateStr.split('-').reverse().join('/') : '';
     const normalizePosition = (pos: string | undefined): string => { if (!pos) return '-'; if (pos.includes('1') || pos.toLowerCase().includes('armador')) return 'Armador (1)'; if (pos.includes('2') || pos.toLowerCase().includes('ala/armador')) return 'Ala/Armador (2)'; if (pos.includes('3') || (pos.toLowerCase().includes('ala') && !pos.includes('piv'))) return 'Ala (3)'; if (pos.includes('4') || pos.toLowerCase().includes('ala/piv')) return 'Ala/Pivô (4)'; if (pos.includes('5') || pos.toLowerCase().includes('piv')) return 'Pivô (5)'; return pos; };
     const calculateAge = (dateString?: string) => { if (!dateString) return '-'; const today = new Date(); const birthDate = new Date(dateString); let age = today.getFullYear() - birthDate.getFullYear(); const m = today.getMonth() - birthDate.getMonth(); if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) { age--; } return age; };
@@ -826,7 +921,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
             {/* CONQUISTAS: modal único com navegação interna galeria ↔ detalhe */}
             <Modal
                 isOpen={showAllBadges || !!selectedBadge}
-                onClose={() => { setShowAllBadges(false); setSelectedBadge(null); setPinMode(false); }}
+                onClose={() => { setShowAllBadges(false); setSelectedBadge(null); }}
                 title={selectedBadge ? 'Detalhes da Conquista' : 'Galeria de Troféus'}
             >
                 {selectedBadge ? (
@@ -875,76 +970,48 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                     </div>
                 ) : (
                     /* ── TELA DE GALERIA ── */
+                    <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
                     <div className="p-2">
-                        {/* Barra de controle: contador + botão de modo seleção */}
-                        <div className="flex items-center justify-between mb-4">
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {(formData.badges || []).length} conquista(s)
-                            </span>
-                            <button
-                                onClick={() => setPinMode(m => !m)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all border ${
-                                    pinMode
-                                        ? 'bg-ancb-blue text-white border-ancb-blue shadow-sm'
-                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                }`}
-                            >
-                                {pinMode
-                                    ? `✓ Selecionando (${(formData.pinnedBadgeIds || []).length}/3)`
-                                    : '⭐ Selecionar principais'
-                                }
-                            </button>
+                        {/* Slots de conquistas principais */}
+                        <div className="mb-4">
+                            <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 px-1">
+                                Conquistas Principais · Arraste para os slots
+                            </p>
+                            <div className="grid grid-cols-3 gap-2">
+                                {[0, 1, 2].map(slotIdx => {
+                                    const slots = buildSlots();
+                                    const slotBadge = slots[slotIdx] ? (formData.badges || []).find(b => b.id === slots[slotIdx]) ?? null : null;
+                                    return (
+                                        <BadgeSlot
+                                            key={slotIdx}
+                                            slotIndex={slotIdx}
+                                            badge={slotBadge}
+                                            onRemove={() => handleRemoveFromSlot(slotIdx)}
+                                        />
+                                    );
+                                })}
+                            </div>
                         </div>
 
-                        {/* Instrução contextual */}
-                        <p className="text-xs text-gray-400 dark:text-gray-500 text-center mb-3">
-                            {pinMode
-                                ? 'Toque para marcar/desmarcar · Máx. 3 exibidas no perfil'
-                                : 'Toque em uma conquista para ver os detalhes'
-                            }
-                        </p>
+                        <div className="border-t border-gray-100 dark:border-gray-700 pt-2 mb-3 px-1 flex items-center justify-between">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {(formData.badges || []).length} conquista(s) · Toque para detalhes
+                            </span>
+                        </div>
 
-                        <div className="max-h-[55vh] overflow-y-auto custom-scrollbar">
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 p-3">
+                        <div className="max-h-[40vh] overflow-y-auto custom-scrollbar">
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 p-1">
                             {formData.badges && formData.badges.length > 0 ? (
                                 [...formData.badges].reverse().map((badge, idx) => {
-                                    const style = getRarityStyles(badge.raridade);
-                                    const isPinned = formData.pinnedBadgeIds?.includes(badge.id);
-                                    const stackCount = getBadgeStackCount(badge);
+                                    const slots = buildSlots();
+                                    const isPinned = slots.includes(badge.id);
                                     return (
-                                        <div
-                                            key={idx}
-                                            onClick={() => pinMode ? handleTogglePin(badge.id) : setSelectedBadge(badge)}
-                                            className={`rounded-xl p-2 flex flex-col items-center justify-center text-center cursor-pointer transition-all shadow-sm border-2 relative select-none
-                                                ${style.classes}
-                                                ${getBadgeEffectClasses(badge.raridade)}
-                                                ${pinMode && isPinned ? '!border-green-400 ring-2 ring-green-400/40 scale-105' : ''}
-                                                ${pinMode && !isPinned ? 'opacity-70' : ''}
-                                                ${!pinMode ? 'hover:scale-105 active:scale-95' : 'active:scale-95'}
-                                            `}
-                                        >
-                                            {stackCount > 1 && (
-                                                <div className="absolute left-1 top-1 rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow-sm">
-                                                    x{stackCount}
-                                                </div>
-                                            )}
-                                            {/* Indicador de seleção — só visível no modo pin */}
-                                            {pinMode && (
-                                                <div className={`absolute top-1 right-1 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                                                    isPinned
-                                                        ? 'bg-green-500 border-green-500'
-                                                        : 'bg-white/20 border-white/50'
-                                                }`}>
-                                                    {isPinned && <LucideCheckCircle2 size={10} className="text-white" fill="white" />}
-                                                </div>
-                                            )}
-                                            {isImageBadge(badge) ? (
-                                                <img src={badge.iconeValor} alt={badge.nome} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20" />
-                                            ) : (
-                                                <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>
-                                            )}
-                                            <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
-                                        </div>
+                                        <DraggableBadgeCard
+                                            key={badge.id || idx}
+                                            badge={badge}
+                                            isPinned={isPinned}
+                                            onTap={() => setSelectedBadge(badge)}
+                                        />
                                     );
                                 })
                             ) : (
@@ -953,6 +1020,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                         </div>
                         </div>
                     </div>
+                    <DragOverlay dropAnimation={null}>
+                        {activeBadgeId ? (() => {
+                            const badge = (formData.badges || []).find(b => b.id === activeBadgeId);
+                            if (!badge) return null;
+                            const ov = getRarityStyles(badge.raridade);
+                            return (
+                                <div className={`rounded-xl p-2 flex flex-col items-center justify-center text-center shadow-2xl border-2 select-none rotate-3 scale-110 ${ov.classes} ${getBadgeEffectClasses(badge.raridade)}`}>
+                                    {getBadgeStackCount(badge) > 1 && <div className="absolute left-1 top-1 rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">x{getBadgeStackCount(badge)}</div>}
+                                    {isImageBadge(badge) ? <img src={badge.iconeValor} alt={badge.nome} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20" /> : <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>}
+                                    <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
+                                </div>
+                            );
+                        })() : null}
+                    </DragOverlay>
+                    </DndContext>
                 )}
             </Modal>
 

@@ -262,8 +262,12 @@ export const getDisplayBadges = (
     pinnedIds: string[],
     maxDisplay = 3,
 ): Badge[] => {
-    if (pinnedIds.length > 0) {
-        return allBadges.filter(b => pinnedIds.includes(b.id));
+    const validPinned = pinnedIds.filter(id => id && id.length > 0);
+    if (validPinned.length > 0) {
+        // preserve pinnedIds order so slot position = display position
+        return validPinned
+            .map(id => allBadges.find(b => b.id === id))
+            .filter(Boolean) as Badge[];
     }
     return [...allBadges]
         .sort((a, b) => {
