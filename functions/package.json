@@ -7,7 +7,9 @@
     "shell": "firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "audit:legacy-badges": "node audit-legacy-badge-groups.js",
+    "backfill:legacy-badge-groups": "node backfill-legacy-badge-groups.js"
   },
   "engines": {
     "node": "20"

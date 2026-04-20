@@ -43,6 +43,8 @@ export interface Badge {
     emoji: string;
     categoria: 'partida' | 'temporada' | 'atributo';
     origem?: 'regra' | 'legado';
+    legacyGroupKey?: string;
+    legacyBaseTitle?: string;
     raridade: RaridadeConquista; // Comum (Bronze), Rara (Prata), Epica (Ouro), Lendaria (MVP Season)
     data: string;
     descricao: string;
