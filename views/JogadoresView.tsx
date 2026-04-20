@@ -36,6 +36,8 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { useReviewQuizConfig } from '../hooks/useReviewQuizConfig';
 import { formatCpf, formatPhoneForDisplay, normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
 import {
+    BADGE_GALLERY_SORT_OPTIONS,
+    BadgeGallerySortOption,
     getRarityStyles,
     getBadgeWeight,
     getDisplayBadges,
@@ -45,6 +47,7 @@ import {
     getBadgeStackCount,
     getMergedBadgesForDisplay,
     isImageBadge,
+    sortBadgesForGallery,
 } from '../utils/badges';
 import imageCompression from 'browser-image-compression';
 import { calculateRelativeRadarStats, hasRadarSourceData } from '../utils/radar';
@@ -86,6 +89,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     
     const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
     const [showAllBadges, setShowAllBadges] = useState(false); // For modal gallery
+    const [badgeGallerySort, setBadgeGallerySort] = useState<BadgeGallerySortOption>('recentes');
 
     const [isEditing, setIsEditing] = useState(false);
     const [showPlayerDataModal, setShowPlayerDataModal] = useState(false);
@@ -466,6 +470,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         ? hasRadarSourceData(selectedPlayer.stats_atributos, selectedPlayer.stats_tags, reviewQuizConfig)
         : false;
     const galleryBadges = getMergedBadgesForDisplay(selectedPlayer?.badges || []);
+    const sortedGalleryBadges = sortBadgesForGallery(galleryBadges, badgeGallerySort);
 
     const displayBadges = selectedPlayer?.badges
         ? getDisplayBadges(selectedPlayer.badges, selectedPlayer.pinnedBadgeIds || [])
@@ -774,10 +779,27 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                     ) : (
                         /* ── TELA DE GALERIA ── */
                         <div className="p-2">
+                            <div className="mb-3 flex items-center justify-between gap-2 px-1">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    {galleryBadges.length} conquista(s) · Toque para detalhes
+                                </span>
+                                <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-800">
+                                    {BADGE_GALLERY_SORT_OPTIONS.map((option) => (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            onClick={() => setBadgeGallerySort(option.value)}
+                                            className={`rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors ${badgeGallerySort === option.value ? 'bg-ancb-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                             <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
                             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 p-3">
-                                {galleryBadges.length > 0 ? (
-                                    [...galleryBadges].reverse().map((badge, idx) => {
+                                {sortedGalleryBadges.length > 0 ? (
+                                    sortedGalleryBadges.map((badge, idx) => {
                                         const style = getRarityStyles(badge.raridade);
                                         const stackCount = getBadgeStackCount(badge);
                                         return (

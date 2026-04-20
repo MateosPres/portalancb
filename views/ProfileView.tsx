@@ -14,6 +14,8 @@ import { useRadarPopulation } from '../hooks/useRadarPopulation';
 import { useReviewQuizConfig } from '../hooks/useReviewQuizConfig';
 import { normalizePhoneForStorage } from '../utils/contactFormat';
 import {
+    BADGE_GALLERY_SORT_OPTIONS,
+    BadgeGallerySortOption,
     getRarityStyles,
     getBadgeWeight,
     getDisplayBadges,
@@ -23,6 +25,7 @@ import {
     getBadgeStackCount,
     getMergedBadgesForDisplay,
     isImageBadge,
+    sortBadgesForGallery,
 } from '../utils/badges';
 import { calculateRelativeRadarStats, hasRadarSourceData } from '../utils/radar';
 
@@ -128,6 +131,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     // Badge Management
     const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
     const [showAllBadges, setShowAllBadges] = useState(false);
+    const [badgeGallerySort, setBadgeGallerySort] = useState<BadgeGallerySortOption>('recentes');
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -535,6 +539,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const hasRadarData = hasRadarSourceData(formData.stats_atributos, formData.stats_tags, reviewQuizConfig);
     const allBadges = formData.badges || [];
     const galleryBadges = getMergedBadgesForDisplay(allBadges);
+    const sortedGalleryBadges = sortBadgesForGallery(galleryBadges, badgeGallerySort);
     const pinnedIds = formData.pinnedBadgeIds || [];
     const displayBadges = getDisplayBadges(allBadges, pinnedIds);
 
@@ -955,12 +960,24 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                             <span className="text-xs text-gray-500 dark:text-gray-400">
                                 {galleryBadges.length} conquista(s) · Toque para detalhes
                             </span>
+                            <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-800">
+                                {BADGE_GALLERY_SORT_OPTIONS.map((option) => (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() => setBadgeGallerySort(option.value)}
+                                        className={`rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors ${badgeGallerySort === option.value ? 'bg-ancb-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                                    >
+                                        {option.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         <div className="max-h-[40vh] overflow-y-auto custom-scrollbar">
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 p-1">
-                            {galleryBadges.length > 0 ? (
-                                [...galleryBadges].reverse().map((badge, idx) => {
+                            {sortedGalleryBadges.length > 0 ? (
+                                sortedGalleryBadges.map((badge, idx) => {
                                     const slots = buildSlots();
                                     const isPinned = slots.includes(badge.id);
                                     return (

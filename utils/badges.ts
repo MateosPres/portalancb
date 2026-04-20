@@ -7,6 +7,13 @@
 
 import { Badge, BadgeOccurrence, ConquistaRegra } from '../types';
 
+export type BadgeGallerySortOption = 'recentes' | 'raras';
+
+export const BADGE_GALLERY_SORT_OPTIONS: Array<{ value: BadgeGallerySortOption; label: string }> = [
+    { value: 'recentes', label: 'Mais recentes' },
+    { value: 'raras', label: 'Mais raras' },
+];
+
 // ─────────────────────────────────────────────────────────────
 // IMPACTOS DE TAGS DE AVALIAÇÃO NOS ATRIBUTOS
 // Era: duplicado em AdminView.tsx (linha 13) e hardcoded em Cloud Functions.
@@ -45,6 +52,26 @@ export interface RarityStyle {
 
 const compareBadgeDates = (left?: string, right?: string): number => {
     return String(left || '').localeCompare(String(right || ''));
+};
+
+const parseBadgeDateValue = (value?: string): number => {
+    const normalized = String(value || '').trim();
+    if (!normalized) return 0;
+
+    if (/^\d{4}-\d{2}-\d{2}/.test(normalized)) {
+        const timestamp = Date.parse(normalized);
+        return Number.isNaN(timestamp) ? 0 : timestamp;
+    }
+
+    const brDateMatch = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (brDateMatch) {
+        const [, day, month, year] = brDateMatch;
+        const timestamp = Date.parse(`${year}-${month}-${day}`);
+        return Number.isNaN(timestamp) ? 0 : timestamp;
+    }
+
+    const timestamp = Date.parse(normalized);
+    return Number.isNaN(timestamp) ? 0 : timestamp;
 };
 
 const buildLegacyOccurrence = (badge: Badge): BadgeOccurrence => ({
@@ -338,6 +365,28 @@ export const getMergedBadgesForDisplay = (allBadges: Badge[]): Badge[] => {
         const diff = getBadgeWeight(right.raridade) - getBadgeWeight(left.raridade);
         if (diff !== 0) return diff;
         return getBadgeDisplayDate(right).localeCompare(getBadgeDisplayDate(left));
+    });
+};
+
+export const sortBadgesForGallery = (
+    badges: Badge[],
+    sortBy: BadgeGallerySortOption = 'recentes',
+): Badge[] => {
+    return [...badges].sort((left, right) => {
+        if (sortBy === 'raras') {
+            const rarityDiff = getBadgeWeight(right.raridade) - getBadgeWeight(left.raridade);
+            if (rarityDiff !== 0) return rarityDiff;
+        }
+
+        const dateDiff = parseBadgeDateValue(getBadgeDisplayDate(right)) - parseBadgeDateValue(getBadgeDisplayDate(left));
+        if (dateDiff !== 0) return dateDiff;
+
+        if (sortBy === 'recentes') {
+            const rarityDiff = getBadgeWeight(right.raridade) - getBadgeWeight(left.raridade);
+            if (rarityDiff !== 0) return rarityDiff;
+        }
+
+        return String(right.nome || '').localeCompare(String(left.nome || ''));
     });
 };
 
