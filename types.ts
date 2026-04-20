@@ -265,6 +265,10 @@ export interface PlayerReview {
 
 // --- NOVA ESTRUTURA DE GAMIFICAÇÃO ---
 
+export type AtributoKey = 'ataque' | 'defesa' | 'velocidade' | 'forca' | 'visao';
+
+export type ReviewAttributeMap = Partial<Record<AtributoKey, number>>;
+
 export type TagType = 'positive' | 'negative';
 
 export interface ReviewTagDefinition {
@@ -274,13 +278,16 @@ export interface ReviewTagDefinition {
     type: TagType;
     description: string;
     // Impact on stats (0-3 scale usually) - UPDATED TO 5 ATTRIBUTES
-    impact: {
-        ataque?: number;
-        defesa?: number;
-        velocidade?: number;
-        forca?: number;
-        visao?: number; // Visão de Jogo
-    }
+    impact: ReviewAttributeMap;
+}
+
+export interface ReviewQuizConfig {
+    version: number;
+    maxSelections: number;
+    multipliers: Record<number, number>;
+    tags: ReviewTagDefinition[];
+    updatedAt?: any;
+    updatedBy?: string;
 }
 
 export interface NotificationItem {

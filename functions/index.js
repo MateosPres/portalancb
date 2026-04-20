@@ -56,6 +56,21 @@ const REVIEW_TAG_IMPACTS = {
 
 const ATTR_KEYS = ['ataque', 'defesa', 'velocidade', 'forca', 'visao'];
 
+function normalizeStoredAttributeDeltas(review) {
+    const normalized = { ataque: 0, defesa: 0, velocidade: 0, forca: 0, visao: 0 };
+    const source = review?.attributeDeltas;
+    if (!source || typeof source !== 'object') return normalized;
+
+    ATTR_KEYS.forEach((key) => {
+        const value = Number(source[key] || 0);
+        if (Number.isFinite(value)) {
+            normalized[key] = Math.round(value * 10) / 10;
+        }
+    });
+
+    return normalized;
+}
+
 function buildHierarchyKey(gatilho) {
     const tipo = String(gatilho?.tipo || '');
     if (!tipo) return '';
@@ -103,12 +118,23 @@ function aggregateAttributeScoresFromReviews(reviewDocs) {
         const review = reviewDoc.data ? reviewDoc.data() : reviewDoc;
         const targetId = review?.targetId;
         if (!targetId) continue;
-        const tags = Array.isArray(review?.tags) ? review.tags : [];
-        const multiplier = REVIEW_TAG_MULTIPLIERS[tags.length] || 1.0;
 
         if (!scoresByPlayer[targetId]) {
             scoresByPlayer[targetId] = { ataque: 0, defesa: 0, velocidade: 0, forca: 0, visao: 0 };
         }
+
+        const storedAttributeDeltas = normalizeStoredAttributeDeltas(review);
+        const hasStoredAttributeDeltas = ATTR_KEYS.some((key) => storedAttributeDeltas[key] !== 0);
+
+        if (hasStoredAttributeDeltas) {
+            ATTR_KEYS.forEach((key) => {
+                scoresByPlayer[targetId][key] += Number(storedAttributeDeltas[key] || 0);
+            });
+            continue;
+        }
+
+        const tags = Array.isArray(review?.tags) ? review.tags : [];
+        const multiplier = REVIEW_TAG_MULTIPLIERS[tags.length] || 1.0;
 
         tags.forEach((tag) => {
             const impact = REVIEW_TAG_IMPACTS[tag];

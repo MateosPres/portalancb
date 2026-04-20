@@ -277,3 +277,67 @@ export const getDisplayBadges = (
         .slice(0, maxDisplay);
 };
 
+const buildBadgeDisplayKey = (badge: Badge): string => {
+    if (badge.regraId) return `regra:${badge.regraId}`;
+    return [
+        'visual',
+        badge.nome || '',
+        badge.emoji || '',
+        badge.raridade || '',
+        badge.categoria || '',
+        badge.tipoIcone || '',
+        badge.iconeValor || '',
+    ].join('|');
+};
+
+export const getMergedBadgesForDisplay = (allBadges: Badge[]): Badge[] => {
+    const merged = new Map<string, Badge>();
+
+    allBadges.forEach((badge) => {
+        const key = buildBadgeDisplayKey(badge);
+        const existing = merged.get(key);
+        if (!existing) {
+            merged.set(key, {
+                ...badge,
+                ocorrencias: getBadgeOccurrences(badge),
+                stackCount: getBadgeStackCount(badge),
+                latestOccurrenceId: getLatestBadgeOccurrence(badge).id,
+                data: getBadgeDisplayDate(badge),
+                descricao: getBadgeDisplayDescription(badge),
+            });
+            return;
+        }
+
+        const mergedOccurrences = [...getBadgeOccurrences(existing)];
+        const knownIds = new Set(mergedOccurrences.map((occurrence) => occurrence.id));
+
+        getBadgeOccurrences(badge).forEach((occurrence) => {
+            if (knownIds.has(occurrence.id)) return;
+            mergedOccurrences.push(occurrence);
+            knownIds.add(occurrence.id);
+        });
+
+        mergedOccurrences.sort((left, right) => {
+            const dateDiff = compareBadgeDates(left.data, right.data);
+            if (dateDiff !== 0) return dateDiff;
+            return String(left.id || '').localeCompare(String(right.id || ''));
+        });
+
+        const latestOccurrence = mergedOccurrences[mergedOccurrences.length - 1] || getLatestBadgeOccurrence(existing);
+        merged.set(key, {
+            ...existing,
+            descricao: latestOccurrence.descricao || existing.descricao,
+            data: latestOccurrence.data || existing.data,
+            latestOccurrenceId: latestOccurrence.id,
+            ocorrencias: mergedOccurrences,
+            stackCount: mergedOccurrences.length,
+        });
+    });
+
+    return Array.from(merged.values()).sort((left, right) => {
+        const diff = getBadgeWeight(right.raridade) - getBadgeWeight(left.raridade);
+        if (diff !== 0) return diff;
+        return getBadgeDisplayDate(right).localeCompare(getBadgeDisplayDate(left));
+    });
+};
+

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Player, ReviewTagDefinition } from '../types';
+import { Player } from '../types';
 import { LucideChevronRight, LucideCheckCircle2, LucideX, LucideStar } from 'lucide-react';
 import { db } from '../services/firebase';
 import { doc, updateDoc, increment, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { useReviewQuizConfig } from '../hooks/useReviewQuizConfig';
+import { calculateReviewAttributeDeltas } from '../utils/reviewQuiz';
 
 interface PeerReviewQuizProps {
     isOpen: boolean;
@@ -13,39 +15,18 @@ interface PeerReviewQuizProps {
     playersToReview: Player[];
 }
 
-// ── SISTEMA DE TAGS COM PESOS BALANCEADOS ────────────────────────────────────
-// Positivas: atributo principal +3, secundário(s) +1
-// Negativas: assimétrico — principal -1, secundário -0.5
-// Negativas nunca cancelam completamente um positivo (precisaria de 3x a mesma tag)
-const AVAILABLE_TAGS: ReviewTagDefinition[] = [
-    // DESTAQUES
-    { id: 'muralha',   label: 'Muralha',   emoji: '🧱', type: 'positive', description: 'Defesa intransponível',       impact: { defesa: 3, forca: 1 } },
-    { id: 'sniper',    label: 'Sniper',    emoji: '🎯', type: 'positive', description: 'Mão calibrada',               impact: { ataque: 3, visao: 1 } },
-    { id: 'garcom',    label: 'Garçom',    emoji: '🤝', type: 'positive', description: 'Visão de jogo e assistências', impact: { visao: 3, ataque: 1 } },
-    { id: 'flash',     label: 'Flash',     emoji: '⚡', type: 'positive', description: 'Velocidade e contra-ataque',  impact: { velocidade: 3, ataque: 1 } },
-    { id: 'lider',     label: 'Líder',     emoji: '🧠', type: 'positive', description: 'Organiza o time',             impact: { visao: 3, defesa: 1, forca: 1 } },
-    { id: 'guerreiro', label: 'Guerreiro', emoji: '🛡️', type: 'positive', description: 'Raça e rebotes',              impact: { forca: 3, defesa: 1 } },
-    // VACILOS (assimétrico: -1 principal, -0.5 secundário)
-    { id: 'avenida',   label: 'Avenida',   emoji: '🛣️', type: 'negative', description: 'Defesa aberta',               impact: { defesa: -1, velocidade: -0.5 } },
-    { id: 'fominha',   label: 'Fominha',   emoji: '🍽️', type: 'negative', description: 'Não passa a bola',            impact: { visao: -1, ataque: -0.5 } },
-    { id: 'tijoleiro', label: 'Pedreiro',  emoji: '🏗️', type: 'negative', description: 'Errou muitos arremessos',     impact: { ataque: -1, visao: -0.5 } },
-    { id: 'cone',      label: 'Cone',      emoji: '⚠️', type: 'negative', description: 'Parado em quadra',            impact: { velocidade: -1, forca: -0.5 } },
-];
-
-// Multiplicadores por número de tags (1→1.0x, 2→0.75x, 3→0.55x)
-const TAG_MULTIPLIERS: Record<number, number> = { 1: 1.0, 2: 0.75, 3: 0.55 };
-
-const POSITIVE_TAGS = AVAILABLE_TAGS.filter(t => t.type === 'positive');
-const NEGATIVE_TAGS = AVAILABLE_TAGS.filter(t => t.type === 'negative');
-
 export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({
     isOpen, onClose, gameId, eventId, reviewerId, playersToReview
 }) => {
+    const { config } = useReviewQuizConfig();
     const [currentIndex, setCurrentIndex] = useState(0);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showFinish, setShowFinish] = useState(false);
     const [animating, setAnimating] = useState(false);
+
+    const positiveTags = config.tags.filter((tag) => tag.type === 'positive');
+    const negativeTags = config.tags.filter((tag) => tag.type === 'negative');
 
     const currentPlayer = playersToReview[currentIndex];
     const isLast = currentIndex === playersToReview.length - 1;
@@ -62,7 +43,7 @@ export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({
     const toggleTag = (tagId: string) => {
         if (selectedTags.includes(tagId)) {
             setSelectedTags(prev => prev.filter(t => t !== tagId));
-        } else if (selectedTags.length < 3) { // ✅ Máximo 3 tags
+        } else if (selectedTags.length < config.maxSelections) {
             setSelectedTags(prev => [...prev, tagId]);
         }
     };
@@ -73,32 +54,24 @@ export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({
 
         try {
             const tags = skip ? [] : selectedTags;
+            const { multiplier, attributeDeltas } = calculateReviewAttributeDeltas(tags, config);
 
             // Salva log da avaliação
             await addDoc(collection(db, "avaliacoes_gamified"), {
                 gameId, eventId, reviewerId,
                 targetId: currentPlayer.id,
                 tags,
+                attributeDeltas,
+                appliedMultiplier: multiplier,
+                configVersion: config.version,
                 timestamp: serverTimestamp()
             });
 
             // Aplica impacto nos atributos com multiplicador por número de tags
             if (tags.length > 0) {
-                const multiplier = TAG_MULTIPLIERS[tags.length] ?? 1.0;
-                const attrDeltas: Record<string, number> = {};
-
-                tags.forEach(tagId => {
-                    const tag = AVAILABLE_TAGS.find(t => t.id === tagId);
-                    if (!tag) return;
-                    Object.entries(tag.impact).forEach(([attr, value]) => {
-                        attrDeltas[attr] = (attrDeltas[attr] || 0) + value * multiplier;
-                    });
-                });
-
-                // Arredonda e só salva atributos com delta != 0
                 const updates: any = {};
-                Object.entries(attrDeltas).forEach(([attr, delta]) => {
-                    const rounded = Math.round(delta * 10) / 10; // 1 casa decimal
+                Object.entries(attributeDeltas).forEach(([attr, delta]) => {
+                    const rounded = Math.round(Number(delta) * 10) / 10;
                     if (rounded !== 0) {
                         updates[`stats_atributos.${attr}`] = increment(rounded);
                     }
@@ -172,7 +145,7 @@ export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({
     const playerName = currentPlayer.apelido || currentPlayer.nome.split(' ')[0];
     const playerInitial = currentPlayer.nome.charAt(0).toUpperCase();
     const selectedCount = selectedTags.length;
-    const maxReached = selectedCount >= 3;
+    const maxReached = selectedCount >= config.maxSelections;
 
     // ── TELA PRINCIPAL ────────────────────────────────────────────────────────
     return (
@@ -227,7 +200,7 @@ export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({
 
                 <h2 className="text-2xl font-black text-white tracking-tight mb-1">{playerName}</h2>
                 <p className="text-sm text-gray-400 font-medium">
-                    Escolha até <span className="text-[#F27405] font-bold">3 tags</span> que definem a atuação dele
+                    Escolha ate <span className="text-[#F27405] font-bold">{config.maxSelections} tags</span> que definem a atuacao dele
                 </p>
 
                 {/* Tags selecionadas — verde para destaques, vermelho para vacilos */}
@@ -259,7 +232,7 @@ export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({
                 <div className="mb-4">
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-green-400/70 mb-2 px-1">✦ Destaques</p>
                     <div className="grid grid-cols-2 gap-2">
-                        {POSITIVE_TAGS.map(tag => {
+                        {positiveTags.map(tag => {
                             const isSelected = selectedTags.includes(tag.id);
                             const isDisabled = !isSelected && maxReached;
                             return (
@@ -289,7 +262,7 @@ export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({
                 <div className="mb-2">
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-400/70 mb-2 px-1">✦ Vacilos</p>
                     <div className="grid grid-cols-2 gap-2">
-                        {NEGATIVE_TAGS.map(tag => {
+                        {negativeTags.map(tag => {
                             const isSelected = selectedTags.includes(tag.id);
                             const isDisabled = !isSelected && maxReached;
                             return (

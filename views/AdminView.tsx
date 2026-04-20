@@ -9,17 +9,17 @@ import { ApoiadoresManager } from '../components/ApoiadoresManager';
 import { LiveStreamAdmin } from '../components/LiveStreamAdmin';
 import { MediaStudio } from '../components/MediaStudio';
 import { AdminConquistasView } from '../components/AdminConquistasView';
+import { AdminReviewQuizView } from '../components/AdminReviewQuizView';
 import { UserManagementCard } from '../components/UserManagementCard';
 import { UserDetailsPanel } from '../components/UserDetailsPanel';
 import { normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
 import {
-    REVIEW_TAG_MULTIPLIERS,
-    REVIEW_TAG_IMPACTS,
     buildRuleBasedBadgeId,
     getRarityStyles,
     renderConquistaTexts,
     upsertStackedBadge,
 } from '../utils/badges';
+import { resolveStoredReviewAttributeDeltas } from '../utils/reviewQuiz';
 
 
 
@@ -43,8 +43,8 @@ interface ApoiadorAdmin {
 const isApoiadorAtivo = (apoiador: ApoiadorAdmin) => apoiador.ativo !== false;
 
 export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, userProfile }) => {
-    const [adminTab, setAdminTab] = useState<'home' | 'posts' | 'users' | 'apoiadores' | 'live' | 'reviews' | 'badges' | 'midia'>('home');
-    const restrictedTabs: Array<'users' | 'reviews' | 'badges'> = ['users', 'reviews', 'badges'];
+    const [adminTab, setAdminTab] = useState<'home' | 'posts' | 'users' | 'apoiadores' | 'live' | 'reviews' | 'badges' | 'quiz' | 'midia'>('home');
+    const restrictedTabs: Array<'users' | 'reviews' | 'badges' | 'quiz'> = ['users', 'reviews', 'badges', 'quiz'];
     // Badge management state
     const [badgeLoading, setBadgeLoading] = useState(false);
     const [badgeSuccess, setBadgeSuccess] = useState<string | null>(null);
@@ -151,7 +151,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     }, [isSuperAdmin]);
 
     useEffect(() => {
-        if (!isSuperAdmin && restrictedTabs.includes(adminTab as 'users' | 'reviews' | 'badges')) {
+        if (!isSuperAdmin && restrictedTabs.includes(adminTab as 'users' | 'reviews' | 'badges' | 'quiz')) {
             setAdminTab('home');
         }
     }, [adminTab, isSuperAdmin]);
@@ -966,17 +966,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                     updates[`stats_tags.${tag}`] = firebase.firestore.FieldValue.increment(-1);
                 });
 
-                const multiplier = REVIEW_TAG_MULTIPLIERS[tags.length] ?? 1.0;
-                const attrDeltas: Partial<Record<'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao', number>> = {};
-
-                tags.forEach((tagId: string) => {
-                    const impact = REVIEW_TAG_IMPACTS[tagId];
-                    if (!impact) return;
-                    Object.entries(impact).forEach(([attr, value]) => {
-                        const key = attr as 'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao';
-                        attrDeltas[key] = (attrDeltas[key] || 0) + (Number(value) * multiplier);
-                    });
-                });
+                const attrDeltas = resolveStoredReviewAttributeDeltas(review);
 
                 Object.entries(attrDeltas).forEach(([attr, delta]) => {
                     const rounded = Math.round(Number(delta) * 10) / 10;
@@ -1002,18 +992,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
 
         playerReviews.forEach((review: any) => {
             const tags: string[] = Array.isArray(review.tags) ? review.tags : [];
-            const multiplier = REVIEW_TAG_MULTIPLIERS[tags.length] ?? 1.0;
+            const attributeDeltas = resolveStoredReviewAttributeDeltas(review);
 
             tags.forEach((tagId: string) => {
                 tagCounts[tagId] = (tagCounts[tagId] || 0) + 1;
-                const impact = REVIEW_TAG_IMPACTS[tagId];
-                if (!impact) return;
-                deltas.ataque += Number(impact.ataque || 0) * multiplier;
-                deltas.defesa += Number(impact.defesa || 0) * multiplier;
-                deltas.forca += Number(impact.forca || 0) * multiplier;
-                deltas.velocidade += Number(impact.velocidade || 0) * multiplier;
-                deltas.visao += Number(impact.visao || 0) * multiplier;
             });
+
+            deltas.ataque += Number(attributeDeltas.ataque || 0);
+            deltas.defesa += Number(attributeDeltas.defesa || 0);
+            deltas.forca += Number(attributeDeltas.forca || 0);
+            deltas.velocidade += Number(attributeDeltas.velocidade || 0);
+            deltas.visao += Number(attributeDeltas.visao || 0);
         });
 
         return {
@@ -1274,18 +1263,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             const playerSummary = summaryMap.get(targetId)!;
             playerSummary.totalReviews += 1;
 
-            const tags: string[] = Array.isArray(review.tags) ? review.tags : [];
-            const multiplier = REVIEW_TAG_MULTIPLIERS[tags.length] ?? 1.0;
+            const attributeDeltas = resolveStoredReviewAttributeDeltas(review);
 
-            tags.forEach((tagId: string) => {
-                const impact = REVIEW_TAG_IMPACTS[tagId];
-                if (!impact) return;
-                playerSummary.ataque += Number(impact.ataque || 0) * multiplier;
-                playerSummary.defesa += Number(impact.defesa || 0) * multiplier;
-                playerSummary.forca += Number(impact.forca || 0) * multiplier;
-                playerSummary.velocidade += Number(impact.velocidade || 0) * multiplier;
-                playerSummary.visao += Number(impact.visao || 0) * multiplier;
-            });
+            playerSummary.ataque += Number(attributeDeltas.ataque || 0);
+            playerSummary.defesa += Number(attributeDeltas.defesa || 0);
+            playerSummary.forca += Number(attributeDeltas.forca || 0);
+            playerSummary.velocidade += Number(attributeDeltas.velocidade || 0);
+            playerSummary.visao += Number(attributeDeltas.visao || 0);
         });
 
         return Array.from(summaryMap.values())
@@ -1675,6 +1659,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Conceder, gerenciar regras e fechar temporada de conquistas.</p>
                             </button>
                         )}
+
+                        {isSuperAdmin && (
+                            <button onClick={() => setAdminTab('quiz')} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-emerald-400 dark:hover:border-emerald-500 transition-all shadow-sm hover:shadow-md">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300 flex items-center justify-center"><LucideMessageCircle size={18} /></div>
+                                    <h3 className="font-bold text-gray-800 dark:text-gray-200">Quiz</h3>
+                                </div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Configurar tags, impactos e multiplicadores do quiz.</p>
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
@@ -1690,6 +1684,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
             {adminTab === 'midia' && (
                 <div className="animate-fadeIn">
                     <MediaStudio events={events} players={activePlayers} />
+                </div>
+            )}
+
+            {/* TAB: QUIZ */}
+            {adminTab === 'quiz' && isSuperAdmin && (
+                <div className="animate-fadeIn rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                    <AdminReviewQuizView />
                 </div>
             )}
 
@@ -2001,120 +2002,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                     }
                                     log.push(`📋 ${eventosDoAno.length} evento(s) em ${seasonYear}`);
 
-                                    // 2. Agrega pontos, cestas de 3 e participações por jogador
-                                    const pontosTotais: Record<string, number> = {};
-                                    const cestas3Totais: Record<string, number> = {};
-                                    const eventosParticipados: Record<string, Set<string>> = {};
-
-                                    // Conta badges de evento já concedidas nesta temporada (para Colecionador)
-                                    const badgesDeEvento: Record<string, number> = {};
-                                    for (const player of activePlayers) {
-                                        const count = (player.badges || []).filter(b => b.data?.includes(seasonYear)).length;
-                                        if (count > 0) badgesDeEvento[player.id] = count;
-                                    }
-
-                                    for (const eventoDoc of eventosDoAno) {
-                                        const eventId = eventoDoc.id;
-                                        const eventData = eventoDoc.data();
-
-                                        let ancbIds: string[] = [];
-                                        if (eventData.timesParticipantes?.length > 0) {
-                                            eventData.timesParticipantes.filter((t: any) => t.isANCB)
-                                                .forEach((t: any) => ancbIds.push(...(t.jogadores || [])));
-                                        } else if (eventData.times?.length > 0) {
-                                            eventData.times.forEach((t: any) => ancbIds.push(...(t.jogadores || [])));
-                                        } else {
-                                            ancbIds = (eventData.jogadoresEscalados || [])
-                                                .map((e: any) => typeof e === 'string' ? e : e?.id).filter(Boolean);
-                                        }
-                                        ancbIds = [...new Set(ancbIds.filter(Boolean))];
-
-                                        for (const pid of ancbIds) {
-                                            if (!eventosParticipados[pid]) eventosParticipados[pid] = new Set();
-                                            eventosParticipados[pid].add(eventId);
-                                        }
-
-                                        const jogosSnap = await db.collection('eventos').doc(eventId).collection('jogos').get();
-                                        for (const jogoDoc of jogosSnap.docs) {
-                                            const cestasSnap = await db.collection('eventos').doc(eventId)
-                                                .collection('jogos').doc(jogoDoc.id).collection('cestas').get();
-                                            for (const cestaDoc of cestasSnap.docs) {
-                                                const cesta = cestaDoc.data();
-                                                const pid = cesta.jogadorId;
-                                                if (!pid || !ancbIds.includes(pid)) continue;
-                                                const pts = Number(cesta.pontos) || 0;
-                                                pontosTotais[pid] = (pontosTotais[pid] || 0) + pts;
-                                                if (pts === 3) cestas3Totais[pid] = (cestas3Totais[pid] || 0) + 1;
-                                            }
-                                        }
-                                    }
-
-                                    // 3. Rankeia e monta badges
-                                    const rankPontos = Object.entries(pontosTotais).sort((a, b) => b[1] - a[1]).map(([id]) => id);
-                                    const rankCestas3 = Object.entries(cestas3Totais).sort((a, b) => b[1] - a[1]).map(([id]) => id);
-                                    const today = new Date().toISOString().split('T')[0];
-                                    const yr = seasonYear;
-                                    const seasonBadges: Record<string, any[]> = {};
-                                    const addS = (pid: string, badge: any) => { if (!seasonBadges[pid]) seasonBadges[pid] = []; seasonBadges[pid].push(badge); };
-                                    const mk = (id: string, nome: string, emoji: string, raridade: string, descricao: string) =>
-                                        ({ id, nome, emoji, raridade, categoria: 'temporada', descricao, data: today });
-
-                                    if (rankPontos[0]) addS(rankPontos[0], mk(`rei_quadra_${yr}`,  `Rei da Quadra ${yr}`,  '👑', 'lendaria', `Maior pontuador da temporada ${yr} com ${pontosTotais[rankPontos[0]]} pontos.`));
-                                    if (rankPontos[1]) addS(rankPontos[1], mk(`chama_viva_${yr}`,  `Chama Viva ${yr}`,     '🔥', 'epica',    `2º maior pontuador da temporada ${yr} com ${pontosTotais[rankPontos[1]]} pontos.`));
-                                    if (rankPontos[2]) addS(rankPontos[2], mk(`forca_bruta_${yr}`, `Força Bruta ${yr}`,    '⚡', 'epica',    `3º maior pontuador da temporada ${yr} com ${pontosTotais[rankPontos[2]]} pontos.`));
-
-                                    if (rankCestas3[0]) addS(rankCestas3[0], mk(`mao_ouro_${yr}`,   `Sniper de Elite ${yr}`,  '🏹', 'lendaria', `O melhor da liga em bolas de 3 na temporada ${yr} com ${cestas3Totais[rankCestas3[0]]} bolas longas.`));
-                                    if (rankCestas3[1]) addS(rankCestas3[1], mk(`mao_prata_${yr}`,  `Sniper ${yr}`,           '🎯', 'epica',    `2º em cestas de 3 da temporada ${yr} com ${cestas3Totais[rankCestas3[1]]} bolas longas. Sempre perigoso.`));
-                                    if (rankCestas3[2]) addS(rankCestas3[2], mk(`mao_bronze_${yr}`, `Mão Calibrada ${yr}`,    '🪃', 'epica',    `3º em cestas de 3 da temporada ${yr} com ${cestas3Totais[rankCestas3[2]]} bolas longas. Precisão técnica.`));
-
-                                    const totalEventos = eventosDoAno.length;
-                                    for (const [pid, evSet] of Object.entries(eventosParticipados)) {
-                                        if (evSet.size >= totalEventos)
-                                            addS(pid, mk(`guerreiro_${yr}`, `Guerreiro da Temporada ${yr}`, '🗓️', 'rara', `Participou de todos os ${totalEventos} eventos da temporada ${yr}.`));
-                                    }
-                                    for (const [pid, count] of Object.entries(badgesDeEvento)) {
-                                        if (count >= 5)
-                                            addS(pid, mk(`colecionador_${yr}`, `Colecionador ${yr}`, '🏅', 'rara', `Acumulou ${count} conquistas de evento na temporada ${yr}.`));
-                                    }
-
-                                    // 4. Salva e notifica
-                                    for (const [pid, newBadges] of Object.entries(seasonBadges)) {
-                                        if (!newBadges.length) continue;
-                                        const playerSnap = await db.collection('jogadores').doc(pid).get();
-                                        if (!playerSnap.exists) continue;
-                                        const existingIds = new Set((playerSnap.data()!.badges || []).map((b: any) => b.id));
-                                        const toAdd = newBadges.filter(b => !existingIds.has(b.id));
-                                        if (!toAdd.length) continue;
-                                        await db.collection('jogadores').doc(pid).update({
-                                            badges: firebase.firestore.FieldValue.arrayUnion(...toAdd),
-                                        });
-                                        totalAwarded += toAdd.length;
-                                        log.push(`🏆 ${playerSnap.data()!.nome || pid}: ${toAdd.map((b: any) => b.emoji + ' ' + b.nome).join(', ')}`);
-                                        const usersSnap = await db.collection('usuarios').where('linkedPlayerId', '==', pid).limit(1).get();
-                                        if (!usersSnap.empty) {
-                                            const targetUserId = usersSnap.docs[0].id;
-                                            for (const badge of toAdd) {
-                                                await db.collection('notifications').doc(`badge_${targetUserId}_${badge.id}`).set({
-                                                    targetUserId, type: 'evaluation',
-                                                    title: `Nova conquista desbloqueada! ${badge.emoji}`,
-                                                    message: `Você ganhou "${badge.nome}": ${badge.descricao}`,
-                                                    data: { badgeId: badge.id }, read: false,
-                                                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                                                }, { merge: true });
-                                            }
-                                        }
-                                    }
-
-                                    // 5. Registra temporada como fechada no Firestore
-                                    await db.collection('temporadas').doc(yr).set({
-                                        ano: yr, fechadaEm: firebase.firestore.FieldValue.serverTimestamp(),
+                                    // 2. Registra temporada como fechada no Firestore
+                                    await db.collection('temporadas').doc(seasonYear).set({
+                                        ano: seasonYear, fechadaEm: firebase.firestore.FieldValue.serverTimestamp(),
                                         totalEventos: eventosDoAno.length, totalBadges: totalAwarded,
                                     }, { merge: true });
 
-                                    // 6. Executa regras dinamicas de fechamento de temporada (pos_evento)
+                                    // 3. Executa regras dinamicas de fechamento de temporada
                                     try {
                                         const avaliarConquistasFechamentoTemporada = functions.httpsCallable('avaliarConquistasFechamentoTemporada');
-                                        const resp = await avaliarConquistasFechamentoTemporada({ seasonYear: yr });
+                                        const resp = await avaliarConquistasFechamentoTemporada({ seasonYear });
                                         const callableData = (resp as any)?.data;
                                         const grantedByRules = Number(callableData?.conquistasConcedidas || 0);
                                         if (grantedByRules > 0) {
@@ -2144,7 +2041,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                         <LucideCrown size={18} className="text-yellow-500" /> Fechar Temporada
                                     </h3>
                                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 pt-3">
-                                        Agrega todos os eventos finalizados do ano e distribui conquistas de temporada. Seguro para rodar mais de uma vez — nunca duplica badges.
+                                        Marca a temporada como fechada e executa apenas as regras sazonais cadastradas no gerenciador de conquistas. Seguro para rodar mais de uma vez.
                                     </p>
                                     <div className="flex items-center gap-3 mb-4">
                                         <select

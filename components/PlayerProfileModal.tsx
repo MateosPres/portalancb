@@ -4,13 +4,17 @@ import { Modal } from './Modal';
 import { RadarChart } from './RadarChart';
 import { Badge, Player, UserProfile } from '../types';
 import { db } from '../services/firebase';
+import { useRadarPopulation } from '../hooks/useRadarPopulation';
+import { useReviewQuizConfig } from '../hooks/useReviewQuizConfig';
 import {
     getBadgeEffectClasses,
     getBadgeOccurrences,
     getBadgeStackCount,
+    getMergedBadgesForDisplay,
     getRarityStyles,
     isImageBadge,
 } from '../utils/badges';
+import { calculateRelativeRadarStats, hasRadarSourceData } from '../utils/radar';
 
 interface PlayerProfileModalProps {
     isOpen: boolean;
@@ -40,62 +44,9 @@ const calculateAge = (dateString?: string) => {
     return String(age);
 };
 
-const calculateRadarStats = (
-    tags?: Record<string, number>,
-    attributeDeltas?: Partial<Record<'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao', number>>
-) => {
-    const BASE_STAT = 20;
-    const DELTA_DISPLAY_GAIN = 4.0;
-    const CONTRAST_GAIN = 1.8;
-    let stats = { ataque: BASE_STAT, defesa: BASE_STAT, forca: BASE_STAT, velocidade: BASE_STAT, visao: BASE_STAT };
-
-    const hasAttributeDeltas = !!attributeDeltas && Object.values(attributeDeltas).some(v => typeof v === 'number' && !Number.isNaN(v) && v !== 0);
-    if (hasAttributeDeltas && attributeDeltas) {
-        stats.ataque += Number(attributeDeltas.ataque || 0) * DELTA_DISPLAY_GAIN;
-        stats.defesa += Number(attributeDeltas.defesa || 0) * DELTA_DISPLAY_GAIN;
-        stats.forca += Number(attributeDeltas.forca || 0) * DELTA_DISPLAY_GAIN;
-        stats.velocidade += Number(attributeDeltas.velocidade || 0) * DELTA_DISPLAY_GAIN;
-        stats.visao += Number(attributeDeltas.visao || 0) * DELTA_DISPLAY_GAIN;
-    } else if (tags) {
-        const LEGACY_WEIGHTS: Record<string, Partial<Record<'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao', number>>> = {
-            sniper: { ataque: 3, visao: 1 },
-            muralha: { defesa: 3, forca: 1 },
-            lider: { visao: 3, defesa: 1, forca: 1 },
-            garcom: { visao: 3, ataque: 1 },
-            flash: { velocidade: 3, ataque: 1 },
-            guerreiro: { forca: 3, defesa: 1 },
-            fominha: { visao: -1, ataque: -0.5 },
-            tijoleiro: { ataque: -1, visao: -0.5 },
-            avenida: { defesa: -1, velocidade: -0.5 },
-            cone: { velocidade: -1, forca: -0.5 },
-        };
-
-        Object.entries(tags).forEach(([tag, count]) => {
-            const impact = LEGACY_WEIGHTS[tag];
-            if (!impact) return;
-            if (impact.ataque) stats.ataque += impact.ataque * count;
-            if (impact.defesa) stats.defesa += impact.defesa * count;
-            if (impact.forca) stats.forca += impact.forca * count;
-            if (impact.velocidade) stats.velocidade += impact.velocidade * count;
-            if (impact.visao) stats.visao += impact.visao * count;
-        });
-    }
-
-    const values = [stats.ataque, stats.defesa, stats.forca, stats.velocidade, stats.visao];
-    const average = values.reduce((sum, value) => sum + value, 0) / values.length;
-    const enhance = (value: number) => average + ((value - average) * CONTRAST_GAIN);
-    const clamp = (n: number) => Math.max(5, Math.min(n, 99));
-
-    return {
-        ataque: clamp(enhance(stats.ataque)),
-        defesa: clamp(enhance(stats.defesa)),
-        forca: clamp(enhance(stats.forca)),
-        velocidade: clamp(enhance(stats.velocidade)),
-        visao: clamp(enhance(stats.visao)),
-    };
-};
-
 export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, playerId, userProfile: _userProfile, onClose }) => {
+    const radarPopulation = useRadarPopulation();
+    const { config: reviewQuizConfig } = useReviewQuizConfig();
     const [loading, setLoading] = useState(false);
     const [player, setPlayer] = useState<Player | null>(null);
     const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
@@ -133,13 +84,18 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
         if (!player) {
             return { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
         }
-        return calculateRadarStats(player.stats_tags, player.stats_atributos);
-    }, [player]);
+        return calculateRelativeRadarStats({
+            attributeDeltas: player.stats_atributos,
+            legacyTagCounts: player.stats_tags,
+            populationPlayers: radarPopulation,
+            quizConfig: reviewQuizConfig,
+        });
+    }, [player, radarPopulation, reviewQuizConfig]);
 
     const hasRadarData = useMemo(() => {
         if (!player) return false;
-        return Object.values(player.stats_atributos || {}).some(value => Number(value) !== 0) || Object.values(player.stats_tags || {}).some(value => Number(value) > 0);
-    }, [player]);
+        return hasRadarSourceData(player.stats_atributos, player.stats_tags, reviewQuizConfig);
+    }, [player, reviewQuizConfig]);
 
     const featuredBadges = useMemo(() => {
         if (!player?.badges?.length || !player.pinnedBadgeIds?.length) return [] as Badge[];
@@ -149,6 +105,8 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
             .slice(0, 3);
         return pinned;
     }, [player]);
+
+    const mergedBadges = useMemo(() => getMergedBadgesForDisplay(player?.badges || []), [player]);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Ficha do Atleta">
@@ -226,7 +184,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
                             <p className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Idade</p>
                         </div>
                         <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center">
-                            <p className="text-2xl font-black text-ancb-blue">{player.badges?.length || 0}</p>
+                            <p className="text-2xl font-black text-ancb-blue">{mergedBadges.length}</p>
                             <p className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Conquistas</p>
                         </div>
                         <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center">
@@ -250,11 +208,11 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
                             <LucideTrophy size={16} className="text-ancb-orange" />
                             <h4 className="font-bold text-sm uppercase tracking-wider">Conquistas</h4>
                         </div>
-                        {!player.badges || player.badges.length === 0 ? (
+                        {mergedBadges.length === 0 ? (
                             <p className="text-sm text-gray-500">Este atleta ainda nao possui conquistas registradas.</p>
                         ) : (
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
-                                {[...player.badges].reverse().map((badge) => {
+                                {[...mergedBadges].reverse().map((badge) => {
                                     const style = getRarityStyles(badge.raridade);
                                     const stackCount = getBadgeStackCount(badge);
                                     return (

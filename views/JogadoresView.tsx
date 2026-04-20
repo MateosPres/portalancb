@@ -33,6 +33,7 @@ import {
     LucideCamera
 } from 'lucide-react';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { useReviewQuizConfig } from '../hooks/useReviewQuizConfig';
 import { formatCpf, formatPhoneForDisplay, normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
 import {
     getRarityStyles,
@@ -42,9 +43,11 @@ import {
     getBadgeEffectClasses,
     getBadgeOccurrences,
     getBadgeStackCount,
+    getMergedBadgesForDisplay,
     isImageBadge,
 } from '../utils/badges';
 import imageCompression from 'browser-image-compression';
+import { calculateRelativeRadarStats, hasRadarSourceData } from '../utils/radar';
 
 interface JogadoresViewProps {
     onBack: () => void;
@@ -70,62 +73,8 @@ interface MatchHistoryItem {
     cesta3: number;
 }
 
-const calculateRadarStats = (
-    tags?: Record<string, number>,
-    attributeDeltas?: Partial<Record<'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao', number>>
-) => {
-    const BASE_STAT = 20;
-    const DELTA_DISPLAY_GAIN = 4.0;
-    const CONTRAST_GAIN = 1.8;
-    let stats = { ataque: BASE_STAT, defesa: BASE_STAT, forca: BASE_STAT, velocidade: BASE_STAT, visao: BASE_STAT };
-
-    const hasAttributeDeltas = !!attributeDeltas && Object.values(attributeDeltas).some(v => typeof v === 'number' && !Number.isNaN(v) && v !== 0);
-    if (hasAttributeDeltas && attributeDeltas) {
-        stats.ataque += Number(attributeDeltas.ataque || 0) * DELTA_DISPLAY_GAIN;
-        stats.defesa += Number(attributeDeltas.defesa || 0) * DELTA_DISPLAY_GAIN;
-        stats.forca += Number(attributeDeltas.forca || 0) * DELTA_DISPLAY_GAIN;
-        stats.velocidade += Number(attributeDeltas.velocidade || 0) * DELTA_DISPLAY_GAIN;
-        stats.visao += Number(attributeDeltas.visao || 0) * DELTA_DISPLAY_GAIN;
-    } else if (tags) {
-        const LEGACY_WEIGHTS: Record<string, Partial<Record<'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao', number>>> = {
-            sniper: { ataque: 3, visao: 1 },
-            muralha: { defesa: 3, forca: 1 },
-            lider: { visao: 3, defesa: 1, forca: 1 },
-            garcom: { visao: 3, ataque: 1 },
-            flash: { velocidade: 3, ataque: 1 },
-            guerreiro: { forca: 3, defesa: 1 },
-            fominha: { visao: -1, ataque: -0.5 },
-            tijoleiro: { ataque: -1, visao: -0.5 },
-            avenida: { defesa: -1, velocidade: -0.5 },
-            cone: { velocidade: -1, forca: -0.5 },
-        };
-
-        Object.entries(tags).forEach(([tag, count]) => {
-            const impact = LEGACY_WEIGHTS[tag];
-            if (!impact) return;
-            if (impact.ataque) stats.ataque += impact.ataque * count;
-            if (impact.defesa) stats.defesa += impact.defesa * count;
-            if (impact.forca) stats.forca += impact.forca * count;
-            if (impact.velocidade) stats.velocidade += impact.velocidade * count;
-            if (impact.visao) stats.visao += impact.visao * count;
-        });
-    }
-
-    const values = [stats.ataque, stats.defesa, stats.forca, stats.velocidade, stats.visao];
-    const average = values.reduce((sum, value) => sum + value, 0) / values.length;
-    const enhance = (value: number) => average + ((value - average) * CONTRAST_GAIN);
-    const clamp = (n: number) => Math.max(5, Math.min(n, 99));
-
-    return {
-        ataque: clamp(enhance(stats.ataque)),
-        defesa: clamp(enhance(stats.defesa)),
-        forca: clamp(enhance(stats.forca)),
-        velocidade: clamp(enhance(stats.velocidade)),
-        visao: clamp(enhance(stats.visao)),
-    };
-};
-
 export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfile, initialPlayerId }) => {
+    const { config: reviewQuizConfig } = useReviewQuizConfig();
     const [players, setPlayers] = useState<Player[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -505,12 +454,18 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
         }
     };
 
-    const radarStats = selectedPlayer 
-        ? calculateRadarStats(selectedPlayer.stats_tags, selectedPlayer.stats_atributos)
+    const radarStats = selectedPlayer
+        ? calculateRelativeRadarStats({
+            attributeDeltas: selectedPlayer.stats_atributos,
+            legacyTagCounts: selectedPlayer.stats_tags,
+            populationPlayers: players,
+            quizConfig: reviewQuizConfig,
+        })
         : { ataque: 50, defesa: 50, forca: 50, velocidade: 50, visao: 50 };
     const hasRadarData = selectedPlayer
-        ? Object.values(selectedPlayer.stats_atributos || {}).some(value => Number(value) !== 0) || Object.values(selectedPlayer.stats_tags || {}).some(value => Number(value) > 0)
+        ? hasRadarSourceData(selectedPlayer.stats_atributos, selectedPlayer.stats_tags, reviewQuizConfig)
         : false;
+    const galleryBadges = getMergedBadgesForDisplay(selectedPlayer?.badges || []);
 
     const displayBadges = selectedPlayer?.badges
         ? getDisplayBadges(selectedPlayer.badges, selectedPlayer.pinnedBadgeIds || [])
@@ -821,8 +776,8 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                         <div className="p-2">
                             <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
                             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 p-3">
-                                {selectedPlayer?.badges && selectedPlayer.badges.length > 0 ? (
-                                    [...selectedPlayer.badges].reverse().map((badge, idx) => {
+                                {galleryBadges.length > 0 ? (
+                                    [...galleryBadges].reverse().map((badge, idx) => {
                                         const style = getRarityStyles(badge.raridade);
                                         const stackCount = getBadgeStackCount(badge);
                                         return (
