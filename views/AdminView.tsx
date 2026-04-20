@@ -16,6 +16,8 @@ import { normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/conta
 import {
     buildRuleBasedBadgeId,
     canRemoveBadgeDirectly,
+    getBadgeOccurrencesNewestFirst,
+    getGroupedBadgesForDisplay,
     getMergedBadgesForDisplay,
     getRarityStyles,
     renderConquistaTexts,
@@ -52,6 +54,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [badgeSuccess, setBadgeSuccess] = useState<string | null>(null);
     const [badgePlayerSearch, setBadgePlayerSearch] = useState('');
     const [expandedBadgePlayerId, setExpandedBadgePlayerId] = useState<string | null>(null);
+    const [expandedBadgeGroupByPlayer, setExpandedBadgeGroupByPlayer] = useState<Record<string, string | null>>({});
     const [badgeQuickAssignByPlayer, setBadgeQuickAssignByPlayer] = useState<Record<string, string>>({});
     const [seasonYear, setSeasonYear] = useState(String(new Date().getFullYear()));
     const [seasonLoading, setSeasonLoading] = useState(false);
@@ -1890,7 +1893,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                 {filteredBadgePlayers.map(player => {
                                     const isOpen = expandedBadgePlayerId === player.id;
                                     const playerBadges = player.badges || [];
-                                    const groupedPlayerBadges = getMergedBadgesForDisplay(playerBadges);
+                                    const groupedPlayerBadges = getGroupedBadgesForDisplay(playerBadges);
+                                    const expandedGroupKey = expandedBadgeGroupByPlayer[player.id] || null;
                                     const quickSelectedId = badgeQuickAssignByPlayer[player.id] || '';
 
                                     return (
@@ -1952,31 +1956,76 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                                         {groupedPlayerBadges.length === 0 && (
                                                             <p className="text-xs text-gray-500 dark:text-gray-400">Nenhuma conquista ainda.</p>
                                                         )}
-                                                        {groupedPlayerBadges.map(badge => {
+                                                        {groupedPlayerBadges.map(({ key, badge, members }) => {
                                                             const style = getRarityStyles(badge.raridade);
                                                             const canRemove = canRemoveBadgeDirectly(badge);
                                                             const stackCount = badge.stackCount || badge.ocorrencias?.length || 1;
+                                                            const isGroupExpanded = expandedGroupKey === key;
                                                             return (
-                                                                <div key={badge.id} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-bold ${style.classes}`}>
-                                                                    <span>{badge.emoji}</span>
-                                                                    <span>{badge.nome}</span>
-                                                                    {stackCount > 1 && <span className="rounded-full bg-black/20 px-1.5 py-0.5 text-[10px] font-black">x{stackCount}</span>}
-                                                                    {canRemove && (
-                                                                        <button
-                                                                            onClick={() => handleRevokeBadge(player.id, badge.id)}
-                                                                            className="ml-1 opacity-70 hover:opacity-100 transition-opacity"
-                                                                            title="Remover conquista"
-                                                                        >
-                                                                            <LucideX size={10} />
-                                                                        </button>
+                                                                <div key={key} className="space-y-2">
+                                                                    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-bold ${style.classes}`}>
+                                                                        <span>{badge.emoji}</span>
+                                                                        <span>{badge.nome}</span>
+                                                                        {stackCount > 1 && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setExpandedBadgeGroupByPlayer((previous) => ({
+                                                                                    ...previous,
+                                                                                    [player.id]: previous[player.id] === key ? null : key,
+                                                                                }))}
+                                                                                className="rounded-full bg-black/20 px-1.5 py-0.5 text-[10px] font-black hover:bg-black/30"
+                                                                                title="Expandir ocorrencias"
+                                                                            >
+                                                                                x{stackCount}
+                                                                            </button>
+                                                                        )}
+                                                                        {canRemove && (
+                                                                            <button
+                                                                                onClick={() => handleRevokeBadge(player.id, badge.id)}
+                                                                                className="ml-1 opacity-70 hover:opacity-100 transition-opacity"
+                                                                                title="Remover conquista"
+                                                                            >
+                                                                                <LucideX size={10} />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {stackCount > 1 && isGroupExpanded && (
+                                                                        <div className="ml-2 space-y-2 rounded-lg border border-gray-200 bg-white/70 p-2 dark:border-gray-600 dark:bg-gray-800/60">
+                                                                            {members
+                                                                                .slice()
+                                                                                .sort((left, right) => {
+                                                                                    const leftOccurrence = getBadgeOccurrencesNewestFirst(left)[0];
+                                                                                    const rightOccurrence = getBadgeOccurrencesNewestFirst(right)[0];
+                                                                                    return String(rightOccurrence?.data || '').localeCompare(String(leftOccurrence?.data || ''));
+                                                                                })
+                                                                                .map((member) => {
+                                                                                    const latestOccurrence = getBadgeOccurrencesNewestFirst(member)[0];
+                                                                                    return (
+                                                                                        <div key={member.id} className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-2 py-2 text-xs dark:border-gray-600 dark:bg-gray-700/70">
+                                                                                            <div className="min-w-0">
+                                                                                                <p className="font-semibold text-gray-800 dark:text-gray-100">{latestOccurrence?.descricao || member.descricao}</p>
+                                                                                                <p className="mt-1 text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">{latestOccurrence?.data || member.data || 'Sem data'}</p>
+                                                                                            </div>
+                                                                                            <button
+                                                                                                onClick={() => handleRevokeBadge(player.id, member.id)}
+                                                                                                className="shrink-0 rounded-md border border-red-200 px-1.5 py-1 text-red-500 hover:bg-red-50 dark:border-red-500/40 dark:text-red-300 dark:hover:bg-red-900/20"
+                                                                                                title="Remover ocorrencia"
+                                                                                            >
+                                                                                                <LucideX size={10} />
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
+                                                                        </div>
                                                                     )}
                                                                 </div>
                                                             );
                                                         })}
                                                     </div>
-                                                    {groupedPlayerBadges.some((badge) => !canRemoveBadgeDirectly(badge)) && (
+                                                    {groupedPlayerBadges.some((group) => !canRemoveBadgeDirectly(group.badge)) && (
                                                         <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-                                                            Conquistas empilhadas estao agrupadas visualmente nesta etapa. A remocao direta continua disponivel apenas para itens sem stack.
+                                                            Conquistas empilhadas podem ser expandidas para remocao individual das ocorrencias mais recentes ou antigas.
                                                         </p>
                                                     )}
                                                 </div>

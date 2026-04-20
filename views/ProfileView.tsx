@@ -22,6 +22,7 @@ import {
     getBadgeDisplayDate,
     getBadgeEffectClasses,
     getBadgeOccurrences,
+    getBadgeOccurrencesNewestFirst,
     getBadgeStackCount,
     getMergedBadgesForDisplay,
     isImageBadge,
@@ -916,7 +917,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                                 )}
                             </div>
                             <div className="mb-4 space-y-3 text-left">
-                                {getBadgeOccurrences(selectedBadge).map((occurrence) => (
+                                {getBadgeOccurrencesNewestFirst(selectedBadge).map((occurrence) => (
                                     <div key={occurrence.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-700/50">
                                         <p className="text-gray-600 dark:text-gray-300">{occurrence.descricao}</p>
                                         {(occurrence.contextLabel || occurrence.data) && (

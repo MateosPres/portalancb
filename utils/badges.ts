@@ -50,6 +50,12 @@ export interface RarityStyle {
     classes: string;
 }
 
+export interface BadgeDisplayGroup {
+    key: string;
+    badge: Badge;
+    members: Badge[];
+}
+
 const LEGACY_STACKABLE_TITLES = new Set([
     'Estava La',
     'Cestinha',
@@ -146,6 +152,10 @@ export const getBadgeOccurrences = (badge: Badge): BadgeOccurrence[] => {
     }
 
     return [buildLegacyOccurrence(badge)];
+};
+
+export const getBadgeOccurrencesNewestFirst = (badge: Badge): BadgeOccurrence[] => {
+    return [...getBadgeOccurrences(badge)].reverse();
 };
 
 export const getBadgeStackCount = (badge: Badge): number => {
@@ -383,27 +393,31 @@ const buildBadgeDisplayKey = (badge: Badge): string => {
     ].join('|');
 };
 
-export const getMergedBadgesForDisplay = (allBadges: Badge[]): Badge[] => {
-    const merged = new Map<string, Badge>();
+export const getGroupedBadgesForDisplay = (allBadges: Badge[]): BadgeDisplayGroup[] => {
+    const grouped = new Map<string, BadgeDisplayGroup>();
 
     allBadges.forEach((badge) => {
         const key = buildBadgeDisplayKey(badge);
-        const existing = merged.get(key);
+        const existing = grouped.get(key);
         if (!existing) {
             const canonicalLegacyName = getCanonicalLegacyBadgeName(badge);
-            merged.set(key, {
-                ...badge,
-                nome: canonicalLegacyName || badge.nome,
-                ocorrencias: getBadgeOccurrences(badge),
-                stackCount: getBadgeStackCount(badge),
-                latestOccurrenceId: getLatestBadgeOccurrence(badge).id,
-                data: getBadgeDisplayDate(badge),
-                descricao: getBadgeDisplayDescription(badge),
+            grouped.set(key, {
+                key,
+                members: [badge],
+                badge: {
+                    ...badge,
+                    nome: canonicalLegacyName || badge.nome,
+                    ocorrencias: getBadgeOccurrences(badge),
+                    stackCount: getBadgeStackCount(badge),
+                    latestOccurrenceId: getLatestBadgeOccurrence(badge).id,
+                    data: getBadgeDisplayDate(badge),
+                    descricao: getBadgeDisplayDescription(badge),
+                },
             });
             return;
         }
 
-        const mergedOccurrences = [...getBadgeOccurrences(existing)];
+        const mergedOccurrences = [...getBadgeOccurrences(existing.badge)];
         const knownIds = new Set(mergedOccurrences.map((occurrence) => occurrence.id));
 
         getBadgeOccurrences(badge).forEach((occurrence) => {
@@ -418,24 +432,32 @@ export const getMergedBadgesForDisplay = (allBadges: Badge[]): Badge[] => {
             return String(left.id || '').localeCompare(String(right.id || ''));
         });
 
-        const latestOccurrence = mergedOccurrences[mergedOccurrences.length - 1] || getLatestBadgeOccurrence(existing);
-        const canonicalLegacyName = getCanonicalLegacyBadgeName(existing) || getCanonicalLegacyBadgeName(badge);
-        merged.set(key, {
-            ...existing,
-            nome: canonicalLegacyName || existing.nome,
-            descricao: latestOccurrence.descricao || existing.descricao,
-            data: latestOccurrence.data || existing.data,
-            latestOccurrenceId: latestOccurrence.id,
-            ocorrencias: mergedOccurrences,
-            stackCount: mergedOccurrences.length,
+        const latestOccurrence = mergedOccurrences[mergedOccurrences.length - 1] || getLatestBadgeOccurrence(existing.badge);
+        const canonicalLegacyName = getCanonicalLegacyBadgeName(existing.badge) || getCanonicalLegacyBadgeName(badge);
+        grouped.set(key, {
+            key,
+            members: [...existing.members, badge],
+            badge: {
+                ...existing.badge,
+                nome: canonicalLegacyName || existing.badge.nome,
+                descricao: latestOccurrence.descricao || existing.badge.descricao,
+                data: latestOccurrence.data || existing.badge.data,
+                latestOccurrenceId: latestOccurrence.id,
+                ocorrencias: mergedOccurrences,
+                stackCount: mergedOccurrences.length,
+            },
         });
     });
 
-    return Array.from(merged.values()).sort((left, right) => {
-        const diff = getBadgeWeight(right.raridade) - getBadgeWeight(left.raridade);
+    return Array.from(grouped.values()).sort((left, right) => {
+        const diff = getBadgeWeight(right.badge.raridade) - getBadgeWeight(left.badge.raridade);
         if (diff !== 0) return diff;
-        return getBadgeDisplayDate(right).localeCompare(getBadgeDisplayDate(left));
+        return getBadgeDisplayDate(right.badge).localeCompare(getBadgeDisplayDate(left.badge));
     });
+};
+
+export const getMergedBadgesForDisplay = (allBadges: Badge[]): Badge[] => {
+    return getGroupedBadgesForDisplay(allBadges).map((group) => group.badge);
 };
 
 export const sortBadgesForGallery = (
