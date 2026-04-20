@@ -15,6 +15,8 @@ import { UserDetailsPanel } from '../components/UserDetailsPanel';
 import { normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
 import {
     buildRuleBasedBadgeId,
+    canRemoveBadgeDirectly,
+    getMergedBadgesForDisplay,
     getRarityStyles,
     renderConquistaTexts,
     upsertStackedBadge,
@@ -1888,6 +1890,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                 {filteredBadgePlayers.map(player => {
                                     const isOpen = expandedBadgePlayerId === player.id;
                                     const playerBadges = player.badges || [];
+                                    const groupedPlayerBadges = getMergedBadgesForDisplay(playerBadges);
                                     const quickSelectedId = badgeQuickAssignByPlayer[player.id] || '';
 
                                     return (
@@ -1912,7 +1915,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-3">
-                                                    <span className="text-xs text-gray-500 dark:text-gray-400">{playerBadges.length} conquista(s)</span>
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400">{groupedPlayerBadges.length} grupo(s) · {playerBadges.length} conquista(s)</span>
                                                     <LucideArrowDown size={16} className={`text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                                                 </div>
                                             </button>
@@ -1946,26 +1949,36 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                                                     </div>
 
                                                     <div className="mt-3 flex flex-wrap gap-2">
-                                                        {playerBadges.length === 0 && (
+                                                        {groupedPlayerBadges.length === 0 && (
                                                             <p className="text-xs text-gray-500 dark:text-gray-400">Nenhuma conquista ainda.</p>
                                                         )}
-                                                        {playerBadges.map(badge => {
+                                                        {groupedPlayerBadges.map(badge => {
                                                             const style = getRarityStyles(badge.raridade);
+                                                            const canRemove = canRemoveBadgeDirectly(badge);
+                                                            const stackCount = badge.stackCount || badge.ocorrencias?.length || 1;
                                                             return (
                                                                 <div key={badge.id} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-bold ${style.classes}`}>
                                                                     <span>{badge.emoji}</span>
                                                                     <span>{badge.nome}</span>
-                                                                    <button
-                                                                        onClick={() => handleRevokeBadge(player.id, badge.id)}
-                                                                        className="ml-1 opacity-70 hover:opacity-100 transition-opacity"
-                                                                        title="Remover conquista"
-                                                                    >
-                                                                        <LucideX size={10} />
-                                                                    </button>
+                                                                    {stackCount > 1 && <span className="rounded-full bg-black/20 px-1.5 py-0.5 text-[10px] font-black">x{stackCount}</span>}
+                                                                    {canRemove && (
+                                                                        <button
+                                                                            onClick={() => handleRevokeBadge(player.id, badge.id)}
+                                                                            className="ml-1 opacity-70 hover:opacity-100 transition-opacity"
+                                                                            title="Remover conquista"
+                                                                        >
+                                                                            <LucideX size={10} />
+                                                                        </button>
+                                                                    )}
                                                                 </div>
                                                             );
                                                         })}
                                                     </div>
+                                                    {groupedPlayerBadges.some((badge) => !canRemoveBadgeDirectly(badge)) && (
+                                                        <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+                                                            Conquistas empilhadas estao agrupadas visualmente nesta etapa. A remocao direta continua disponivel apenas para itens sem stack.
+                                                        </p>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>

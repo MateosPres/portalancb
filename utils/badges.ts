@@ -50,6 +50,16 @@ export interface RarityStyle {
     classes: string;
 }
 
+const LEGACY_STACKABLE_TITLES = new Set([
+    'Estava La',
+    'Cestinha',
+    'Imparavel',
+    'Bola Quente',
+    'Mao Quente',
+    'Tiro Certo',
+    'Mira Calibrada',
+]);
+
 const compareBadgeDates = (left?: string, right?: string): number => {
     return String(left || '').localeCompare(String(right || ''));
 };
@@ -72,6 +82,47 @@ const parseBadgeDateValue = (value?: string): number => {
 
     const timestamp = Date.parse(normalized);
     return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const normalizeLegacyTitleToken = (value?: string): string => {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+const extractLegacyBaseTitle = (badge: Badge): string | null => {
+    if (badge.origem && badge.origem !== 'legado') return null;
+
+    const normalizedTitle = normalizeLegacyTitleToken(badge.nome);
+    if (!normalizedTitle) return null;
+
+    const titleMatch = normalizedTitle.match(/^(.+?)\s*\((.+)\)$/);
+    const candidateTitle = titleMatch ? titleMatch[1].trim() : normalizedTitle;
+
+    if (!LEGACY_STACKABLE_TITLES.has(candidateTitle)) {
+        return null;
+    }
+
+    return candidateTitle;
+};
+
+const getCanonicalLegacyBadgeName = (badge: Badge): string | null => {
+    const legacyBaseTitle = extractLegacyBaseTitle(badge);
+    if (!legacyBaseTitle) return null;
+
+    const baseNameByTitle: Record<string, string> = {
+        'Estava La': 'Estava Lá',
+        'Cestinha': 'Cestinha',
+        'Imparavel': 'Imparável',
+        'Bola Quente': 'Bola Quente',
+        'Mao Quente': 'Mão Quente',
+        'Tiro Certo': 'Tiro Certo',
+        'Mira Calibrada': 'Mira Calibrada',
+    };
+
+    return baseNameByTitle[legacyBaseTitle] || badge.nome;
 };
 
 const buildLegacyOccurrence = (badge: Badge): BadgeOccurrence => ({
@@ -289,14 +340,15 @@ export const getDisplayBadges = (
     pinnedIds: string[],
     maxDisplay = 3,
 ): Badge[] => {
+    const mergedBadges = getMergedBadgesForDisplay(allBadges);
     const validPinned = pinnedIds.filter(id => id && id.length > 0);
     if (validPinned.length > 0) {
         // preserve pinnedIds order so slot position = display position
         return validPinned
-            .map(id => allBadges.find(b => b.id === id))
+            .map(id => mergedBadges.find(b => b.id === id) || allBadges.find(b => b.id === id))
             .filter(Boolean) as Badge[];
     }
-    return [...allBadges]
+    return [...mergedBadges]
         .sort((a, b) => {
             const diff = getBadgeWeight(b.raridade) - getBadgeWeight(a.raridade);
             return diff !== 0 ? diff : getBadgeDisplayDate(b).localeCompare(getBadgeDisplayDate(a));
@@ -306,6 +358,20 @@ export const getDisplayBadges = (
 
 const buildBadgeDisplayKey = (badge: Badge): string => {
     if (badge.regraId) return `regra:${badge.regraId}`;
+
+    const canonicalLegacyName = getCanonicalLegacyBadgeName(badge);
+    if (canonicalLegacyName) {
+        return [
+            'legacy',
+            canonicalLegacyName,
+            badge.emoji || '',
+            badge.raridade || '',
+            badge.categoria || '',
+            badge.tipoIcone || '',
+            badge.iconeValor || '',
+        ].join('|');
+    }
+
     return [
         'visual',
         badge.nome || '',
@@ -324,8 +390,10 @@ export const getMergedBadgesForDisplay = (allBadges: Badge[]): Badge[] => {
         const key = buildBadgeDisplayKey(badge);
         const existing = merged.get(key);
         if (!existing) {
+            const canonicalLegacyName = getCanonicalLegacyBadgeName(badge);
             merged.set(key, {
                 ...badge,
+                nome: canonicalLegacyName || badge.nome,
                 ocorrencias: getBadgeOccurrences(badge),
                 stackCount: getBadgeStackCount(badge),
                 latestOccurrenceId: getLatestBadgeOccurrence(badge).id,
@@ -351,8 +419,10 @@ export const getMergedBadgesForDisplay = (allBadges: Badge[]): Badge[] => {
         });
 
         const latestOccurrence = mergedOccurrences[mergedOccurrences.length - 1] || getLatestBadgeOccurrence(existing);
+        const canonicalLegacyName = getCanonicalLegacyBadgeName(existing) || getCanonicalLegacyBadgeName(badge);
         merged.set(key, {
             ...existing,
+            nome: canonicalLegacyName || existing.nome,
             descricao: latestOccurrence.descricao || existing.descricao,
             data: latestOccurrence.data || existing.data,
             latestOccurrenceId: latestOccurrence.id,
@@ -388,5 +458,9 @@ export const sortBadgesForGallery = (
 
         return String(right.nome || '').localeCompare(String(left.nome || ''));
     });
+};
+
+export const canRemoveBadgeDirectly = (badge: Badge): boolean => {
+    return getBadgeStackCount(badge) <= 1;
 };
 
