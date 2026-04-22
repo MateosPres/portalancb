@@ -213,7 +213,8 @@ export interface Jogo {
 
 export interface Cesta {
     id: string;
-    pontos: 1 | 2 | 3;
+    acao?: 'pontos' | 'assistencia' | 'rebote';
+    pontos?: 1 | 2 | 3;
     timestamp: any; // Firestore Timestamp
     timeId?: string; // Optional if linked to jogo
     jogoId?: string; // Link direto ao jogo

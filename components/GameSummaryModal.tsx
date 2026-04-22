@@ -56,6 +56,9 @@ export const GameSummaryModal: React.FC<GameSummaryModalProps> = ({
 
             snapshot.docs.forEach(doc => {
                 const data = doc.data() as Cesta;
+                const actionType = data.acao || 'pontos';
+                if (actionType !== 'pontos') return;
+
                 if (data.jogadorId && data.nomeJogador) {
                     if (!statsMap[data.jogadorId]) {
                         statsMap[data.jogadorId] = {
@@ -66,6 +69,7 @@ export const GameSummaryModal: React.FC<GameSummaryModalProps> = ({
                         };
                     }
                     const pts = Number(data.pontos);
+                    if (!Number.isFinite(pts) || pts <= 0) return;
                     statsMap[data.jogadorId].points += pts;
                     if (pts === 1) statsMap[data.jogadorId].c1++;
                     if (pts === 2) statsMap[data.jogadorId].c2++;

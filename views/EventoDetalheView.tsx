@@ -687,10 +687,14 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
 
                 cestasSnap.forEach(doc => {
                     const data = doc.data() as Cesta;
+                    const actionType = data.acao || 'pontos';
+                    if (actionType !== 'pontos') return;
+
                     if (data.jogadorId) {
                         if (!stats[data.jogadorId]) stats[data.jogadorId] = { points: 0, longRangeShots: 0 };
                         
                         const points = Number(data.pontos);
+                        if (points <= 0) return;
                         stats[data.jogadorId].points += points;
                         if (is3x3) {
                             if (points === 2) stats[data.jogadorId].longRangeShots += 1;

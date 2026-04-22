@@ -54,7 +54,9 @@ export const PublicGameModal: React.FC<PublicGameModalProps> = ({ game, eventId,
         const q = query(cestasRef, orderBy("timestamp", "desc"), limit(10)); // Show more items in modal
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const newItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Cesta));
+            const newItems = snapshot.docs
+                .map(d => ({ id: d.id, ...d.data() } as Cesta))
+                .filter(item => (item.acao || 'pontos') === 'pontos');
             setFeedItems(newItems);
         });
 

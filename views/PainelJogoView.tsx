@@ -22,18 +22,25 @@ interface PainelJogoViewProps {
 interface ScoreAction {
     cestaId: string;
     gameId: string;
-    points: number;
+    actionType: 'pontos' | 'assistencia' | 'rebote';
+    points?: number;
     teamSide: 'A' | 'B';
     playerId?: string | null;
+}
+
+interface PlayerActionStats {
+    assistencia: number;
+    rebote: number;
 }
 
 interface PlayerButtonProps {
     player: Player;
     jerseyNumber: string | number;
+    actionStats?: PlayerActionStats;
     onClick: () => void;
 }
 
-const PlayerButton: React.FC<PlayerButtonProps> = ({ player, jerseyNumber, onClick }) => (
+const PlayerButton: React.FC<PlayerButtonProps> = ({ player, jerseyNumber, actionStats, onClick }) => (
     <button 
         onClick={onClick}
         className="flex flex-col items-center p-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/20 border border-white/5 transition-all group"
@@ -46,6 +53,21 @@ const PlayerButton: React.FC<PlayerButtonProps> = ({ player, jerseyNumber, onCli
             <div className="absolute -bottom-1 -right-1 bg-ancb-orange text-white text-[10px] font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-gray-900 shadow-md z-10">
                 {jerseyNumber}
             </div>
+
+            {!!actionStats && (actionStats.assistencia > 0 || actionStats.rebote > 0) && (
+                <div className="absolute -top-1 left-1 z-10 flex flex-col gap-1 pointer-events-none">
+                    {actionStats.assistencia > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-indigo-500/90 text-white text-[9px] font-black leading-none shadow-sm">
+                            A{actionStats.assistencia}
+                        </span>
+                    )}
+                    {actionStats.rebote > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/90 text-white text-[9px] font-black leading-none shadow-sm">
+                            R{actionStats.rebote}
+                        </span>
+                    )}
+                </div>
+            )}
         </div>
         <span className="text-xs font-bold text-white text-center leading-tight line-clamp-1 w-full group-hover:text-ancb-orange transition-colors">
             {player.apelido || player.nome.split(' ')[0]}
@@ -63,6 +85,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
     // UI State
     const [selectedPlayerForScoring, setSelectedPlayerForScoring] = useState<{player: Player, teamSide: 'A'|'B'} | null>(null);
     const [actionHistory, setActionHistory] = useState<ScoreAction[]>([]);
+    const [playerActionStats, setPlayerActionStats] = useState<Record<string, PlayerActionStats>>({});
     const [isProcessing, setIsProcessing] = useState(false);
 
     const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
@@ -74,6 +97,27 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
             if (docSnap.exists()) {
                 setLiveGame({ id: docSnap.id, ...(docSnap.data() as any) } as Jogo);
             }
+        });
+
+        const unsubActions = onSnapshot(collection(db, "eventos", eventId, "jogos", game.id, "cestas"), (snapshot) => {
+            const nextStats: Record<string, PlayerActionStats> = {};
+
+            snapshot.forEach((docSnap) => {
+                const action = docSnap.data() as Cesta;
+                const actionType = action.acao || 'pontos';
+                if (actionType !== 'assistencia' && actionType !== 'rebote') return;
+
+                const playerId = action.jogadorId || null;
+                if (!playerId) return;
+
+                if (!nextStats[playerId]) {
+                    nextStats[playerId] = { assistencia: 0, rebote: 0 };
+                }
+
+                nextStats[playerId][actionType] += 1;
+            });
+
+            setPlayerActionStats(nextStats);
         });
 
         // Load Players & Teams Logic
@@ -134,7 +178,10 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
         };
         loadRosters();
 
-        return () => unsubGame();
+        return () => {
+            unsubGame();
+            unsubActions();
+        };
     }, [game.id, eventId]);
 
     // Helper to get jersey number from event specific roster or fall back to profile
@@ -156,15 +203,20 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
     };
 
     // 2. Score Logic
-    const handleAddPoint = async (points: 1 | 2 | 3, teamSide: 'A' | 'B', player?: Player) => {
+    const handleAddAction = async (
+        actionType: 'pontos' | 'assistencia' | 'rebote',
+        teamSide: 'A' | 'B',
+        player?: Player,
+        points?: 1 | 2 | 3
+    ) => {
         if (!isAdmin || isProcessing) return;
+        if (actionType === 'pontos' && !points) return;
         setIsProcessing(true);
         if (selectedPlayerForScoring) setSelectedPlayerForScoring(null); // Close modal
 
         try {
-            // 1. Add Cesta Document
-            const cestaData = {
-                pontos: points,
+            const cestaData: any = {
+                acao: actionType,
                 jogadorId: player ? player.id : null,
                 nomeJogador: player ? (player.apelido || player.nome) : null,
                 timestamp: serverTimestamp(),
@@ -172,34 +224,41 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                 jogoId: game.id,
                 eventoId: eventId
             };
+
+            if (actionType === 'pontos') {
+                cestaData.pontos = points;
+            }
             
             const docRef = await addDoc(collection(db, "eventos", eventId, "jogos", game.id, "cestas"), cestaData);
 
-            // 2. Update Game Totals (Atomic Increment)
-            const fieldToUpdate = teamSide === 'A' ? 'placarTimeA_final' : 'placarTimeB_final';
-            const legacyField = teamSide === 'A' ? 'placarANCB_final' : 'placarAdversario_final';
-            
-            const updates: any = {
-                [fieldToUpdate]: increment(points),
-                [legacyField]: increment(points),
-                status: 'andamento' // Ensure active if scoring happens
-            };
+            if (actionType === 'pontos' && points) {
+                // 2. Update Game Totals (Atomic Increment)
+                const fieldToUpdate = teamSide === 'A' ? 'placarTimeA_final' : 'placarTimeB_final';
+                const legacyField = teamSide === 'A' ? 'placarANCB_final' : 'placarAdversario_final';
+                
+                const updates: any = {
+                    [fieldToUpdate]: increment(points),
+                    [legacyField]: increment(points),
+                    status: 'andamento' // Ensure active if scoring happens
+                };
 
-            // Add player to game roster for stats tracking if not present
-            if (player) {
-                const currentRoster = liveGame.jogadoresEscalados || [];
-                if (!currentRoster.includes(player.id)) {
-                    updates.jogadoresEscalados = [...currentRoster, player.id];
+                // Add player to game roster for stats tracking if not present
+                if (player) {
+                    const currentRoster = liveGame.jogadoresEscalados || [];
+                    if (!currentRoster.includes(player.id)) {
+                        updates.jogadoresEscalados = [...currentRoster, player.id];
+                    }
                 }
-            }
 
-            await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), updates);
+                await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), updates);
+            }
 
             // 3. Push to Local History for Undo
             const newAction: ScoreAction = {
                 cestaId: docRef.id,
                 gameId: game.id,
-                points: points,
+                actionType,
+                points,
                 teamSide: teamSide,
                 playerId: player?.id
             };
@@ -223,14 +282,16 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
             // 1. Delete Cesta Doc
             await deleteDoc(doc(db, "eventos", eventId, "jogos", game.id, "cestas", lastAction.cestaId));
 
-            // 2. Decrement Game Score
-            const fieldToUpdate = lastAction.teamSide === 'A' ? 'placarTimeA_final' : 'placarTimeB_final';
-            const legacyField = lastAction.teamSide === 'A' ? 'placarANCB_final' : 'placarAdversario_final';
+            if (lastAction.actionType === 'pontos' && lastAction.points) {
+                // 2. Decrement Game Score only for point actions
+                const fieldToUpdate = lastAction.teamSide === 'A' ? 'placarTimeA_final' : 'placarTimeB_final';
+                const legacyField = lastAction.teamSide === 'A' ? 'placarANCB_final' : 'placarAdversario_final';
 
-            await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), {
-                [fieldToUpdate]: increment(-lastAction.points),
-                [legacyField]: increment(-lastAction.points)
-            });
+                await updateDoc(doc(db, "eventos", eventId, "jogos", game.id), {
+                    [fieldToUpdate]: increment(-lastAction.points),
+                    [legacyField]: increment(-lastAction.points)
+                });
+            }
 
             // 3. Pop from History
             setActionHistory(prev => prev.slice(0, -1));
@@ -351,6 +412,17 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
         </button>
     );
 
+    const ActionButton = ({ label, icon, onClick, colorClass }: { label: string, icon: string, onClick: () => void, colorClass: string }) => (
+        <button
+            onClick={onClick}
+            disabled={isProcessing}
+            className={`w-full rounded-xl px-4 py-3 flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all text-white font-bold ${colorClass} disabled:opacity-50`}
+        >
+            <span className="text-base" aria-hidden="true">{icon}</span>
+            <span className="text-xs uppercase tracking-wide">{label}</span>
+        </button>
+    );
+
     const TeamPanel = ({ 
         name, 
         players, 
@@ -383,6 +455,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                                     key={p.id} 
                                     player={p} 
                                     jerseyNumber={getJerseyNumber(p)}
+                                    actionStats={playerActionStats[p.id]}
                                     onClick={() => setSelectedPlayerForScoring({ player: p, teamSide: side })} 
                                 />
                             ))}
@@ -392,9 +465,9 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                         <div className="h-full flex flex-col justify-center gap-4 max-w-xs mx-auto">
                             <p className="text-center text-white/30 text-xs uppercase font-bold mb-2">Pontuação de Time</p>
                             <div className="grid grid-cols-3 gap-4">
-                                <ScoreButton points={1} onClick={() => handleAddPoint(1, side)} colorClass="bg-green-600 hover:bg-green-500 text-white" />
-                                <ScoreButton points={2} onClick={() => handleAddPoint(2, side)} colorClass="bg-blue-600 hover:bg-blue-500 text-white" />
-                                <ScoreButton points={3} onClick={() => handleAddPoint(3, side)} colorClass="bg-orange-600 hover:bg-orange-500 text-white" />
+                                <ScoreButton points={1} onClick={() => handleAddAction('pontos', side, undefined, 1)} colorClass="bg-green-600 hover:bg-green-500 text-white" />
+                                <ScoreButton points={2} onClick={() => handleAddAction('pontos', side, undefined, 2)} colorClass="bg-blue-600 hover:bg-blue-500 text-white" />
+                                <ScoreButton points={3} onClick={() => handleAddAction('pontos', side, undefined, 3)} colorClass="bg-orange-600 hover:bg-orange-500 text-white" />
                             </div>
                         </div>
                     )}
@@ -448,7 +521,7 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                         onClick={handleUndo} 
                         disabled={actionHistory.length === 0}
                         className="p-2 rounded-full bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-30 transition-all border border-gray-700"
-                        title="Desfazer último ponto"
+                        title="Desfazer última ação"
                     >
                         <LucideRotateCcw size={20} />
                     </button>
@@ -510,16 +583,31 @@ export const PainelJogoView: React.FC<PainelJogoViewProps> = ({ game, eventId, o
                         <div className="grid grid-cols-3 gap-4 mb-4">
                             {eventData?.modalidade === '3x3' ? (
                                 <>
-                                    <ScoreButton points={1} onClick={() => handleAddPoint(1, selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)} colorClass="bg-blue-600 hover:bg-blue-500 text-white col-span-1" label="1 Pt" />
-                                    <ScoreButton points={2} onClick={() => handleAddPoint(2, selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)} colorClass="bg-orange-600 hover:bg-orange-500 text-white col-span-2" label="2 Pts (Longa)" />
+                                    <ScoreButton points={1} onClick={() => handleAddAction('pontos', selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player, 1)} colorClass="bg-blue-600 hover:bg-blue-500 text-white col-span-1" label="1 Pt" />
+                                    <ScoreButton points={2} onClick={() => handleAddAction('pontos', selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player, 2)} colorClass="bg-orange-600 hover:bg-orange-500 text-white col-span-2" label="2 Pts (Longa)" />
                                 </>
                             ) : (
                                 <>
-                                    <ScoreButton points={1} onClick={() => handleAddPoint(1, selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)} colorClass="bg-green-600 hover:bg-green-500 text-white" label="Livre" />
-                                    <ScoreButton points={2} onClick={() => handleAddPoint(2, selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)} colorClass="bg-blue-600 hover:bg-blue-500 text-white" label="Curta" />
-                                    <ScoreButton points={3} onClick={() => handleAddPoint(3, selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)} colorClass="bg-orange-600 hover:bg-orange-500 text-white" label="Longa" />
+                                    <ScoreButton points={1} onClick={() => handleAddAction('pontos', selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player, 1)} colorClass="bg-green-600 hover:bg-green-500 text-white" label="Livre" />
+                                    <ScoreButton points={2} onClick={() => handleAddAction('pontos', selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player, 2)} colorClass="bg-blue-600 hover:bg-blue-500 text-white" label="Curta" />
+                                    <ScoreButton points={3} onClick={() => handleAddAction('pontos', selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player, 3)} colorClass="bg-orange-600 hover:bg-orange-500 text-white" label="Longa" />
                                 </>
                             )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 mb-2">
+                            <ActionButton
+                                label="Assistência"
+                                icon="🤝"
+                                colorClass="bg-indigo-600 hover:bg-indigo-500"
+                                onClick={() => handleAddAction('assistencia', selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)}
+                            />
+                            <ActionButton
+                                label="Rebote"
+                                icon="💪"
+                                colorClass="bg-emerald-600 hover:bg-emerald-500"
+                                onClick={() => handleAddAction('rebote', selectedPlayerForScoring.teamSide, selectedPlayerForScoring.player)}
+                            />
                         </div>
 
                         <button 

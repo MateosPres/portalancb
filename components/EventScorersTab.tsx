@@ -83,12 +83,16 @@ export const EventScorersTab: React.FC<EventScorersTabProps> = ({ event, eventId
                     const cestasSnap = await getDocs(collection(db, 'eventos', eventId, 'jogos', game.id, 'cestas'));
                     cestasSnap.forEach(docSnap => {
                         const basket = docSnap.data() as Cesta;
+                        const actionType = basket.acao || 'pontos';
+                        if (actionType !== 'pontos') return;
+
                         const playerId = basket.jogadorId || undefined;
                         if (!playerId) return;
 
                         if (ancbPlayerIds.size > 0 && !ancbPlayerIds.has(playerId)) return;
 
                         const points = Number(basket.pontos) || 0;
+                        if (points <= 0) return;
                         if (!acc.has(playerId)) {
                             acc.set(playerId, {
                                 playerId,
