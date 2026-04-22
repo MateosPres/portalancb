@@ -53,6 +53,8 @@ interface MatchHistoryItem {
     cesta1: number;
     cesta2: number;
     cesta3: number;
+    ast: number;
+    reb: number;
 }
 
 interface PendingInvite {
@@ -125,6 +127,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const [phoneNumber, setPhoneNumber] = useState('');
     const [matches, setMatches] = useState<MatchHistoryItem[]>([]);
     const [loadingMatches, setLoadingMatches] = useState(false);
+    const [seasonStats, setSeasonStats] = useState({ pts: 0, ast: 0, reb: 0 });
     
     // Invites
     const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
@@ -299,6 +302,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
             try {
                 const eventsQ = query(collection(db, "eventos"), where("status", "==", "finalizado"));
                 const eventsSnap = await getDocs(eventsQ);
+                const currentYear = new Date().getFullYear().toString();
+                let _seasonPts = 0, _seasonAst = 0, _seasonReb = 0;
                 for (const eventDoc of eventsSnap.docs) {
                     const eventData = eventDoc.data() as Evento;
                     const gamesSnap = await getDocs(collection(db, "eventos", eventDoc.id, "jogos"));
@@ -316,12 +321,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                         else if ((!gameData.jogadoresEscalados || gameData.jogadoresEscalados.length === 0) && eventData.jogadoresEscalados?.includes(playerDocId)) { played = true; isTeamA = true; }
                         if (played) {
                             let points = 0; let c1 = 0; let c2 = 0; let c3 = 0;
+                            let gameAst = 0; let gameReb = 0;
                             const processedCestaIds = new Set<string>();
                             const countCesta = (cesta: Cesta) => {
                                 if (processedCestaIds.has(cesta.id)) return;
                                 if (cesta.jogadorId === playerDocId) {
-                                    const p = Number(cesta.pontos); points += p;
-                                    if (p === 1) c1++; if (p === 2) c2++; if (p === 3) c3++;
+                                    const actionType = (cesta as any).acao || 'pontos';
+                                    if (actionType === 'assistencia') { gameAst++; }
+                                    else if (actionType === 'rebote') { gameReb++; }
+                                    else {
+                                        const p = Number(cesta.pontos) || 0;
+                                        if (p > 0) { points += p; if (p === 1) c1++; if (p === 2) c2++; if (p === 3) c3++; }
+                                    }
                                     processedCestaIds.add(cesta.id);
                                 }
                             };
@@ -334,13 +345,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                             historyList.push({
                                 eventId: eventDoc.id, gameId: gameDoc.id, eventName: eventData.nome, eventType: eventData.modalidade || '5x5',
                                 date: gameData.dataJogo || eventData.data, gameTime: gameData.horaJogo || '', opponent: isTeamA ? (gameData.adversario || gameData.timeB_nome || 'Adversário') : (gameData.timeA_nome || 'ANCB'),
-                                myTeam: isTeamA ? (gameData.timeA_nome || 'ANCB') : (gameData.timeB_nome || 'Meu Time'), scoreMyTeam: isTeamA ? sA : sB, scoreOpponent: isTeamA ? sB : sA, reviewed: !reviewSnap.empty, individualPoints: points, cesta1: c1, cesta2: c2, cesta3: c3
+                                myTeam: isTeamA ? (gameData.timeA_nome || 'ANCB') : (gameData.timeB_nome || 'Meu Time'), scoreMyTeam: isTeamA ? sA : sB, scoreOpponent: isTeamA ? sB : sA, reviewed: !reviewSnap.empty, individualPoints: points, cesta1: c1, cesta2: c2, cesta3: c3, ast: gameAst, reb: gameReb
                             });
+                            const evDate = String(eventData.data || '');
+                            if (evDate.includes(currentYear)) { _seasonPts += points; _seasonAst += gameAst; _seasonReb += gameReb; }
                         }
                     }
                 }
                 historyList.sort((a, b) => getHistorySortKey(b).localeCompare(getHistorySortKey(a)));
                 setMatches(historyList);
+                setSeasonStats({ pts: _seasonPts, ast: _seasonAst, reb: _seasonReb });
             } catch (e) { console.error("Error fetching matches", e); } finally { setLoadingMatches(false); }
         };
         fetchMatches();
@@ -665,6 +679,20 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                                 <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
                             </div>
                         </div>
+                        <div className="grid grid-cols-3 gap-2 w-full max-w-[240px] mx-auto md:mx-0 mt-2">
+                            <div className="bg-[#092b5e] rounded-xl p-2 text-center border border-white/5 shadow-inner">
+                                <span className="block text-xl font-bold text-ancb-orange">{seasonStats.pts}</span>
+                                <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Pts</span>
+                            </div>
+                            <div className="bg-[#092b5e] rounded-xl p-2 text-center border border-white/5 shadow-inner">
+                                <span className="block text-xl font-bold text-emerald-400">{seasonStats.reb}</span>
+                                <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Reb</span>
+                            </div>
+                            <div className="bg-[#092b5e] rounded-xl p-2 text-center border border-white/5 shadow-inner">
+                                <span className="block text-xl font-bold text-indigo-400">{seasonStats.ast}</span>
+                                <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Ast</span>
+                            </div>
+                        </div>
                     </div>
 
                     {/* RIGHT COLUMN: Radar Chart */}
@@ -748,6 +776,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                                     <div className="flex flex-wrap gap-2 items-center justify-center border-t border-gray-100 dark:border-gray-700 pt-2">
                                         <div className="flex items-center gap-1 bg-ancb-blue/10 dark:bg-blue-900/30 px-2 py-1 rounded text-ancb-blue dark:text-blue-300 font-bold text-xs"><span>{match.individualPoints} Pts</span></div>
                                         <div className="text-[10px] text-gray-500 dark:text-gray-400 flex gap-2"><span title="Bolas de 3 Pontos">3PT: <b>{match.cesta3}</b></span><span className="text-gray-300 dark:text-gray-600">|</span><span title="Bolas de 2 Pontos">2PT: <b>{match.cesta2}</b></span><span className="text-gray-300 dark:text-gray-600">|</span><span title="Lances Livres">1PT: <b>{match.cesta1}</b></span></div>
+                                        {match.reb > 0 && <div className="flex items-center gap-1 bg-emerald-500/10 dark:bg-emerald-900/30 px-2 py-1 rounded text-emerald-600 dark:text-emerald-400 font-bold text-xs"><span>{match.reb} Reb</span></div>}
+                                        {match.ast > 0 && <div className="flex items-center gap-1 bg-indigo-500/10 dark:bg-indigo-900/30 px-2 py-1 rounded text-indigo-600 dark:text-indigo-400 font-bold text-xs"><span>{match.ast} Ast</span></div>}
                                     </div>
                                     {onOpenReview && !match.reviewed && (
                                         <div className="mt-2 text-center">

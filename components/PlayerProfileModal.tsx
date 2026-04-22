@@ -50,6 +50,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
     const [loading, setLoading] = useState(false);
     const [player, setPlayer] = useState<Player | null>(null);
     const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
+    const [seasonStats, setSeasonStats] = useState({ pts: 0, ast: 0, reb: 0 });
 
     useEffect(() => {
         if (!isOpen || !playerId) return;
@@ -78,6 +79,28 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
         return () => {
             cancelled = true;
         };
+    }, [isOpen, playerId]);
+
+    useEffect(() => {
+        if (!isOpen || !playerId) return;
+        let cancelled = false;
+        const fetchSeasonStats = async () => {
+            try {
+                const snap = await db.collectionGroup('cestas').where('jogadorId', '==', playerId).get();
+                let pts = 0, ast = 0, reb = 0;
+                snap.forEach(d => {
+                    const data = d.data() as any;
+                    const actionType = data.acao || 'pontos';
+                    const p = Number(data.pontos) || 0;
+                    if (actionType === 'pontos' && p > 0) pts += p;
+                    else if (actionType === 'assistencia') ast += 1;
+                    else if (actionType === 'rebote') reb += 1;
+                });
+                if (!cancelled) setSeasonStats({ pts, ast, reb });
+            } catch (e) { /* fail silently */ }
+        };
+        fetchSeasonStats();
+        return () => { cancelled = true; };
     }, [isOpen, playerId]);
 
     const radarStats = useMemo(() => {
@@ -190,6 +213,21 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
                         <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center">
                             <p className="text-2xl font-black text-ancb-blue">{player.numero_uniforme ?? '-'}</p>
                             <p className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Numero</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                        <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center">
+                            <p className="text-2xl font-black text-ancb-orange">{seasonStats.pts}</p>
+                            <p className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Pontos</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center">
+                            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{seasonStats.reb}</p>
+                            <p className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Rebotes</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center">
+                            <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{seasonStats.ast}</p>
+                            <p className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Assistências</p>
                         </div>
                     </div>
 

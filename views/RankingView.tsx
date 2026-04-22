@@ -26,7 +26,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack, onOpenPlayer }
     const defaultYear = parseInt(currentYear) < 2025 ? "2025" : currentYear;
     
     const [selectedYear, setSelectedYear] = useState<string>(defaultYear);
-    const [selectedMode, setSelectedMode] = useState<'3x3' | '5x5' | 'shooters'>('5x5');
+    const [selectedMode, setSelectedMode] = useState<'pontos' | 'arremessadores' | 'rebotes' | 'assistencias'>('pontos');
     const [selectedCategory, setSelectedCategory] = useState<'aberta' | 'juvenil'>('aberta');
 
     useEffect(() => {
@@ -89,9 +89,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack, onOpenPlayer }
                     if (!isYearMatch) return;
 
                     // Filter logic:
-                    // If 'shooters', we allow BOTH 3x3 and 5x5.
-                    // Otherwise, we filter strictly by the selected mode.
-                    if (selectedMode !== 'shooters' && evento.modalidade !== selectedMode) return;
+                    // All ranking modes include all modalities (5x5 and 3x3 unified)
                     
                     filteredEvents.push({ ...evento, id: eventId });
                     
@@ -136,29 +134,31 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack, onOpenPlayer }
                                     subCestasSnap.forEach(cDoc => {
                                         const cesta = { id: cDoc.id, ...cDoc.data() } as Cesta;
                                         if (processedCestaIds.has(cesta.id)) return;
+                                        if (!cesta.jogadorId || !playersMap[cesta.jogadorId]) return;
 
-                                        if (cesta.jogadorId && cesta.pontos) {
-                                            const points = Number(cesta.pontos);
-                                            
-                                            // LOGIC FOR SHOOTERS vs NORMAL
-                                            if (selectedMode === 'shooters') {
-                                                const is3x3 = evento.modalidade === '3x3';
-                                                // 3x3 Long range = 2pts, 5x5 Long range = 3pts
-                                                const isLongRange = is3x3 ? (points === 2) : (points === 3);
-                                                
-                                                if (isLongRange && (playersMap[cesta.jogadorId])) {
-                                                    pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + 1; // Count quantity
-                                                    if (playerGamesMap[cesta.jogadorId]) playerGamesMap[cesta.jogadorId].add(gameId);
-                                                    processedCestaIds.add(cesta.id);
-                                                }
-                                            } else {
-                                                // Normal Logic
-                                                if (playersMap[cesta.jogadorId]) {
-                                                    pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + points;
-                                                    if (playerGamesMap[cesta.jogadorId]) playerGamesMap[cesta.jogadorId].add(gameId);
-                                                    processedCestaIds.add(cesta.id);
-                                                }
+                                        const actionType = (cesta as any).acao || 'pontos';
+                                        const points = Number(cesta.pontos) || 0;
+
+                                        if (selectedMode === 'pontos' && actionType === 'pontos' && points > 0) {
+                                            pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + points;
+                                            if (playerGamesMap[cesta.jogadorId]) playerGamesMap[cesta.jogadorId].add(gameId);
+                                            processedCestaIds.add(cesta.id);
+                                        } else if (selectedMode === 'arremessadores' && actionType === 'pontos') {
+                                            const is3x3 = evento.modalidade === '3x3';
+                                            const isLongRange = is3x3 ? (points === 2) : (points === 3);
+                                            if (isLongRange) {
+                                                pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + 1;
+                                                if (playerGamesMap[cesta.jogadorId]) playerGamesMap[cesta.jogadorId].add(gameId);
+                                                processedCestaIds.add(cesta.id);
                                             }
+                                        } else if (selectedMode === 'rebotes' && actionType === 'rebote') {
+                                            pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + 1;
+                                            if (playerGamesMap[cesta.jogadorId]) playerGamesMap[cesta.jogadorId].add(gameId);
+                                            processedCestaIds.add(cesta.id);
+                                        } else if (selectedMode === 'assistencias' && actionType === 'assistencia') {
+                                            pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + 1;
+                                            if (playerGamesMap[cesta.jogadorId]) playerGamesMap[cesta.jogadorId].add(gameId);
+                                            processedCestaIds.add(cesta.id);
                                         }
                                     });
                                 } catch (err) {
@@ -193,25 +193,24 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack, onOpenPlayer }
 
                     const modality = contextModalityMap[contextId] || '5x5'; // Default to 5x5 if unknown
 
-                    if (cesta.jogadorId && cesta.pontos) {
-                        const points = Number(cesta.pontos);
+                    if (cesta.jogadorId && playersMap[cesta.jogadorId]) {
+                        const actionType = (cesta as any).acao || 'pontos';
+                        const points = Number(cesta.pontos) || 0;
 
-                        if (selectedMode === 'shooters') {
+                        if (selectedMode === 'pontos' && actionType === 'pontos' && points > 0) {
+                            pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + points;
+                            if (playerGamesMap[cesta.jogadorId]) playerGamesMap[cesta.jogadorId].add(contextId);
+                            processedCestaIds.add(cesta.id);
+                        } else if (selectedMode === 'arremessadores' && actionType === 'pontos') {
                             const is3x3 = modality === '3x3';
                             const isLongRange = is3x3 ? (points === 2) : (points === 3);
-
-                            if (isLongRange && playersMap[cesta.jogadorId]) {
-                                pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + 1; // Count quantity
-                                if (playerGamesMap[cesta.jogadorId]) playerGamesMap[cesta.jogadorId].add(contextId);
-                                processedCestaIds.add(cesta.id);
-                            }
-                        } else {
-                            if (playersMap[cesta.jogadorId]) {
-                                pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + points;
+                            if (isLongRange) {
+                                pointsMap[cesta.jogadorId] = (pointsMap[cesta.jogadorId] || 0) + 1;
                                 if (playerGamesMap[cesta.jogadorId]) playerGamesMap[cesta.jogadorId].add(contextId);
                                 processedCestaIds.add(cesta.id);
                             }
                         }
+                        // rebotes/assistencias não existem na coleção raiz legada
                     }
                 });
 
@@ -263,13 +262,17 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack, onOpenPlayer }
     }, [selectedYear, selectedMode, selectedCategory]);
 
     const getRuleText = () => {
-        if (selectedMode === 'shooters') return 'Contabiliza apenas cestas de longa distância (3pts no 5x5 e 2pts no 3x3). Soma quantidade, não pontos.';
-        if (selectedMode === '3x3') return 'Lance Livre (1pt) • Dentro (1pt) • Fora (2pts)';
-        return 'Lance Livre (1pt) • Dentro (2pts) • Fora (3pts)';
+        if (selectedMode === 'arremessadores') return 'Cestas de longa distância: 3pts no 5x5 e 2pts no 3x3. Conta quantidade convertida, não pontos.';
+        if (selectedMode === 'rebotes') return 'Total de rebotes registrados no painel ao vivo. Inclui jogos 5x5 e 3x3.';
+        if (selectedMode === 'assistencias') return 'Total de assistências registradas no painel ao vivo. Inclui jogos 5x5 e 3x3.';
+        return 'Total de pontos somados de todas as modalidades (5x5 e 3x3).';
     };
 
     const getMetricLabel = () => {
-        return selectedMode === 'shooters' ? 'bolas' : 'pts';
+        if (selectedMode === 'arremessadores') return 'bolas';
+        if (selectedMode === 'rebotes') return 'reb';
+        if (selectedMode === 'assistencias') return 'ast';
+        return 'pts';
     };
 
     return (
@@ -314,36 +317,46 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack, onOpenPlayer }
                 </div>
 
                 {/* Mode Toggles */}
-                <div className="flex p-1 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-x-auto">
+                <div className="flex p-1 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-x-auto gap-0.5">
                     <button
-                        onClick={() => setSelectedMode('5x5')}
-                        className={`flex-1 py-1.5 px-2 text-xs md:text-sm font-bold rounded-md transition-all whitespace-nowrap ${
-                            selectedMode === '5x5' 
-                            ? 'bg-ancb-orange text-white shadow-sm' 
+                        onClick={() => setSelectedMode('pontos')}
+                        className={`flex-1 py-1.5 px-2 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
+                            selectedMode === 'pontos'
+                            ? 'bg-ancb-orange text-white shadow-sm'
                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                         }`}
                     >
-                        Basquete 5x5
+                        Total Pts
                     </button>
                     <button
-                        onClick={() => setSelectedMode('3x3')}
-                        className={`flex-1 py-1.5 px-2 text-xs md:text-sm font-bold rounded-md transition-all whitespace-nowrap ${
-                            selectedMode === '3x3' 
-                            ? 'bg-ancb-orange text-white shadow-sm' 
+                        onClick={() => setSelectedMode('arremessadores')}
+                        className={`flex-1 py-1.5 px-2 text-xs font-bold rounded-md transition-all whitespace-nowrap flex items-center justify-center gap-1 ${
+                            selectedMode === 'arremessadores'
+                            ? 'bg-ancb-blue text-white shadow-sm'
                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                         }`}
                     >
-                        FIBA 3x3
+                        <LucideCrosshair size={12} /> Arremess.
                     </button>
                     <button
-                        onClick={() => setSelectedMode('shooters')}
-                        className={`flex-1 py-1.5 px-2 text-xs md:text-sm font-bold rounded-md transition-all whitespace-nowrap flex items-center justify-center gap-1 ${
-                            selectedMode === 'shooters' 
-                            ? 'bg-ancb-blue text-white shadow-sm' 
+                        onClick={() => setSelectedMode('rebotes')}
+                        className={`flex-1 py-1.5 px-2 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
+                            selectedMode === 'rebotes'
+                            ? 'bg-emerald-600 text-white shadow-sm'
                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                         }`}
                     >
-                        <LucideCrosshair size={14} /> Arremessadores
+                        Rebotes
+                    </button>
+                    <button
+                        onClick={() => setSelectedMode('assistencias')}
+                        className={`flex-1 py-1.5 px-2 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
+                            selectedMode === 'assistencias'
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                        }`}
+                    >
+                        Assistências
                     </button>
                 </div>
                 
@@ -364,7 +377,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack, onOpenPlayer }
                 <div className="text-center py-20 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mx-4">
                     <LucideTrophy className="mx-auto text-gray-300 dark:text-gray-600 mb-4" size={48} />
                     <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">Ranking indisponível</h3>
-                    <p className="text-gray-500 dark:text-gray-400 px-6">Nenhum dado encontrado para {selectedMode === 'shooters' ? 'arremessadores' : selectedMode} em {selectedYear} ({selectedCategory}).</p>
+                    <p className="text-gray-500 dark:text-gray-400 px-6">Nenhum dado encontrado para {selectedMode} em {selectedYear} ({selectedCategory}).</p>
                 </div>
             ) : (
                 <>
@@ -527,7 +540,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack, onOpenPlayer }
                             <div className="col-span-2 text-center">Pos</div>
                             <div className="col-span-6">Atleta</div>
                             <div className="col-span-2 text-center">Jogos</div>
-                            <div className="col-span-2 text-center">{selectedMode === 'shooters' ? 'Conv' : 'Pts'}</div>
+                            <div className="col-span-2 text-center">{getMetricLabel().toUpperCase()}</div>
                         </div>
                         
                         <div className="divide-y divide-gray-100 dark:divide-gray-700">
