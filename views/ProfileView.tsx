@@ -29,6 +29,7 @@ import {
     sortBadgesForGallery,
 } from '../utils/badges';
 import { calculateRelativeRadarStats, hasRadarSourceData } from '../utils/radar';
+import { isDateInCurrentSeason } from '../utils/dateFormat';
 
 interface ProfileViewProps {
     userProfile: UserProfile;
@@ -128,6 +129,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
     const [matches, setMatches] = useState<MatchHistoryItem[]>([]);
     const [loadingMatches, setLoadingMatches] = useState(false);
     const [seasonStats, setSeasonStats] = useState({ pts: 0, ast: 0, reb: 0 });
+    const [seasonGamesCount, setSeasonGamesCount] = useState(0);
     
     // Invites
     const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
@@ -302,8 +304,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
             try {
                 const eventsQ = query(collection(db, "eventos"), where("status", "==", "finalizado"));
                 const eventsSnap = await getDocs(eventsQ);
-                const currentYear = new Date().getFullYear().toString();
-                let _seasonPts = 0, _seasonAst = 0, _seasonReb = 0;
+                let _seasonPts = 0, _seasonAst = 0, _seasonReb = 0, _seasonGames = 0;
                 for (const eventDoc of eventsSnap.docs) {
                     const eventData = eventDoc.data() as Evento;
                     const gamesSnap = await getDocs(collection(db, "eventos", eventDoc.id, "jogos"));
@@ -347,14 +348,20 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                                 date: gameData.dataJogo || eventData.data, gameTime: gameData.horaJogo || '', opponent: isTeamA ? (gameData.adversario || gameData.timeB_nome || 'Adversário') : (gameData.timeA_nome || 'ANCB'),
                                 myTeam: isTeamA ? (gameData.timeA_nome || 'ANCB') : (gameData.timeB_nome || 'Meu Time'), scoreMyTeam: isTeamA ? sA : sB, scoreOpponent: isTeamA ? sB : sA, reviewed: !reviewSnap.empty, individualPoints: points, cesta1: c1, cesta2: c2, cesta3: c3, ast: gameAst, reb: gameReb
                             });
-                            const evDate = String(eventData.data || '');
-                            if (evDate.includes(currentYear)) { _seasonPts += points; _seasonAst += gameAst; _seasonReb += gameReb; }
+                            const seasonDate = gameData.dataJogo || eventData.data;
+                            if (isDateInCurrentSeason(seasonDate)) {
+                                _seasonPts += points;
+                                _seasonAst += gameAst;
+                                _seasonReb += gameReb;
+                                _seasonGames += 1;
+                            }
                         }
                     }
                 }
                 historyList.sort((a, b) => getHistorySortKey(b).localeCompare(getHistorySortKey(a)));
                 setMatches(historyList);
                 setSeasonStats({ pts: _seasonPts, ast: _seasonAst, reb: _seasonReb });
+                setSeasonGamesCount(_seasonGames);
             } catch (e) { console.error("Error fetching matches", e); } finally { setLoadingMatches(false); }
         };
         fetchMatches();
@@ -669,13 +676,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                             <LucideEdit2 size={14} /> Editar Perfil
                         </button>
 
+                        <div className="flex items-center justify-center md:justify-start gap-2 mb-2 text-blue-100/60">
+                            <LucideTrendingUp size={12} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Estatísticas da Temporada</span>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4 w-full max-w-[240px] mx-auto md:mx-0">
                             <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
                                 <span className="block text-2xl font-bold text-white">{calculateAge(formData.nascimento)}</span>
                                 <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Idade</span>
                             </div>
                             <div className="bg-[#092b5e] rounded-xl p-3 text-center border border-white/5 shadow-inner">
-                                <span className="block text-2xl font-bold text-white">{matches.length}</span>
+                                <span className="block text-2xl font-bold text-white">{seasonGamesCount}</span>
                                 <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
                             </div>
                         </div>

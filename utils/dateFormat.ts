@@ -17,6 +17,28 @@ export const normalizeDateToIso = (dateValue?: string) => {
     return dateValue;
 };
 
+export const extractYearFromDateValue = (dateValue?: string): number | null => {
+    if (!dateValue) return null;
+
+    const normalized = normalizeDateToIso(String(dateValue).trim());
+    const isoMatch = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) return Number(isoMatch[1]);
+
+    const slashMatch = String(dateValue).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (slashMatch) return Number(slashMatch[3]);
+
+    const leadingYear = String(dateValue).match(/^(\d{4})/);
+    if (leadingYear) return Number(leadingYear[1]);
+
+    return null;
+};
+
+export const isDateInCurrentSeason = (dateValue?: string) => {
+    const year = extractYearFromDateValue(dateValue);
+    if (!year) return false;
+    return year === new Date().getFullYear();
+};
+
 const parseIsoDate = (dateValue?: string) => {
     const normalized = normalizeDateToIso(dateValue);
     const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);

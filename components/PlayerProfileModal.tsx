@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { LucideLoader2, LucideMapPin, LucideStar, LucideTrophy } from 'lucide-react';
+import { LucideLoader2, LucideMapPin, LucideStar, LucideTrendingUp, LucideTrophy } from 'lucide-react';
 import { Modal } from './Modal';
 import { RadarChart } from './RadarChart';
-import { Badge, Player, UserProfile } from '../types';
+import { Badge, Cesta, Evento, Jogo, Player, UserProfile } from '../types';
 import { db } from '../services/firebase';
 import { useRadarPopulation } from '../hooks/useRadarPopulation';
 import { useReviewQuizConfig } from '../hooks/useReviewQuizConfig';
@@ -15,6 +15,7 @@ import {
     isImageBadge,
 } from '../utils/badges';
 import { calculateRelativeRadarStats, hasRadarSourceData } from '../utils/radar';
+import { isDateInCurrentSeason } from '../utils/dateFormat';
 
 interface PlayerProfileModalProps {
     isOpen: boolean;
@@ -50,7 +51,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
     const [loading, setLoading] = useState(false);
     const [player, setPlayer] = useState<Player | null>(null);
     const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
-    const [seasonStats, setSeasonStats] = useState({ pts: 0, ast: 0, reb: 0 });
+    const [seasonStats, setSeasonStats] = useState({ games: 0, pts: 0, ast: 0, reb: 0 });
 
     useEffect(() => {
         if (!isOpen || !playerId) return;
@@ -86,17 +87,102 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
         let cancelled = false;
         const fetchSeasonStats = async () => {
             try {
-                const snap = await db.collectionGroup('cestas').where('jogadorId', '==', playerId).get();
-                let pts = 0, ast = 0, reb = 0;
-                snap.forEach(d => {
-                    const data = d.data() as any;
-                    const actionType = data.acao || 'pontos';
-                    const p = Number(data.pontos) || 0;
-                    if (actionType === 'pontos' && p > 0) pts += p;
-                    else if (actionType === 'assistencia') ast += 1;
-                    else if (actionType === 'rebote') reb += 1;
-                });
-                if (!cancelled) setSeasonStats({ pts, ast, reb });
+                const scoredGamesMap = new Map<string, string | undefined>();
+                try {
+                    const snapCestas = await db.collectionGroup('cestas').where('jogadorId', '==', playerId).get();
+                    snapCestas.forEach(d => {
+                        const data = d.data() as any;
+                        let gameId = data.jogoId;
+                        if (!gameId && d.ref.parent && d.ref.parent.parent) {
+                            gameId = d.ref.parent.parent.id;
+                        }
+                        if (gameId) {
+                            if (!scoredGamesMap.has(gameId) || data.timeId) {
+                                scoredGamesMap.set(gameId, data.timeId);
+                            }
+                        }
+                    });
+                } catch (e) {}
+
+                let pts = 0;
+                let ast = 0;
+                let reb = 0;
+                let games = 0;
+
+                const eventsSnap = await db.collection('eventos').where('status', '==', 'finalizado').get();
+                for (const eventDoc of eventsSnap.docs) {
+                    const eventData = eventDoc.data() as Evento;
+                    const gamesSnap = await db.collection('eventos').doc(eventDoc.id).collection('jogos').get();
+
+                    for (const gameDoc of gamesSnap.docs) {
+                        const gameData = gameDoc.data() as Jogo;
+                        let played = false;
+                        const isExternal = eventData.type !== 'torneio_interno';
+
+                        if (isExternal) {
+                            if (
+                                scoredGamesMap.has(gameDoc.id) ||
+                                gameData.jogadoresEscalados?.includes(playerId) ||
+                                eventData.jogadoresEscalados?.includes(playerId)
+                            ) {
+                                played = true;
+                            }
+                        } else {
+                            const playerTeam = eventData.times?.find(t => t.jogadores?.includes(playerId));
+                            const normalize = (s: string) => s ? s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : '';
+
+                            if (playerTeam) {
+                                const playerTeamId = playerTeam.id;
+                                const playerTeamName = normalize(playerTeam.nomeTime);
+                                const gameTeamAId = gameData.timeA_id;
+                                const gameTeamAName = normalize(gameData.timeA_nome || '');
+                                const gameTeamBId = gameData.timeB_id;
+                                const gameTeamBName = normalize(gameData.timeB_nome || '');
+
+                                if ((gameTeamAId && gameTeamAId === playerTeamId) || (gameTeamAName === playerTeamName)) {
+                                    played = true;
+                                } else if ((gameTeamBId && gameTeamBId === playerTeamId) || (gameTeamBName === playerTeamName)) {
+                                    played = true;
+                                }
+                            }
+
+                            if (!played && scoredGamesMap.has(gameDoc.id)) {
+                                played = true;
+                            }
+                        }
+
+                        if (!played || !isDateInCurrentSeason(gameData.dataJogo || eventData.data)) {
+                            continue;
+                        }
+
+                        games += 1;
+                        const processedCestaIds = new Set<string>();
+                        const countCesta = (cesta: Cesta) => {
+                            if (processedCestaIds.has(cesta.id)) return;
+                            if (cesta.jogadorId !== playerId) return;
+
+                            const actionType = (cesta as any).acao || 'pontos';
+                            if (actionType === 'assistencia') ast += 1;
+                            else if (actionType === 'rebote') reb += 1;
+                            else {
+                                const p = Number(cesta.pontos) || 0;
+                                if (p > 0) pts += p;
+                            }
+                            processedCestaIds.add(cesta.id);
+                        };
+
+                        try {
+                            const subCestas = await db.collection('eventos').doc(eventDoc.id).collection('jogos').doc(gameDoc.id).collection('cestas').get();
+                            subCestas.forEach(d => countCesta({ id: d.id, ...(d.data() as any) } as Cesta));
+                        } catch (e) {}
+                        try {
+                            const rootCestas = await db.collection('cestas').where('jogoId', '==', gameDoc.id).where('jogadorId', '==', playerId).get();
+                            rootCestas.forEach(d => countCesta({ id: d.id, ...(d.data() as any) } as Cesta));
+                        } catch (e) {}
+                    }
+                }
+
+                if (!cancelled) setSeasonStats({ games, pts, ast, reb });
             } catch (e) { /* fail silently */ }
         };
         fetchSeasonStats();
@@ -201,18 +287,19 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ isOpen, 
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
+                        <LucideTrendingUp size={16} className="text-ancb-orange" />
+                        <h4 className="font-bold text-sm uppercase tracking-wider">Estatísticas da Temporada</h4>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
                         <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center">
                             <p className="text-2xl font-black text-ancb-blue">{calculateAge(player.nascimento)}</p>
                             <p className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Idade</p>
                         </div>
                         <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center">
-                            <p className="text-2xl font-black text-ancb-blue">{mergedBadges.length}</p>
-                            <p className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Conquistas</p>
-                        </div>
-                        <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center">
-                            <p className="text-2xl font-black text-ancb-blue">{player.numero_uniforme ?? '-'}</p>
-                            <p className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Numero</p>
+                            <p className="text-2xl font-black text-ancb-blue">{seasonStats.games}</p>
+                            <p className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Jogos</p>
                         </div>
                     </div>
 

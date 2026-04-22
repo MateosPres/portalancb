@@ -52,6 +52,7 @@ import {
 } from '../utils/badges';
 import imageCompression from 'browser-image-compression';
 import { calculateRelativeRadarStats, hasRadarSourceData } from '../utils/radar';
+import { isDateInCurrentSeason } from '../utils/dateFormat';
 
 interface JogadoresViewProps {
     onBack: () => void;
@@ -90,6 +91,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
     const [matches, setMatches] = useState<MatchHistoryItem[]>([]);
     const [loadingMatches, setLoadingMatches] = useState(false);
     const [seasonStats, setSeasonStats] = useState({ pts: 0, ast: 0, reb: 0 });
+    const [seasonGamesCount, setSeasonGamesCount] = useState(0);
     
     const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
     const [showAllBadges, setShowAllBadges] = useState(false); // For modal gallery
@@ -192,8 +194,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                 });
             } catch (e) {}
 
-            const currentYear = new Date().getFullYear().toString();
-            let _seasonPts = 0, _seasonAst = 0, _seasonReb = 0;
+            let _seasonPts = 0, _seasonAst = 0, _seasonReb = 0, _seasonGames = 0;
 
             try {
                 const eventsSnap = await db.collection("eventos").where("status", "==", "finalizado").get();
@@ -309,11 +310,12 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                 ast: gameAst,
                                 reb: gameReb
                             });
-                            const evDate = String(eventData.data || '');
-                            if (evDate.includes(currentYear)) {
+                            const seasonDate = gameData.dataJogo || eventData.data;
+                            if (isDateInCurrentSeason(seasonDate)) {
                                 _seasonPts += points;
                                 _seasonAst += gameAst;
                                 _seasonReb += gameReb;
+                                _seasonGames += 1;
                             }
                         }
                     }
@@ -321,6 +323,7 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                 historyList.sort((a, b) => getHistorySortKey(b).localeCompare(getHistorySortKey(a)));
                 setMatches(historyList);
                 setSeasonStats({ pts: _seasonPts, ast: _seasonAst, reb: _seasonReb });
+                setSeasonGamesCount(_seasonGames);
             } catch (e) {
                 console.error("Error fetching matches", e);
             } finally {
@@ -607,13 +610,17 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                 )}
 
                                 <div className="w-full max-w-[320px] mx-auto md:mx-0 mt-6 pt-4 border-t border-white/10">
+                                    <div className="flex items-center justify-center md:justify-start gap-2 mb-2 text-blue-100/60">
+                                        <LucideTrendingUp size={12} />
+                                        <span className="text-[10px] font-bold uppercase tracking-wider">Estatísticas da Temporada</span>
+                                    </div>
                                     <div className="grid grid-cols-2 gap-3 md:gap-4 mb-3">
                                     <div className="bg-[#092b5e] rounded-xl p-3 md:p-4 text-center border border-white/5 shadow-inner">
                                         <span className="block text-2xl font-bold text-white">{selectedPlayer.nascimento ? calculateAge(selectedPlayer.nascimento) : '-'}</span>
                                         <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Idade</span>
                                     </div>
                                     <div className="bg-[#092b5e] rounded-xl p-3 md:p-4 text-center border border-white/5 shadow-inner">
-                                        <span className="block text-2xl font-bold text-white">{matches.length}</span>
+                                        <span className="block text-2xl font-bold text-white">{seasonGamesCount}</span>
                                         <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Jogos</span>
                                     </div>
                                     </div>
