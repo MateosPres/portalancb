@@ -33,7 +33,7 @@ const formatPlayerName = (name: string) => {
 const BBALL_ICON = "https://cdn-icons-png.flaticon.com/512/70/70678.png";
 
 export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, event, game, scorers, stats }, ref) => {
-    const LOGO_URL = "https://i.imgur.com/sfO9ILj.png";
+    const LOGO_URL = "https://i.imgur.com/gbXKuYi.png";
 
     // ─────────────────────────────────────────────────────────────────
     //  PRÉ-JOGO

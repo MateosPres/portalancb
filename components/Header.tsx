@@ -3,7 +3,7 @@ import { Menu, X, User, LogIn, ClipboardList, Home, Shield, LogOut, Bell, Heart,
 import { NotificationItem } from '../types';
 
 const PRANCHETA_URL = "https://prancheta.ancb.app.br";
-const LOGO_URL = "https://i.imgur.com/sfO9ILj.png";
+const LOGO_URL = "https://i.imgur.com/gbXKuYi.png";
 
 interface HeaderProps {
   user?: { 

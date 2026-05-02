@@ -54,7 +54,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
         <div className="w-full max-w-2xl">
           {/* Logo */}
           <div className="flex flex-col items-center gap-6 text-center mb-12">
-            <img src="https://i.imgur.com/sfO9ILj.png" alt="ANCB" className="h-20 w-20 object-contain" />
+            <img src="https://i.imgur.com/gbXKuYi.png" alt="ANCB" className="h-20 w-20 object-contain" />
             <div>
               <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">ANCB</h1>
               <p className="mt-3 text-base text-slate-300 sm:text-lg">Basquete é nossa história. Acompanhe jogos, rankings e atletas em uma experiência imersiva.</p>

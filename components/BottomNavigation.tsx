@@ -14,7 +14,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeItem, 
   const items: Array<{ key: BottomNavItem; label: string; icon: React.ReactNode }> = [
     { key: 'eventos', label: 'Eventos', icon: <LucideCalendar size={20} /> },
     { key: 'jogadores', label: 'Jogadores', icon: <LucideUsers size={20} /> },
-    { key: 'home', label: 'Início', icon: <img src="https://i.imgur.com/sfO9ILj.png" alt="ANCB" className="h-10 w-10 object-contain" /> },
+    { key: 'home', label: 'Início', icon: <img src="https://i.imgur.com/gbXKuYi.png" alt="ANCB" className="h-10 w-10 object-contain" /> },
     { key: 'ranking', label: 'Ranking', icon: <LucideTrophy size={20} /> },
     { key: 'profile', label: 'Perfil', icon: profilePhoto ? <img src={profilePhoto} alt="Perfil" className="h-6 w-6 rounded-full object-cover" /> : <LucideUser size={20} /> },
   ];

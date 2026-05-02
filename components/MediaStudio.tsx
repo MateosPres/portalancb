@@ -43,7 +43,7 @@ const TEMPLATE_PRESETS: Record<MediaTemplateType, MediaPreset> = {
     },
 };
 
-const FALLBACK_LOGO = 'https://i.imgur.com/sfO9ILj.png';
+const FALLBACK_LOGO = 'https://i.imgur.com/gbXKuYi.png';
 
 const getGamesCollection = (eventId: string) => db.collection('eventos').doc(eventId).collection('jogos');
 

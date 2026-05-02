@@ -1340,7 +1340,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-[#062553] flex flex-col items-center justify-center z-[9999]">
             <div className="relative mb-6">
                 <div className="absolute inset-0 bg-blue-400 rounded-full blur-3xl opacity-20 animate-pulse scale-150"></div>
-                <img src="https://i.imgur.com/sfO9ILj.png" alt="ANCB" className="h-32 md:h-40 w-auto relative z-10 drop-shadow-2xl animate-fade-in" />
+                <img src="https://i.imgur.com/gbXKuYi.png" alt="ANCB" className="h-32 md:h-40 w-auto relative z-10 drop-shadow-2xl animate-fade-in" />
             </div>
             <div className="w-12 h-12 border-4 border-white/10 border-t-ancb-orange rounded-full animate-spin"></div>
         </div>
