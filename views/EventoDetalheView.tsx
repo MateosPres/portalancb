@@ -235,7 +235,7 @@ export const EventoDetalheView: React.FC<EventoDetalheViewProps> = ({ eventId, o
         };
 
         const defaultPhotoSvg = `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" fill="#e5e7eb"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="24" fill="#6b7280">?</text></svg>')}`;
-        const logoUrl = team.logoUrl || 'https://i.imgur.com/SE2jHsz.png';
+        const logoUrl = team.logoUrl || 'https://i.imgur.com/XPMEKrv.png';
 
         const rowsHtml = Array.from({ length: 12 }).map((_, index) => {
             const player = rosterPlayers[index];

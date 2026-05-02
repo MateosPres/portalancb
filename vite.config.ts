@@ -35,12 +35,12 @@ export default defineConfig({
         scope: "./",
         icons: [
           {
-            src: 'https://i.imgur.com/SE2jHsz.png',
+            src: 'https://i.imgur.com/XPMEKrv.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'https://i.imgur.com/SE2jHsz.png',
+            src: 'https://i.imgur.com/XPMEKrv.png',
             sizes: '512x512',
             type: 'image/png'
           }

@@ -64,7 +64,7 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
 
       // Pre-seed 'system' so it's never queried from Firestore
       if (!authorCacheRef.current.has('system')) {
-        authorCacheRef.current.set('system', { authorName: 'ANCB', authorPhoto: 'https://i.imgur.com/SE2jHsz.png', authorPlayerId: null });
+        authorCacheRef.current.set('system', { authorName: 'ANCB', authorPhoto: 'https://i.imgur.com/XPMEKrv.png', authorPlayerId: null });
       }
 
       const missingAuthorIds = authorIds.filter((authorId) => authorId !== 'system' && !authorCacheRef.current.has(authorId));
@@ -93,7 +93,7 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
           return {
             ...post,
             authorName: 'ANCB',
-            authorPhoto: 'https://i.imgur.com/SE2jHsz.png',
+            authorPhoto: 'https://i.imgur.com/XPMEKrv.png',
             authorPlayerId: null,
           };
         }

@@ -548,17 +548,17 @@ const App: React.FC = () => {
                 navigator.serviceWorker.ready.then(registration => {
                     registration.showNotification(title, {
                         body: body,
-                        icon: 'https://i.imgur.com/SE2jHsz.png',
+                        icon: 'https://i.imgur.com/XPMEKrv.png',
                         badge: 'https://i.imgur.com/mQWcgnZ.png',
                         vibrate: [200, 100, 200]
                     } as any);
                 }).catch((e) => {
                     console.warn("SW notification failed, falling back", e);
-                    new Notification(title, { body: body, icon: 'https://i.imgur.com/SE2jHsz.png' });
+                    new Notification(title, { body: body, icon: 'https://i.imgur.com/XPMEKrv.png' });
                 });
             } catch (e) {
                 console.error("Erro ao disparar notificação de sistema:", e);
-                new Notification(title, { body: body, icon: 'https://i.imgur.com/SE2jHsz.png' });
+                new Notification(title, { body: body, icon: 'https://i.imgur.com/XPMEKrv.png' });
             }
         }
     };
