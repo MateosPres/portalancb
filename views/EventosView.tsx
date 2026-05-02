@@ -1046,6 +1046,107 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
 
             {loading ? (
                 <div className="flex justify-center py-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ancb-blue"></div></div>
+            ) : tab === 'finalizados' ? (
+                displayEvents.length === 0 ? (
+                    <div className="text-center py-16 text-gray-400 dark:text-gray-500">
+                        <LucideCheckCircle2 size={40} className="mx-auto mb-3 opacity-30" />
+                        <p className="font-medium">Nenhum evento finalizado</p>
+                    </div>
+                ) : (
+                    <div className="space-y-10">
+                        {(() => {
+                            const byYear: Record<string, Evento[]> = {};
+                            displayEvents.forEach(evento => {
+                                const year = evento.data ? evento.data.substring(0, 4) : 'Sem data';
+                                if (!byYear[year]) byYear[year] = [];
+                                byYear[year].push(evento);
+                            });
+                            return Object.keys(byYear).sort((a, b) => b.localeCompare(a)).map(year => (
+                                <section key={year}>
+                                    <div className="flex items-center gap-3 mb-5">
+                                        <h3 className="text-2xl font-extrabold text-gray-800 dark:text-white tracking-tight">{year}</h3>
+                                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                                        <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{byYear[year].length} evento{byYear[year].length !== 1 ? 's' : ''}</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+                                        {byYear[year].map(evento => {
+                                            const friendlyGame = friendlyGamesMap[evento.id];
+                                            const eventDateLabel = formatShortWeekdayDateTime(evento.data, friendlyGame?.horaJogo);
+                                            return (
+                                                <Card
+                                                    key={evento.id}
+                                                    onClick={() => handleEventCardClick(evento)}
+                                                    onMouseEnter={() => onPreloadEventDetail?.(evento.id)}
+                                                    onFocus={() => onPreloadEventDetail?.(evento.id)}
+                                                    onTouchStart={() => onPreloadEventDetail?.(evento.id)}
+                                                    className={`flex flex-col h-full hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden ${getCardStyle(evento.type)}`}
+                                                >
+                                                    <div className="absolute -right-6 -bottom-6 opacity-10 rotate-12 pointer-events-none">
+                                                        <LucideTrophy size={140} fill="currentColor" />
+                                                    </div>
+                                                    <div className="flex justify-between items-start mb-4 relative z-10">
+                                                        <div className="bg-white/20 backdrop-blur-md rounded-lg px-3 py-2 border border-white/30 text-white shadow-sm">
+                                                            <span className="block text-xs font-bold tracking-wide">{eventDateLabel || formatShortWeekdayDate(evento.data)}</span>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            {(userProfile?.role === 'admin' || userProfile?.role === 'super-admin') && (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleOpenEventEdit(evento); }}
+                                                                    className="p-1.5 rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors backdrop-blur-md border border-white/10"
+                                                                    title="Editar evento"
+                                                                >
+                                                                    <LucideEdit size={16} />
+                                                                </button>
+                                                            )}
+                                                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide flex items-center ${getStatusBadgeStyle(evento.status, evento.type)}`}>
+                                                                {evento.status === 'andamento' ? 'EM ANDAMENTO' : evento.status}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex-grow mb-4 relative z-10">
+                                                        <div className="flex items-start justify-between gap-3 mb-2">
+                                                            <div className="flex items-start gap-3 min-w-0">
+                                                                {evento.logoUrl && (
+                                                                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border-2 border-white/40 bg-white/10 backdrop-blur-md overflow-hidden shrink-0">
+                                                                        <img src={evento.logoUrl} alt={`Logo ${evento.nome}`} className="w-full h-full object-cover" />
+                                                                    </div>
+                                                                )}
+                                                                <h3 className="text-2xl font-bold leading-tight drop-shadow-sm line-clamp-2 break-words">{evento.nome}</h3>
+                                                            </div>
+                                                            {evento.type === 'amistoso' && friendlyGamesMap[evento.id]?.status === 'finalizado' && (
+                                                                <div className="shrink-0 rounded-md border border-white/20 bg-black/20 px-2.5 py-1.5 text-white text-sm font-extrabold leading-none tracking-tight whitespace-nowrap">
+                                                                    <span className="text-white/90 text-[11px] mr-1">{friendlyGamesMap[evento.id].timeA_nome || 'ANCB'}</span>
+                                                                    <span className="text-ancb-orange">{friendlyGamesMap[evento.id].placarTimeA_final ?? friendlyGamesMap[evento.id].placarANCB_final ?? 0}</span>
+                                                                    <span className="text-white/80 px-1">x</span>
+                                                                    <span className="text-ancb-orange">{friendlyGamesMap[evento.id].placarTimeB_final ?? friendlyGamesMap[evento.id].placarAdversario_final ?? 0}</span>
+                                                                    <span className="text-white/90 text-[11px] ml-1">{friendlyGamesMap[evento.id].timeB_nome || friendlyGamesMap[evento.id].adversario || 'Adversário'}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-col gap-1 text-white/80 text-sm font-medium">
+                                                            <div className="flex items-center gap-2">
+                                                                <LucideTrophy size={14} className="opacity-70" />
+                                                                <span className="capitalize tracking-wide">{evento.type.replace('_', ' ')}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/20 relative z-10">
+                                                        <span className="text-xs font-bold px-3 py-1 rounded-md uppercase border border-white/30 bg-white/10 backdrop-blur-sm">
+                                                            {evento.modalidade}
+                                                        </span>
+                                                        <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-full transition-colors">
+                                                            Detalhes <LucideChevronRight size={14} />
+                                                        </div>
+                                                    </div>
+                                                </Card>
+                                            );
+                                        })}
+                                    </div>
+                                </section>
+                            ));
+                        })()}
+                    </div>
+                )
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
                     {displayEvents.length > 0 ? displayEvents.map(evento => {
@@ -1053,9 +1154,9 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                         const eventDateLabel = formatShortWeekdayDateTime(evento.data, friendlyGame?.horaJogo);
 
                         return (
-                        <Card 
-                            key={evento.id} 
-                            onClick={() => handleEventCardClick(evento)} 
+                        <Card
+                            key={evento.id}
+                            onClick={() => handleEventCardClick(evento)}
                             onMouseEnter={() => onPreloadEventDetail?.(evento.id)}
                             onFocus={() => onPreloadEventDetail?.(evento.id)}
                             onTouchStart={() => onPreloadEventDetail?.(evento.id)}
@@ -1085,7 +1186,7 @@ export const EventosView: React.FC<EventosViewProps> = ({ onBack, userProfile, o
                                     </span>
                                 </div>
                             </div>
-                            
+
                             <div className="flex-grow mb-4 relative z-10">
                                 <div className="flex items-start justify-between gap-3 mb-2">
                                     <div className="flex items-start gap-3 min-w-0">

@@ -61,26 +61,6 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
             </div>
           </div>
 
-          {/* Event Hero */}
-          {shouldShowStandaloneLive && streamConfig && streamGame && (
-            <div className="mb-8">
-              <LiveYouTubePlayer
-                videoId={streamConfig.videoId}
-                onClose={() => setShowStandaloneLivePlayer(false)}
-              />
-            </div>
-          )}
-
-          {publicEvent && (
-            <div className="mb-8">
-              <LiveEventHero
-                event={publicEvent}
-                onClick={onEventClick}
-                onOpenLiveGame={onOpenPublicGame}
-              />
-            </div>
-          )}
-
           {/* Public Access Buttons */}
           <div className="mb-10">
             <p className="text-sm uppercase tracking-[0.25em] text-slate-400 mb-5">Acesso público</p>
@@ -122,6 +102,26 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Event Hero */}
+          {shouldShowStandaloneLive && streamConfig && streamGame && (
+            <div className="mb-8">
+              <LiveYouTubePlayer
+                videoId={streamConfig.videoId}
+                onClose={() => setShowStandaloneLivePlayer(false)}
+              />
+            </div>
+          )}
+
+          {publicEvent && (
+            <div className="mb-8">
+              <LiveEventHero
+                event={publicEvent}
+                onClick={onEventClick}
+                onOpenLiveGame={onOpenPublicGame}
+              />
+            </div>
+          )}
 
           {/* Mural ANCB */}
           <section className="mb-10">

@@ -207,7 +207,7 @@ export const PeerReviewQuiz: React.FC<PeerReviewQuizProps> = ({
                 {selectedCount > 0 && (
                     <div className="flex flex-wrap justify-center gap-2 mt-3 px-4">
                         {selectedTags.map(tagId => {
-                            const tag = AVAILABLE_TAGS.find(t => t.id === tagId);
+                            const tag = config.tags.find(t => t.id === tagId);
                             if (!tag) return null;
                             const isPos = tag.type === 'positive';
                             return (

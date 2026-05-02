@@ -435,7 +435,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack, onOpenPlayer }
                         {stats[0] && stats[0].totalPoints > 0 && (
                             <div className="flex flex-col items-center w-1/3 md:w-40 order-2 -mt-6">
                                 <div className="relative mb-3">
-                                    <LucideTrophy 
+                                    <LucideTrophy
                                         className="absolute -top-3 -right-2 text-yellow-400 drop-shadow-md animate-bounce z-20" 
                                         size={36}
                                     />
@@ -481,7 +481,7 @@ export const RankingView: React.FC<RankingViewProps> = ({ onBack, onOpenPlayer }
                                     <h4 className="font-bold text-gray-800 dark:text-white text-lg text-center line-clamp-1">{stats[0].apelido || stats[0].nome}</h4>
                                 )}
                                 <p className="text-ancb-orange font-bold text-xl">{stats[0].totalPoints} {getMetricLabel()}</p>
-                                <p className="text-gray-400 dark:text-gray-500 text-xs font-medium">{stats[0].ppg} {selectedMode === 'shooters' ? '/jogo' : 'PPG'}</p>
+                                <p className="text-gray-400 dark:text-gray-500 text-xs font-medium">{stats[0].ppg} {selectedMode === 'arremessadores' ? '/jogo' : 'PPG'}</p>
                             </div>
                         )}
 
