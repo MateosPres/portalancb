@@ -56,25 +56,6 @@ export interface BadgeDisplayGroup {
     members: Badge[];
 }
 
-const LEGACY_STACKABLE_TITLES = new Set([
-    'Estava La',
-    'Cestinha',
-    'Imparavel',
-    'Bola Quente',
-    'Mao Quente',
-    'Tiro Certo',
-    'Mira Calibrada',
-    'Campeao',
-    'Vice',
-    'Podio',
-    'Vice-Cestinha',
-    'Mestre 3pts',
-    'Bronze',
-    'Prata',
-    'Ouro',
-    'Contribuiu!',
-]);
-
 const compareBadgeDates = (left?: string, right?: string): number => {
     return String(left || '').localeCompare(String(right || ''));
 };
@@ -97,75 +78,6 @@ const parseBadgeDateValue = (value?: string): number => {
 
     const timestamp = Date.parse(normalized);
     return Number.isNaN(timestamp) ? 0 : timestamp;
-};
-
-const normalizeLegacyTitleToken = (value?: string): string => {
-    return String(value || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-};
-
-const buildLegacyGroupKeyFromBaseTitle = (baseTitle: string, category?: Badge['categoria'] | null): string => {
-    return ['legacy', normalizeLegacyTitleToken(baseTitle), String(category || '')].join('|');
-};
-
-const extractLegacyBaseTitle = (badge: Badge): string | null => {
-    if (badge.origem && badge.origem !== 'legado') return null;
-
-    if (badge.legacyBaseTitle) {
-        const storedBaseTitle = normalizeLegacyTitleToken(badge.legacyBaseTitle);
-        return LEGACY_STACKABLE_TITLES.has(storedBaseTitle) ? storedBaseTitle : null;
-    }
-
-    const normalizedTitle = normalizeLegacyTitleToken(badge.nome);
-    if (!normalizedTitle) return null;
-
-    const titleMatch = normalizedTitle.match(/^(.+?)\s*\((.+)\)$/);
-    const candidateTitle = titleMatch ? titleMatch[1].trim() : normalizedTitle;
-
-    if (!LEGACY_STACKABLE_TITLES.has(candidateTitle)) {
-        return null;
-    }
-
-    return candidateTitle;
-};
-
-const getCanonicalLegacyBadgeName = (badge: Badge): string | null => {
-    const legacyBaseTitle = extractLegacyBaseTitle(badge);
-    if (!legacyBaseTitle) return null;
-
-    const baseNameByTitle: Record<string, string> = {
-        'Estava La': 'Estava Lá',
-        'Cestinha': 'Cestinha',
-        'Imparavel': 'Imparável',
-        'Bola Quente': 'Bola Quente',
-        'Mao Quente': 'Mão Quente',
-        'Tiro Certo': 'Tiro Certo',
-        'Mira Calibrada': 'Mira Calibrada',
-        'Campeao': 'Campeão',
-        'Vice': 'Vice',
-        'Podio': 'Pódio',
-        'Vice-Cestinha': 'Vice-Cestinha',
-        'Mestre 3pts': 'Mestre 3pts',
-        'Bronze': 'Bronze',
-        'Prata': 'Prata',
-        'Ouro': 'Ouro',
-        'Contribuiu!': 'Contribuiu!',
-    };
-
-    return baseNameByTitle[legacyBaseTitle] || badge.nome;
-};
-
-const getCanonicalLegacyGroupKey = (badge: Badge): string | null => {
-    if (badge.legacyGroupKey) {
-        return String(badge.legacyGroupKey).trim() || null;
-    }
-
-    const legacyBaseTitle = extractLegacyBaseTitle(badge);
-    if (!legacyBaseTitle) return null;
-    return buildLegacyGroupKeyFromBaseTitle(legacyBaseTitle, badge.categoria);
 };
 
 const getPreferredBadgeForGroup = (left: Badge, right: Badge): Badge => {
@@ -420,40 +332,40 @@ export const getDisplayBadges = (
 const buildBadgeDisplayKey = (badge: Badge): string => {
     if (badge.regraId) return `regra:${badge.regraId}`;
 
-    const canonicalLegacyGroupKey = getCanonicalLegacyGroupKey(badge);
-    if (canonicalLegacyGroupKey) {
-        return canonicalLegacyGroupKey;
-    }
-
     return [
         'visual',
         badge.nome || '',
         badge.emoji || '',
         badge.raridade || '',
-        badge.categoria || '',
         badge.tipoIcone || '',
         badge.iconeValor || '',
     ].join('|');
 };
 
+const normalizeLegacyBadge = (badge: Badge): Badge => {
+    // Remove categoria from legacy badges (without regraId) to ensure proper stacking
+    if (!badge.regraId) {
+        const { categoria, ...rest } = badge;
+        return rest as Badge;
+    }
+    return badge;
+};
+
 export const getGroupedBadgesForDisplay = (allBadges: Badge[]): BadgeDisplayGroup[] => {
     const grouped = new Map<string, BadgeDisplayGroup>();
 
-    allBadges.forEach((badge) => {
+    // Normalize legacy badges before grouping
+    const normalizedBadges = allBadges.map(normalizeLegacyBadge);
+
+    normalizedBadges.forEach((badge) => {
         const key = buildBadgeDisplayKey(badge);
         const existing = grouped.get(key);
         if (!existing) {
-            const canonicalLegacyName = getCanonicalLegacyBadgeName(badge);
-            const canonicalLegacyGroupKey = getCanonicalLegacyGroupKey(badge);
-            const legacyBaseTitle = extractLegacyBaseTitle(badge);
             grouped.set(key, {
                 key,
                 members: [badge],
                 badge: {
                     ...badge,
-                    nome: canonicalLegacyName || badge.nome,
-                    legacyGroupKey: canonicalLegacyGroupKey || badge.legacyGroupKey,
-                    legacyBaseTitle: legacyBaseTitle || badge.legacyBaseTitle,
                     ocorrencias: getBadgeOccurrences(badge),
                     stackCount: getBadgeStackCount(badge),
                     latestOccurrenceId: getLatestBadgeOccurrence(badge).id,
@@ -480,18 +392,12 @@ export const getGroupedBadgesForDisplay = (allBadges: Badge[]): BadgeDisplayGrou
         });
 
         const latestOccurrence = mergedOccurrences[mergedOccurrences.length - 1] || getLatestBadgeOccurrence(existing.badge);
-        const canonicalLegacyName = getCanonicalLegacyBadgeName(existing.badge) || getCanonicalLegacyBadgeName(badge);
-        const canonicalLegacyGroupKey = getCanonicalLegacyGroupKey(existing.badge) || getCanonicalLegacyGroupKey(badge);
-        const legacyBaseTitle = extractLegacyBaseTitle(existing.badge) || extractLegacyBaseTitle(badge);
         const preferredBadge = getPreferredBadgeForGroup(existing.badge, badge);
         grouped.set(key, {
             key,
             members: [...existing.members, badge],
             badge: {
                 ...preferredBadge,
-                nome: canonicalLegacyName || existing.badge.nome,
-            legacyGroupKey: canonicalLegacyGroupKey || preferredBadge.legacyGroupKey,
-            legacyBaseTitle: legacyBaseTitle || preferredBadge.legacyBaseTitle,
                 descricao: latestOccurrence.descricao || preferredBadge.descricao,
                 data: latestOccurrence.data || preferredBadge.data,
                 latestOccurrenceId: latestOccurrence.id,
@@ -536,15 +442,5 @@ export const sortBadgesForGallery = (
 
 export const canRemoveBadgeDirectly = (badge: Badge): boolean => {
     return getBadgeStackCount(badge) <= 1;
-};
-
-export const resolveLegacyBadgeCanonicalFields = (badge: Badge): Pick<Badge, 'legacyGroupKey' | 'legacyBaseTitle'> | null => {
-    const legacyBaseTitle = extractLegacyBaseTitle(badge);
-    if (!legacyBaseTitle) return null;
-
-    return {
-        legacyBaseTitle,
-        legacyGroupKey: buildLegacyGroupKeyFromBaseTitle(legacyBaseTitle, badge.categoria),
-    };
 };
 

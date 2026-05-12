@@ -56,6 +56,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     const [expandedBadgePlayerId, setExpandedBadgePlayerId] = useState<string | null>(null);
     const [expandedBadgeGroupByPlayer, setExpandedBadgeGroupByPlayer] = useState<Record<string, string | null>>({});
     const [badgeQuickAssignByPlayer, setBadgeQuickAssignByPlayer] = useState<Record<string, string>>({});
+    const [normalizingBadges, setNormalizingBadges] = useState(false);
+    const [normalizationResult, setNormalizationResult] = useState<any>(null);
     const [seasonYear, setSeasonYear] = useState(String(new Date().getFullYear()));
     const [seasonLoading, setSeasonLoading] = useState(false);
     const [seasonResult, setSeasonResult] = useState<{ awarded: number; log: string[] } | null>(null);
@@ -1773,6 +1775,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
 
             {/* TAB: CONQUISTAS */}
             {adminTab === 'badges' && isSuperAdmin && (() => {
+                const handleNormalizeLegacyBadges = async () => {
+                    if (!window.confirm('Isso vai normalizar badges legado removendo o campo categoria inconsistente.\n\nEssa operação é segura e pode ser executada quantas vezes for necessário.\n\nDeseja continuar?')) return;
+                    
+                    setNormalizingBadges(true);
+                    setNormalizationResult(null);
+                    try {
+                        const result = await functions.httpsCallable('normalizeLegacyBadges')({});
+                        setNormalizationResult(result.data);
+                        alert(`✅ Normalização concluída!\n\n${result.data.playersProcessed} jogador(es)\n${result.data.badgesNormalized} badge(s) ajustado(s)\n${result.data.batchesProcessed} lote(s)`);
+                    } catch (error: any) {
+                        console.error('Erro ao normalizar badges:', error);
+                        alert(`❌ Erro ao normalizar badges: ${error.message || error}`);
+                    } finally {
+                        setNormalizingBadges(false);
+                    }
+                };
+
                 const handleRevokeBadge = async (playerId: string, badgeId: string) => {
                     const player = activePlayers.find(p => p.id === playerId);
                     if (!player) return;
@@ -1870,6 +1889,28 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
 
                 return (
                     <div className="animate-fadeIn flex flex-col gap-6">
+                        {/* Ferramenta de Normalização */}
+                        <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl p-5">
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <h4 className="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2 mb-1">
+                                        <LucideRefreshCw size={16} /> Normalizar Badges Legado
+                                    </h4>
+                                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                                        Remove o campo categoria inconsistente de conquistas legado para corrigir o empilhamento.
+                                        {normalizationResult && <> Último: {normalizationResult.badgesNormalized} badge(s) em {normalizationResult.playersProcessed} jogador(es).</>}
+                                    </p>
+                                </div>
+                                <Button
+                                    onClick={handleNormalizeLegacyBadges}
+                                    disabled={normalizingBadges}
+                                    className="shrink-0"
+                                >
+                                    {normalizingBadges ? '⏳ Normalizando...' : '🔧 Normalizar'}
+                                </Button>
+                            </div>
+                        </div>
+
                         {/* Cards de conquistas por atleta */}
                         <div className="order-4 bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                             <h3 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">

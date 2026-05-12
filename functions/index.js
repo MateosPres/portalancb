@@ -54,6 +54,29 @@ const REVIEW_TAG_IMPACTS = {
     cone:      { velocidade: -1, forca: -0.5 },
 };
 
+const LEGACY_QUIZ_BADGE_TOKENS = new Set([
+    'muralha',
+    'sniper',
+    'garcom',
+    'flash',
+    'lider',
+    'guerreiro',
+    'avenida',
+    'fominha',
+    'tijoleiro',
+    'cone',
+]);
+
+function isLegacyQuizBadge(badge) {
+    if (!badge || typeof badge !== 'object') return false;
+    const id = String(badge.id || '').trim().toLowerCase();
+    const nome = String(badge.nome || '').trim().toLowerCase();
+    if (LEGACY_QUIZ_BADGE_TOKENS.has(id) || LEGACY_QUIZ_BADGE_TOKENS.has(nome)) {
+        return true;
+    }
+    return [...LEGACY_QUIZ_BADGE_TOKENS].some((token) => id.includes(token) || nome.includes(token));
+}
+
 const ATTR_KEYS = ['ataque', 'defesa', 'velocidade', 'forca', 'visao'];
 
 function normalizeStoredAttributeDeltas(review) {
@@ -249,14 +272,7 @@ function evaluateRuleForPlayer(gatilho, stats, playerId, teamId) {
             return (stats.bolas3ByPlayer[playerId] || 0) >= (Number(gatilho.minimo) || 0);
         case 'cestinha_partida':
             return Array.isArray(stats.topScorersByTeam?.[teamId]) && stats.topScorersByTeam[teamId].includes(playerId);
-        case 'top_atributo_jogo': {
-            const attr = String(gatilho.atributo || '');
-            return Boolean(
-                attr &&
-                Array.isArray(stats.topByAttributeByTeam?.[teamId]?.[attr]) &&
-                stats.topByAttributeByTeam[teamId][attr].includes(playerId)
-            );
-        }
+        // REMOVIDO: case 'top_atributo_jogo' - triggers baseados em quiz são obsoletos
         default:
             return false;
     }
@@ -341,10 +357,7 @@ function evaluateSeasonRuleForPlayer(gatilho, seasonStats, playerId) {
             return (seasonStats.eventosParticipados[playerId] || 0) >= seasonStats.totalEventos && seasonStats.totalEventos > 0;
         case 'conquistas_evento_temporada':
             return (seasonStats.eventBadgesByPlayer[playerId] || 0) >= (Number(gatilho.minimo) || 0);
-        case 'top_atributo_temporada': {
-            const attr = String(gatilho.atributo || '');
-            return Boolean(attr && Array.isArray(seasonStats.topByAttribute?.[attr]) && seasonStats.topByAttribute[attr].includes(playerId));
-        }
+        // REMOVIDO: case 'top_atributo_temporada' - triggers baseados em quiz são obsoletos
         case 'manual_admin':
             return false;
         default:
@@ -370,14 +383,7 @@ function evaluateEventRuleForPlayer(gatilho, eventStats, playerId, teamId) {
             return (eventStats.maxPontosJogo[playerId] || 0) >= (Number(gatilho.minimo) || 0);
         case 'bolas_de_tres_evento':
             return (eventStats.bolas3NoEvento[playerId] || 0) >= (Number(gatilho.minimo) || 0);
-        case 'top_atributo_evento': {
-            const attr = String(gatilho.atributo || '');
-            return Boolean(
-                attr &&
-                Array.isArray(eventStats.topByAttributeByTeam?.[teamId]?.[attr]) &&
-                eventStats.topByAttributeByTeam[teamId][attr].includes(playerId)
-            );
-        }
+        // REMOVIDO: case 'top_atributo_evento' - triggers baseados em quiz são obsoletos
         case 'campeao_torneio_interno':
             return eventStats.eventType === 'torneio_interno' && eventStats.campeoes.has(playerId);
         case 'medalhista_torneio_externo':
@@ -2232,3 +2238,196 @@ async function upsertAutoGameFeedPost(eventId, gameId, eventData, gameData, team
         console.error(`Erro ao criar post automático de placar para jogo ${gameId}:`, error);
     }
 }
+
+// ─────────────────────────────────────────────────────────────
+// MIGRAÇÃO: Normalizar Badges Legado (Remover categoria)
+// Para resolver problema de empilhamento de conquistas legado
+// que não têm regraId. Deve ser executada uma vez.
+// ─────────────────────────────────────────────────────────────
+exports.normalizeLegacyBadges = functions.https.onCall(async (data, context) => {
+    const callerUid = context.auth?.uid;
+    const callerDoc = await admin.firestore().collection('usuarios').doc(callerUid).get();
+    const callerRole = callerDoc.exists ? callerDoc.data().role : null;
+    
+    if (!callerDoc.exists || (callerRole !== 'admin' && callerRole !== 'super-admin')) {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas administradores podem executar normalizações.');
+    }
+
+    let playersProcessed = 0;
+    let badgesNormalized = 0;
+    let batchesProcessed = 0;
+    const batchSize = 100;
+    let lastDoc = null;
+
+    console.log('🔄 Iniciando normalização de badges legado...');
+
+    while (true) {
+        let query = admin.firestore().collection('jogadores')
+            .orderBy(admin.firestore.FieldPath.documentId())
+            .limit(batchSize);
+        
+        if (lastDoc) {
+            query = query.startAfter(lastDoc);
+        }
+
+        const playersSnap = await query.get();
+        if (playersSnap.empty) break;
+
+        batchesProcessed += 1;
+        console.log(`📦 Lote ${batchesProcessed}: processando ${playersSnap.size} jogador(es)...`);
+
+        for (const playerDoc of playersSnap.docs) {
+            const playerData = playerDoc.data() || {};
+            const badges = Array.isArray(playerData.badges) ? playerData.badges : [];
+            
+            let changed = false;
+            const normalizedBadges = badges.map((badge) => {
+                if (!badge?.regraId && badge?.categoria !== undefined) {
+                    const { categoria, ...rest } = badge;
+                    badgesNormalized += 1;
+                    changed = true;
+                    return rest;
+                }
+                return badge;
+            });
+
+            if (changed) {
+                await playerDoc.ref.update({ badges: normalizedBadges });
+                playersProcessed += 1;
+                console.log(`✅ ${playerData.nome || playerDoc.id}: ${badgesNormalized} badge(s) normalizado(s)`);
+            }
+        }
+
+        lastDoc = playersSnap.docs[playersSnap.docs.length - 1];
+    }
+
+    console.log(`✨ Normalização completa: ${playersProcessed} jogador(es), ${badgesNormalized} badge(s) ajustado(s), ${batchesProcessed} lote(s)`);
+    
+    return {
+        success: true,
+        playersProcessed,
+        badgesNormalized,
+        batchesProcessed,
+    };
+});
+
+// ─────────────────────────────────────────────────────────────
+// LIMPEZA: Remover Conquistas Baseadas em Quiz
+// 
+// Remove TODAS as conquistas baseadas em quiz (top_atributo_jogo,
+// top_atributo_evento, top_atributo_temporada) dos jogadores e
+// deleta as regras correspondentes do Firestore.
+//
+// IMPORTANTE: Esta operação é IRREVERSÍVEL. Use com cuidado!
+// ─────────────────────────────────────────────────────────────
+exports.removeQuizBasedBadges = functions.https.onCall(async (data, context) => {
+    const callerUid = context.auth?.uid;
+    if (!callerUid) {
+        throw new functions.https.HttpsError('unauthenticated', 'Usuario precisa estar autenticado.');
+    }
+
+    const callerDoc = await admin.firestore().collection('usuarios').doc(callerUid).get();
+    const callerRole = callerDoc.exists ? callerDoc.data().role : null;
+    if (!callerDoc.exists || (callerRole !== 'admin' && callerRole !== 'super-admin')) {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas administradores podem executar esta limpeza.');
+    }
+
+    console.log('🔍 INICIANDO LIMPEZA DE CONQUISTAS BASEADAS EM QUIZ...');
+
+    try {
+        // PASSO 1: Deletar regras baseadas em quiz
+        console.log('📋 PASSO 1: Deletando regras do Firestore...');
+        const regrasSnap = await admin.firestore().collection('conquistas_regras').get();
+        const rulesToDelete = [];
+        const quizRuleIds = [];
+
+        for (const doc of regrasSnap.docs) {
+            const regra = doc.data();
+            let gatilho = regra.gatilho;
+            
+            if (typeof gatilho === 'string') {
+                try {
+                    gatilho = JSON.parse(gatilho);
+                } catch (e) {
+                    gatilho = {};
+                }
+            }
+
+            const tipoGatilho = gatilho?.tipo || '';
+            if (
+                tipoGatilho === 'top_atributo_jogo' ||
+                tipoGatilho === 'top_atributo_evento' ||
+                tipoGatilho === 'top_atributo_temporada'
+            ) {
+                rulesToDelete.push({
+                    id: doc.id,
+                    titulo: regra.titulo,
+                    tipo: tipoGatilho,
+                });
+                quizRuleIds.push(doc.id);
+
+                await admin.firestore().collection('conquistas_regras').doc(doc.id).delete();
+                console.log(`  ✅ Deletado: "${regra.titulo}" (${tipoGatilho})`);
+            }
+        }
+
+        if (rulesToDelete.length === 0) {
+            console.log('  ℹ️  Nenhuma regra baseada em quiz encontrada.');
+        } else {
+            console.log(`✅ ${rulesToDelete.length} regra(s) deletada(s)`);
+        }
+
+        // PASSO 2: Remover badges dos jogadores
+        console.log('\n📋 PASSO 2: Removendo badges dos jogadores...');
+        const jogadoresSnap = await admin.firestore().collection('jogadores').get();
+        let totalBadgesRemovidas = 0;
+        let jogadoresAfetados = 0;
+        const detalhes = [];
+
+        for (const jogadorDoc of jogadoresSnap.docs) {
+            const jogador = jogadorDoc.data() || {};
+            const badges = Array.isArray(jogador.badges) ? jogador.badges : [];
+
+            if (badges.length === 0) continue;
+
+            const badgesFiltradas = badges.filter((badge) => {
+                const ruleBased = badge?.regraId && quizRuleIds.includes(badge.regraId);
+                const legacyQuizBadge = isLegacyQuizBadge(badge);
+                return !ruleBased && !legacyQuizBadge;
+            });
+
+            if (badgesFiltradas.length < badges.length) {
+                const qtdRemovidas = badges.length - badgesFiltradas.length;
+                totalBadgesRemovidas += qtdRemovidas;
+                jogadoresAfetados += 1;
+
+                await admin.firestore().collection('jogadores').doc(jogadorDoc.id).update({
+                    badges: badgesFiltradas
+                });
+
+                const nomeJogador = jogador.nome || jogadorDoc.id;
+                console.log(`  ✅ ${nomeJogador}: ${qtdRemovidas} badge(s) removida(s)`);
+                detalhes.push(`${nomeJogador}: ${qtdRemovidas}`);
+            }
+        }
+
+        console.log(`\n✅ ${jogadoresAfetados} jogador(es) afetado(s)`);
+        console.log(`✅ ${totalBadgesRemovidas} badge(s) removida(s)`);
+
+        const resultado = {
+            success: true,
+            regrasRemovidas: rulesToDelete.length,
+            detalhesRegras: rulesToDelete,
+            jogadoresAfetados,
+            badgesRemovidas: totalBadgesRemovidas,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        console.log('✨ Limpeza concluída com sucesso!');
+        return resultado;
+
+    } catch (error) {
+        console.error('❌ Erro durante a limpeza:', error);
+        throw new functions.https.HttpsError('internal', `Erro na limpeza: ${error.message}`);
+    }
+});

@@ -27,7 +27,6 @@ type TriggerType =
     | 'pontos_partida'
     | 'bolas_de_tres'
     | 'cestinha_partida'
-    | 'top_atributo_jogo'
     | 'participacao_evento'
     | 'podio_campeao'
     | 'podio_vice'
@@ -36,14 +35,12 @@ type TriggerType =
     | 'pontos_totais_evento'
     | 'pontos_unico_jogo_evento'
     | 'bolas_de_tres_evento'
-    | 'top_atributo_evento'
     | 'campeao_torneio_interno'
     | 'medalhista_torneio_externo'
     | 'ranking_pontos_temporada'
     | 'ranking_bolas_de_tres_temporada'
     | 'participou_todos_eventos_temporada'
     | 'conquistas_evento_temporada'
-    | 'top_atributo_temporada'
     | 'manual_admin';
 
 type TriggerAtributo = 'ataque' | 'defesa' | 'velocidade' | 'forca' | 'visao';
@@ -80,7 +77,6 @@ const triggerLabels: Record<TriggerType, string> = {
     pontos_partida: 'Pontos na partida (minimo)',
     bolas_de_tres: 'Bolas de 3 na partida (minimo)',
     cestinha_partida: 'Cestinha da partida',
-    top_atributo_jogo: 'Topo de atributo no jogo (quiz)',
     participacao_evento: 'Participacao no evento',
     podio_campeao: 'Time campeao',
     podio_vice: 'Time vice-campeao',
@@ -89,14 +85,12 @@ const triggerLabels: Record<TriggerType, string> = {
     pontos_totais_evento: 'Pontos feitos no evento (minimo)',
     pontos_unico_jogo_evento: 'Pontos em um unico jogo do evento (minimo)',
     bolas_de_tres_evento: 'Bolas de 3 no evento (minimo)',
-    top_atributo_evento: 'Topo de atributo no evento (quiz)',
     campeao_torneio_interno: 'Campeao de torneio interno',
     medalhista_torneio_externo: 'Medalhista de torneio externo (podio)',
     ranking_pontos_temporada: 'Ranking de pontos da temporada (posicao)',
     ranking_bolas_de_tres_temporada: 'Ranking de bolas de 3 da temporada (posicao)',
     participou_todos_eventos_temporada: 'Participou de todos os eventos da temporada',
     conquistas_evento_temporada: 'Conquistas de evento na temporada (minimo)',
-    top_atributo_temporada: 'Topo de atributo na temporada (quiz)',
     manual_admin: 'Conquista manual (somente admin)',
 };
 
@@ -126,11 +120,11 @@ const triggerNeedsMinimo = (trigger: TriggerType) =>
     trigger === 'ranking_bolas_de_tres_temporada' ||
     trigger === 'conquistas_evento_temporada';
 
-const triggerNeedsAtributo = (trigger: TriggerType) =>
-    trigger === 'top_atributo_jogo' || trigger === 'top_atributo_evento' || trigger === 'top_atributo_temporada';
+// REMOVIDO: triggerNeedsAtributo - triggers baseados em quiz são obsoletos
+// const triggerNeedsAtributo = (trigger: TriggerType) => false;
 
 const availableTriggersByTipo: Record<TipoAvaliacaoConquista, TriggerType[]> = {
-    pos_jogo: ['pontos_partida', 'bolas_de_tres', 'cestinha_partida', 'top_atributo_jogo'],
+    pos_jogo: ['pontos_partida', 'bolas_de_tres', 'cestinha_partida'],
     pos_evento: [
         'participacao_evento',
         'podio_campeao',
@@ -140,7 +134,6 @@ const availableTriggersByTipo: Record<TipoAvaliacaoConquista, TriggerType[]> = {
         'pontos_totais_evento',
         'pontos_unico_jogo_evento',
         'bolas_de_tres_evento',
-        'top_atributo_evento',
         'campeao_torneio_interno',
         'medalhista_torneio_externo',
     ],
@@ -149,7 +142,6 @@ const availableTriggersByTipo: Record<TipoAvaliacaoConquista, TriggerType[]> = {
         'ranking_bolas_de_tres_temporada',
         'participou_todos_eventos_temporada',
         'conquistas_evento_temporada',
-        'top_atributo_temporada',
     ],
     manual: ['manual_admin'],
 };

@@ -9,7 +9,8 @@
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
     "audit:legacy-badges": "node audit-legacy-badge-groups.js",
-    "backfill:legacy-badge-groups": "node backfill-legacy-badge-groups.js"
+    "backfill:legacy-badge-groups": "node backfill-legacy-badge-groups.js",
+    "cleanup:legacy-badges": "node remove-legacy-badges.js"
   },
   "engines": {
     "node": "20"
