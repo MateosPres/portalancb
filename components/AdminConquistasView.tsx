@@ -120,8 +120,7 @@ const triggerNeedsMinimo = (trigger: TriggerType) =>
     trigger === 'ranking_bolas_de_tres_temporada' ||
     trigger === 'conquistas_evento_temporada';
 
-// REMOVIDO: triggerNeedsAtributo - triggers baseados em quiz são obsoletos
-// const triggerNeedsAtributo = (trigger: TriggerType) => false;
+const triggerNeedsAtributo = (_trigger: TriggerType) => false;
 
 const availableTriggersByTipo: Record<TipoAvaliacaoConquista, TriggerType[]> = {
     pos_jogo: ['pontos_partida', 'bolas_de_tres', 'cestinha_partida'],
@@ -181,8 +180,6 @@ const compactTriggerLabel = (gatilho: any): string => {
             return `Bolas de 3 na partida${min ? ` >= ${min}` : ''}`;
         case 'cestinha_partida':
             return 'Cestinha da partida';
-        case 'top_atributo_jogo':
-            return `Topo atributo no jogo${attr}`;
         case 'participacao_evento':
             return 'Participou do evento';
         case 'podio_campeao':
@@ -199,8 +196,6 @@ const compactTriggerLabel = (gatilho: any): string => {
             return `Pontos em 1 jogo${min ? ` >= ${min}` : ''}`;
         case 'bolas_de_tres_evento':
             return `Bolas de 3 no evento${min ? ` >= ${min}` : ''}`;
-        case 'top_atributo_evento':
-            return `Topo atributo no evento${attr}`;
         case 'campeao_torneio_interno':
             return 'Campeao torneio interno';
         case 'medalhista_torneio_externo':
@@ -213,8 +208,6 @@ const compactTriggerLabel = (gatilho: any): string => {
             return 'Todos os eventos da temporada';
         case 'conquistas_evento_temporada':
             return `Conquistas de evento${min ? ` >= ${min}` : ''}`;
-        case 'top_atributo_temporada':
-            return `Topo atributo temporada${attr}`;
         case 'manual_admin':
             return 'Concedida manualmente';
         default:

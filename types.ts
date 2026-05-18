@@ -68,7 +68,6 @@ export type ConquistaGatilho =
     | { tipo: 'pontos_partida'; minimo: number }
     | { tipo: 'bolas_de_tres'; minimo: number }
     | { tipo: 'cestinha_partida' }
-    | { tipo: 'top_atributo_jogo'; atributo: 'ataque' | 'defesa' | 'velocidade' | 'forca' | 'visao' }
     | { tipo: 'participacao_evento' }
     | { tipo: 'podio_campeao' }
     | { tipo: 'podio_vice' }
@@ -77,14 +76,12 @@ export type ConquistaGatilho =
     | { tipo: 'pontos_totais_evento'; minimo: number }
     | { tipo: 'pontos_unico_jogo_evento'; minimo: number }
     | { tipo: 'bolas_de_tres_evento'; minimo: number }
-    | { tipo: 'top_atributo_evento'; atributo: 'ataque' | 'defesa' | 'velocidade' | 'forca' | 'visao' }
     | { tipo: 'campeao_torneio_interno' }
     | { tipo: 'medalhista_torneio_externo' }
     | { tipo: 'ranking_pontos_temporada'; minimo: number }
     | { tipo: 'ranking_bolas_de_tres_temporada'; minimo: number }
     | { tipo: 'participou_todos_eventos_temporada' }
     | { tipo: 'conquistas_evento_temporada'; minimo: number }
-    | { tipo: 'top_atributo_temporada'; atributo: 'ataque' | 'defesa' | 'velocidade' | 'forca' | 'visao' }
     | { tipo: 'manual_admin' };
 
 export interface ConquistaRegra {
@@ -119,6 +116,7 @@ export interface Player {
     status?: 'active' | 'pending' | 'rejected' | 'banned'; // Controle de aprovação e banimento
     emailContato?: string; // Legacy: manter durante migracao para email unico
     // New Gamification Stats
+    stats_tags?: Record<string, number>; // e.g. { 'muralha': 10, 'sniper': 5 }
     stats_atributos?: {
         ataque?: number;
         defesa?: number;
