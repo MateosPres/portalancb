@@ -10,10 +10,8 @@ import {
     LucideCalendar,
     LucideLoader2,
     LucideX,
-    LucidePlayCircle,
     LucideTrash2,
     LucideBellRing,
-    LucideClipboardList,
 } from 'lucide-react';
 import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, orderBy, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { motion, AnimatePresence, type PanInfo, useMotionValue, useTransform } from 'framer-motion';
@@ -23,12 +21,10 @@ interface NotificationsViewProps {
     userProfile: UserProfile;
     notificationPermissionStatus?: 'granted' | 'denied' | 'default';
     onEnableNotifications?: () => void;
-    // ✅ Agora recebe também o notificationId para poder apagar após o quiz
-    onStartEvaluation: (gameId: string, eventId: string, notificationId: string) => void;
 }
 
 export const NotificationsView: React.FC<NotificationsViewProps> = ({
-    onBack, userProfile, notificationPermissionStatus, onEnableNotifications, onStartEvaluation
+    onBack, userProfile, notificationPermissionStatus, onEnableNotifications
 }) => {
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [rosteredEvents, setRosteredEvents] = useState<Evento[]>([]);
@@ -61,7 +57,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                 });
 
                 const checkedNotifs = await Promise.all(notificationChecks);
-                const validNotifs = checkedNotifs.filter((n): n is NotificationItem => n !== null);
+                const validNotifs = checkedNotifs.filter((n): n is NotificationItem => n !== null && n.type !== 'pending_review');
                 setNotifications(validNotifs);
 
                 // Busca eventos onde o jogador está escalado
@@ -112,7 +108,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
     }, [userProfile]);
 
     const handleDeleteNotification = useCallback(async (id: string, type: string) => {
-        if (type === 'roster_invite' || type === 'pending_review') return;
+        if (type === 'roster_invite') return;
         try {
             await deleteDoc(doc(db, 'notifications', id));
             setNotifications(prev => prev.filter(n => n.id !== id));
@@ -123,9 +119,9 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
 
     const handleClearAll = useCallback(async () => {
         if (!window.confirm("Deseja limpar todas as notificações recentes?")) return;
-        const deletable = notifications.filter(n => n.type !== 'roster_invite' && n.type !== 'pending_review');
+        const deletable = notifications.filter(n => n.type !== 'roster_invite');
         await Promise.all(deletable.map((notif) => deleteDoc(doc(db, 'notifications', notif.id))));
-        setNotifications(prev => prev.filter(n => n.type === 'roster_invite' || n.type === 'pending_review'));
+        setNotifications(prev => prev.filter(n => n.type === 'roster_invite'));
     }, [notifications]);
 
     const handleRosterResponse = useCallback(async (notification: NotificationItem, accept: boolean) => {
@@ -185,36 +181,9 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
         }
     }, [userProfile.linkedPlayerId]);
 
-    const handleStartEvaluation = useCallback(async (notification: NotificationItem) => {
-        const { eventId, gameId } = notification.data || {};
-
-        if (!eventId || !gameId) {
-            alert("Notificação sem vínculo com partida. Limpando...");
-            await deleteDoc(doc(db, 'notifications', notification.id));
-            setNotifications(prev => prev.filter(n => n.id !== notification.id));
-            return;
-        }
-
-        try {
-            const gameSnap = await getDoc(doc(db, 'eventos', eventId, 'jogos', gameId));
-            if (!gameSnap.exists()) {
-                alert("A partida foi excluída. Limpando notificação...");
-                await deleteDoc(doc(db, 'notifications', notification.id));
-                setNotifications(prev => prev.filter(n => n.id !== notification.id));
-                return;
-            }
-            // ✅ Passa o notificationId — App.tsx vai apagar do Firestore e chamar removeNotification
-            onStartEvaluation(gameId, eventId, notification.id);
-        } catch (error) {
-            console.error("Erro ao verificar partida:", error);
-            alert("Erro ao acessar os dados do jogo.");
-        }
-    }, [onStartEvaluation]);
-
     // Separa por tipo
-    const pendingReviews = useMemo(() => notifications.filter(n => n.type === 'pending_review'), [notifications]);
-    const otherNotifs = useMemo(() => notifications.filter(n => n.type !== 'pending_review'), [notifications]);
-    const hasAnything = rosteredEvents.length > 0 || pendingReviews.length > 0 || otherNotifs.length > 0;
+    const otherNotifs = useMemo(() => notifications, [notifications]);
+    const hasAnything = rosteredEvents.length > 0 || otherNotifs.length > 0;
 
     if (loading) return (
         <div className="fixed inset-0 z-50 flex justify-center items-center bg-black/50 backdrop-blur-sm">
@@ -282,31 +251,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                     </section>
                 )}
 
-                {/* ── SEÇÃO 2: AVALIAÇÕES PENDENTES ── */}
-                {pendingReviews.length > 0 && (
-                    <section>
-                        <h2 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase mb-3 flex items-center gap-2">
-                            <LucideClipboardList size={16} />
-                            Avaliações Pendentes
-                            <span className="ml-auto bg-[#F27405] text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full">
-                                {pendingReviews.length}
-                            </span>
-                        </h2>
-                        <div className="space-y-3">
-                            <AnimatePresence mode="popLayout">
-                                {pendingReviews.map(notif => (
-                                    <PendingReviewCard
-                                        key={notif.id}
-                                        notification={notif}
-                                        onStart={() => handleStartEvaluation(notif)}
-                                    />
-                                ))}
-                            </AnimatePresence>
-                        </div>
-                    </section>
-                )}
-
-                {/* ── SEÇÃO 3: RECENTES ── */}
+                {/* ── SEÇÃO 2: RECENTES ── */}
                 <section>
                     <h2 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase mb-3 flex items-center gap-2">
                         <LucideBell size={16} /> Recentes
@@ -339,39 +284,6 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
         </div>
     );
 };
-
-// ── CARD DE AVALIAÇÃO PENDENTE ────────────────────────────────────────────────
-interface PendingReviewCardProps {
-    notification: NotificationItem;
-    onStart: () => void;
-}
-
-const PendingReviewCard: React.FC<PendingReviewCardProps> = memo(({ notification, onStart }) => (
-    <motion.div
-        layout
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-gradient-to-r from-[#062553]/80 to-[#0a3a7a]/60 border border-blue-800/50 dark:border-blue-700/40 rounded-xl p-4 shadow-md"
-    >
-        <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#F27405]/20 flex items-center justify-center shrink-0 mt-0.5">
-                <span className="text-lg">🏆</span>
-            </div>
-            <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-white text-sm mb-0.5">{notification.title}</h3>
-                <p className="text-xs text-blue-300 leading-relaxed">{notification.message}</p>
-                <button
-                    onClick={onStart}
-                    className="mt-3 inline-flex items-center gap-2 bg-[#F27405] hover:bg-orange-500 text-white text-xs font-black px-4 py-2 rounded-lg transition-all active:scale-95 shadow-lg shadow-orange-500/20"
-                >
-                    <LucidePlayCircle size={14} />
-                    Iniciar Avaliação
-                </button>
-            </div>
-        </div>
-    </motion.div>
-));
 
 // ── CARD DE NOTIFICAÇÃO GERAL ─────────────────────────────────────────────────
 interface NotificationCardProps {

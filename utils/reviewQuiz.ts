@@ -5,24 +5,19 @@ export const REVIEW_QUIZ_CONFIG_DOC_ID = 'review_quiz';
 
 export const ATTRIBUTE_KEYS: AtributoKey[] = ['ataque', 'defesa', 'velocidade', 'forca', 'visao'];
 
-export const DEFAULT_REVIEW_TAGS: ReviewTagDefinition[] = [
-    { id: 'muralha', label: 'Muralha', emoji: '🧱', type: 'positive', description: 'Defesa intransponivel', impact: { defesa: 3, forca: 1 } },
-    { id: 'sniper', label: 'Sniper', emoji: '🎯', type: 'positive', description: 'Mao calibrada', impact: { ataque: 3, visao: 1 } },
-    { id: 'garcom', label: 'Garcom', emoji: '🤝', type: 'positive', description: 'Visao de jogo e assistencias', impact: { visao: 3, ataque: 1 } },
-    { id: 'flash', label: 'Flash', emoji: '⚡', type: 'positive', description: 'Velocidade e contra-ataque', impact: { velocidade: 3, ataque: 1 } },
-    { id: 'lider', label: 'Lider', emoji: '🧠', type: 'positive', description: 'Organiza o time', impact: { visao: 3, defesa: 1, forca: 1 } },
-    { id: 'guerreiro', label: 'Guerreiro', emoji: '🛡️', type: 'positive', description: 'Raca e rebotes', impact: { forca: 3, defesa: 1 } },
-    { id: 'avenida', label: 'Avenida', emoji: '🛣️', type: 'negative', description: 'Defesa aberta', impact: { defesa: -1, velocidade: -0.5 } },
-    { id: 'fominha', label: 'Fominha', emoji: '🍽️', type: 'negative', description: 'Nao passa a bola', impact: { visao: -1, ataque: -0.5 } },
-    { id: 'tijoleiro', label: 'Pedreiro', emoji: '🏗️', type: 'negative', description: 'Errou muitos arremessos', impact: { ataque: -1, visao: -0.5 } },
-    { id: 'cone', label: 'Cone', emoji: '⚠️', type: 'negative', description: 'Parado em quadra', impact: { velocidade: -1, forca: -0.5 } },
-];
+/**
+ * DEPRECATED: Review quiz tags are no longer supported.
+ * All badge/conquest definitions must be created exclusively through
+ * the Firestore 'conquistas_regras' collection via the admin panel.
+ * Legacy quiz-based badges (muralha, sniper, garcom, etc.) have been removed.
+ */
+export const DEFAULT_REVIEW_TAGS: ReviewTagDefinition[] = [];
 
 export const DEFAULT_REVIEW_QUIZ_CONFIG: ReviewQuizConfig = {
     version: 1,
     maxSelections: 3,
     multipliers: { 1: 1.0, 2: 0.75, 3: 0.55 },
-    tags: DEFAULT_REVIEW_TAGS,
+    tags: [],
 };
 
 export const createEmptyAttributeMap = (): Record<AtributoKey, number> => ({

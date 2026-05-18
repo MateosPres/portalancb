@@ -15,30 +15,12 @@ export const BADGE_GALLERY_SORT_OPTIONS: Array<{ value: BadgeGallerySortOption; 
 ];
 
 // ─────────────────────────────────────────────────────────────
-// IMPACTOS DE TAGS DE AVALIAÇÃO NOS ATRIBUTOS
-// Era: duplicado em AdminView.tsx (linha 13) e hardcoded em Cloud Functions.
-// Agora: fonte única. AdminView e Functions devem importar / copiar daqui.
+// NOTE: All badge definitions are now managed exclusively through
+// the Firestore 'conquistas_regras' collection via the admin panel.
+// No hardcoded badge values are allowed to prevent automatic re-creation
+// of removed badges (e.g., quiz-based badges like muralha, sniper, etc.).
 // ─────────────────────────────────────────────────────────────
 export type AtributoKey = 'ataque' | 'defesa' | 'forca' | 'velocidade' | 'visao';
-
-export const REVIEW_TAG_MULTIPLIERS: Record<number, number> = {
-    1: 1.0,
-    2: 0.75,
-    3: 0.55,
-};
-
-export const REVIEW_TAG_IMPACTS: Record<string, Partial<Record<AtributoKey, number>>> = {
-    muralha:   { defesa: 3, forca: 1 },
-    sniper:    { ataque: 3, visao: 1 },
-    garcom:    { visao: 3, ataque: 1 },
-    flash:     { velocidade: 3, ataque: 1 },
-    lider:     { visao: 3, defesa: 1, forca: 1 },
-    guerreiro: { forca: 3, defesa: 1 },
-    avenida:   { defesa: -1, velocidade: -0.5 },
-    fominha:   { visao: -1, ataque: -0.5 },
-    tijoleiro: { ataque: -1, visao: -0.5 },
-    cone:      { velocidade: -1, forca: -0.5 },
-};
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS DE EXIBIÇÃO

@@ -119,7 +119,6 @@ export interface Player {
     status?: 'active' | 'pending' | 'rejected' | 'banned'; // Controle de aprovação e banimento
     emailContato?: string; // Legacy: manter durante migracao para email unico
     // New Gamification Stats
-    stats_tags?: Record<string, number>; // e.g. { 'muralha': 10, 'sniper': 5 }
     stats_atributos?: {
         ataque?: number;
         defesa?: number;

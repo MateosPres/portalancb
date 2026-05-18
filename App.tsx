@@ -36,8 +36,6 @@ const loadApoiadoresView = () => import('./views/ApoiadoresView');
 const loadPostView = () => import('./views/PostView');
 const loadPlayerProfileModal = () => import('./components/PlayerProfileModal');
 const loadImageCropperModal = () => import('./components/ImageCropperModal');
-const loadPeerReviewQuiz = () => import('./components/PeerReviewQuiz');
-
 // Route-level lazy loading to reduce initial mobile bundle size.
 const PublicGameView = React.lazy(() => loadPublicGameView().then((m) => ({ default: m.PublicGameView })));
 const TeamManagerView = React.lazy(() => loadTeamManagerView().then((m) => ({ default: m.TeamManagerView })));
@@ -53,7 +51,6 @@ const ApoiadoresView = React.lazy(() => loadApoiadoresView().then((m) => ({ defa
 const PostView = React.lazy(() => loadPostView().then((m) => ({ default: m.PostView })));
 const PlayerProfileModal = React.lazy(() => loadPlayerProfileModal().then((m) => ({ default: m.PlayerProfileModal })));
 const ImageCropperModal = React.lazy(() => loadImageCropperModal().then((m) => ({ default: m.ImageCropperModal })));
-const PeerReviewQuiz = React.lazy(() => loadPeerReviewQuiz().then((m) => ({ default: m.PeerReviewQuiz })));
 
 const App: React.FC = () => {
     const viewToHash: Partial<Record<ViewState, string>> = {
@@ -231,9 +228,6 @@ const App: React.FC = () => {
     // --- NOTIFICATIONS STATE ---
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [showNotificationsView, setShowNotificationsView] = useState(false);
-    const [showQuiz, setShowQuiz] = useState(false);
-    const [reviewTargetGame, setReviewTargetGame] = useState<{ gameId: string, eventId: string, playersToReview: Player[] } | null>(null);
-    const [pendingReviewNotificationId, setPendingReviewNotificationId] = useState<string | null>(null);
     
     const [notificationPermissionStatus, setNotificationPermissionStatus] = useState<NotificationPermission>(
         (typeof Notification !== 'undefined') ? Notification.permission : 'default'
@@ -414,11 +408,6 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const handlePopState = (event: PopStateEvent) => {
-            if (showQuiz) {
-                setShowQuiz(false);
-                window.history.pushState(buildNavigationState(), '', window.location.href);
-                return;
-            }
             if (showNotificationsView) {
                 setShowNotificationsView(false);
                 window.history.pushState(buildNavigationState(), '', window.location.href);
@@ -471,7 +460,7 @@ const App: React.FC = () => {
 
             if (!isAndroid) return;
 
-            if (currentView === 'home' && !showNotificationsView && !showQuiz) {
+            if (currentView === 'home' && !showNotificationsView) {
                 const now = Date.now();
                 const pressedTwice = now - lastHomeBackPressAtRef.current <= 1500;
                 if (!pressedTwice) {
@@ -498,7 +487,6 @@ const App: React.FC = () => {
         showLogin,
         showNotificationsView,
         showPranchetaInstallModal,
-        showQuiz,
         showRegister,
         showRegisterCropModal,
     ]);
@@ -887,113 +875,6 @@ const App: React.FC = () => {
         return () => unsubscribe();
     }, []);
 
-    const handleOpenReviewQuiz = async (gameId: string, eventId: string, notificationId?: string) => {
-        try {
-            const playersSnap = await db.collection("jogadores").get();
-            const allPlayers = playersSnap.docs.map(d => ({id: d.id, ...(d.data() as any)} as Player));
-            const eventDoc = await db.collection("eventos").doc(eventId).get();
-            if (!eventDoc.exists) { alert("Evento não encontrado."); return; }
-            const eventData = eventDoc.data() as Evento;
-
-            const gameDoc = await db.collection("eventos").doc(eventId).collection("jogos").doc(gameId).get();
-            const gameData = gameDoc.exists ? gameDoc.data() as Jogo : null;
-
-            let ancbPlayerIds: string[] = [];
-            const reviewerPlayerId = userProfile?.linkedPlayerId || allPlayers.find(p => p.userId === userProfile?.uid)?.id;
-            const gameTeamIds = gameData ? [gameData.timeA_id, gameData.timeB_id].filter(Boolean) : [];
-            let reviewerTeamIdFromNotification: string | null = null;
-
-            if (notificationId) {
-                const notifSnap = await getDoc(doc(db, 'notifications', notificationId));
-                if (notifSnap.exists()) {
-                    const notifData: any = notifSnap.data();
-                    reviewerTeamIdFromNotification = notifData?.data?.teamId || null;
-                }
-            }
-
-            if (eventData.timesParticipantes && eventData.timesParticipantes.length > 0) {
-                const participantTeams = gameTeamIds.length > 0
-                    ? eventData.timesParticipantes.filter(t => gameTeamIds.includes(t.id))
-                    : eventData.timesParticipantes;
-
-                const ancbTeams = participantTeams.filter(t => t.isANCB);
-
-                const reviewerTeam = reviewerTeamIdFromNotification
-                    ? ancbTeams.find(team => team.id === reviewerTeamIdFromNotification)
-                    : reviewerPlayerId
-                    ? ancbTeams.find(team => (team.jogadores || []).includes(reviewerPlayerId))
-                    : undefined;
-
-                if (reviewerTeam) {
-                    ancbPlayerIds = reviewerTeam.jogadores || [];
-                } else {
-                    alert("Não foi possível identificar seu time para avaliação nesta partida.");
-                    return;
-                }
-            } else if (eventData.times && eventData.times.length > 0) {
-                if (gameTeamIds.length > 0) {
-                    const participantTeams = eventData.times.filter(t => gameTeamIds.includes(t.id));
-                    const reviewerTeam = reviewerTeamIdFromNotification
-                        ? participantTeams.find(team => team.id === reviewerTeamIdFromNotification)
-                        : reviewerPlayerId
-                        ? participantTeams.find(team => (team.jogadores || []).includes(reviewerPlayerId))
-                        : undefined;
-
-                    if (reviewerTeam) {
-                        ancbPlayerIds = reviewerTeam.jogadores || [];
-                    } else {
-                        alert("Não foi possível identificar seu time para avaliação nesta partida.");
-                        return;
-                    }
-                } else {
-                    eventData.times.forEach(team => {
-                        ancbPlayerIds.push(...(team.jogadores || []));
-                    });
-                }
-            } else {
-                const gameRoster = (gameData?.jogadoresEscalados || [])
-                    .map((e: any) => typeof e === 'string' ? e : e?.id)
-                    .filter(Boolean);
-
-                const eventRoster = (eventData.jogadoresEscalados || [])
-                    .map((e: any) => typeof e === 'string' ? e : e?.id)
-                    .filter(Boolean);
-
-                ancbPlayerIds = gameRoster.length > 0 ? gameRoster : eventRoster;
-            }
-
-            if (ancbPlayerIds.length === 0) {
-                const rosterCollectionSnap = await db.collection("eventos").doc(eventId).collection("roster").get();
-                ancbPlayerIds = rosterCollectionSnap.docs
-                    .filter(d => (d.data() as any).status !== 'recusado')
-                    .map(d => d.id)
-                    .filter(Boolean);
-            }
-
-            ancbPlayerIds = Array.from(new Set(ancbPlayerIds));
-
-            if (ancbPlayerIds.length === 0) {
-                alert("Não há jogadores ANCB escalados nesta partida para avaliar.");
-                return;
-            }
-
-            const playersToReview = allPlayers.filter(p => 
-                ancbPlayerIds.includes(p.id) && p.id !== reviewerPlayerId
-            );
-
-            if (playersToReview.length > 0) {
-                setReviewTargetGame({ gameId, eventId, playersToReview });
-                setPendingReviewNotificationId(notificationId || null);
-                setShowQuiz(true);
-            } else {
-                alert("Não há outros jogadores ANCB para avaliar nesta partida.");
-            }
-        } catch (e) {
-            console.error("Erro ao carregar quiz:", e);
-            alert("Erro ao carregar dados da avaliação.");
-        }
-    };
-
     const handleOpenGamePanel = (game: Jogo, eventId: string, isEditable: boolean = false) => {
         const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super-admin';
         if (isAdmin) {
@@ -1234,7 +1115,6 @@ const App: React.FC = () => {
                 onBack={() => { setCurrentView('eventos'); setReturnToTeamId(null); setReturnToTab('jogos'); }} 
                 userProfile={userProfile} 
                 onOpenGamePanel={(g, eid) => handleOpenGamePanel(g, eid, false)} 
-                onOpenReview={handleOpenReviewQuiz} 
                 onSelectPlayer={(pid) => handleOpenPlayerProfile(pid)}
                 onOpenTeamManager={(eventId, teamId) => {
                     setTeamManagerEventId(eventId);
@@ -1261,7 +1141,7 @@ const App: React.FC = () => {
             case 'admin': return <AdminView onBack={() => setCurrentView('home')} userProfile={userProfile} onOpenGamePanel={(g, eid, isEditable) => handleOpenGamePanel(g, eid, isEditable)} />;
             case 'painel-jogo': return panelGame && panelEventId ? <PainelJogoView game={panelGame} eventId={panelEventId} onBack={() => handleOpenEventDetail(panelEventId)} userProfile={userProfile} isEditable={panelIsEditable} /> : null;
             case 'public-game': return selectedPublicGame ? <PublicGameView game={selectedPublicGame.game} eventId={selectedPublicGame.eventId} onBack={() => setCurrentView('home')} /> : <div>Jogo não encontrado</div>;
-            case 'profile': return userProfile ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} onOpenReview={handleOpenReviewQuiz} onOpenEvent={handleOpenEventDetail} /> : null;
+            case 'profile': return userProfile ? <ProfileView userProfile={userProfile} onBack={() => setCurrentView('home')} onOpenEvent={handleOpenEventDetail} /> : null;
             case 'team-manager': return teamManagerEventId ? <TeamManagerView eventId={teamManagerEventId} teamId={teamManagerTeamId} onBack={() => { setCurrentView('evento-detalhe'); }} userProfile={userProfile} /> : null;
             case 'apoiadores': return <ApoiadoresView onBack={() => setCurrentView('home')} userProfile={userProfile} />;
             case 'post-view': return selectedPost ? (
@@ -1438,10 +1318,6 @@ const App: React.FC = () => {
                         userProfile={userProfile} 
                         notificationPermissionStatus={notificationPermissionStatus}
                         onEnableNotifications={handleEnableNotifications}
-                        onStartEvaluation={(gameId, eventId, notificationId) => {
-                            setShowNotificationsView(false);
-                            handleOpenReviewQuiz(gameId, eventId, notificationId);
-                        }}
                     />
                 </Suspense>
             )}
@@ -1489,28 +1365,6 @@ const App: React.FC = () => {
                 </div>
             </Modal>
 
-            {reviewTargetGame && userProfile?.linkedPlayerId && (
-                <Suspense fallback={null}>
-                    <PeerReviewQuiz 
-                        isOpen={showQuiz} 
-                        onClose={async () => {
-                            setShowQuiz(false);
-                            if (pendingReviewNotificationId) {
-                                try {
-                                    await deleteDoc(doc(db, 'notifications', pendingReviewNotificationId));
-                                } catch (e) {
-                                    console.warn("Não foi possível apagar notificação de review:", e);
-                                }
-                                setPendingReviewNotificationId(null);
-                            }
-                        }} 
-                        gameId={reviewTargetGame.gameId} 
-                        eventId={reviewTargetGame.eventId} 
-                        reviewerId={userProfile.linkedPlayerId} 
-                        playersToReview={reviewTargetGame.playersToReview} 
-                    />
-                </Suspense>
-            )}
             
             <Modal isOpen={showLogin} onClose={() => setShowLogin(false)} title="Entrar">
                 <form onSubmit={async (e) => { e.preventDefault(); try { await auth.signInWithEmailAndPassword(authEmail, authPassword); setShowLogin(false); setAuthEmail(''); setAuthPassword(''); } catch (error) { setAuthError("Erro ao entrar. Verifique suas credenciais."); } }} className="space-y-4">

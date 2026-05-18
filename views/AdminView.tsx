@@ -9,7 +9,6 @@ import { ApoiadoresManager } from '../components/ApoiadoresManager';
 import { LiveStreamAdmin } from '../components/LiveStreamAdmin';
 import { MediaStudio } from '../components/MediaStudio';
 import { AdminConquistasView } from '../components/AdminConquistasView';
-import { AdminReviewQuizView } from '../components/AdminReviewQuizView';
 import { UserManagementCard } from '../components/UserManagementCard';
 import { UserDetailsPanel } from '../components/UserDetailsPanel';
 import { normalizeCpfForStorage, normalizePhoneForStorage } from '../utils/contactFormat';
@@ -47,8 +46,8 @@ interface ApoiadorAdmin {
 const isApoiadorAtivo = (apoiador: ApoiadorAdmin) => apoiador.ativo !== false;
 
 export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, userProfile }) => {
-    const [adminTab, setAdminTab] = useState<'home' | 'posts' | 'users' | 'apoiadores' | 'live' | 'reviews' | 'badges' | 'quiz' | 'midia'>('home');
-    const restrictedTabs: Array<'users' | 'reviews' | 'badges' | 'quiz'> = ['users', 'reviews', 'badges', 'quiz'];
+    const [adminTab, setAdminTab] = useState<'home' | 'posts' | 'users' | 'apoiadores' | 'live' | 'reviews' | 'badges' | 'midia'>('home');
+    const restrictedTabs: Array<'users' | 'reviews' | 'badges'> = ['users', 'reviews', 'badges'];
     // Badge management state
     const [badgeLoading, setBadgeLoading] = useState(false);
     const [badgeSuccess, setBadgeSuccess] = useState<string | null>(null);
@@ -158,7 +157,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
     }, [isSuperAdmin]);
 
     useEffect(() => {
-        if (!isSuperAdmin && restrictedTabs.includes(adminTab as 'users' | 'reviews' | 'badges' | 'quiz')) {
+        if (!isSuperAdmin && restrictedTabs.includes(adminTab as 'users' | 'reviews' | 'badges')) {
             setAdminTab('home');
         }
     }, [adminTab, isSuperAdmin]);
@@ -1667,15 +1666,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                             </button>
                         )}
 
-                        {isSuperAdmin && (
-                            <button onClick={() => setAdminTab('quiz')} className="text-left bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-emerald-400 dark:hover:border-emerald-500 transition-all shadow-sm hover:shadow-md">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300 flex items-center justify-center"><LucideMessageCircle size={18} /></div>
-                                    <h3 className="font-bold text-gray-800 dark:text-gray-200">Quiz</h3>
-                                </div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Configurar tags, impactos e multiplicadores do quiz.</p>
-                            </button>
-                        )}
                     </div>
                 </div>
             )}
@@ -1694,12 +1684,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                 </div>
             )}
 
-            {/* TAB: QUIZ */}
-            {adminTab === 'quiz' && isSuperAdmin && (
-                <div className="animate-fadeIn rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                    <AdminReviewQuizView />
-                </div>
-            )}
 
             {/* TAB: REVIEWS */}
             {adminTab === 'reviews' && isSuperAdmin && (
