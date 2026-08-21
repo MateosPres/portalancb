@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { UserProfile, ViewState, Evento, Jogo, NotificationItem, Player, FeedPost } from './types';
-import firebase, { auth, db, requestFCMToken } from './services/firebase';
+import firebase, { auth, db, functions, requestFCMToken } from './services/firebase';
 import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
@@ -501,10 +501,8 @@ const App: React.FC = () => {
             const token = await requestFCMToken(VAPID_KEY);
             if (token) {
                 setNotificationPermissionStatus('granted');
-                if (userProfile.fcmToken !== token) {
-                    await db.collection("usuarios").doc(userProfile.uid).update({ fcmToken: token });
-                    console.log("Token FCM salvo com sucesso.");
-                }
+                await syncNotificationToken(token, 'attach');
+                console.log("Token FCM salvo com sucesso.");
                 alert("Notificações ativadas! Você receberá avisos sobre convocações e jogos.");
             } else {
                 setNotificationPermissionStatus('denied');
@@ -521,8 +519,10 @@ const App: React.FC = () => {
         if (typeof Notification === 'undefined') return;
         if (userProfile?.uid && Notification.permission === 'granted') {
             requestFCMToken(VAPID_KEY).then(token => {
-                if (token && userProfile.fcmToken !== token) {
-                    db.collection("usuarios").doc(userProfile.uid).update({ fcmToken: token });
+                if (token) {
+                    syncNotificationToken(token, 'attach').catch((error) => {
+                        console.warn("Erro ao sincronizar token FCM:", error);
+                    });
                 }
             });
         }
@@ -1171,7 +1171,30 @@ const App: React.FC = () => {
         setShowRegister(true);
         setAuthError('');
     };
-    const handleLogout = () => auth.signOut();
+    const syncNotificationToken = async (token: string, action: 'attach' | 'detach') => {
+        if (!userProfile?.uid) return;
+
+        try {
+            await functions.httpsCallable('syncNotificationToken')({ token, action });
+        } catch (error) {
+            // Keeps notification management functional while the callable is rolling out.
+            const fallbackValue = action === 'attach'
+                ? token
+                : firebase.firestore.FieldValue.delete();
+            await db.collection('usuarios').doc(userProfile.uid).update({ fcmToken: fallbackValue });
+        }
+    };
+
+    const handleLogout = async () => {
+        const token = userProfile?.fcmToken;
+        try {
+            if (token) await syncNotificationToken(token, 'detach');
+        } catch (error) {
+            console.warn('Nao foi possivel remover o token FCM durante o logout:', error);
+        } finally {
+            await auth.signOut();
+        }
+    };
     
     const handleProfileClick = () => setCurrentView('profile');
     const handleAdminClick = () => setCurrentView('admin');
