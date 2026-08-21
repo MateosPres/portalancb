@@ -1,0 +1,26 @@
+
+{
+  "name": "Portal ANCB | Associacao Nova Canaa de Basquetebol",
+  "short_name": "ANCB",
+  "description": "Portal oficial da Associacao Nova Canaa de Basquetebol com eventos, ranking, jogadores e noticias do basquete de Nova Canaa.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "categories": ["sports", "news"],
+  "lang": "pt-BR",
+  "background_color": "#062553",
+  "theme_color": "#062553",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://i.imgur.com/XPMEKrv.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://i.imgur.com/XPMEKrv.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

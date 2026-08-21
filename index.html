@@ -1,0 +1,315 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ANCB | Basquete de Nova Canaa | Portal Oficial</title>
+    <meta name="description" content="Portal oficial da Associacao Nova Canaa de Basquetebol. Acompanhe eventos, ranking, jogadores, resultados e noticias do basquete de Nova Canaa.">
+    <meta name="keywords" content="ANCB, Associacao Nova Canaa de Basquetebol, basquete de Nova Canaa, basquetebol em Nova Canaa, basquete, esporte em Nova Canaa">
+    <meta name="author" content="ANCB - Associacao Nova Canaa de Basquetebol">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <link rel="canonical" href="https://ancb.app.br/">
+
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="pt_BR">
+    <meta property="og:site_name" content="ANCB | Associacao Nova Canaa de Basquetebol">
+    <meta property="og:title" content="ANCB | Basquete de Nova Canaa | Portal Oficial">
+    <meta property="og:description" content="Portal oficial da Associacao Nova Canaa de Basquetebol com eventos, ranking, jogadores e resultados do basquete de Nova Canaa.">
+    <meta property="og:url" content="https://ancb.app.br/">
+    <meta property="og:image" content="https://i.imgur.com/XPMEKrv.png">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="ANCB | Basquete de Nova Canaa">
+    <meta name="twitter:description" content="Portal oficial da Associacao Nova Canaa de Basquetebol para eventos, ranking, jogadores e noticias do basquete de Nova Canaa.">
+    <meta name="twitter:image" content="https://i.imgur.com/XPMEKrv.png">
+    
+    <!-- PWA Manifest - Caminho Relativo -->
+    <link rel="manifest" href="./assets/manifest-B5BH1KRz.json">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="https://i.imgur.com/gbXKuYi.png">
+    <link rel="apple-touch-icon" href="https://i.imgur.com/XPMEKrv.png">
+    <link rel="dns-prefetch" href="https://i.imgur.com">
+    <link rel="preconnect" href="https://i.imgur.com" crossorigin>
+    <link rel="dns-prefetch" href="https://firestore.googleapis.com">
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+    <link rel="dns-prefetch" href="https://firebaseinstallations.googleapis.com">
+    <link rel="preconnect" href="https://firebaseinstallations.googleapis.com" crossorigin>
+    <link rel="dns-prefetch" href="https://fcmregistrations.googleapis.com">
+    <link rel="preconnect" href="https://fcmregistrations.googleapis.com" crossorigin>
+    <link rel="dns-prefetch" href="https://www.gstatic.com">
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://i.ytimg.com">
+    <link rel="preconnect" href="https://i.ytimg.com" crossorigin>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#062553">
+        <script type="application/ld+json">
+                {
+                    "@context": "https://schema.org",
+                    "@type": "SportsOrganization",
+                    "name": "ANCB - Associacao Nova Canaa de Basquetebol",
+                    "alternateName": "ANCB",
+                    "url": "https://ancb.app.br/",
+                    "logo": "https://i.imgur.com/gbXKuYi.png",
+                    "image": "https://i.imgur.com/SE2jHsz.png",
+                    "description": "Associacao Nova Canaa de Basquetebol com eventos, ranking e desenvolvimento do basquete de Nova Canaa.",
+                    "sport": "Basketball",
+                    "areaServed": [
+                        {
+                            "@type": "City",
+                            "name": "Nova Canaa do Norte"
+                        },
+                        {
+                            "@type": "State",
+                            "name": "Mato Grosso"
+                        }
+                    ],
+                    "address": {
+                        "@type": "PostalAddress",
+                        "addressLocality": "Nova Canaa do Norte",
+                        "addressRegion": "MT",
+                        "addressCountry": "BR"
+                    }
+                }
+        </script>
+
+    <!-- Tailwind via CDN (Mantido conforme solicitado, embora importação local seja preferível para produção) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Adicionado crossorigin="anonymous" para permitir leitura das regras CSS pelo html-to-image -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" crossorigin="anonymous">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        ancb: {
+                            red: '#A62626',
+                            redLight: '#D92E2E',
+                            blue: '#0D47A1',
+                            blueLight: '#1976D2',
+                            orange: '#F27405',
+                            black: '#0B0F12',
+                            grayBg: '#f3f4f6',
+                            darkBg: '#111827',
+                            darkCard: '#1f2937',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Roboto', 'sans-serif'],
+                    },
+                    animation: {
+                        fadeIn: 'fadeIn 0.5s ease-in-out',
+                        slideUp: 'slideUp 0.5s ease-out',
+                        slideDown: 'slideDown 0.3s ease-out',
+                        'bounce-slow': 'bounce 3s infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        },
+                        slideDown: {
+                            '0%': { transform: 'translateY(-10px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            transition: background-color 0.3s ease, color 0.3s ease;
+            overscroll-behavior-y: none;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        .dark ::-webkit-scrollbar-track {
+            background: #1f2937; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ccc; 
+            border-radius: 3px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #4b5563; 
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #aaa; 
+        }
+
+        /* ── CUSTOM SCROLLBAR ── */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+
+        /* ── BADGE RARITY ANIMATIONS ── */
+        @keyframes badgeGlowRare {
+            0%, 100% {
+                box-shadow:
+                    inset 0 0 0 2px rgba(147, 197, 253, 0.65),
+                    inset 0 0 10px rgba(96, 165, 250, 0.3),
+                    0 0 6px 2px rgba(96, 165, 250, 0.35);
+                filter: brightness(1.0);
+            }
+            50% {
+                box-shadow:
+                    inset 0 0 0 2.5px rgba(191, 219, 254, 1.0),
+                    inset 0 0 18px rgba(96, 165, 250, 0.6),
+                    0 0 10px 3px rgba(59, 130, 246, 0.55);
+                filter: brightness(1.08);
+            }
+        }
+        @keyframes badgeGlowEpic {
+            0%, 100% {
+                box-shadow:
+                    inset 0 0 0 2px rgba(192, 132, 252, 0.8),
+                    inset 0 0 10px rgba(168, 85, 247, 0.45),
+                    0 0 6px 2px rgba(147, 51, 234, 0.6);
+                filter: saturate(1.15) brightness(1.02);
+            }
+            50% {
+                box-shadow:
+                    inset 0 0 0 2.5px rgba(216, 180, 254, 1.0),
+                    inset 0 0 18px rgba(168, 85, 247, 0.85),
+                    0 0 10px 3px rgba(126, 34, 206, 0.82);
+                filter: saturate(1.5) brightness(1.14);
+            }
+        }
+        @keyframes badgeGlowLegendary {
+            0%, 100% {
+                box-shadow:
+                    inset 0 0 0 2px rgba(253, 224, 71, 0.9),
+                    inset 0 0 10px rgba(250, 204, 21, 0.55),
+                    0 0 6px 2px rgba(250, 204, 21, 0.7);
+                filter: saturate(1.25) brightness(1.06);
+            }
+            50% {
+                box-shadow:
+                    inset 0 0 0 2.5px rgba(255, 255, 255, 1.0),
+                    inset 0 0 18px rgba(250, 204, 21, 0.95),
+                    0 0 10px 3px rgba(249, 115, 22, 0.9);
+                filter: saturate(1.75) brightness(1.25);
+            }
+        }
+        @keyframes badgeInnerShimmer {
+            0%, 100% { opacity: 0.35; }
+            50% { opacity: 0.85; }
+        }
+        @keyframes badgeLegendarySparkle {
+            0%   { opacity: 0;   background-position: 18% 78%, 62% 18%, 43% 53%, 82% 68%, 29% 32%; }
+            15%  { opacity: 0.9; }
+            50%  { opacity: 0.5; background-position: 20% 72%, 65% 22%, 46% 48%, 79% 72%, 32% 28%; }
+            85%  { opacity: 0.85; }
+            100% { opacity: 0;   background-position: 22% 66%, 68% 26%, 49% 43%, 76% 76%, 35% 24%; }
+        }
+
+        .badge-rarity {
+            position: relative;
+            isolation: isolate;
+            overflow: visible !important;
+            will-change: transform, filter;
+        }
+        .badge-rarity > * { position: relative; z-index: 2; }
+        .badge-rarity::before,
+        .badge-rarity::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 1;
+        }
+
+        /* RARA – blue pulsing ring */
+        .badge-rarity-rara {
+            animation: badgeGlowRare 2.8s ease-in-out infinite;
+        }
+
+        /* ÉPICA – purple pulsing ring + inner shimmer */
+        .badge-rarity-epica {
+            animation: badgeGlowEpic 2.2s ease-in-out infinite;
+        }
+        .badge-rarity-epica::before {
+            opacity: 1;
+            background:
+                radial-gradient(circle at 20% 25%, rgba(233, 213, 255, 0.28) 0%, transparent 42%),
+                radial-gradient(circle at 80% 30%, rgba(196, 181, 253, 0.32) 0%, transparent 40%),
+                radial-gradient(circle at 50% 95%, rgba(147, 51, 234, 0.38) 0%, transparent 55%);
+            animation: badgeInnerShimmer 2.2s ease-in-out infinite;
+        }
+
+        /* LENDÁRIA – gold pulsing ring + inner glow + sparkle dots */
+        .badge-rarity-lendaria {
+            animation: badgeGlowLegendary 1.8s ease-in-out infinite;
+        }
+        .badge-rarity-lendaria::before {
+            opacity: 1;
+            background:
+                radial-gradient(circle at 50% 50%, rgba(254, 240, 138, 0.4) 0%, rgba(250, 204, 21, 0.25) 38%, rgba(249, 115, 22, 0.12) 62%, transparent 80%),
+                linear-gradient(135deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.05) 38%, transparent 62%);
+            animation: badgeInnerShimmer 1.8s ease-in-out infinite;
+        }
+        .badge-rarity-lendaria::after {
+            opacity: 1;
+            background-image:
+                radial-gradient(circle, rgba(255, 251, 235, 0.95) 0 1.5px, transparent 2px),
+                radial-gradient(circle, rgba(254, 240, 138, 0.92) 0 1.5px, transparent 2px),
+                radial-gradient(circle, rgba(251, 191, 36, 0.92) 0 1.5px, transparent 2px),
+                radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 1.5px, transparent 2px),
+                radial-gradient(circle, rgba(250, 204, 21, 0.88) 0 1.5px, transparent 2px);
+            background-repeat: no-repeat;
+            background-size: 5px 5px, 4px 4px, 5px 5px, 4px 4px, 5px 5px;
+            animation: badgeLegendarySparkle 2s ease-in-out infinite;
+            mix-blend-mode: screen;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .badge-rarity, .badge-rarity::before, .badge-rarity::after {
+                animation: none !important;
+            }
+        }
+    </style>
+
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "browser-image-compression": "https://esm.sh/browser-image-compression@^2.0.2",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3",
+    "firebase/": "https://esm.sh/firebase@^12.9.0/",
+    "vite-plugin-pwa": "https://esm.sh/vite-plugin-pwa@^1.2.0",
+    "html-to-image": "https://esm.sh/html-to-image@^1.11.13"
+  }
+}
+</script>
+  <script type="module" crossorigin src="./assets/main-_M-abasT.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/vendor-R-QS5V7O.js">
+  <link rel="modulepreload" crossorigin href="./assets/firebase-rxqan_v7.js">
+  <link rel="modulepreload" crossorigin href="./assets/firebase-DLEzh5hp.js">
+  <link rel="modulepreload" crossorigin href="./assets/icons-VtoOrrwq.js">
+  <link rel="modulepreload" crossorigin href="./assets/framer-motion-8Zu1zIYi.js">
+<link rel="manifest" href="./manifest.json"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div id="root"></div>
+</body>
+</html>

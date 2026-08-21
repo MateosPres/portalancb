@@ -1,0 +1,1 @@
+import{r}from"./vendor-R-QS5V7O.js";import{d as c}from"./firebase-DLEzh5hp.js";const p=()=>{const[o,t]=r.useState([]);return r.useEffect(()=>{const e=c.collection("jogadores").onSnapshot(n=>{const u=n.docs.map(s=>{const a=s.data();return{id:s.id,stats_atributos:a.stats_atributos||{},stats_tags:a.stats_tags||{}}});t(u)},()=>{t([])});return()=>e()},[]),o};export{p as u};
