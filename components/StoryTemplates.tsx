@@ -48,7 +48,7 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
         const dateStr = game.dataJogo
             ? game.dataJogo.split('-').reverse().join('/')
             : formatDate(event.data);
-        const timeStr = game.horario || game.hora || game.horaJogo || '';
+        const timeStr = game.horaJogo || '';
 
         return (
             <div ref={ref} className="w-[1080px] h-[1920px] text-white flex flex-col relative overflow-hidden font-sans shrink-0">
@@ -228,7 +228,7 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
                         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                     }}>
                         {/* Hora — destaque máximo */}
-                        {(game.hora || timeStr) && (
+                        {timeStr && (
                             <>
                                 <div className="flex flex-col items-center justify-center px-8 py-6" style={{
                                     background: 'linear-gradient(135deg, rgba(249,115,22,0.25) 0%, rgba(249,115,22,0.08) 100%)',
@@ -241,7 +241,7 @@ export const StoryRenderer = forwardRef<HTMLDivElement, StoryProps>(({ type, eve
                                         lineHeight: 1,
                                         textShadow: '0 0 30px rgba(249,115,22,0.4)',
                                     }}>
-                                        {game.hora || timeStr}
+                                        {timeStr}
                                     </span>
                                 </div>
                                 {/* Divisor vertical com dot */}

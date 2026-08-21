@@ -653,25 +653,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
         } catch (e) { alert("Erro."); }
     };
 
-    const handleSelfPromote = async () => {
-        if (!userProfile) return;
-        if (userProfile.email !== 'mateospres@gmail.com') return;
-        try {
-            await db.collection("usuarios").doc(userProfile.uid).update({ role: 'super-admin' });
-            alert("Agora você é Super Admin! Recarregue a página se necessário.");
-        } catch (e) {
-            alert("Erro ao atualizar permissão.");
-        }
-    };
-
     const handleResetPassword = async (user: UserProfile) => {
-        if (!window.confirm(`Tem certeza que deseja resetar a senha de ${user.nome} para "ancb1234"?`)) return;
+        if (!window.confirm(`Gerar um link temporário para redefinir a senha de ${user.nome}?`)) return;
         try {
             const resetFn = functions.httpsCallable('adminResetPassword');
-            await resetFn({ targetUid: user.uid });
-            alert(`Senha de ${user.nome} resetada com sucesso.`);
+            const response = await resetFn({ targetUid: user.uid });
+            const resetLink = String(response.data?.resetLink || '');
+            if (!resetLink) throw new Error('A função não retornou o link de redefinição.');
+            try {
+                await navigator.clipboard.writeText(resetLink);
+                alert(`Link temporário de redefinição de ${user.nome} copiado para a área de transferência.`);
+            } catch {
+                window.prompt(`Copie o link temporário de redefinição de ${user.nome}:`, resetLink);
+            }
         } catch (error: any) {
-            alert("Erro ao resetar senha: " + error.message);
+            const message = error?.details || error?.message || String(error);
+            alert("Erro ao resetar senha: " + message);
         }
     };
 
@@ -1300,19 +1297,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, onOpenGamePanel, u
                     <h2 className="text-2xl font-bold text-ancb-blue dark:text-blue-400">Painel Administrativo</h2>
                 </div>
             </div>
-
-            {/* SUPER ADMIN CLAIM */}
-            {userProfile?.email === 'mateospres@gmail.com' && userProfile.role !== 'super-admin' && (
-                <div className="mb-6 p-4 bg-purple-100 border border-purple-300 rounded-xl flex justify-between items-center animate-pulse">
-                    <div className="text-purple-800">
-                        <h4 className="font-bold text-sm">Privilégio Disponível</h4>
-                        <p className="text-xs">Sua conta foi identificada como proprietária do sistema.</p>
-                    </div>
-                    <Button size="sm" className="!bg-purple-700 hover:!bg-purple-800 text-white border-none" onClick={handleSelfPromote}>
-                        <LucideCrown size={16}/> Reivindicar Super Admin
-                    </Button>
-                </div>
-            )}
 
             {/* TAB: USERS */}
             {adminTab === 'users' && isSuperAdmin && (

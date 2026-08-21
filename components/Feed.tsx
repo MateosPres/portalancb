@@ -52,8 +52,8 @@ export const Feed: React.FC<FeedProps> = ({ userProfile, onOpenPost, onOpenPlaye
         .get();
 
       const basePosts = snapshot.docs.map((doc) => ({
-        id: doc.id,
         ...(doc.data() as FeedPost),
+        id: doc.id,
       }));
 
       const authorIds = Array.from(new Set(

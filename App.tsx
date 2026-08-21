@@ -558,7 +558,7 @@ const App: React.FC = () => {
             const notifiedEvents = JSON.parse(localStorage.getItem('ancb_notified_rosters') || '[]');
             const ongoing: Evento[] = [];
 
-            snapshot.docChanges().forEach((change) => {
+            snapshot.docChanges().forEach((change: any) => {
                 if (change.type === "added" || change.type === "modified") {
                     const eventData = change.doc.data() as Evento;
                     const eventId = change.doc.id;
@@ -618,7 +618,7 @@ const App: React.FC = () => {
             const newNotifs: NotificationItem[] = [];
             const notifiedIds = JSON.parse(localStorage.getItem('ancb_notified_ids') || '[]');
 
-            snapshot.docChanges().forEach((change) => {
+            snapshot.docChanges().forEach((change: any) => {
                 if (change.type === "added") {
                     const data = change.doc.data();
                     const notifId = change.doc.id;
@@ -632,7 +632,7 @@ const App: React.FC = () => {
                 }
             });
 
-            snapshot.forEach(doc => {
+            snapshot.forEach((doc: any) => {
                 const data = doc.data();
                 const normalizedRead = isNotificationRead(data.read);
                 newNotifs.push({

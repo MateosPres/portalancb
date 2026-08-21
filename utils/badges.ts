@@ -152,6 +152,30 @@ export const renderConquistaTexts = (
     };
 };
 
+export const getBadgeDisplayName = (badge: Badge): string => {
+    const title = String(badge.nome || '').trim();
+    if (!title) return title;
+
+    const match = title.match(/\s*\(([^()]{1,200})\)\s*$/);
+    if (!match) return title;
+
+    const suffix = match[1].trim();
+    if (!suffix) return title;
+
+    const occurrences = getBadgeOccurrences(badge);
+    const knownEventNames = new Set<string>(
+        occurrences
+            .map((occurrence) => occurrence.renderContext?.eventName || occurrence.contextLabel || '')
+            .filter(Boolean) as string[],
+    );
+
+    if (knownEventNames.has(suffix) || badge.eventId || badge.gameId) {
+        return title.slice(0, title.length - match[0].length).trim();
+    }
+
+    return title;
+};
+
 export const getBadgeEffectClasses = (rarity?: Badge['raridade'] | null): string => {
     switch (rarity || 'comum') {
         case 'lendaria':
@@ -209,6 +233,7 @@ export const upsertStackedBadge = (allBadges: Badge[], incomingBadge: Badge) => 
             latestOccurrenceId: latestOccurrence?.id,
             ocorrencias: incomingOccurrences,
         };
+        normalizedBadge.nome = getBadgeDisplayName(normalizedBadge);
         nextBadges.push(normalizedBadge);
         return { badges: nextBadges, badge: normalizedBadge, occurrenceAdded: true };
     }
@@ -247,6 +272,7 @@ export const upsertStackedBadge = (allBadges: Badge[], incomingBadge: Badge) => 
         latestOccurrenceId: latestOccurrence.id,
         ocorrencias: currentOccurrences,
     };
+    mergedBadge.nome = getBadgeDisplayName(mergedBadge);
 
     nextBadges[badgeIndex] = mergedBadge;
     return { badges: nextBadges, badge: mergedBadge, occurrenceAdded };
@@ -348,6 +374,7 @@ export const getGroupedBadgesForDisplay = (allBadges: Badge[]): BadgeDisplayGrou
                 members: [badge],
                 badge: {
                     ...badge,
+                    nome: getBadgeDisplayName(badge),
                     ocorrencias: getBadgeOccurrences(badge),
                     stackCount: getBadgeStackCount(badge),
                     latestOccurrenceId: getLatestBadgeOccurrence(badge).id,
@@ -380,6 +407,7 @@ export const getGroupedBadgesForDisplay = (allBadges: Badge[]): BadgeDisplayGrou
             members: [...existing.members, badge],
             badge: {
                 ...preferredBadge,
+                nome: getBadgeDisplayName(preferredBadge),
                 descricao: latestOccurrence.descricao || preferredBadge.descricao,
                 data: latestOccurrence.data || preferredBadge.data,
                 latestOccurrenceId: latestOccurrence.id,

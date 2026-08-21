@@ -1,0 +1,200 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Assumed data model:
+    // usuarios: private identity/contact data and immutable role/status for self-service.
+    // jogadores: public sports profile; linked owner may edit profile-only fields.
+    // eventos/feed_posts/apoiadores: public portal content, managed by admins.
+    // notifications: private per-target messages.
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner(userId) {
+      return isOwner(userId);
+    }
+
+    function uidUnchanged() {
+      return !request.resource.data.keys().hasAny(['uid']) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['uid']);
+    }
+
+    function userRole() {
+      return isAuthenticated()
+        ? get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isAdmin() {
+      return userRole() in ['admin', 'super-admin'];
+    }
+
+    function isSuperAdmin() {
+      return userRole() == 'super-admin';
+    }
+
+    function isPublicContent() {
+      return true;
+    }
+
+    function validOptionalString(data, field, maxSize) {
+      return !data.keys().hasAny([field]) || data[field] == null || (data[field] is string && data[field].size() <= maxSize);
+    }
+
+    function validUser(data) {
+      return data.keys().hasAll(['nome', 'email', 'role', 'status'])
+        && data.keys().hasOnly([
+          'uid', 'nome', 'apelido', 'email', 'emailContato', 'role', 'status',
+          'dataNascimento', 'linkedPlayerId', 'fcmToken', 'foto', 'whatsapp',
+          'cpf', 'posicaoPreferida', 'numeroPreferido', 'createdAt'
+        ])
+        && data.nome is string && data.nome.size() >= 2 && data.nome.size() <= 120
+        && data.email is string && data.email.size() <= 254
+        && data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && data.role in ['jogador', 'admin', 'super-admin']
+        && data.status in ['pending', 'active', 'banned']
+        && validOptionalString(data, 'apelido', 60)
+        && validOptionalString(data, 'emailContato', 254)
+        && validOptionalString(data, 'dataNascimento', 20)
+        && validOptionalString(data, 'linkedPlayerId', 128)
+        && validOptionalString(data, 'fcmToken', 4096)
+        && validOptionalString(data, 'foto', 800000)
+        && validOptionalString(data, 'whatsapp', 20)
+        && validOptionalString(data, 'cpf', 14)
+        && validOptionalString(data, 'posicaoPreferida', 40)
+        && validOptionalString(data, 'numeroPreferido', 10);
+    }
+
+    function validPlayerProfile(data) {
+      return data.keys().size() <= 30
+        && validOptionalString(data, 'id', 128)
+        && validOptionalString(data, 'nome', 120)
+        && validOptionalString(data, 'apelido', 60)
+        && validOptionalString(data, 'email', 254)
+        && validOptionalString(data, 'emailContato', 254)
+        && validOptionalString(data, 'foto', 800000)
+        && validOptionalString(data, 'posicao', 40)
+        && validOptionalString(data, 'cpf', 14)
+        && validOptionalString(data, 'nascimento', 20)
+        && validOptionalString(data, 'telefone', 20)
+        && validOptionalString(data, 'userId', 128)
+        && (!data.keys().hasAny(['pinnedBadgeIds']) || (data.pinnedBadgeIds is list && data.pinnedBadgeIds.size() <= 12));
+    }
+
+    function validComment(data) {
+      return data.keys().hasAll(['text', 'userId', 'userName', 'createdAt', 'likesCount'])
+        && data.keys().hasOnly(['text', 'userId', 'userName', 'userPhoto', 'createdAt', 'updatedAt', 'likesCount', 'linkedPlayerId'])
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 1000
+        && data.userId is string && data.userId.size() <= 128
+        && data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 120
+        && validOptionalString(data, 'userPhoto', 800000)
+        && validOptionalString(data, 'linkedPlayerId', 128)
+        && data.likesCount is int && data.likesCount >= 0;
+    }
+
+    function validManagedDocument(data) {
+      return data is map && data.keys().size() <= 100;
+    }
+
+    match /usuarios/{userId} {
+      allow read: if isDocOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && uidUnchanged() && validUser(request.resource.data)
+        && request.resource.data.role == 'jogador' && request.resource.data.status == 'pending';
+      allow update: if validUser(request.resource.data) && (
+        isAdmin() || (isOwner(userId) && uidNotModified()
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status']))
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /jogadores/{playerId} {
+      allow read: if isPublicContent();
+      allow create: if isAdmin() && validPlayerProfile(request.resource.data);
+      allow update: if validPlayerProfile(request.resource.data) && (
+        isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'nome', 'apelido', 'email', 'emailContato', 'foto', 'posicao',
+            'numero_uniforme', 'cpf', 'nascimento', 'telefone', 'pinnedBadgeIds'
+          ]))
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /eventos/{eventId} {
+      allow read: if isPublicContent();
+      allow create, update: if isAdmin() && validManagedDocument(request.resource.data);
+      allow delete: if isSuperAdmin();
+
+      match /{subcollection}/{documentId} {
+        allow read: if isPublicContent() && exists(/databases/$(database)/documents/eventos/$(eventId));
+        allow create, update: if isAdmin() && validManagedDocument(request.resource.data);
+        allow delete: if isAdmin();
+
+        match /cestas/{cestaId} {
+          allow read: if isPublicContent() && exists(/databases/$(database)/documents/eventos/$(eventId));
+          allow create, update: if isAdmin() && validManagedDocument(request.resource.data);
+          allow delete: if isAdmin();
+        }
+      }
+    }
+
+    match /feed_posts/{postId} {
+      allow read: if isPublicContent();
+      allow create, update: if isAdmin() && validManagedDocument(request.resource.data);
+      allow delete: if isAdmin();
+
+      match /comments/{commentId} {
+        allow read: if isPublicContent() && exists(/databases/$(database)/documents/feed_posts/$(postId));
+        allow create: if isAuthenticated() && validComment(request.resource.data)
+          && request.resource.data.userId == request.auth.uid;
+        allow update: if validComment(request.resource.data)
+          && (isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid
+            && request.resource.data.userId == resource.data.userId));
+        allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+
+        match /likes/{userId} {
+          allow read: if isPublicContent();
+          allow create: if isOwner(userId) && request.resource.data.keys().hasOnly(['createdAt']);
+          allow update: if false;
+          allow delete: if isOwner(userId);
+        }
+      }
+
+      match /likes/{userId} {
+        allow read: if isPublicContent();
+        allow create: if isOwner(userId) && request.resource.data.keys().hasOnly(['timestamp']);
+        allow update: if false;
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    match /notifications/{notificationId} {
+      allow read, delete: if isAdmin() || (isAuthenticated() && resource.data.targetUserId == request.auth.uid);
+      allow create, update: if isAdmin() && validManagedDocument(request.resource.data);
+    }
+
+    match /avaliacoes_gamified/{reviewId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin() && validManagedDocument(request.resource.data);
+    }
+
+    match /{collectionName}/{documentId} {
+      allow read: if collectionName in ['apoiadores', 'historia_galeria', 'temporadas', 'config', 'cestas', 'jogos'] && isPublicContent();
+      allow create, update: if isAdmin() && validManagedDocument(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

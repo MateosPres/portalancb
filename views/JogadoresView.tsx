@@ -45,6 +45,7 @@ import {
     getBadgeEffectClasses,
     getBadgeOccurrences,
     getBadgeOccurrencesNewestFirst,
+    getBadgeDisplayName,
     getBadgeStackCount,
     getMergedBadgesForDisplay,
     isImageBadge,
@@ -682,13 +683,13 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                                                     </span>
                                                 )}
                                                 {isImageBadge(badge) ? (
-                                                    <img src={badge.iconeValor} alt={badge.nome} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20 z-10" />
+                                                    <img src={badge.iconeValor} alt={getBadgeDisplayName(badge)} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20 z-10" />
                                                 ) : (
                                                     <div className="text-2xl md:text-3xl mb-1 drop-shadow-md z-10">{badge.emoji}</div>
                                                 )}
                                                 <div className="z-10 w-full">
                                                     <span className="block text-[8px] md:text-[9px] font-bold uppercase leading-tight line-clamp-2 min-h-[2em] flex items-center justify-center">
-                                                        {badge.nome}
+                                                        {getBadgeDisplayName(badge)}
                                                     </span>
                                                 </div>
                                             </div>
@@ -792,12 +793,12 @@ export const JogadoresView: React.FC<JogadoresViewProps> = ({ onBack, userProfil
                             <div className="text-center">
                                 <div className={`mx-auto mb-4 flex h-28 w-28 items-center justify-center rounded-[2rem] ${getBadgeEffectClasses(selectedBadge.raridade)}`}>
                                     {isImageBadge(selectedBadge) ? (
-                                        <img src={selectedBadge.iconeValor} alt={selectedBadge.nome} className="h-24 w-24 rounded-[1.5rem] object-cover" />
+                                        <img src={selectedBadge.iconeValor} alt={getBadgeDisplayName(selectedBadge)} className="h-24 w-24 rounded-[1.5rem] object-cover" />
                                     ) : (
                                         <div className="text-8xl animate-bounce-slow drop-shadow-xl">{selectedBadge.emoji}</div>
                                     )}
                                 </div>
-                                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 uppercase tracking-wide">{selectedBadge.nome}</h3>
+                                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 uppercase tracking-wide">{getBadgeDisplayName(selectedBadge)}</h3>
                                 <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
                                     <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${getRarityStyles(selectedBadge.raridade).classes}`}>
                                         {getRarityStyles(selectedBadge.raridade).label}

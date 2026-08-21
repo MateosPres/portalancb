@@ -212,8 +212,6 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, data })
                             type={data.type} 
                             event={data.event} 
                             game={data.game} 
-                            players={data.players} 
-                            teams={data.teams}
                             scorers={data.scorers} 
                             stats={data.stats}
                         />

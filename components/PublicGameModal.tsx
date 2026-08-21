@@ -78,7 +78,7 @@ export const PublicGameModal: React.FC<PublicGameModalProps> = ({ game, eventId,
     };
 
     return (
-        <Modal isOpen={true} onClose={onClose} title="Acompanhar Jogo" maxWidth="max-w-4xl">
+        <Modal isOpen={true} onClose={onClose} title="Acompanhar Jogo" maxWidthClassName="max-w-4xl">
             <div className="space-y-6">
                 {/* Header / Scoreboard */}
                 <div className="bg-gradient-to-r from-[#062553] to-blue-900 rounded-2xl shadow-xl overflow-hidden relative border border-blue-800 p-6 md:p-8 text-center">

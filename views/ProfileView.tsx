@@ -20,6 +20,7 @@ import {
     getBadgeWeight,
     getDisplayBadges,
     getBadgeDisplayDate,
+    getBadgeDisplayName,
     getBadgeEffectClasses,
     getBadgeOccurrences,
     getBadgeOccurrencesNewestFirst,
@@ -82,8 +83,8 @@ const DraggableBadgeCard: React.FC<DraggableBadgeCardProps> = ({ badge, isPinned
         >
             {stackCount > 1 && <div className="absolute left-1 top-1 rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow-sm">x{stackCount}</div>}
             {isPinned && <div className="absolute top-1 right-1 w-3 h-3 rounded-full bg-white shadow-sm flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-ancb-blue" /></div>}
-            {isImageBadge(badge) ? <img src={badge.iconeValor} alt={badge.nome} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20" /> : <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>}
-            <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
+            {isImageBadge(badge) ? <img src={badge.iconeValor} alt={getBadgeDisplayName(badge)} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20" /> : <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>}
+            <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{getBadgeDisplayName(badge)}</span>
         </div>
     );
 };
@@ -102,8 +103,8 @@ const BadgeSlot: React.FC<BadgeSlotProps> = ({ slotIndex, badge, onRemove }) => 
                     <button onClick={(e) => { e.stopPropagation(); onRemove(); }}
                         className="absolute -top-2 -right-2 z-20 w-5 h-5 rounded-full bg-gray-900 border border-gray-600 text-gray-300 hover:text-white hover:bg-red-600 hover:border-red-600 flex items-center justify-center transition-all text-sm font-bold leading-none"
                         title="Remover">×</button>
-                    {isImageBadge(badge) ? <img src={badge.iconeValor} alt={badge.nome} className="h-8 w-8 rounded-lg object-cover border border-white/20 mb-1" /> : <div className="text-xl mb-1">{badge.emoji}</div>}
-                    <span className="text-[8px] font-bold uppercase leading-tight line-clamp-2 px-1">{badge.nome}</span>
+                    {isImageBadge(badge) ? <img src={badge.iconeValor} alt={getBadgeDisplayName(badge)} className="h-8 w-8 rounded-lg object-cover border border-white/20 mb-1" /> : <div className="text-xl mb-1">{badge.emoji}</div>}
+                    <span className="text-[8px] font-bold uppercase leading-tight line-clamp-2 px-1">{getBadgeDisplayName(badge)}</span>
                 </>
             ) : (
                 <div className="flex flex-col items-center gap-1 text-gray-500 dark:text-gray-600">
@@ -749,13 +750,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                                                     </span>
                                                 )}
                                                 {isImageBadge(badge) ? (
-                                                    <img src={badge.iconeValor} alt={badge.nome} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20 z-10" />
+                                                    <img src={badge.iconeValor} alt={getBadgeDisplayName(badge)} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20 z-10" />
                                                 ) : (
                                                     <div className="text-2xl md:text-3xl mb-1 drop-shadow-md z-10">{badge.emoji}</div>
                                                 )}
                                         <div className="z-10 w-full">
                                             <span className="block text-[8px] md:text-[9px] font-bold uppercase leading-tight line-clamp-2 min-h-[2em] flex items-center justify-center">
-                                                {badge.nome}
+                                                {getBadgeDisplayName(badge)}
                                             </span>
                                         </div>
                                     </div>
@@ -942,12 +943,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                         <div className="text-center">
                             <div className={`mx-auto mb-6 flex h-28 w-28 items-center justify-center rounded-[2rem] ${getBadgeEffectClasses(selectedBadge.raridade)}`}>
                                 {isImageBadge(selectedBadge) ? (
-                                    <img src={selectedBadge.iconeValor} alt={selectedBadge.nome} className="h-24 w-24 rounded-[1.5rem] object-cover" />
+                                    <img src={selectedBadge.iconeValor} alt={getBadgeDisplayName(selectedBadge)} className="h-24 w-24 rounded-[1.5rem] object-cover" />
                                 ) : (
                                     <div className="text-8xl animate-bounce-slow">{selectedBadge.emoji}</div>
                                 )}
                             </div>
-                            <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">{selectedBadge.nome}</h3>
+                            <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">{getBadgeDisplayName(selectedBadge)}</h3>
                             <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
                                 <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${getRarityStyles(selectedBadge.raridade).classes} border`}>
                                     {getRarityStyles(selectedBadge.raridade).label}
@@ -1046,8 +1047,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userProfile, onBack, o
                             return (
                                 <div className={`rounded-xl p-2 flex flex-col items-center justify-center text-center shadow-2xl border-2 select-none rotate-3 scale-110 ${ov.classes} ${getBadgeEffectClasses(badge.raridade)}`}>
                                     {getBadgeStackCount(badge) > 1 && <div className="absolute left-1 top-1 rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">x{getBadgeStackCount(badge)}</div>}
-                                    {isImageBadge(badge) ? <img src={badge.iconeValor} alt={badge.nome} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20" /> : <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>}
-                                    <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{badge.nome}</span>
+                                    {isImageBadge(badge) ? <img src={badge.iconeValor} alt={getBadgeDisplayName(badge)} className="mb-1 h-10 w-10 rounded-xl object-cover border border-white/20" /> : <div className="text-2xl mb-1 filter drop-shadow-sm">{badge.emoji}</div>}
+                                    <span className="text-[9px] font-bold uppercase leading-tight line-clamp-2">{getBadgeDisplayName(badge)}</span>
                                 </div>
                             );
                         })() : null}
